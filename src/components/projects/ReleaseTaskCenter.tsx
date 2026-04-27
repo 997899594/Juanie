@@ -1,6 +1,7 @@
 'use client';
 
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AITaskCenterSection } from '@/components/projects/AITaskCenterSection';
@@ -73,24 +74,39 @@ export function ReleaseTaskCenter(input: {
       scopeLabel="release-task"
       tasks={snapshot?.tasks ?? []}
       onRefresh={load}
-      renderActions={(task) =>
-        task.migrationRunId && task.actionLabel ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 rounded-full border-0 bg-[rgba(255,255,255,0.76)] px-3.5 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-white"
-            onClick={() => handleMigrationAction(task)}
-            disabled={pendingTaskId === task.id || !input.canManageActions}
-          >
-            {pendingTaskId === task.id ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}
-            {task.actionLabel}
-          </Button>
-        ) : null
-      }
+      renderActions={(task) => (
+        <>
+          {task.migrationRunId && task.actionLabel ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 rounded-full border-0 bg-[rgba(255,255,255,0.76)] px-3.5 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-white"
+              onClick={() => handleMigrationAction(task)}
+              disabled={pendingTaskId === task.id || !input.canManageActions}
+            >
+              {pendingTaskId === task.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              {task.actionLabel}
+            </Button>
+          ) : null}
+
+          {!task.migrationRunId && task.href && task.actionLabel ? (
+            <Button
+              asChild
+              variant="ghost"
+              className="h-8 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
+            >
+              <Link href={task.href}>
+                {task.actionLabel}
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : null}
+        </>
+      )}
     />
   );
 }

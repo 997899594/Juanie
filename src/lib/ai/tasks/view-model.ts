@@ -6,6 +6,7 @@ export type AITaskCenterItemKind =
   | 'migration_approval'
   | 'migration_external'
   | 'migration_failed'
+  | 'deployment_failed'
   | 'ai_analysis'
   | 'schema_repair'
   | 'preview_cleanup_blocked';

@@ -1315,6 +1315,83 @@ function describeDeploymentPodIssues(pods: k8s.V1Pod[]): string | null {
   return null;
 }
 
+function getEventTimestamp(event: k8s.CoreV1Event): number {
+  const timestamp = event.eventTime ?? event.lastTimestamp ?? event.firstTimestamp;
+  if (!timestamp) {
+    return 0;
+  }
+
+  const value = new Date(timestamp).getTime();
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function formatPodWarningEvent(event: k8s.CoreV1Event): string {
+  const reason = event.reason ?? 'Warning';
+  if (!event.message) {
+    return reason;
+  }
+
+  return `${reason}: ${event.message}`;
+}
+
+function isReadinessWarning(event: k8s.CoreV1Event): boolean {
+  const reason = event.reason ?? '';
+  const message = event.message ?? '';
+  const text = `${reason} ${message}`;
+  return [
+    'Unhealthy',
+    'Readiness probe failed',
+    'Liveness probe failed',
+    'Startup probe failed',
+    'Back-off restarting failed container',
+  ].some((keyword) => text.includes(keyword));
+}
+
+async function describeDeploymentEventIssues(
+  namespace: string,
+  pods: k8s.V1Pod[]
+): Promise<string | null> {
+  const podNames = new Set(
+    pods.map((pod) => pod.metadata?.name).filter((name): name is string => Boolean(name))
+  );
+
+  if (podNames.size === 0) {
+    return null;
+  }
+
+  let events: k8s.CoreV1Event[];
+  try {
+    events = await getEvents(namespace);
+  } catch (error) {
+    k8sLogger.warn('Could not list pod events while waiting for deployment readiness', {
+      namespace,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+
+  const podWarnings = events
+    .filter((event) => {
+      if (event.type !== 'Warning') {
+        return false;
+      }
+
+      if (event.involvedObject.kind !== 'Pod') {
+        return false;
+      }
+
+      return podNames.has(event.involvedObject.name ?? '');
+    })
+    .sort((left, right) => getEventTimestamp(right) - getEventTimestamp(left));
+
+  const event = podWarnings.find(isReadinessWarning) ?? podWarnings[0];
+  if (!event) {
+    return null;
+  }
+
+  return `${event.involvedObject.name ?? 'pod'} · ${formatPodWarningEvent(event)}`;
+}
+
 export async function waitForDeploymentReady(input: {
   namespace: string;
   name: string;
@@ -1355,6 +1432,8 @@ export async function waitForDeploymentReady(input: {
       throw new Error(podIssue);
     }
 
+    const eventIssue = await describeDeploymentEventIssues(input.namespace, pods);
+
     if (
       desiredReplicas > 0 &&
       readyReplicas >= desiredReplicas &&
@@ -1365,7 +1444,7 @@ export async function waitForDeploymentReady(input: {
     }
 
     lastObservedIssue =
-      podIssue ??
+      eventIssue ??
       progressingCondition?.message ??
       `ready ${readyReplicas}/${desiredReplicas}, updated ${updatedReplicas}/${desiredReplicas}`;
 

@@ -262,10 +262,29 @@ function buildReleaseBlockingReason(input: {
     input.release.status === 'verification_failed' ||
     input.release.deployments.some((deployment) => deployment.status === 'verification_failed')
   ) {
+    const failedDeployment = input.release.deployments.find(
+      (deployment) => deployment.status === 'verification_failed'
+    );
+
     return {
       label: '校验失败',
-      summary: '镜像已经部署，但运行态校验没有通过，因此平台不会把这次发布记为成功。',
-      nextActionLabel: '检查校验路径、应用日志和环境入口',
+      summary: failedDeployment?.errorMessage
+        ? `候选版本没有通过运行态校验：${failedDeployment.errorMessage}`
+        : '镜像已经部署，但运行态校验没有通过，因此平台不会把这次发布记为成功。',
+      nextActionLabel: '补齐环境变量或修复启动错误后重试发布',
+    };
+  }
+
+  const failedDeployment = input.release.deployments.find((deployment) =>
+    ['failed', 'rolled_back'].includes(deployment.status)
+  );
+  if (failedDeployment) {
+    return {
+      label: '部署失败',
+      summary: failedDeployment.errorMessage
+        ? `部署阶段失败：${failedDeployment.errorMessage}`
+        : '发布在部署阶段中断，当前版本没有进入稳定服务。',
+      nextActionLabel: '检查运行日志、环境变量和服务配置后重试',
     };
   }
 

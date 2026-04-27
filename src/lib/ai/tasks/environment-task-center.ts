@@ -46,9 +46,10 @@ export function sortEnvironmentTasks(tasks: EnvironmentTaskItem[]): EnvironmentT
       migration_approval: 0,
       migration_external: 1,
       migration_failed: 2,
-      ai_analysis: 3,
-      schema_repair: 4,
-      preview_cleanup_blocked: 5,
+      deployment_failed: 3,
+      ai_analysis: 4,
+      schema_repair: 5,
+      preview_cleanup_blocked: 6,
     };
 
     return priority[left.kind] - priority[right.kind];

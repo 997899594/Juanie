@@ -13,9 +13,24 @@ import { executeDeploymentWorkload, logDeployment } from './deployment-executor'
 import type { DeploymentJobData } from './index';
 
 function classifyDeploymentFailureStatus(message: string) {
-  return message.includes('Service verify failed') || message.includes('Verification pod')
-    ? 'verification_failed'
-    : 'failed';
+  const verificationSignals = [
+    'Service verify failed',
+    'Verification pod',
+    'Readiness probe failed',
+    'Liveness probe failed',
+    'Startup probe failed',
+    'HTTP probe failed',
+    'Deployment rollout failed',
+    'rollout timed out',
+    'ready 0/',
+    'Unhealthy',
+  ];
+
+  if (verificationSignals.some((signal) => message.includes(signal))) {
+    return 'verification_failed';
+  }
+
+  return 'failed';
 }
 
 async function cleanupFailedCandidateResources(deploymentId: string): Promise<boolean> {

@@ -106,7 +106,9 @@ export function resolveReleaseDeploymentResolution(
     return {
       kind: 'failed',
       failureStatus: 'verification_failed',
-      message: `Deployment ${verificationFailed.id} ended with status verification_failed`,
+      message:
+        verificationFailed.errorMessage ??
+        `Deployment ${verificationFailed.id} ended with status verification_failed`,
     };
   }
 
@@ -117,7 +119,7 @@ export function resolveReleaseDeploymentResolution(
     return {
       kind: 'failed',
       failureStatus: 'failed',
-      message: `Deployment ${failed.id} ended with status ${failed.status}`,
+      message: failed.errorMessage ?? `Deployment ${failed.id} ended with status ${failed.status}`,
     };
   }
 

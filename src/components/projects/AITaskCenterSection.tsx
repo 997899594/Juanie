@@ -11,6 +11,7 @@ function getTaskTone(kind: AITaskCenterItem['kind']): 'warning' | 'secondary' {
   if (
     kind === 'migration_approval' ||
     kind === 'migration_external' ||
+    kind === 'deployment_failed' ||
     kind === 'schema_repair' ||
     kind === 'ai_analysis'
   ) {

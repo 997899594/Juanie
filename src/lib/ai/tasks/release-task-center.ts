@@ -12,10 +12,11 @@ import {
   formatApprovalStatusLabel,
 } from '@/lib/approvals/view';
 import { db } from '@/lib/db';
-import { migrationRuns, releases } from '@/lib/db/schema';
+import { deployments, migrationRuns, releases } from '@/lib/db/schema';
 import { collapseRunsToLatestByLockKey } from '@/lib/migrations/attention';
 
 type RawReleaseMigrationRun = Awaited<ReturnType<typeof db.query.migrationRuns.findMany>>[number];
+type RawReleaseDeployment = Awaited<ReturnType<typeof db.query.deployments.findMany>>[number];
 
 type DecoratedReleaseApprovalRun = RawReleaseMigrationRun &
   ApprovalItemDecorations & {
@@ -41,9 +42,10 @@ export function sortReleaseTasks(tasks: ReleaseTaskItem[]): ReleaseTaskItem[] {
       migration_approval: 0,
       migration_external: 1,
       migration_failed: 2,
-      ai_analysis: 3,
-      schema_repair: 4,
-      preview_cleanup_blocked: 5,
+      deployment_failed: 3,
+      ai_analysis: 4,
+      schema_repair: 5,
+      preview_cleanup_blocked: 6,
     };
 
     return priority[left.kind] - priority[right.kind];
@@ -103,6 +105,30 @@ function toReleaseTask(
             actorUserId,
           })
         : null,
+  };
+}
+
+function toDeploymentFailureTask(
+  projectId: string,
+  environmentId: string,
+  deployment: RawReleaseDeployment & {
+    service?: {
+      name?: string | null;
+    } | null;
+  }
+): ReleaseTaskItem {
+  const serviceName = deployment.service?.name ?? '应用';
+  const summary =
+    deployment.errorMessage ?? '部署或运行态校验没有通过，当前版本不会被切到稳定服务。';
+
+  return {
+    id: `deployment-${deployment.id}`,
+    kind: 'deployment_failed',
+    title: `${serviceName} · 运行态校验`,
+    summary,
+    statusLabel: deployment.status === 'verification_failed' ? '校验失败' : '部署失败',
+    actionLabel: '打开变量',
+    href: `/projects/${projectId}/environments/${environmentId}/variables`,
   };
 }
 
@@ -172,6 +198,24 @@ export async function getReleaseTaskCenterData(input: {
       run
     )
   );
+
+  const failedDeployments = await db.query.deployments.findMany({
+    where: and(
+      eq(deployments.projectId, input.projectId),
+      eq(deployments.releaseId, input.releaseId)
+    ),
+    with: {
+      service: true,
+    },
+  });
+
+  for (const deployment of failedDeployments) {
+    if (!['failed', 'verification_failed', 'rolled_back'].includes(deployment.status)) {
+      continue;
+    }
+
+    tasks.push(toDeploymentFailureTask(input.projectId, release.environmentId, deployment));
+  }
 
   const recentAITasks = await listRecentReleaseAITasks({
     projectId: input.projectId,
