@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import {
   getProjectAccessOrThrow,
@@ -7,8 +7,9 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { environments, releases } from '@/lib/db/schema';
+import { environments, promotionFlows, releases } from '@/lib/db/schema';
 import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
+import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
@@ -68,19 +69,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { project, member } = await getProjectWithRepositoryAccessOrThrow(id, session.user.id);
     const body = await request.json().catch(() => ({}));
     const flowId = typeof body?.flowId === 'string' ? body.flowId : undefined;
-    const promotion = await buildPromotionPlan(id, {
+
+    const [envList, flowList] = await Promise.all([
+      db.query.environments.findMany({
+        where: eq(environments.projectId, id),
+      }),
+      db.query.promotionFlows.findMany({
+        where: eq(promotionFlows.projectId, id),
+      }),
+    ]);
+    const promotion = resolvePromotionFlow({
+      environments: envList,
+      promotionFlows: flowList,
       flowId,
     });
 
     if (!promotion.sourceEnvironment) {
       return NextResponse.json(
-        { error: promotion.plan.blockingReason ?? '没有可用的提升来源环境' },
-        { status: 400 }
+        { error: flowId ? '未找到对应的提升链路' : '没有可用的提升来源环境' },
+        { status: flowId ? 404 : 400 }
       );
     }
     if (!promotion.targetEnvironment) {
       return NextResponse.json(
-        { error: promotion.plan.blockingReason ?? '没有可用的提升目标环境' },
+        { error: flowId ? '未找到对应的提升链路' : '没有可用的提升目标环境' },
         { status: flowId ? 404 : 400 }
       );
     }
@@ -102,25 +114,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const sourceRelease = promotion.sourceRelease
-      ? await db.query.releases.findFirst({
-          where: eq(releases.id, promotion.sourceRelease.id),
+    const sourceRelease = await db.query.releases.findFirst({
+      where: and(
+        eq(releases.projectId, id),
+        eq(releases.environmentId, promotion.sourceEnvironment.id),
+        eq(releases.status, 'succeeded')
+      ),
+      orderBy: [desc(releases.createdAt)],
+      with: {
+        artifacts: {
           with: {
-            artifacts: {
-              with: {
-                service: true,
-              },
-            },
+            service: true,
           },
-        })
-      : null;
-
-    if (!promotion.plan.canCreate) {
-      return NextResponse.json(
-        { error: promotion.plan.blockingReason ?? '当前无法执行提升' },
-        { status: 400 }
-      );
-    }
+        },
+      },
+    });
 
     if (!sourceRelease || sourceRelease.artifacts.length === 0) {
       return NextResponse.json(
@@ -161,13 +169,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       {
         success: true,
         releaseId: promotedRelease?.id,
-        plan: promotion.plan,
         artifacts: promotedRelease?.artifacts.map((artifact) => ({
           service: artifact.service.name,
           imageUrl: artifact.imageUrl,
         })),
         commitSha: sourceRelease.sourceCommitSha,
-        promotionFlowId: promotion.flowId,
+        promotionFlowId: promotion.flow?.id ?? null,
         targetEnvironmentName: promotion.targetEnvironment.name,
         tagName,
       },

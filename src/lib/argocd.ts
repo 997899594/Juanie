@@ -156,16 +156,9 @@ async function getArgocdResource<T>(ref: ArgocdResourceRef): Promise<T | null> {
   }
 }
 
-function withResourceVersionForReplace(body: unknown, current: unknown): unknown {
-  if (!body || typeof body !== 'object' || !current || typeof current !== 'object') {
-    return body;
-  }
-
-  const currentMetadata = (current as { metadata?: { resourceVersion?: unknown } }).metadata;
-  const resourceVersion = currentMetadata?.resourceVersion;
-
-  if (typeof resourceVersion !== 'string' || resourceVersion.length === 0) {
-    return body;
+function buildArgocdResourcePatch(body: unknown): unknown[] {
+  if (!body || typeof body !== 'object') {
+    return [];
   }
 
   const bodyRecord = body as Record<string, unknown>;
@@ -173,34 +166,53 @@ function withResourceVersionForReplace(body: unknown, current: unknown): unknown
     bodyRecord.metadata && typeof bodyRecord.metadata === 'object'
       ? (bodyRecord.metadata as Record<string, unknown>)
       : {};
+  const operations: unknown[] = [];
 
-  return {
-    ...bodyRecord,
-    metadata: {
-      ...metadata,
-      resourceVersion,
-    },
-  };
+  if (metadata.labels && typeof metadata.labels === 'object') {
+    operations.push({
+      op: 'add',
+      path: '/metadata/labels',
+      value: metadata.labels,
+    });
+  }
+
+  if (metadata.annotations && typeof metadata.annotations === 'object') {
+    operations.push({
+      op: 'add',
+      path: '/metadata/annotations',
+      value: metadata.annotations,
+    });
+  }
+
+  if (bodyRecord.spec && typeof bodyRecord.spec === 'object') {
+    operations.push({
+      op: 'replace',
+      path: '/spec',
+      value: bodyRecord.spec,
+    });
+  }
+
+  return operations;
 }
 
 async function upsertArgocdResource(ref: ArgocdResourceRef, body: unknown): Promise<void> {
   const { custom } = getK8sClient();
 
   try {
-    const current = await custom.getNamespacedCustomObject({
+    await custom.getNamespacedCustomObject({
       group: ARGO_API_GROUP,
       version: ARGO_API_VERSION,
       namespace: ref.namespace,
       plural: ref.plural,
       name: ref.name,
     });
-    await custom.replaceNamespacedCustomObject({
+    await custom.patchNamespacedCustomObject({
       group: ARGO_API_GROUP,
       version: ARGO_API_VERSION,
       namespace: ref.namespace,
       plural: ref.plural,
       name: ref.name,
-      body: withResourceVersionForReplace(body, current),
+      body: buildArgocdResourcePatch(body),
     });
   } catch (error) {
     if (isNotFoundError(error)) {
