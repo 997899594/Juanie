@@ -15,6 +15,7 @@ import {
   getEnvironmentKind,
   usesArgoRolloutsRuntime,
 } from '@/lib/environments/model';
+import { markEnvironmentRuntimeActivity } from '@/lib/environments/runtime-control';
 import { reconcileEnvironmentState } from '@/lib/environments/service';
 import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
@@ -131,6 +132,7 @@ export async function executeDeploymentWorkload(
   await updateDeploymentRealtimeState(deploymentId, {
     status: 'deploying',
   });
+  await markEnvironmentRuntimeActivity(environment.id);
 
   await logDeployment(deploymentId, 'Deploying to Kubernetes');
   await progress?.(50);
@@ -353,6 +355,7 @@ export async function executeDeploymentWorkload(
     errorMessage: null,
     deployedAt: new Date(),
   });
+  await markEnvironmentRuntimeActivity(targetEnvironment.id);
 
   await logDeployment(
     deploymentId,

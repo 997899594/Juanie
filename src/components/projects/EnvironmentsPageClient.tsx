@@ -866,6 +866,11 @@ function EnvironmentOverviewPanel({
             <div className={summaryClassName}>
               {environment.runtimeState?.summary ?? '运行态暂不可用'}
             </div>
+            {environment.runtimeState?.autoSleep ? (
+              <div className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {environment.runtimeState.autoSleep.summary}
+              </div>
+            ) : null}
           </div>
           {runtimeAction ? <div className="shrink-0">{runtimeAction}</div> : null}
         </div>

@@ -389,6 +389,7 @@ async function createProjectAggregate(input: {
           databaseStrategy: environment.databaseStrategy,
           deploymentStrategy: environment.deploymentStrategy,
           deploymentRuntime: environment.deploymentRuntime,
+          autoSleepEnabled: !environment.isProduction,
         }))
       )
       .returning();

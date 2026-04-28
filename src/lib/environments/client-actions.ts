@@ -41,6 +41,13 @@ export interface EnvironmentRuntimeState {
   readyReplicas: number;
   workloadCount: number;
   summary: string;
+  autoSleep: {
+    enabled: boolean;
+    idleMinutes: number | null;
+    lastActivityAt: string | Date | null;
+    lastSleptAt: string | Date | null;
+    summary: string;
+  };
 }
 
 export interface CreatePreviewEnvironmentInput {

@@ -664,6 +664,10 @@ export const environments = pgTable(
     deploymentRuntime: environmentDeploymentRuntimeEnum('deploymentRuntime')
       .default('native_k8s')
       .notNull(),
+    autoSleepEnabled: boolean('autoSleepEnabled').default(true).notNull(),
+    idleSleepMinutes: integer('idleSleepMinutes'),
+    lastRuntimeActivityAt: timestamp('lastRuntimeActivityAt').defaultNow().notNull(),
+    lastRuntimeSleptAt: timestamp('lastRuntimeSleptAt'),
 
     namespace: varchar('namespace', { length: 100 }),
 
@@ -675,6 +679,11 @@ export const environments = pgTable(
     previewIdx: index('environment_preview_idx').on(table.projectId, table.isPreview),
     previewPrIdx: index('environment_preview_pr_idx').on(table.projectId, table.previewPrNumber),
     baseEnvironmentIdx: index('environment_base_env_idx').on(table.baseEnvironmentId),
+    idleSleepIdx: index('environment_idle_sleep_idx').on(
+      table.autoSleepEnabled,
+      table.kind,
+      table.lastRuntimeActivityAt
+    ),
   })
 );
 

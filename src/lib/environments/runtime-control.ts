@@ -1,5 +1,11 @@
+import { eq } from 'drizzle-orm';
 import { listArgoRollouts, scaleArgoRolloutIfExists } from '@/lib/argocd';
 import { db } from '@/lib/db';
+import { environments } from '@/lib/db/schema';
+import {
+  buildEnvironmentAutoSleepSnapshot,
+  type EnvironmentAutoSleepSnapshot,
+} from '@/lib/environments/idle-policy';
 import { isProductionEnvironment } from '@/lib/environments/model';
 import { getDeployments, isK8sAvailable, scaleDeploymentIfExists } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
@@ -10,6 +16,7 @@ export type EnvironmentRuntimeState = {
   readyReplicas: number;
   workloadCount: number;
   summary: string;
+  autoSleep: EnvironmentAutoSleepSnapshot;
 };
 
 type EnvironmentRuntimeProject = {
@@ -24,6 +31,12 @@ type EnvironmentRuntimeRecord = {
   kind?: 'production' | 'persistent' | 'preview' | null;
   isProduction?: boolean | null;
   isPreview?: boolean | null;
+  autoSleepEnabled?: boolean | null;
+  idleSleepMinutes?: number | null;
+  lastRuntimeActivityAt?: Date | string | null;
+  lastRuntimeSleptAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  createdAt?: Date | string | null;
 };
 
 type EnvironmentRuntimeService = {
@@ -54,6 +67,8 @@ export async function getEnvironmentRuntimeState(input: {
   environment: EnvironmentRuntimeRecord;
   services?: EnvironmentRuntimeService[];
 }): Promise<EnvironmentRuntimeState> {
+  const autoSleep = buildEnvironmentAutoSleepSnapshot(input.environment);
+
   if (!input.environment.namespace) {
     return {
       state: 'unknown',
@@ -61,6 +76,7 @@ export async function getEnvironmentRuntimeState(input: {
       readyReplicas: 0,
       workloadCount: 0,
       summary: '环境命名空间还没有建立',
+      autoSleep,
     };
   }
 
@@ -71,6 +87,7 @@ export async function getEnvironmentRuntimeState(input: {
       readyReplicas: 0,
       workloadCount: 0,
       summary: '当前无法连接 Kubernetes',
+      autoSleep,
     };
   }
 
@@ -106,6 +123,7 @@ export async function getEnvironmentRuntimeState(input: {
         readyReplicas: 0,
         workloadCount: 0,
         summary: '当前环境还没有可休眠的应用工作负载',
+        autoSleep,
       };
     }
 
@@ -129,6 +147,7 @@ export async function getEnvironmentRuntimeState(input: {
         state === 'sleeping'
           ? '应用工作负载已休眠，数据库和配置仍保留'
           : `${readyReplicas}/${desiredReplicas} 个应用副本可用`,
+      autoSleep,
     };
   } catch (error) {
     return {
@@ -137,8 +156,20 @@ export async function getEnvironmentRuntimeState(input: {
       readyReplicas: 0,
       workloadCount: 0,
       summary: error instanceof Error ? error.message : '运行态暂不可用',
+      autoSleep,
     };
   }
+}
+
+export async function markEnvironmentRuntimeActivity(environmentId: string): Promise<void> {
+  await db
+    .update(environments)
+    .set({
+      lastRuntimeActivityAt: new Date(),
+      lastRuntimeSleptAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(environments.id, environmentId));
 }
 
 export async function setEnvironmentRuntimeState(input: {
@@ -184,9 +215,25 @@ export async function setEnvironmentRuntimeState(input: {
     throw new Error('当前环境还没有可控制的应用工作负载');
   }
 
+  const now = new Date();
+  await db
+    .update(environments)
+    .set({
+      lastRuntimeActivityAt: input.action === 'wake' ? now : undefined,
+      lastRuntimeSleptAt: input.action === 'sleep' ? now : null,
+      updatedAt: now,
+    })
+    .where(eq(environments.id, input.environment.id));
+
   return getEnvironmentRuntimeState({
     project: input.project,
-    environment: input.environment,
+    environment: {
+      ...input.environment,
+      lastRuntimeActivityAt:
+        input.action === 'wake' ? now : input.environment.lastRuntimeActivityAt,
+      lastRuntimeSleptAt: input.action === 'sleep' ? now : null,
+      updatedAt: now,
+    },
     services: serviceList,
   });
 }
