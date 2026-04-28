@@ -159,7 +159,11 @@ export async function getProjectEnvironmentListData(input: {
     db.query.services.findMany({
       where: eq(services.projectId, projectId),
       columns: {
+        id: true,
         name: true,
+        type: true,
+        isPublic: true,
+        port: true,
         replicas: true,
       },
     }),

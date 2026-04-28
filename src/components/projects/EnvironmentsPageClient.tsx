@@ -871,6 +871,11 @@ function EnvironmentOverviewPanel({
                 {environment.runtimeState.autoSleep.summary}
               </div>
             ) : null}
+            {environment.runtimeState?.state === 'sleeping' && environment.primaryDomainUrl ? (
+              <div className="mt-2 text-sm text-muted-foreground">
+                访问地址会自动唤醒应用，数据库和环境变量不会被重建。
+              </div>
+            ) : null}
           </div>
           {runtimeAction ? <div className="shrink-0">{runtimeAction}</div> : null}
         </div>

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { domains } from '@/lib/db/schema';
 import { buildDomainRouteName } from '@/lib/domains/defaults';
+import { deleteEnvironmentWakeRouteForHostname } from '@/lib/domains/wake-routing';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
@@ -53,6 +54,7 @@ export async function syncEnvironmentServiceTrafficRoutes(input: {
 
   for (const domain of serviceDomains) {
     const routeName = buildDomainRouteName(domain.hostname);
+    await deleteEnvironmentWakeRouteForHostname(domain.hostname);
     await reconcileCiliumHTTPRoutesForHostname({
       namespace: input.namespace,
       hostname: domain.hostname,

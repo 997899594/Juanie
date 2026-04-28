@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { listArgoRollouts, scaleArgoRolloutIfExists } from '@/lib/argocd';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
+import { syncEnvironmentWakeRoutes } from '@/lib/domains/wake-routing';
 import {
   buildEnvironmentAutoSleepSnapshot,
   type EnvironmentAutoSleepSnapshot,
@@ -9,6 +10,10 @@ import {
 import { isProductionEnvironment } from '@/lib/environments/model';
 import { getDeployments, isK8sAvailable, scaleDeploymentIfExists } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
+import {
+  buildStableDeploymentName,
+  syncEnvironmentServiceTrafficRoutes,
+} from '@/lib/releases/traffic';
 
 export type EnvironmentRuntimeState = {
   state: 'running' | 'sleeping' | 'partial' | 'not_deployed' | 'unknown';
@@ -40,7 +45,11 @@ type EnvironmentRuntimeRecord = {
 };
 
 type EnvironmentRuntimeService = {
+  id: string;
   name: string;
+  type: string;
+  isPublic?: boolean | null;
+  port?: number | null;
   replicas: number | null;
 };
 
@@ -56,10 +65,77 @@ async function getProjectServices(projectId: string): Promise<EnvironmentRuntime
   return db.query.services.findMany({
     where: (service, { eq }) => eq(service.projectId, projectId),
     columns: {
+      id: true,
       name: true,
+      type: true,
+      isPublic: true,
+      port: true,
       replicas: true,
     },
   });
+}
+
+async function waitForEnvironmentRuntimeState(input: {
+  project: EnvironmentRuntimeProject;
+  environment: EnvironmentRuntimeRecord;
+  services: EnvironmentRuntimeService[];
+  targetState: EnvironmentRuntimeState['state'];
+  timeoutMs: number;
+  pollIntervalMs?: number;
+}): Promise<EnvironmentRuntimeState> {
+  const pollIntervalMs = input.pollIntervalMs ?? 2_000;
+  const deadline = Date.now() + input.timeoutMs;
+  let runtimeState = await getEnvironmentRuntimeState(input);
+
+  while (runtimeState.state !== input.targetState && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    runtimeState = await getEnvironmentRuntimeState(input);
+  }
+
+  return runtimeState;
+}
+
+async function syncEnvironmentRuntimeRoutes(input: {
+  project: EnvironmentRuntimeProject;
+  environment: EnvironmentRuntimeRecord;
+  services: EnvironmentRuntimeService[];
+  runtimeState: EnvironmentRuntimeState;
+}): Promise<void> {
+  if (!input.environment.namespace) {
+    return;
+  }
+
+  if (input.runtimeState.state === 'sleeping' || input.runtimeState.state === 'partial') {
+    await syncEnvironmentWakeRoutes({
+      environmentId: input.environment.id,
+      environmentNamespace: input.environment.namespace,
+    });
+    return;
+  }
+
+  if (input.runtimeState.state !== 'running') {
+    return;
+  }
+
+  for (const service of input.services) {
+    if (service.type !== 'web' || service.isPublic === false) {
+      continue;
+    }
+
+    await syncEnvironmentServiceTrafficRoutes({
+      projectSlug: input.project.slug,
+      environmentId: input.environment.id,
+      namespace: input.environment.namespace,
+      service,
+      backends: [
+        {
+          serviceName: buildStableDeploymentName(input.project.slug, service.name),
+          servicePort: service.port ?? 3000,
+          weight: 100,
+        },
+      ],
+    });
+  }
 }
 
 export async function getEnvironmentRuntimeState(input: {
@@ -176,6 +252,7 @@ export async function setEnvironmentRuntimeState(input: {
   project: EnvironmentRuntimeProject;
   environment: EnvironmentRuntimeRecord;
   action: 'sleep' | 'wake';
+  waitForReadyMs?: number;
 }): Promise<EnvironmentRuntimeState> {
   if (isProductionEnvironment(input.environment)) {
     throw new Error('生产环境不允许休眠');
@@ -216,6 +293,13 @@ export async function setEnvironmentRuntimeState(input: {
   }
 
   const now = new Date();
+  const updatedEnvironment = {
+    ...input.environment,
+    lastRuntimeActivityAt: input.action === 'wake' ? now : input.environment.lastRuntimeActivityAt,
+    lastRuntimeSleptAt: input.action === 'sleep' ? now : null,
+    updatedAt: now,
+  };
+
   await db
     .update(environments)
     .set({
@@ -225,15 +309,27 @@ export async function setEnvironmentRuntimeState(input: {
     })
     .where(eq(environments.id, input.environment.id));
 
-  return getEnvironmentRuntimeState({
+  const runtimeState =
+    input.action === 'wake' && (input.waitForReadyMs ?? 30_000) > 0
+      ? await waitForEnvironmentRuntimeState({
+          project: input.project,
+          environment: updatedEnvironment,
+          services: serviceList,
+          targetState: 'running',
+          timeoutMs: input.waitForReadyMs ?? 30_000,
+        })
+      : await getEnvironmentRuntimeState({
+          project: input.project,
+          environment: updatedEnvironment,
+          services: serviceList,
+        });
+
+  await syncEnvironmentRuntimeRoutes({
     project: input.project,
-    environment: {
-      ...input.environment,
-      lastRuntimeActivityAt:
-        input.action === 'wake' ? now : input.environment.lastRuntimeActivityAt,
-      lastRuntimeSleptAt: input.action === 'sleep' ? now : null,
-      updatedAt: now,
-    },
+    environment: updatedEnvironment,
     services: serviceList,
+    runtimeState,
   });
+
+  return runtimeState;
 }
