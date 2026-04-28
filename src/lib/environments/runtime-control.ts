@@ -95,7 +95,7 @@ async function waitForEnvironmentRuntimeState(input: {
   return runtimeState;
 }
 
-async function syncEnvironmentRuntimeRoutes(input: {
+export async function syncEnvironmentRuntimeRoutes(input: {
   project: EnvironmentRuntimeProject;
   environment: EnvironmentRuntimeRecord;
   services: EnvironmentRuntimeService[];
@@ -105,7 +105,10 @@ async function syncEnvironmentRuntimeRoutes(input: {
     return;
   }
 
-  if (input.runtimeState.state === 'sleeping' || input.runtimeState.state === 'partial') {
+  if (
+    !isProductionEnvironment(input.environment) &&
+    (input.runtimeState.state === 'sleeping' || input.runtimeState.state === 'partial')
+  ) {
     await syncEnvironmentWakeRoutes({
       environmentId: input.environment.id,
       environmentNamespace: input.environment.namespace,

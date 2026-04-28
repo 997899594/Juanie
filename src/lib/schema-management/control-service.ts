@@ -3,6 +3,7 @@ import { getProjectAccessOrThrow } from '@/lib/api/access';
 import { db } from '@/lib/db';
 import { databases, schemaRepairPlans } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { markEnvironmentSchemaAligned } from '@/lib/schema-management/adopt';
 import {
   type EnvironmentSchemaStateSnapshot,
   getEnvironmentSchemaState,
@@ -281,4 +282,15 @@ export async function runSchemaRepairAtlasForDatabase(input: {
     planId: latestPlan.id,
     userId: input.userId,
   });
+}
+
+export async function markSchemaAlignedForDatabase(input: {
+  projectId: string;
+  databaseId: string;
+  userId: string;
+}): Promise<PresentedEnvironmentSchemaState> {
+  await getSchemaDatabaseContext(input);
+  const state = await markEnvironmentSchemaAligned(input);
+
+  return presentSchemaState(state) as PresentedEnvironmentSchemaState;
 }

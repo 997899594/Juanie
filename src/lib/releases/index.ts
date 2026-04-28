@@ -27,10 +27,7 @@ import {
   PreviewDatabaseGuardBlockedError,
 } from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
-import {
-  inspectReleaseSchemaGate,
-  ReleaseSchemaGateBlockedError,
-} from '@/lib/releases/schema-gate';
+import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;

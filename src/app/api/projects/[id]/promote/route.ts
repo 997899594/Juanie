@@ -15,7 +15,7 @@ import { createProjectRelease } from '@/lib/releases';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
-import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
+import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

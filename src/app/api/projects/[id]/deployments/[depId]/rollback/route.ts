@@ -10,7 +10,7 @@ import { createProjectRelease } from '@/lib/releases';
 import { getProjectDeploymentContextOrThrow } from '@/lib/releases/deployment-access';
 import { buildRollbackPlan } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
-import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
+import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 export async function GET(
   _request: Request,

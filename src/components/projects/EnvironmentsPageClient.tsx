@@ -782,6 +782,33 @@ function EnvironmentOverviewPanel({
   const hasStrategyControl = environment.actions.canConfigureStrategy;
   const sourceSummary = buildEnvironmentSourceSummary(environment);
   const versionSummary = buildEnvironmentVersionSummary(environment);
+  const schemaSummary = buildEnvironmentDatabaseSummary(environment);
+  const mainFlowItems = [
+    {
+      key: 'source',
+      label: '来源',
+      value: sourceSummary.label,
+      summary: sourceSummary.summary,
+    },
+    {
+      key: 'release',
+      label: '版本',
+      value: versionSummary.label,
+      summary: versionSummary.summary,
+    },
+    {
+      key: 'schema',
+      label: 'Schema Safety',
+      value: schemaSummary,
+      summary: variableSummary,
+    },
+    {
+      key: 'runtime',
+      label: '运行',
+      value: buildRuntimeStateLabel(environment.runtimeState),
+      summary: environment.runtimeState?.summary ?? '运行态暂不可用',
+    },
+  ];
   const strategyHelper = hasStrategyControl
     ? environment.actions.configureStrategySummary
     : environment.actions.configureStrategySummary !== environment.strategyLabel
@@ -881,6 +908,31 @@ function EnvironmentOverviewPanel({
         </div>
       </section>
 
+      <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
+        <div className={titleClassName}>主链路</div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {mainFlowItems.map((item, index) => (
+            <div
+              key={item.key}
+              className="relative min-w-0 rounded-[18px] bg-white/70 px-4 py-4 shadow-[0_0_0_1px_rgba(17,17,17,0.04)]"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                {item.label}
+              </div>
+              <div className="mt-2 truncate text-base font-semibold tracking-[-0.02em] text-foreground">
+                {item.value}
+              </div>
+              <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {item.summary || '等待数据'}
+              </div>
+              {index < mainFlowItems.length - 1 ? (
+                <ArrowRight className="-right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/60 md:absolute md:block" />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <EnvironmentAISummaryPanel
         projectId={projectId}
         environmentId={environment.id}
@@ -918,28 +970,7 @@ function EnvironmentOverviewPanel({
         </section>
       ) : null}
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        <div className={shellClassName}>
-          <div className={titleClassName}>来源</div>
-          <div className={valueClassName}>{sourceSummary.label}</div>
-          <div className={summaryClassName}>{sourceSummary.summary}</div>
-        </div>
-
-        <div className={shellClassName}>
-          <div className={titleClassName}>当前版本</div>
-          <div className={valueClassName}>{versionSummary.label}</div>
-          <div className={summaryClassName}>{versionSummary.summary}</div>
-          <div className="mt-4 text-xs text-muted-foreground">
-            {environment.policy.primarySignal?.label ??
-              environment.previewLifecycle?.stateLabel ??
-              '运行中'}
-            {' · '}
-            {buildEnvironmentStatusSummary(environment)}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 lg:grid-cols-2">
+      <section>
         <div
           className={cn(
             shellClassName,
@@ -978,12 +1009,6 @@ function EnvironmentOverviewPanel({
           {strategyHelper || environment.strategyLabel ? (
             <div className={summaryClassName}>{strategyHelper ?? environment.strategyLabel}</div>
           ) : null}
-        </div>
-
-        <div className={shellClassName}>
-          <div className={titleClassName}>配置概览</div>
-          <div className={valueClassName}>{buildEnvironmentDatabaseSummary(environment)}</div>
-          <div className={summaryClassName}>{variableSummary}</div>
         </div>
       </section>
     </div>

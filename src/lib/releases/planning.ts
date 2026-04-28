@@ -38,10 +38,7 @@ import {
 } from '@/lib/releases/admission';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
 import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
-import {
-  inspectReleaseSchemaGate,
-  type ReleaseSchemaGateSnapshot,
-} from '@/lib/releases/schema-gate';
+import { inspectReleaseSchemaGate, type ReleaseSchemaGateSnapshot } from '@/lib/schema-safety';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface PlanningServiceLike {

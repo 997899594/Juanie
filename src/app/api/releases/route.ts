@@ -5,7 +5,7 @@ import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
-import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
+import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 export async function POST(request: Request) {
   try {

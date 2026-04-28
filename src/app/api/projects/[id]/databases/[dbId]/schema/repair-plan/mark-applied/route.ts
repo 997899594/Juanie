@@ -4,7 +4,7 @@ import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import {
   isSchemaManagementActionError,
   markLatestSchemaRepairPlanAppliedForDatabase,
-} from '@/lib/schema-management/control-service';
+} from '@/lib/schema-safety';
 
 export async function POST(
   _request: Request,

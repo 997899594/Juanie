@@ -4,6 +4,7 @@ import { domains } from '@/lib/db/schema';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
+  getCiliumHTTPRoutes,
   isK8sAvailable,
   reconcileCiliumHTTPRoutesForHostname,
 } from '@/lib/k8s';
@@ -16,6 +17,60 @@ const SHARED_GATEWAY_SECTION = 'https-wildcard';
 
 function getControlPlaneNamespace(): string {
   return process.env.JUANIE_NAMESPACE?.trim() || 'juanie';
+}
+
+interface WakeHTTPRouteLike {
+  metadata?: {
+    name?: string;
+  };
+  spec?: {
+    hostnames?: string[];
+    rules?: Array<{
+      backendRefs?: Array<{
+        name?: string;
+        port?: number;
+      }>;
+    }>;
+  };
+}
+
+function isWakeRoute(route: WakeHTTPRouteLike): boolean {
+  return (
+    route.spec?.rules?.some((rule) =>
+      rule.backendRefs?.some(
+        (backend) => backend.name === WAKE_SERVICE_NAME && backend.port === WAKE_SERVICE_PORT
+      )
+    ) ?? false
+  );
+}
+
+export async function getWakeRoutedHostnames(hostnames: string[]): Promise<Set<string>> {
+  if (!isK8sAvailable() || hostnames.length === 0) {
+    return new Set();
+  }
+
+  const expectedHostnames = new Set(hostnames);
+  const expectedRouteNames = new Set(hostnames.map(buildDomainRouteName));
+  const routes = (await getCiliumHTTPRoutes(getControlPlaneNamespace())) as WakeHTTPRouteLike[];
+  const wakeRoutedHostnames = new Set<string>();
+
+  for (const route of routes) {
+    if (!route.metadata?.name || !expectedRouteNames.has(route.metadata.name)) {
+      continue;
+    }
+
+    if (!isWakeRoute(route)) {
+      continue;
+    }
+
+    for (const hostname of route.spec?.hostnames ?? []) {
+      if (expectedHostnames.has(hostname)) {
+        wakeRoutedHostnames.add(hostname);
+      }
+    }
+  }
+
+  return wakeRoutedHostnames;
 }
 
 export async function deleteEnvironmentWakeRouteForHostname(hostname: string): Promise<void> {

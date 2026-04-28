@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import {
-  inspectSchemaStateForDatabase,
-  isSchemaManagementActionError,
-} from '@/lib/schema-management/control-service';
+import { inspectSchemaStateForDatabase, isSchemaManagementActionError } from '@/lib/schema-safety';
 
 export async function POST(
   _request: Request,

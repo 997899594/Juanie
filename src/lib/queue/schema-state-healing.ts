@@ -8,8 +8,8 @@ import {
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { logger } from '@/lib/logger';
-import { isReleaseSchemaStateBlocking } from '@/lib/releases/schema-gate';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
+import { isReleaseSchemaStateBlocking } from '@/lib/schema-safety';
 
 const DEFAULT_SCHEMA_STATE_HEALING_SCHEDULE =
   process.env.SCHEMA_STATE_HEALING_SCHEDULE?.trim() || '*/10 * * * *';

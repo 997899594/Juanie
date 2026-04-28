@@ -1,6 +1,7 @@
 import { initK8sClient } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 import { startEnvironmentIdleSleep } from './environment-idle-sleep';
+import { startEnvironmentRouteReconciliation } from './environment-route-reconciliation';
 import { startHistoryRetention } from './history-retention';
 import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { startMigrationStateHealing } from './migration-state-healing';
@@ -33,6 +34,11 @@ export function startSchedulerRuntime(): string[] {
   if (process.env.ENABLE_IDLE_SLEEP !== 'false') {
     startEnvironmentIdleSleep();
     enabledTasks.push('environment-idle-sleep');
+  }
+
+  if (process.env.ENABLE_ROUTE_RECONCILIATION !== 'false') {
+    startEnvironmentRouteReconciliation();
+    enabledTasks.push('environment-route-reconciliation');
   }
 
   if (process.env.ENABLE_AUTO_REMEDIATION !== 'false') {
