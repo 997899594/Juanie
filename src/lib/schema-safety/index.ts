@@ -1,7 +1,9 @@
 export {
+  getStoredReleaseSchemaGate,
   inspectReleaseSchemaGate,
   isReleaseSchemaStateBlocking,
   ReleaseSchemaGateBlockedError,
+  type ReleaseSchemaGateRefreshSnapshot,
   type ReleaseSchemaGateSnapshot,
   type ReleaseSchemaGateState,
 } from '@/lib/releases/schema-gate';

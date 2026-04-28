@@ -107,6 +107,9 @@ export function ReleasePromoteDialog({
         sourceCommitSha: selectedPlan.sourceRelease?.sourceCommitSha,
       })
     : null;
+  const schemaRefresh = selectedPlan?.plan.schema.refresh ?? null;
+  const schemaRefreshPending =
+    schemaRefresh && schemaRefresh.queuedCount + schemaRefresh.runningCount > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -214,8 +217,8 @@ export function ReleasePromoteDialog({
 
                 {loadingPlan ? (
                   <EmptyState
-                    title="正在运行实时预检"
-                    description="正在读取仓库配置、schema 门禁和目标环境状态。"
+                    title="正在读取提升计划"
+                    description="先展示持久门禁快照，Schema 深度检查会在后台继续刷新。"
                     className="min-h-40 rounded-[20px]"
                   />
                 ) : planError ? (
@@ -230,6 +233,17 @@ export function ReleasePromoteDialog({
                       nextActionLabel={promotePanel.nextActionLabel}
                       summaryClassName="rounded-[20px]"
                     />
+
+                    {schemaRefreshPending ? (
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
+                        Schema 状态正在后台刷新，完成后会自动更新这里；创建发布时仍会再次强校验。
+                      </div>
+                    ) : schemaRefresh?.missingCount ? (
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
+                        还有 {schemaRefresh.missingCount}{' '}
+                        个数据库尚无持久检查结果；创建发布时会强校验。
+                      </div>
+                    ) : null}
 
                     {promoteAI?.summary && (
                       <div className={dialogSubtleClassName}>

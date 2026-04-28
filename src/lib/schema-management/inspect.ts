@@ -31,6 +31,7 @@ import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repai
 import {
   canUseSchemaRunnerJobs,
   runSchemaRunnerJobAndWait,
+  startSchemaRunnerJob,
 } from '@/lib/schema-management/schema-runner-job';
 import { classifySchemaLedgerState } from './classification';
 
@@ -66,6 +67,12 @@ interface EnvironmentSchemaInspectionInput {
   databaseId: string;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
+}
+
+export interface EnvironmentSchemaInspectionRequestSnapshot {
+  status: 'queued' | 'running' | 'unavailable' | 'failed';
+  currentState: EnvironmentSchemaStateSnapshot | null;
+  message: string | null;
 }
 
 interface InspectionDatabaseTarget {
@@ -538,6 +545,44 @@ function buildSchemaInspectJobName(input: EnvironmentSchemaInspectionInput): str
   return `schema-inspect-${input.databaseId.slice(0, 8)}-${digest}`;
 }
 
+function buildSchemaInspectRunnerInput(input: EnvironmentSchemaInspectionInput) {
+  return {
+    jobName: buildSchemaInspectJobName(input),
+    mode: 'inspect' as const,
+    labels: {
+      'juanie.dev/schema-inspect': 'true',
+      'juanie.dev/database-id': input.databaseId,
+    },
+    env: [
+      {
+        name: 'SCHEMA_INSPECT_PROJECT_ID',
+        value: input.projectId,
+      },
+      {
+        name: 'SCHEMA_INSPECT_DATABASE_ID',
+        value: input.databaseId,
+      },
+      ...(input.sourceRef
+        ? [
+            {
+              name: 'SCHEMA_INSPECT_SOURCE_REF',
+              value: input.sourceRef,
+            },
+          ]
+        : []),
+      ...(input.sourceCommitSha
+        ? [
+            {
+              name: 'SCHEMA_INSPECT_SOURCE_COMMIT_SHA',
+              value: input.sourceCommitSha,
+            },
+          ]
+        : []),
+    ],
+    waitForRedis: false,
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -564,42 +609,14 @@ async function inspectEnvironmentSchemaStateInRunner(
   input: EnvironmentSchemaInspectionInput
 ): Promise<EnvironmentSchemaStateSnapshot> {
   const startedAt = new Date();
-  const env = [
-    {
-      name: 'SCHEMA_INSPECT_PROJECT_ID',
-      value: input.projectId,
-    },
-    {
-      name: 'SCHEMA_INSPECT_DATABASE_ID',
-      value: input.databaseId,
-    },
-    ...(input.sourceRef
-      ? [
-          {
-            name: 'SCHEMA_INSPECT_SOURCE_REF',
-            value: input.sourceRef,
-          },
-        ]
-      : []),
-    ...(input.sourceCommitSha
-      ? [
-          {
-            name: 'SCHEMA_INSPECT_SOURCE_COMMIT_SHA',
-            value: input.sourceCommitSha,
-          },
-        ]
-      : []),
-  ];
+  const runnerInput = buildSchemaInspectRunnerInput(input);
 
   await runSchemaRunnerJobAndWait({
-    jobName: buildSchemaInspectJobName(input),
-    mode: 'inspect',
-    labels: {
-      'juanie.dev/schema-inspect': 'true',
-      'juanie.dev/database-id': input.databaseId,
-    },
-    env,
-    waitForRedis: false,
+    jobName: runnerInput.jobName,
+    mode: runnerInput.mode,
+    labels: runnerInput.labels,
+    env: runnerInput.env,
+    waitForRedis: runnerInput.waitForRedis,
   });
 
   const state = await waitForFreshSchemaState(input, startedAt);
@@ -783,5 +800,43 @@ export async function inspectEnvironmentSchemaState(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return buildSchemaInspectionFailureState(input, database, message);
+  }
+}
+
+export async function requestEnvironmentSchemaStateInspection(
+  input: EnvironmentSchemaInspectionInput
+): Promise<EnvironmentSchemaInspectionRequestSnapshot> {
+  await loadInspectionDatabase(input);
+  const currentState = await getEnvironmentSchemaState(input.projectId, input.databaseId);
+
+  if (!canUseSchemaRunnerJobs() || process.env.JUANIE_SCHEMA_INSPECT_FORCE_LOCAL === 'true') {
+    return {
+      status: 'unavailable',
+      currentState,
+      message: 'Schema runner job execution is not available in this runtime',
+    };
+  }
+
+  try {
+    const runnerInput = buildSchemaInspectRunnerInput(input);
+    const started = await startSchemaRunnerJob({
+      jobName: runnerInput.jobName,
+      mode: runnerInput.mode,
+      labels: runnerInput.labels,
+      env: runnerInput.env,
+      waitForRedis: runnerInput.waitForRedis,
+    });
+
+    return {
+      status: started.status,
+      currentState,
+      message: started.message,
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      currentState,
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
 }

@@ -26,8 +26,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const url = new URL(request.url);
     const flowId = url.searchParams.get('flowId');
+    const refreshSchemaParam = url.searchParams.get('refreshSchema');
+    const requestSchemaRefresh =
+      refreshSchemaParam !== 'false' && refreshSchemaParam !== '0' && refreshSchemaParam !== 'no';
     const promotion = await buildPromotionPlan(id, {
       flowId,
+      schemaGateMode: 'stored',
+      requestSchemaRefresh,
     });
 
     if (!promotion.targetEnvironment && flowId) {

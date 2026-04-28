@@ -39,7 +39,11 @@ import {
 } from '@/lib/releases/admission';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
 import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
-import { inspectReleaseSchemaGate, type ReleaseSchemaGateSnapshot } from '@/lib/schema-safety';
+import {
+  getStoredReleaseSchemaGate,
+  inspectReleaseSchemaGate,
+  type ReleaseSchemaGateSnapshot,
+} from '@/lib/schema-safety';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface PlanningServiceLike {
@@ -101,6 +105,7 @@ export interface ReleasePlanningSnapshot {
     states: ReleaseSchemaGateSnapshot['states'];
     summary: string | null;
     nextActionLabel: string | null;
+    refresh: ReleaseSchemaGateSnapshot['refresh'];
   };
   environmentInheritance: string | null;
   environmentDatabaseStrategy: string | null;
@@ -131,6 +136,8 @@ export interface PromotionPlanSnapshot {
 
 interface PromotionPlanningOptions {
   includeLiveChecks?: boolean;
+  schemaGateMode?: 'live' | 'stored';
+  requestSchemaRefresh?: boolean;
 }
 
 function buildStaticPlanningSnapshot(input: {
@@ -181,6 +188,14 @@ function buildStaticPlanningSnapshot(input: {
       states: [],
       summary: null,
       nextActionLabel: null,
+      refresh: {
+        requested: false,
+        queuedCount: 0,
+        runningCount: 0,
+        unavailableCount: 0,
+        failedCount: 0,
+        missingCount: 0,
+      },
     },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
@@ -366,6 +381,14 @@ export function summarizeReleasePlan(input: {
       states: schemaGate?.states ?? [],
       summary: schemaGate?.summary ?? null,
       nextActionLabel: schemaGate?.nextActionLabel ?? null,
+      refresh: schemaGate?.refresh ?? {
+        requested: false,
+        queuedCount: 0,
+        runningCount: 0,
+        unavailableCount: 0,
+        failedCount: 0,
+        missingCount: 0,
+      },
     },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
@@ -387,6 +410,8 @@ export async function buildProjectReleasePlan(input: {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
   entryPoint?: ReleaseEntryPoint;
+  schemaGateMode?: PromotionPlanningOptions['schemaGateMode'];
+  requestSchemaRefresh?: boolean;
 }): Promise<ReleasePlanningSnapshot> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, input.projectId),
@@ -457,13 +482,23 @@ export async function buildProjectReleasePlan(input: {
   const filteredMigrationSpecs = effectiveMigrationSpecs
     .filter(({ pendingInspection }) => pendingInspection.state !== 'none')
     .map(({ spec }) => spec);
-  const schemaGate = await inspectReleaseSchemaGate({
-    projectId: project.id,
-    environmentId: environment.id,
-    serviceIds,
-    sourceRef: input.sourceRef,
-    sourceCommitSha: input.sourceCommitSha,
-  });
+  const schemaGate =
+    input.schemaGateMode === 'stored'
+      ? await getStoredReleaseSchemaGate({
+          projectId: project.id,
+          environmentId: environment.id,
+          serviceIds,
+          sourceRef: input.sourceRef,
+          sourceCommitSha: input.sourceCommitSha,
+          requestRefresh: input.requestSchemaRefresh,
+        })
+      : await inspectReleaseSchemaGate({
+          projectId: project.id,
+          environmentId: environment.id,
+          serviceIds,
+          sourceRef: input.sourceRef,
+          sourceCommitSha: input.sourceCommitSha,
+        });
 
   return summarizeReleasePlan({
     environment,
@@ -587,12 +622,14 @@ async function buildPromotionPlanForResolution(
         sourceRef: sourceRelease.sourceRef,
         sourceCommitSha: sourceRelease.sourceCommitSha,
         entryPoint: 'promotion',
+        schemaGateMode: options.schemaGateMode,
+        requestSchemaRefresh: options.requestSchemaRefresh,
       })
     : buildStaticPlanningSnapshot({
         canCreate: true,
         blockingReason: null,
         environment: resolution.targetEnvironment,
-        summary: '打开提升发布时执行实时预检',
+        summary: '打开提升发布时读取最新门禁快照',
       });
 
   return {

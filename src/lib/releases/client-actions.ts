@@ -334,10 +334,14 @@ export async function createPromotionRelease(input: {
 export async function fetchPromotionPlan(input: {
   projectId: string;
   flowId?: string | null;
+  refreshSchema?: boolean;
 }): Promise<PromotionPlanResponse> {
   const params = new URLSearchParams();
   if (input.flowId) {
     params.set('flowId', input.flowId);
+  }
+  if (input.refreshSchema === false) {
+    params.set('refreshSchema', 'false');
   }
 
   const query = params.toString();

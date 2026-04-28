@@ -3,6 +3,7 @@ import { createJob, deleteJob, getJob, getPodLogs, getPods, isK8sAvailable } fro
 
 export type SchemaRunnerMode = 'schema-repair' | 'inspect' | 'migration';
 export type SchemaRunnerJobStatus = 'missing' | 'running' | 'succeeded' | 'failed';
+export type SchemaRunnerJobStartStatus = 'queued' | 'running';
 
 interface SchemaRunnerJobInput {
   namespace: string;
@@ -331,5 +332,74 @@ export async function runSchemaRunnerJobAndWait(input: {
     if (ownsJob) {
       await deleteJob(namespace, input.jobName).catch(() => undefined);
     }
+  }
+}
+
+export async function startSchemaRunnerJob(input: {
+  namespace?: string;
+  jobName: string;
+  mode: SchemaRunnerMode;
+  env?: Array<{
+    name: string;
+    value: string;
+  }>;
+  labels?: Record<string, string>;
+  waitForRedis?: boolean;
+}): Promise<{
+  status: SchemaRunnerJobStartStatus;
+  message: string | null;
+}> {
+  const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
+  const image = resolveSchemaRunnerImage();
+  if (!isK8sAvailable()) {
+    throw new Error('Schema runner execution requires Kubernetes connectivity');
+  }
+  if (!image) {
+    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
+  }
+
+  const existingStatus = await getSchemaRunnerJobStatus({
+    namespace,
+    jobName: input.jobName,
+  });
+
+  if (existingStatus.status === 'running') {
+    return {
+      status: 'running',
+      message: existingStatus.message,
+    };
+  }
+
+  if (existingStatus.status === 'succeeded' || existingStatus.status === 'failed') {
+    await deleteJob(namespace, input.jobName).catch(() => undefined);
+  }
+
+  try {
+    await createJob(
+      namespace,
+      buildSchemaRunnerJob({
+        namespace,
+        jobName: input.jobName,
+        image,
+        mode: input.mode,
+        env: input.env,
+        labels: input.labels,
+        waitForRedis: input.waitForRedis,
+      })
+    );
+
+    return {
+      status: 'queued',
+      message: null,
+    };
+  } catch (error) {
+    if (isK8sConflictError(error)) {
+      return {
+        status: 'running',
+        message: null,
+      };
+    }
+
+    throw error;
   }
 }

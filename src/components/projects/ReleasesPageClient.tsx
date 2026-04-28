@@ -3,7 +3,7 @@
 import { ArrowUpCircle, Database, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
+import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -28,6 +29,29 @@ function getPromotionPlanKey(flowId?: string | null): string {
   return flowId ?? '__default__';
 }
 
+function mergePromotionPlanItems(
+  currentPlans: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'],
+  plan: Awaited<ReturnType<typeof fetchPromotionPlan>>
+): Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'] {
+  const nextKey = getPromotionPlanKey(plan.flowId);
+  const previousPlan = currentPlans.find(
+    (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
+  );
+  const nextPlan = {
+    ...plan,
+    ai: previousPlan?.ai ?? null,
+  };
+  const hasPlan = currentPlans.some(
+    (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
+  );
+
+  return hasPlan
+    ? currentPlans.map((currentPlan) =>
+        getPromotionPlanKey(currentPlan.flowId) === nextKey ? nextPlan : currentPlan
+      )
+    : [...currentPlans, nextPlan];
+}
+
 export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -41,6 +65,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     key: string;
     message: string;
   } | null>(null);
+  const promotionSchemaPlanReloadTimerRef = useRef<number | null>(null);
   const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
     initialData.promotionPlans.find((plan) =>
       plan.targetEnvironment
@@ -230,6 +255,37 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const shellClassName =
     'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
+  useSchemaRepairs({
+    projectId,
+    envId: promoteDialogOpen ? selectedPromotionPlan?.targetEnvironment?.id : null,
+    enabled: promoteDialogOpen && Boolean(selectedPromotionPlan?.targetEnvironment?.id),
+    onRepair: () => {
+      if (!promoteDialogOpen || promotionSchemaPlanReloadTimerRef.current !== null) {
+        return;
+      }
+
+      promotionSchemaPlanReloadTimerRef.current = window.setTimeout(() => {
+        promotionSchemaPlanReloadTimerRef.current = null;
+        const key = getPromotionPlanKey(selectedPromotionFlowId);
+
+        fetchPromotionPlan({
+          projectId,
+          flowId: selectedPromotionFlowId,
+          refreshSchema: false,
+        })
+          .then((plan) => {
+            setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
+            setLoadedPromotionPlanKeys((currentKeys) => {
+              const nextKeys = new Set(currentKeys);
+              nextKeys.add(key);
+              return nextKeys;
+            });
+          })
+          .catch(() => undefined);
+      }, 400);
+    },
+  });
+
   useEffect(() => {
     if (!promoteDialogOpen || !hasPromotionTarget) {
       return;
@@ -247,25 +303,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           return;
         }
 
-        setPromotionPlans((currentPlans) => {
-          const nextKey = getPromotionPlanKey(plan.flowId);
-          const previousPlan = currentPlans.find(
-            (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
-          );
-          const nextPlan = {
-            ...plan,
-            ai: previousPlan?.ai ?? null,
-          };
-          const hasPlan = currentPlans.some(
-            (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
-          );
-
-          return hasPlan
-            ? currentPlans.map((currentPlan) =>
-                getPromotionPlanKey(currentPlan.flowId) === nextKey ? nextPlan : currentPlan
-              )
-            : [...currentPlans, nextPlan];
-        });
+        setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
         setLoadedPromotionPlanKeys((currentKeys) => {
           const nextKeys = new Set(currentKeys);
           nextKeys.add(key);
@@ -299,6 +337,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       cancelled = true;
     };
   }, [hasPromotionTarget, projectId, promoteDialogOpen, selectedPromotionFlowId]);
+
+  useEffect(() => {
+    return () => {
+      if (promotionSchemaPlanReloadTimerRef.current !== null) {
+        window.clearTimeout(promotionSchemaPlanReloadTimerRef.current);
+        promotionSchemaPlanReloadTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
