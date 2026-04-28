@@ -146,6 +146,10 @@ spec:
           env:
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
+            {{- if .Values.worker.runScheduler }}
+            - name: JUANIE_WORKER_RUN_SCHEDULER
+              value: "true"
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config

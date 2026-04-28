@@ -6,6 +6,7 @@ import { createMigrationWorker, reconcileUnexpectedMigrationJobFailure } from '.
 import { createProjectDeleteWorker } from './project-delete';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
+import { startSchedulerRuntime } from './scheduler-runtime';
 import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
 
 // 启动时初始化 K8s 客户端（in-cluster ServiceAccount 或 KUBECONFIG）
@@ -21,6 +22,8 @@ const deploymentWorker = createDeploymentWorker();
 const migrationWorker = createMigrationWorker();
 const schemaRepairAtlasWorker = createSchemaRepairAtlasWorker();
 const aiTaskWorker = createAITaskWorker();
+const schedulerTasks =
+  process.env.JUANIE_WORKER_RUN_SCHEDULER === 'true' ? startSchedulerRuntime() : [];
 
 projectInitWorker.on('completed', (job) => {
   workerLogger.info('Project init job completed', { jobId: job.id, queue: 'project-init' });
@@ -143,4 +146,5 @@ workerLogger.info('Workers started successfully', {
     'schema-repair-atlas',
     'ai-task',
   ],
+  schedulerTasks,
 });

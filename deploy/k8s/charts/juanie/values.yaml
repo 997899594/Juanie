@@ -23,6 +23,9 @@ replicaCount:
   worker: 1
   scheduler: 1
 
+worker:
+  runScheduler: false
+
 deployment:
   progressDeadlineSeconds: 900
   revisionHistoryLimit: 5

@@ -2,7 +2,10 @@
 replicaCount:
   web: 1
   worker: 1
-  scheduler: 1
+  scheduler: 0
+
+worker:
+  runScheduler: true
 
 deployment:
   progressDeadlineSeconds: 1200
