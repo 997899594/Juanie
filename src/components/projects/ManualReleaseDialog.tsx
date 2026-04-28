@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -288,19 +289,16 @@ export function ManualReleaseDialog({
           手动发布
         </Button>
       </DialogTrigger>
-      <DialogContent
-        size="workspace"
-        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
-      >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+      <DialogContent size="workspace" layout="workspace">
+        <DialogHeader chrome>
           <DialogTitle>手动发布</DialogTitle>
           <DialogDescription>
             复用已经构建成功的产物，直接发到目标环境，不改动源码分支。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(420px,0.84fr)]">
+        <DialogBody>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.16fr)_minmax(380px,0.84fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
                 <div className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-4 py-3 text-sm text-muted-foreground">
@@ -433,9 +431,9 @@ export function ManualReleaseDialog({
               </div>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+        <DialogFooter chrome>
           <Button
             variant="ghost"
             className="w-full rounded-full sm:w-auto"

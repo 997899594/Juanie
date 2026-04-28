@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -267,17 +268,14 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请链接
                 </Button>
               </DialogTrigger>
-              <DialogContent
-                size="form"
-                className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[94vh]"
-              >
-                <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+              <DialogContent size="form" layout="form">
+                <DialogHeader chrome>
                   <DialogTitle>生成邀请链接</DialogTitle>
                   <DialogDescription>
                     先选成员角色，再生成可直接分享的团队邀请链接。
                   </DialogDescription>
                 </DialogHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+                <DialogBody>
                   <FormSection className="space-y-4 px-0 py-0 shadow-none">
                     <linkForm.Field name="role">
                       {(field) => (
@@ -320,8 +318,8 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                       <EmptyState title="生成后显示链接" className="min-h-32 rounded-[20px]" />
                     )}
                   </FormSection>
-                </div>
-                <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+                </DialogBody>
+                <DialogFooter chrome>
                   <Button
                     type="button"
                     variant="ghost"
@@ -359,10 +357,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请成员
                 </Button>
               </DialogTrigger>
-              <DialogContent
-                size="form"
-                className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[94vh]"
-              >
+              <DialogContent size="form" layout="form">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -373,13 +368,13 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   }}
                   className="flex min-h-0 flex-1 flex-col"
                 >
-                  <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+                  <DialogHeader chrome>
                     <DialogTitle>邀请成员</DialogTitle>
                     <DialogDescription>
                       通过邮箱邀请新成员加入团队，并直接设置初始角色。
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+                  <DialogBody>
                     <FormSection className="space-y-4 px-0 py-0 shadow-none">
                       <inviteForm.Field
                         name="email"
@@ -434,8 +429,8 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                         )}
                       </inviteForm.Field>
                     </FormSection>
-                  </div>
-                  <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+                  </DialogBody>
+                  <DialogFooter chrome>
                     <Button
                       type="button"
                       variant="ghost"

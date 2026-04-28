@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -120,17 +121,14 @@ export function DeploymentRollbackAction({
           回滚
         </Button>
       </DialogTrigger>
-      <DialogContent
-        size="workspace"
-        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
-      >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+      <DialogContent size="workspace" layout="workspace">
+        <DialogHeader chrome>
           <DialogTitle>回滚检查</DialogTitle>
           <DialogDescription>确认后回滚。</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)]">
+        <DialogBody>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)]">
             <div className="space-y-4">
               {disabledSummary && (
                 <div className="rounded-[20px] bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
@@ -195,9 +193,9 @@ export function DeploymentRollbackAction({
               </div>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+        <DialogFooter chrome>
           <Button
             variant="ghost"
             className="w-full rounded-full sm:w-auto"

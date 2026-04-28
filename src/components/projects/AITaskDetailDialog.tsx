@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -36,10 +37,10 @@ export function AITaskDetailDialog(input: {
 
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
-      <DialogContent size="form" className="gap-0 p-0">
+      <DialogContent size="form" layout="form">
         {task ? (
-          <div className="overflow-hidden rounded-[34px] bg-[rgba(251,250,247,0.985)]">
-            <DialogHeader className="px-8 py-7">
+          <>
+            <DialogHeader chrome>
               <div className="flex items-start gap-4">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.62)]">
                   <Sparkles className="h-5 w-5" />
@@ -73,7 +74,7 @@ export function AITaskDetailDialog(input: {
               </div>
             </DialogHeader>
 
-            <div className="space-y-6 px-8 py-7 pt-0">
+            <DialogBody className="space-y-6">
               {task.inputSummary ? (
                 <section className="space-y-3">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
@@ -139,8 +140,8 @@ export function AITaskDetailDialog(input: {
                   <StreamdownMessage content={task.detail ?? task.summary} />
                 </div>
               </section>
-            </div>
-          </div>
+            </DialogBody>
+          </>
         ) : null}
       </DialogContent>
     </Dialog>

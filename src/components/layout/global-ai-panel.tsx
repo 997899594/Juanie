@@ -454,7 +454,10 @@ export function GlobalAIPanel() {
       ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-none overflow-visible border-0 bg-transparent p-0 shadow-none ring-0 sm:max-h-none sm:max-w-[min(calc(100vw-1.5rem),38rem)] sm:p-0 sm:shadow-none sm:ring-0 lg:inset-y-4 lg:right-4 lg:left-auto lg:top-4 lg:bottom-4 lg:mr-0 lg:ml-0 lg:mt-0 lg:h-auto lg:w-[38rem] lg:max-w-[38rem] lg:translate-x-0 lg:translate-y-0 [&>button]:right-3 [&>button]:top-3 [&>button]:z-20 [&>button]:h-9 [&>button]:w-9 [&>button]:bg-white/85 [&>button]:shadow-[0_12px_28px_-20px_rgba(15,23,42,0.4)] sm:[&>button]:right-4 sm:[&>button]:top-4">
+        <DialogContent
+          layout="bare"
+          className="max-h-none overflow-visible border-0 bg-transparent p-0 shadow-none ring-0 sm:max-h-none sm:max-w-[min(calc(100vw-1.5rem),38rem)] sm:p-0 sm:shadow-none sm:ring-0 lg:inset-y-4 lg:right-4 lg:left-auto lg:top-4 lg:bottom-4 lg:mr-0 lg:ml-0 lg:mt-0 lg:h-auto lg:w-[38rem] lg:max-w-[38rem] lg:translate-x-0 lg:translate-y-0 [&>button]:right-3 [&>button]:top-3 [&>button]:z-20 [&>button]:h-9 [&>button]:w-9 [&>button]:bg-white/85 [&>button]:shadow-[0_12px_28px_-20px_rgba(15,23,42,0.4)] sm:[&>button]:right-4 sm:[&>button]:top-4"
+        >
           <section className="isolate flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] min-h-0 flex-col overflow-hidden rounded-t-[32px] bg-[#fbfaf7] shadow-[0_28px_82px_rgba(15,23,42,0.16)] ring-1 ring-[rgba(15,23,42,0.06)] sm:h-[min(86vh,46rem)] sm:max-h-[86vh] sm:rounded-[32px] lg:h-full lg:max-h-none">
             <DialogHeader className="shrink-0 px-5 py-4 pr-14 text-left sm:px-6 sm:py-5">
               <div className="flex items-center gap-3 border-b border-[rgba(15,23,42,0.05)] pb-4">

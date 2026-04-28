@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -111,19 +112,16 @@ export function ReleasePromoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        size="workspace"
-        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
-      >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+      <DialogContent size="workspace" layout="workspace">
+        <DialogHeader chrome>
           <DialogTitle>提升到 {selectedPlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
           <DialogDescription>
             沿着已配置的提升链路复用制品或重新构建，避免环境之间的代码漂移。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)]">
+        <DialogBody>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)]">
             <div className="space-y-4">
               <div className={dialogPanelClassName}>
                 <div className="text-sm font-semibold text-foreground">提升配置</div>
@@ -313,9 +311,9 @@ export function ReleasePromoteDialog({
               </div>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+        <DialogFooter chrome>
           <Button
             variant="ghost"
             className="w-full rounded-full sm:w-auto"

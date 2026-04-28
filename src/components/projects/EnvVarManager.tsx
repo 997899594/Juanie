@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -200,11 +201,8 @@ function EnvVarDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent
-        size="form"
-        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[94vh]"
-      >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+      <DialogContent size="form" layout="form">
+        <DialogHeader chrome>
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
           <DialogDescription>
             变量只作用于当前环境，密文值不会回显，更新时需要重新输入。
@@ -220,7 +218,7 @@ function EnvVarDialog({
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+          <DialogBody>
             <FormSection className="space-y-4 px-0 py-0 shadow-none">
               <form.Field
                 name="key"
@@ -340,9 +338,9 @@ function EnvVarDialog({
 
               {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
             </FormSection>
-          </div>
+          </DialogBody>
 
-          <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+          <DialogFooter chrome>
             <Button
               type="button"
               variant="ghost"

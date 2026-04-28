@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -343,11 +344,8 @@ function PreviewEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        size="workspace"
-        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
-      >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
+      <DialogContent size="workspace" layout="workspace">
+        <DialogHeader chrome>
           <DialogTitle>新建预览环境</DialogTitle>
           <DialogDescription>基于分支或 PR 直接启动。</DialogDescription>
         </DialogHeader>
@@ -362,7 +360,7 @@ function PreviewEnvironmentDialog({
             });
           }}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+          <DialogBody>
             <FormSection className="space-y-4 px-0 py-0 shadow-none">
               {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
 
@@ -460,9 +458,9 @@ function PreviewEnvironmentDialog({
                 </div>
               </div>
             </FormSection>
-          </div>
+          </DialogBody>
 
-          <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+          <DialogFooter chrome>
             <Button
               type="button"
               variant="ghost"

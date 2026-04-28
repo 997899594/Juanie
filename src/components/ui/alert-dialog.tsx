@@ -12,8 +12,8 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
 const alertDialogContentSizeClasses = {
-  compact: 'sm:[--alert-dialog-content-width:40rem]',
-  form: 'sm:[--alert-dialog-content-width:48rem] lg:[--alert-dialog-content-width:60rem]',
+  compact: 'sm:[--alert-dialog-content-width:34rem]',
+  form: 'sm:[--alert-dialog-content-width:42rem] lg:[--alert-dialog-content-width:48rem]',
 } as const;
 
 type AlertDialogContentSize = keyof typeof alertDialogContentSizeClasses;
@@ -24,7 +24,7 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-[rgba(28,27,24,0.14)] backdrop-blur-[3px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      'fixed inset-0 z-50 bg-[rgba(28,27,24,0.24)] backdrop-blur-[7px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
     )}
     {...props}
@@ -44,7 +44,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid max-h-[84dvh] w-full gap-5 overflow-y-auto bg-[linear-gradient(180deg,rgba(252,251,249,0.992),rgba(247,245,241,0.988))] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[92vh] sm:w-[min(calc(100vw-2.5rem),var(--alert-dialog-content-width,36rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[32px] sm:px-7 sm:pb-7 sm:pt-7 sm:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_36px_104px_rgba(55,53,47,0.16)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        'fixed inset-x-0 bottom-0 z-50 grid max-h-[84dvh] w-full gap-5 overflow-y-auto bg-[linear-gradient(180deg,rgba(252,251,249,0.996),rgba(247,245,241,0.994))] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.12)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[86vh] sm:w-[min(calc(100vw-3rem),var(--alert-dialog-content-width,36rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[30px] sm:px-7 sm:pb-7 sm:pt-7 sm:shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_34px_94px_rgba(55,53,47,0.17)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
         alertDialogContentSizeClasses[size],
         className
       )}
