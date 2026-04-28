@@ -26,7 +26,36 @@ export function createCopilotEventStream(input: {
 }): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(encodeSseEvent('meta', input.metadata));
+      let closed = false;
+      const safeEnqueue = (chunk: Uint8Array) => {
+        if (closed) {
+          return false;
+        }
+
+        try {
+          controller.enqueue(chunk);
+          return true;
+        } catch {
+          closed = true;
+          return false;
+        }
+      };
+      const safeClose = () => {
+        if (closed) {
+          return;
+        }
+
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // The client may already have closed the HTTP stream.
+        }
+      };
+
+      if (!safeEnqueue(encodeSseEvent('meta', input.metadata))) {
+        return;
+      }
 
       const reader = input.textStream.getReader();
 
@@ -38,19 +67,21 @@ export function createCopilotEventStream(input: {
           }
 
           if (value) {
-            controller.enqueue(encodeSseEvent('delta', { text: value }));
+            if (!safeEnqueue(encodeSseEvent('delta', { text: value }))) {
+              break;
+            }
           }
         }
 
-        controller.enqueue(encodeSseEvent('done', { completed: true }));
-        controller.close();
+        safeEnqueue(encodeSseEvent('done', { completed: true }));
+        safeClose();
       } catch (error) {
-        controller.enqueue(
+        safeEnqueue(
           encodeSseEvent('error', {
             message: error instanceof Error ? error.message : 'Copilot stream failed',
           })
         );
-        controller.close();
+        safeClose();
       } finally {
         reader.releaseLock();
       }
