@@ -1191,6 +1191,7 @@ export interface CiliumHTTPRouteSpec {
     weight?: number;
   }>;
   path?: string;
+  rewritePathPrefix?: string;
 }
 
 export async function createCiliumGateway(
@@ -1314,6 +1315,21 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
       hostnames: spec.hostnames,
       rules: [
         {
+          ...(spec.rewritePathPrefix
+            ? {
+                filters: [
+                  {
+                    type: 'URLRewrite',
+                    urlRewrite: {
+                      path: {
+                        type: 'ReplacePrefixMatch',
+                        replacePrefixMatch: spec.rewritePathPrefix,
+                      },
+                    },
+                  },
+                ],
+              }
+            : {}),
           backendRefs: [
             ...(spec.backendRefs?.length
               ? spec.backendRefs.map((backend) => ({

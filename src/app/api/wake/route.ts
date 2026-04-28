@@ -22,7 +22,11 @@ function normalizeHostname(value: string | null): string | null {
 function getReturnPath(url: URL): string {
   const path = url.searchParams.get('path');
   if (!path || !path.startsWith('/') || path.startsWith('//')) {
-    return '/';
+    const rewrittenPath = url.pathname.startsWith('/api/wake/')
+      ? url.pathname.slice('/api/wake'.length)
+      : null;
+    const fallbackPath = rewrittenPath ? `${rewrittenPath}${url.search}` : '/';
+    return fallbackPath.startsWith('/') && !fallbackPath.startsWith('//') ? fallbackPath : '/';
   }
 
   return path;

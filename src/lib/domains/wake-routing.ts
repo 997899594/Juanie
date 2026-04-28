@@ -61,6 +61,7 @@ export async function syncEnvironmentWakeRoutes(input: {
       serviceName: WAKE_SERVICE_NAME,
       servicePort: WAKE_SERVICE_PORT,
       path: '/',
+      rewritePathPrefix: '/api/wake',
     });
   }
 }
