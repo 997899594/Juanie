@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { SchemaCenterClient } from '@/components/projects/SchemaCenterClient';
 import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectSchemaCenterData } from '@/lib/schema-management/page-data';
+import { getProjectSchemaCenterData } from '@/lib/schema-safety/page-data';
 
 export default async function EnvironmentSchemaPage({
   params,

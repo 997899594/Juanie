@@ -1,6 +1,6 @@
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
-import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import { getEnvironmentSchemaStateLabel } from '@/lib/schema-safety/presentation';
 import type { PlatformSignalChip } from '@/lib/signals/platform';
 
 export interface ReleaseSchemaGateState {

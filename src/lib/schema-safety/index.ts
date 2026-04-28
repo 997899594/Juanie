@@ -11,11 +11,11 @@ export {
   discardLatestSchemaRepairPlanForDatabase,
   getStoredSchemaStateForDatabase,
   inspectSchemaStateForDatabase,
-  isSchemaManagementActionError,
+  isSchemaSafetyActionError,
   markLatestSchemaRepairPlanAppliedForDatabase,
   markSchemaAlignedForDatabase,
   type PresentedEnvironmentSchemaState,
   runSchemaRepairAtlasForDatabase,
-  SchemaManagementActionError,
+  SchemaSafetyActionError,
 } from '@/lib/schema-management/control-service';
 export { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';

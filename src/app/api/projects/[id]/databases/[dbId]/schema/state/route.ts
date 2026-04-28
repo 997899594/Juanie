@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import {
-  getStoredSchemaStateForDatabase,
-  isSchemaManagementActionError,
-} from '@/lib/schema-safety';
+import { getStoredSchemaStateForDatabase, isSchemaSafetyActionError } from '@/lib/schema-safety';
 
 export async function GET(
   _request: Request,
@@ -26,7 +23,7 @@ export async function GET(
       return toAccessErrorResponse(error);
     }
 
-    if (isSchemaManagementActionError(error)) {
+    if (isSchemaSafetyActionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

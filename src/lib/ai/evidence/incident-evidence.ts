@@ -20,26 +20,6 @@ export interface IncidentEvidencePack {
   safeActions: Array<'cleanup_terminating_pods' | 'restart_deployments'>;
 }
 
-function inferTimelineType(key: string): IncidentEvidencePack['timeline'][number]['type'] {
-  if (key.startsWith('migration-')) {
-    return 'migration';
-  }
-
-  if (key.startsWith('deployment-') || key === 'rollout-ready' || key === 'preview-ready') {
-    return 'deployment';
-  }
-
-  if (key.startsWith('event:')) {
-    return 'incident';
-  }
-
-  if (key.startsWith('governance:')) {
-    return 'governance';
-  }
-
-  return 'release';
-}
-
 export async function buildIncidentEvidencePack(input: {
   releaseId: string;
   projectId: string;
@@ -86,7 +66,7 @@ export async function buildIncidentEvidencePack(input: {
       null,
     timeline: decoratedRelease.timeline.map((item) => ({
       at: item.at,
-      type: inferTimelineType(item.key),
+      type: item.type,
       title: item.title,
       summary: item.description,
       tone: item.tone,

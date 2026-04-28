@@ -7,7 +7,7 @@ import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 import {
   type SchemaRepairRealtimeEvent,
   type SchemaRepairRealtimeRecord,
-} from '@/lib/schema-management/realtime';
+} from '@/lib/schema-safety/realtime';
 
 const SCHEMA_REPAIR_CHANNEL_PREFIX = 'realtime:schema-repairs:project:';
 const schemaRepairsRealtimeLogger = logger.child({ component: 'realtime-schema-repairs' });

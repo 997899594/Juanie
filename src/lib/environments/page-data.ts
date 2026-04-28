@@ -26,9 +26,9 @@ import {
 } from '@/lib/environments/page-runtime';
 import { getEnvironmentRuntimeState } from '@/lib/environments/runtime-control';
 import { decorateEnvironmentList } from '@/lib/environments/view';
-import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 import { syncLatestSchemaRepairPlans } from '@/lib/schema-management/review-sync';
+import { getEnvironmentSchemaStateLabel } from '@/lib/schema-safety/presentation';
 
 export function buildProjectEnvironmentListData<
   TEnvironment extends Parameters<typeof decorateEnvironmentList>[0][number],

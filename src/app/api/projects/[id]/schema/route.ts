@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import { getProjectSchemaCenterData } from '@/lib/schema-management/page-data';
+import { getProjectSchemaCenterData } from '@/lib/schema-safety/page-data';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

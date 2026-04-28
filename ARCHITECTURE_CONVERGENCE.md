@@ -96,3 +96,14 @@ or long-term compatibility branches just to hide old states.
 - Documentation records which plane owns which capability.
 - UI keeps the main path simple: Environment -> Release -> Schema Safety -> Logs/Timeline.
 
+## Current Convergence Pass
+
+Implemented on 2026-04-28:
+
+- Release Timeline is now a dedicated module and carries event type directly.
+- AI release and incident evidence consume timeline event type instead of inferring from key names.
+- Schema Center API, page, client actions, presentation and realtime consumers enter through
+  `schema-safety/*`.
+- Schema action errors use the Schema Safety name at the boundary.
+- Environment route reconciliation only repairs detected sleep/wake drift, avoiding periodic route
+  churn.

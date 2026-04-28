@@ -174,6 +174,7 @@ export interface ReleaseDetailMetadataItem {
 
 export interface ReleaseTimelineItem {
   key: string;
+  type: 'release' | 'migration' | 'deployment' | 'incident' | 'governance';
   at: string | null;
   title: string;
   description: string;

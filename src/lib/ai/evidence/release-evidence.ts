@@ -33,26 +33,6 @@ export interface ReleaseEvidencePack {
   }>;
 }
 
-function inferTimelineType(key: string): ReleaseEvidencePack['timeline'][number]['type'] {
-  if (key.startsWith('migration-')) {
-    return 'migration';
-  }
-
-  if (key.startsWith('deployment-') || key === 'rollout-ready' || key === 'preview-ready') {
-    return 'deployment';
-  }
-
-  if (key.startsWith('event:')) {
-    return 'incident';
-  }
-
-  if (key.startsWith('governance:')) {
-    return 'governance';
-  }
-
-  return 'release';
-}
-
 export async function buildReleaseEvidencePack(input: {
   releaseId: string;
   projectId: string;
@@ -100,7 +80,7 @@ export async function buildReleaseEvidencePack(input: {
       : null,
     timeline: decoratedRelease.timeline.map((item) => ({
       at: item.at,
-      type: inferTimelineType(item.key),
+      type: item.type,
       title: item.title,
       summary: item.description,
       tone: item.tone,

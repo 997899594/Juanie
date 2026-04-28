@@ -43,6 +43,7 @@ function buildMigrationRetryTimelineItems(
 
       items.push({
         key: `migration-retry-${run.id ?? `${targetKey}-${attemptNumber}`}`,
+        type: 'migration',
         at: formatTimelineTimestamp(run.createdAt),
         title: priorFailed ? '迁移已重试' : '迁移再次执行',
         description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · 第 ${attemptNumber} 次尝试`,
@@ -77,6 +78,7 @@ export function buildReleaseTimeline(input: {
 
   items.push({
     key: 'release-created',
+    type: 'release',
     at: formatTimelineTimestamp(release.createdAt),
     title: '发布已创建',
     description: getReleaseDisplayTitle(release),
@@ -88,6 +90,7 @@ export function buildReleaseTimeline(input: {
   if (release.sourceRelease) {
     items.push({
       key: `source-release-${release.sourceRelease.id}`,
+      type: 'release',
       at: formatTimelineTimestamp(release.createdAt),
       title: '复用来源发布',
       description: [
@@ -112,6 +115,7 @@ export function buildReleaseTimeline(input: {
   for (const run of release.migrationRuns) {
     items.push({
       key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
+      type: 'migration',
       at: formatTimelineTimestamp(run.createdAt),
       title: `迁移${getMigrationStatusDecoration(run.status).label ?? run.status}`,
       description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${getMigrationPhaseLabel(
@@ -130,6 +134,7 @@ export function buildReleaseTimeline(input: {
 
     items.push({
       key: `deployment-${deployment.id ?? `${deployment.serviceId ?? 'service'}-${deployment.status}`}`,
+      type: 'deployment',
       at: formatTimelineTimestamp(deployment.createdAt),
       title: `部署${getDeploymentStatusDecoration(deployment.status).label ?? deployment.status}`,
       description: serviceName,
@@ -149,6 +154,7 @@ export function buildReleaseTimeline(input: {
   ) {
     items.push({
       key: 'rollout-ready',
+      type: 'deployment',
       at: null,
       title: '渐进式发布待推进',
       description: input.environmentStrategy
@@ -168,6 +174,7 @@ export function buildReleaseTimeline(input: {
   ) {
     items.push({
       key: 'preview-ready',
+      type: 'deployment',
       at: null,
       title: '预览环境可访问',
       description: input.primaryDomainUrl.replace('https://', ''),
@@ -180,6 +187,7 @@ export function buildReleaseTimeline(input: {
   if (release.status !== 'queued') {
     items.push({
       key: 'release-result',
+      type: 'release',
       at: formatTimelineTimestamp(release.updatedAt),
       title: `发布${input.statusLabel}`,
       description: release.errorMessage ?? getReleaseDisplayTitle(release),
@@ -192,6 +200,7 @@ export function buildReleaseTimeline(input: {
   for (const incident of release.infrastructureDiagnostics?.incidents ?? []) {
     items.push({
       key: incident.key,
+      type: 'incident',
       at: formatTimelineTimestamp(incident.at),
       title: incident.title,
       description: incident.description,
@@ -204,6 +213,7 @@ export function buildReleaseTimeline(input: {
   for (const event of release.governanceEvents ?? []) {
     items.push({
       key: event.key,
+      type: 'governance',
       at: formatTimelineTimestamp(event.at),
       title: event.title,
       description: event.description,

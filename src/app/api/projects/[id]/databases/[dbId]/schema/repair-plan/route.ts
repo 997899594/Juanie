@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import {
-  createSchemaRepairPlanForDatabase,
-  isSchemaManagementActionError,
-} from '@/lib/schema-safety';
+import { createSchemaRepairPlanForDatabase, isSchemaSafetyActionError } from '@/lib/schema-safety';
 
 export async function POST(
   _request: Request,
@@ -25,7 +22,7 @@ export async function POST(
       return toAccessErrorResponse(error);
     }
 
-    if (isSchemaManagementActionError(error)) {
+    if (isSchemaSafetyActionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

@@ -3,7 +3,7 @@ import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import {
   discardLatestSchemaRepairPlanForDatabase,
-  isSchemaManagementActionError,
+  isSchemaSafetyActionError,
 } from '@/lib/schema-safety';
 
 export async function POST(_request: Request, context: { params: Promise<unknown> }) {
@@ -22,7 +22,7 @@ export async function POST(_request: Request, context: { params: Promise<unknown
       return toAccessErrorResponse(error);
     }
 
-    if (isSchemaManagementActionError(error)) {
+    if (isSchemaSafetyActionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

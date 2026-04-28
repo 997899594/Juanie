@@ -6,7 +6,7 @@ import {
   createSchemaRepairRealtimeSubscriber,
   loadProjectSchemaRepairRealtimeRecords,
 } from '@/lib/realtime/schema-repairs';
-import { buildSchemaRepairRealtimeStateKey } from '@/lib/schema-management/realtime';
+import { buildSchemaRepairRealtimeStateKey } from '@/lib/schema-safety/realtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

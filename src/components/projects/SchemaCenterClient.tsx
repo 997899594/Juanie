@@ -17,12 +17,12 @@ import {
   markDatabaseSchemaAligned,
   runDatabaseRepairAtlas,
 } from '@/lib/environments/client-actions';
-import { fetchProjectSchemaCenter } from '@/lib/schema-management/client-actions';
+import { fetchProjectSchemaCenter } from '@/lib/schema-safety/client-actions';
 import {
   getSchemaRepairPlanPresentation,
   isSchemaRepairSuggestionRequired,
-} from '@/lib/schema-management/presentation';
-import { buildSchemaRepairRealtimeStateIndex } from '@/lib/schema-management/realtime';
+} from '@/lib/schema-safety/presentation';
+import { buildSchemaRepairRealtimeStateIndex } from '@/lib/schema-safety/realtime';
 
 interface SchemaCenterDatabaseRecord {
   id: string;

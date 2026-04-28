@@ -21,20 +21,18 @@ import {
 import { createSchemaRepairReviewRequest } from '@/lib/schema-management/review-request';
 import { runSchemaRepairAtlas } from './atlas-run';
 
-export class SchemaManagementActionError extends Error {
+export class SchemaSafetyActionError extends Error {
   constructor(
     readonly status: number,
     message: string
   ) {
     super(message);
-    this.name = 'SchemaManagementActionError';
+    this.name = 'SchemaSafetyActionError';
   }
 }
 
-export function isSchemaManagementActionError(
-  error: unknown
-): error is SchemaManagementActionError {
-  return error instanceof SchemaManagementActionError;
+export function isSchemaSafetyActionError(error: unknown): error is SchemaSafetyActionError {
+  return error instanceof SchemaSafetyActionError;
 }
 
 export interface PresentedEnvironmentSchemaState extends EnvironmentSchemaStateSnapshot {
@@ -97,16 +95,16 @@ async function getSchemaDatabaseContext(input: {
   });
 
   if (!database) {
-    throw new SchemaManagementActionError(404, '数据库不存在');
+    throw new SchemaSafetyActionError(404, '数据库不存在');
   }
 
   if (input.requireManage !== false) {
     if (!database.environment) {
-      throw new SchemaManagementActionError(400, '数据库缺少环境绑定');
+      throw new SchemaSafetyActionError(400, '数据库缺少环境绑定');
     }
 
     if (!canManageEnvironment(member.role, database.environment)) {
-      throw new SchemaManagementActionError(403, getEnvironmentGuardReason(database.environment));
+      throw new SchemaSafetyActionError(403, getEnvironmentGuardReason(database.environment));
     }
   }
 
@@ -127,7 +125,7 @@ async function getLatestSchemaRepairPlanForDatabase(input: {
   });
 
   if (!latestPlan) {
-    throw new SchemaManagementActionError(400, input.missingMessage);
+    throw new SchemaSafetyActionError(400, input.missingMessage);
   }
 
   return toPersistedSchemaRepairPlan(latestPlan);
@@ -170,7 +168,7 @@ export async function createSchemaRepairPlanForDatabase(input: {
   const { database } = await getSchemaDatabaseContext(input);
 
   if (!database.environment) {
-    throw new SchemaManagementActionError(400, '数据库缺少环境绑定');
+    throw new SchemaSafetyActionError(400, '数据库缺少环境绑定');
   }
 
   const state = await inspectEnvironmentSchemaState({
@@ -211,7 +209,7 @@ export async function markLatestSchemaRepairPlanAppliedForDatabase(input: {
   });
 
   if (!isSchemaRepairResolvedStatus(state.status)) {
-    throw new SchemaManagementActionError(
+    throw new SchemaSafetyActionError(
       409,
       `当前 schema 状态仍为 ${state.status}，不能标记修复计划已应用`
     );

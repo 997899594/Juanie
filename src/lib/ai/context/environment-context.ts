@@ -16,8 +16,8 @@ import {
   buildEnvironmentRuntimeIndexes,
 } from '@/lib/environments/page-runtime';
 import { decorateEnvironmentList } from '@/lib/environments/view';
-import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
+import { getEnvironmentSchemaStateLabel } from '@/lib/schema-safety/presentation';
 
 function getLatestGovernanceEventForEnvironment(input: {
   projectId: string;
