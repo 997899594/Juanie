@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const flowId = url.searchParams.get('flowId');
     const refreshSchemaParam = url.searchParams.get('refreshSchema');
     const requestSchemaRefresh =
-      refreshSchemaParam !== 'false' && refreshSchemaParam !== '0' && refreshSchemaParam !== 'no';
+      refreshSchemaParam === 'true' || refreshSchemaParam === '1' || refreshSchemaParam === 'yes';
     const promotion = await buildPromotionPlan(id, {
       flowId,
       schemaGateMode: 'stored',

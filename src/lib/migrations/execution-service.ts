@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   failMigrationRunWithoutThrow,
@@ -8,6 +9,9 @@ import {
 } from '@/lib/migrations/run-state';
 import { executeMigrationRun } from '@/lib/migrations/runner';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
+import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
+
+const migrationExecutionLogger = logger.child({ component: 'migration-execution-service' });
 
 export type MigrationExecutionServiceResult =
   | {
@@ -68,6 +72,20 @@ export async function executeMigrationRunInExecutionService(input: {
       allowApprovalBypass: input.allowApprovalBypass,
       sourceRef,
       sourceCommitSha,
+    });
+    await inspectEnvironmentSchemaStateLocally({
+      projectId: run.projectId,
+      databaseId: spec.database.id,
+      sourceRef,
+      sourceCommitSha,
+    }).catch((error) => {
+      migrationExecutionLogger.warn('Failed to refresh schema state after migration success', {
+        runId: run.id,
+        projectId: run.projectId,
+        environmentId: run.environmentId,
+        databaseId: spec.database.id,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     });
     await resumeReleaseAfterMigrationProgress(run.id);
   } catch (error) {
