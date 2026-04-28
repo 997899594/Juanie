@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
-import { createPromotionRelease } from '@/lib/releases/client-actions';
+import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
@@ -24,12 +24,23 @@ interface ReleasesPageClientProps {
   initialData: Awaited<ReturnType<typeof getProjectReleasesPageData>>;
 }
 
+function getPromotionPlanKey(flowId?: string | null): string {
+  return flowId ?? '__default__';
+}
+
 export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [promoting, setPromoting] = useState(false);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [promotionPlans, setPromotionPlans] = useState(initialData.promotionPlans);
+  const [loadedPromotionPlanKeys, setLoadedPromotionPlanKeys] = useState<Set<string>>(new Set());
+  const [promotionPlanLoadingKey, setPromotionPlanLoadingKey] = useState<string | null>(null);
+  const [promotionPlanError, setPromotionPlanError] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
   const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
     initialData.promotionPlans.find((plan) =>
       plan.targetEnvironment
@@ -63,31 +74,42 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   });
 
   useEffect(() => {
-    const hasSelectedFlow = initialData.promotionPlans.some(
-      (plan) => plan.flowId === selectedPromotionFlowId
-    );
+    setPromotionPlans(initialData.promotionPlans);
+    setLoadedPromotionPlanKeys(new Set());
+    setPromotionPlanLoadingKey(null);
+    setPromotionPlanError(null);
+  }, [initialData.promotionPlans]);
+
+  useEffect(() => {
+    const hasSelectedFlow = promotionPlans.some((plan) => plan.flowId === selectedPromotionFlowId);
 
     if (hasSelectedFlow) {
       return;
     }
 
     setSelectedPromotionFlowId(
-      initialData.promotionPlans.find((plan) =>
+      promotionPlans.find((plan) =>
         plan.targetEnvironment
           ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
           : false
       )?.flowId ??
-        initialData.promotionPlans[0]?.flowId ??
+        promotionPlans[0]?.flowId ??
         null
     );
   }, [
     initialData.governance.promotion.manageableTargetIds,
-    initialData.promotionPlans,
+    promotionPlans,
     selectedPromotionFlowId,
   ]);
 
   const handlePromote = async () => {
     if (promoting) return;
+    const planKey = getPromotionPlanKey(selectedPromotionFlowId);
+    if (!loadedPromotionPlanKeys.has(planKey)) {
+      toast.error('实时预检还没有完成，请稍等一下');
+      return;
+    }
+
     setPromoting(true);
 
     try {
@@ -142,7 +164,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       ? (environments.find((environment) => environment.id === filter) ?? null)
       : null;
   const filtered = initialData.filteredReleaseItems;
-  const promotionPlans = initialData.promotionPlans;
   const incomingPromotionPlans = selectedEnvironment
     ? promotionPlans.filter((plan) => plan.targetEnvironment?.id === selectedEnvironment.id)
     : [];
@@ -169,6 +190,14 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     promotionPlans.find((plan) => plan.flowId === selectedPromotionFlowId) ??
     promotionPlans[0] ??
     null;
+  const selectedPromotionPlanKey = getPromotionPlanKey(
+    selectedPromotionPlan?.flowId ?? selectedPromotionFlowId
+  );
+  const loadingPromotionPlan =
+    promoteDialogOpen && promotionPlanLoadingKey === selectedPromotionPlanKey;
+  const selectedPromotionPlanError =
+    promotionPlanError?.key === selectedPromotionPlanKey ? promotionPlanError.message : null;
+  const selectedPromotionPlanLoaded = loadedPromotionPlanKeys.has(selectedPromotionPlanKey);
   const canManageSelectedTarget = selectedPromotionPlan?.targetEnvironment
     ? governance.promotion.manageableTargetIds.includes(selectedPromotionPlan.targetEnvironment.id)
     : false;
@@ -176,6 +205,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     hasPromotionTarget &&
     !!selectedPromotionPlan?.sourceRelease &&
     canManageSelectedTarget &&
+    selectedPromotionPlanLoaded &&
+    !loadingPromotionPlan &&
+    !selectedPromotionPlanError &&
     (selectedPromotionPlan.plan.canCreate ?? true) &&
     !selectedPromotionPlan.plan.blockingReason;
   const promoteButtonTitle =
@@ -197,6 +229,76 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       outgoingPromotionPlans.length > 0);
   const shellClassName =
     'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+
+  useEffect(() => {
+    if (!promoteDialogOpen || !hasPromotionTarget) {
+      return;
+    }
+
+    const key = getPromotionPlanKey(selectedPromotionFlowId);
+    let cancelled = false;
+
+    setPromotionPlanLoadingKey(key);
+    setPromotionPlanError(null);
+
+    fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId })
+      .then((plan) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPromotionPlans((currentPlans) => {
+          const nextKey = getPromotionPlanKey(plan.flowId);
+          const previousPlan = currentPlans.find(
+            (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
+          );
+          const nextPlan = {
+            ...plan,
+            ai: previousPlan?.ai ?? null,
+          };
+          const hasPlan = currentPlans.some(
+            (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
+          );
+
+          return hasPlan
+            ? currentPlans.map((currentPlan) =>
+                getPromotionPlanKey(currentPlan.flowId) === nextKey ? nextPlan : currentPlan
+              )
+            : [...currentPlans, nextPlan];
+        });
+        setLoadedPromotionPlanKeys((currentKeys) => {
+          const nextKeys = new Set(currentKeys);
+          nextKeys.add(key);
+          return nextKeys;
+        });
+      })
+      .catch((fetchError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPromotionPlanError({
+          key,
+          message: fetchError instanceof Error ? fetchError.message : '加载提升预检失败',
+        });
+        setLoadedPromotionPlanKeys((currentKeys) => {
+          const nextKeys = new Set(currentKeys);
+          nextKeys.delete(key);
+          return nextKeys;
+        });
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setPromotionPlanLoadingKey((currentKey) => (currentKey === key ? null : currentKey));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPromotionTarget, projectId, promoteDialogOpen, selectedPromotionFlowId]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -255,6 +357,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onSelectedFlowIdChange={setSelectedPromotionFlowId}
         canPromote={canPromote}
         promoting={promoting}
+        loadingPlan={loadingPromotionPlan}
+        planError={selectedPromotionPlanError}
         onPromote={handlePromote}
       />
 

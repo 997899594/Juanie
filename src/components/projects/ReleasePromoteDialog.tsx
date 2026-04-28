@@ -80,6 +80,8 @@ interface ReleasePromoteDialogProps {
   onSelectedFlowIdChange: (flowId: string | null) => void;
   canPromote: boolean;
   promoting: boolean;
+  loadingPlan?: boolean;
+  planError?: string | null;
   onPromote: () => void;
 }
 
@@ -91,6 +93,8 @@ export function ReleasePromoteDialog({
   onSelectedFlowIdChange,
   canPromote,
   promoting,
+  loadingPlan = false,
+  planError = null,
   onPromote,
 }: ReleasePromoteDialogProps) {
   const selectedPlan =
@@ -208,7 +212,17 @@ export function ReleasePromoteDialog({
               <div className={dialogPanelClassName}>
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
-                {promotePanel ? (
+                {loadingPlan ? (
+                  <EmptyState
+                    title="正在运行实时预检"
+                    description="正在读取仓库配置、schema 门禁和目标环境状态。"
+                    className="min-h-40 rounded-[20px]"
+                  />
+                ) : planError ? (
+                  <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>
+                    {planError}
+                  </div>
+                ) : promotePanel ? (
                   <div className="space-y-3">
                     <PlatformSignalBlock
                       chips={promotePanel.chips}
@@ -304,9 +318,9 @@ export function ReleasePromoteDialog({
           <Button
             className="w-full rounded-full sm:w-auto"
             onClick={onPromote}
-            disabled={promoting || !canPromote}
+            disabled={promoting || loadingPlan || !canPromote}
           >
-            {promoting ? '创建中...' : '确认提升'}
+            {promoting ? '创建中...' : loadingPlan ? '预检中...' : '确认提升'}
           </Button>
         </DialogFooter>
       </DialogContent>

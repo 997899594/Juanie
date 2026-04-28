@@ -129,6 +129,10 @@ export interface PromotionPlanSnapshot {
   plan: ReleasePlanningSnapshot;
 }
 
+interface PromotionPlanningOptions {
+  includeLiveChecks?: boolean;
+}
+
 function buildStaticPlanningSnapshot(input: {
   canCreate: boolean;
   blockingReason: string | null;
@@ -510,8 +514,10 @@ function toPromotionPlanEnvironment(
 
 async function buildPromotionPlanForResolution(
   projectId: string,
-  resolution: PromotionFlowResolution
+  resolution: PromotionFlowResolution,
+  options: PromotionPlanningOptions = {}
 ): Promise<PromotionPlanSnapshot> {
+  const includeLiveChecks = options.includeLiveChecks ?? true;
   const sourceEnvironment = toPromotionPlanEnvironment(resolution.sourceEnvironment);
   const targetEnvironment = toPromotionPlanEnvironment(resolution.targetEnvironment);
   const strategy = resolution.flow?.strategy ?? 'reuse_release_artifacts';
@@ -568,19 +574,26 @@ async function buildPromotionPlanForResolution(
     });
   }
 
-  const plan = await buildProjectReleasePlan({
-    projectId,
-    environmentId: resolution.targetEnvironment.id,
-    services: sourceRelease.artifacts.map((artifact) => ({
-      id: artifact.serviceId,
-      name: artifact.service.name,
-      image: artifact.imageUrl,
-      digest: artifact.imageDigest,
-    })),
-    sourceRef: sourceRelease.sourceRef,
-    sourceCommitSha: sourceRelease.sourceCommitSha,
-    entryPoint: 'promotion',
-  });
+  const plan = includeLiveChecks
+    ? await buildProjectReleasePlan({
+        projectId,
+        environmentId: resolution.targetEnvironment.id,
+        services: sourceRelease.artifacts.map((artifact) => ({
+          id: artifact.serviceId,
+          name: artifact.service.name,
+          image: artifact.imageUrl,
+          digest: artifact.imageDigest,
+        })),
+        sourceRef: sourceRelease.sourceRef,
+        sourceCommitSha: sourceRelease.sourceCommitSha,
+        entryPoint: 'promotion',
+      })
+    : buildStaticPlanningSnapshot({
+        canCreate: true,
+        blockingReason: null,
+        environment: resolution.targetEnvironment,
+        summary: '打开提升发布时执行实时预检',
+      });
 
   return {
     flowId: resolution.flow?.id ?? null,
@@ -601,7 +614,7 @@ export async function buildPromotionPlan(
   projectId: string,
   input?: {
     flowId?: string | null;
-  }
+  } & PromotionPlanningOptions
 ): Promise<PromotionPlanSnapshot> {
   await requireProjectRepositoryContext(projectId);
 
@@ -631,7 +644,7 @@ export async function buildPromotionPlan(
       });
     }
 
-    return buildPromotionPlanForResolution(projectId, resolution);
+    return buildPromotionPlanForResolution(projectId, resolution, input);
   }
 
   const resolution = resolutions[0] ?? null;
@@ -643,10 +656,13 @@ export async function buildPromotionPlan(
     });
   }
 
-  return buildPromotionPlanForResolution(projectId, resolution);
+  return buildPromotionPlanForResolution(projectId, resolution, input);
 }
 
-export async function buildPromotionPlans(projectId: string): Promise<PromotionPlanSnapshot[]> {
+export async function buildPromotionPlans(
+  projectId: string,
+  options: PromotionPlanningOptions = {}
+): Promise<PromotionPlanSnapshot[]> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
     columns: {
@@ -676,7 +692,7 @@ export async function buildPromotionPlans(projectId: string): Promise<PromotionP
   }
 
   return Promise.all(
-    resolutions.map((resolution) => buildPromotionPlanForResolution(projectId, resolution))
+    resolutions.map((resolution) => buildPromotionPlanForResolution(projectId, resolution, options))
   );
 }
 

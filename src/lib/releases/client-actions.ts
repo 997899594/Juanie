@@ -1,4 +1,5 @@
 import type { ReleaseServiceInput } from '@/lib/releases';
+import type { PromotionPlanSnapshot } from '@/lib/releases/planning';
 
 interface ApiErrorResponse {
   error?: string;
@@ -193,6 +194,8 @@ export interface PromoteReleaseResponse {
   targetEnvironmentName?: string | null;
 }
 
+export type PromotionPlanResponse = PromotionPlanSnapshot;
+
 export interface MigrationRunActionResponse {
   message: string;
   runId: string;
@@ -326,6 +329,23 @@ export async function createPromotionRelease(input: {
   });
 
   return parseJsonResponse<PromoteReleaseResponse>(response, '创建提升发布失败');
+}
+
+export async function fetchPromotionPlan(input: {
+  projectId: string;
+  flowId?: string | null;
+}): Promise<PromotionPlanResponse> {
+  const params = new URLSearchParams();
+  if (input.flowId) {
+    params.set('flowId', input.flowId);
+  }
+
+  const query = params.toString();
+  const response = await fetch(
+    `/api/projects/${input.projectId}/promote${query ? `?${query}` : ''}`
+  );
+
+  return parseJsonResponse<PromotionPlanResponse>(response, '加载提升预检失败');
 }
 
 export async function createProductionRelease(input: {

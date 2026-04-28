@@ -16,7 +16,7 @@ import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-me
 import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
-import { buildPromotionPlans } from '@/lib/releases/planning';
+import { buildPromotionPlans, type PromotionPlanSnapshot } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import {
@@ -355,7 +355,7 @@ type PromotionAIView = {
   errorMessage: string | null;
 };
 
-type ProjectPromotionPlanView = Awaited<ReturnType<typeof buildPromotionPlans>>[number] & {
+type ProjectPromotionPlanView = PromotionPlanSnapshot & {
   ai: PromotionAIView | null;
 };
 
@@ -528,7 +528,7 @@ export async function getProjectReleasesPageData(input: {
         },
       },
     }),
-    buildPromotionPlans(input.project.id).catch(() => []),
+    buildPromotionPlans(input.project.id, { includeLiveChecks: false }).catch(() => []),
   ]);
   const promotionAISnapshots = await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
     pluginId: 'release-intelligence',
