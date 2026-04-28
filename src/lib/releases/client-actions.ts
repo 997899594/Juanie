@@ -189,6 +189,7 @@ export interface PromoteReleaseResponse {
   releaseId?: string;
   tagName?: string | null;
   promotionFlowId?: string | null;
+  targetEnvironmentId?: string | null;
   targetEnvironmentName?: string | null;
 }
 

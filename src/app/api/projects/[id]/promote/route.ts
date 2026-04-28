@@ -175,6 +175,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         })),
         commitSha: sourceRelease.sourceCommitSha,
         promotionFlowId: promotion.flow?.id ?? null,
+        targetEnvironmentId: promotion.targetEnvironment.id,
         targetEnvironmentName: promotion.targetEnvironment.name,
         tagName,
       },

@@ -15,6 +15,7 @@ import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createPromotionRelease } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
 
@@ -101,6 +102,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
       );
       setPromoteDialogOpen(false);
+      if (data.releaseId && data.targetEnvironmentId) {
+        router.push(buildReleaseDetailPath(projectId, data.targetEnvironmentId, data.releaseId));
+        return;
+      }
+
       router.refresh();
     } catch (promoteError) {
       toast.error(promoteError instanceof Error ? promoteError.message : '创建提升发布失败');
