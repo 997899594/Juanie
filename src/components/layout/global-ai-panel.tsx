@@ -2,13 +2,14 @@
 
 import { Folder, Inbox, Loader2, MoveRight, Send, Settings, Sparkles, Users } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useCopilotConversation } from '@/hooks/useCopilotConversation';
 import { getCommandBarConfig } from '@/lib/ai/command-bar';
+import { getGlobalCopilotReplaySeed } from '@/lib/ai/copilot/context-seed';
 import { getCopilotDefinition } from '@/lib/ai/copilot/registry';
 import type { CopilotReplayPayload, CopilotSessionMetadata } from '@/lib/ai/copilot/types';
 import { getJuanieToolById } from '@/lib/ai/tools/registry';
@@ -91,8 +92,9 @@ export function openGlobalAIPanel(): void {
 }
 
 export function openGlobalAIPanelWithReplay(input: {
-  messages: CopilotReplayPayload['messages'];
+  messages?: CopilotReplayPayload['messages'];
   metadata?: CopilotReplayPayload['metadata'];
+  contextCard?: CopilotReplayPayload['contextCard'];
 }): void {
   window.dispatchEvent(
     new CustomEvent(openEventName, {
@@ -116,18 +118,13 @@ export function GlobalAIPanel() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setOpen(true);
+  const applyReplayPayload = useCallback(
+    (detail: CopilotReplayPayload | null | undefined) => {
+      if (!detail) {
+        return;
       }
-    };
 
-    const onOpen = (event: Event) => {
-      const detail = (event as CustomEvent<CopilotReplayPayload>).detail;
-
-      if (detail?.messages?.length) {
+      if (detail.messages?.length) {
         conversation.setMessages(
           detail.messages.map((message) => ({
             id: buildMessageId(),
@@ -136,9 +133,27 @@ export function GlobalAIPanel() {
             createdAt: new Date().toISOString(),
           }))
         );
-        conversation.setMetadata(detail.metadata ?? null);
       }
 
+      conversation.setMetadata(detail.metadata ?? null);
+    },
+    [conversation]
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        if (config.kind === 'chat' && conversation.messages.length === 0) {
+          applyReplayPayload(getGlobalCopilotReplaySeed());
+        }
+        setOpen(true);
+      }
+    };
+
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<CopilotReplayPayload>).detail;
+      applyReplayPayload(detail);
       setOpen(true);
     };
 
@@ -148,7 +163,7 @@ export function GlobalAIPanel() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener(openEventName, onOpen);
     };
-  }, [conversation]);
+  }, [applyReplayPayload, config.kind, conversation.messages.length]);
 
   useEffect(() => {
     viewportRef.current?.scrollTo({
@@ -191,7 +206,6 @@ export function GlobalAIPanel() {
     currentToolCalls.length > 0
       ? `已读取 ${currentToolCalls.length} 项${formatSkillLabel(conversation.metadata?.skillId)}上下文`
       : null;
-
   const send = async (question: string) => {
     const content = question.trim();
     if (!content || config.kind !== 'chat' || loading || !config.endpoint) {
@@ -390,7 +404,13 @@ export function GlobalAIPanel() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (config.kind === 'chat' && conversation.messages.length === 0) {
+            applyReplayPayload(getGlobalCopilotReplaySeed());
+          }
+
+          setOpen(true);
+        }}
         className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(28,27,24,0.94)] text-[rgba(251,250,247,0.96)] shadow-[0_20px_36px_rgba(15,23,42,0.14)] transition duration-200 hover:scale-[1.02] hover:bg-[rgba(28,27,24,0.88)] lg:bottom-8 lg:right-8"
         aria-label="打开 AI"
       >
@@ -419,17 +439,19 @@ export function GlobalAIPanel() {
                 <div ref={viewportRef} className="flex-1 space-y-5 overflow-y-auto px-5 pb-4">
                   {conversation.messages.length === 0 && suggestions.length > 0 ? (
                     <div className="pb-1">
-                      {suggestions.slice(0, 1).map((suggestion) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-[12px] font-medium text-[rgba(15,23,42,0.66)] transition hover:bg-[rgba(15,23,42,0.08)]"
-                          onClick={() => void send(suggestion)}
-                          disabled={loading || taskLoading}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
+                      <div className="flex flex-wrap gap-2">
+                        {suggestions.slice(0, 3).map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-[12px] font-medium text-[rgba(15,23,42,0.66)] transition hover:bg-[rgba(15,23,42,0.08)]"
+                            onClick={() => void send(suggestion)}
+                            disabled={loading || taskLoading}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
 

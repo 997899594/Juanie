@@ -4,8 +4,7 @@ import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
-import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
-import { ReleaseTaskCenter } from '@/components/projects/ReleaseTaskCenter';
+import { ReleaseAIInfoWindow } from '@/components/projects/ReleaseAIInfoWindow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
@@ -406,8 +405,6 @@ export function ReleaseExecutionSections({
   releaseId,
   role,
   release,
-  releasePlanSnapshot,
-  incidentSnapshot,
   dynamicPluginPanels,
   initialTaskCenter,
 }: {
@@ -415,20 +412,6 @@ export function ReleaseExecutionSections({
   releaseId: string;
   role: TeamRole;
   release: ReleasePageData['release'];
-  releasePlanSnapshot: Awaited<
-    ReturnType<
-      typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<
-        import('@/lib/ai/schemas/release-plan').ReleasePlan
-      >
-    >
-  > | null;
-  incidentSnapshot: Awaited<
-    ReturnType<
-      typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<
-        import('@/lib/ai/schemas/incident-analysis').IncidentAnalysis
-      >
-    >
-  > | null;
   dynamicPluginPanels?: Array<{
     pluginId: string;
     snapshot: Awaited<
@@ -583,90 +566,65 @@ export function ReleaseExecutionSections({
           )}
         </section>
 
-        <details className={cn(releaseShellClassName, 'overflow-hidden')}>
-          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <div className={releaseSectionTitleClassName}>AI 辅助</div>
-                <div className="mt-2 text-xl font-semibold tracking-[-0.02em] text-foreground">
-                  分析与建议
-                </div>
-                <div className="mt-2 text-sm leading-6 text-muted-foreground">
-                  默认收纳，只先保留发布主链路。需要时再展开查看事项、计划、归因和插件输出。
-                </div>
-              </div>
-              <div className="inline-flex h-9 items-center rounded-full bg-[rgba(15,23,42,0.05)] px-3.5 text-xs font-medium text-[rgba(15,23,42,0.58)]">
-                {3 + (dynamicPluginPanels?.length ?? 0)} 个模块
-              </div>
-            </div>
-          </summary>
-          <div className="mt-4 space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {release.sourceCommitSha && (
-                <div className={releaseSubtleClassName}>
-                  <div className={releaseSectionTitleClassName}>来源提交</div>
-                  <code className="mt-2 block text-sm font-mono text-foreground">
-                    {release.sourceCommitSha.slice(0, 7)}
-                  </code>
-                </div>
-              )}
+        <ReleaseAIInfoWindow
+          projectId={projectId}
+          releaseId={releaseId}
+          canManageActions={releaseActions.canManage}
+          disabledSummary={releaseActions.summary}
+          dynamicPluginPanels={dynamicPluginPanels}
+          initialTaskCenter={initialTaskCenter}
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {release.sourceCommitSha && (
               <div className={releaseSubtleClassName}>
-                <div className={releaseSectionTitleClassName}>仓库与更新时间</div>
-                <div className="mt-2 text-sm text-foreground">{release.sourceRepository}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {formatPlatformDateTime(release.updatedAt) ?? '—'}
-                </div>
+                <div className={releaseSectionTitleClassName}>来源提交</div>
+                <code className="mt-2 block text-sm font-mono text-foreground">
+                  {release.sourceCommitSha.slice(0, 7)}
+                </code>
+              </div>
+            )}
+            <div className={releaseSubtleClassName}>
+              <div className={releaseSectionTitleClassName}>仓库与更新时间</div>
+              <div className="mt-2 text-sm text-foreground">{release.sourceRepository}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {formatPlatformDateTime(release.updatedAt) ?? '—'}
               </div>
             </div>
-            <ReleaseTaskCenter
-              projectId={projectId}
-              releaseId={releaseId}
-              canManageActions={releaseActions.canManage}
-              disabledSummary={releaseActions.summary}
-              initialSnapshot={initialTaskCenter}
-            />
-            <ReleaseAISnapshotPanel
-              projectId={projectId}
-              releaseId={releaseId}
-              releasePlan={releasePlanSnapshot}
-              incidentAnalysis={incidentSnapshot}
-              dynamicPluginPanels={dynamicPluginPanels}
-            />
-            <details className={releaseSubtleClassName}>
-              <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
-                详细信息
-              </summary>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <GitBranch className="h-3.5 w-3.5" />
-                    来源分支
-                  </span>
-                  <span>{release.sourceRef}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    创建时间
-                  </span>
-                  <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
-                </div>
-                {release.metadataItems.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">{item.label}</span>
-                    {item.mono ? (
-                      <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
-                        {item.value}
-                      </code>
-                    ) : (
-                      <span>{item.value}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
           </div>
-        </details>
+          <details className={releaseSubtleClassName}>
+            <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+              详细信息
+            </summary>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <GitBranch className="h-3.5 w-3.5" />
+                  来源分支
+                </span>
+                <span>{release.sourceRef}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  创建时间
+                </span>
+                <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
+              </div>
+              {release.metadataItems.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  {item.mono ? (
+                    <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                      {item.value}
+                    </code>
+                  ) : (
+                    <span>{item.value}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        </ReleaseAIInfoWindow>
       </div>
     </div>
   );

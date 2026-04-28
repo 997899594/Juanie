@@ -18,7 +18,17 @@ export interface CopilotReplayMessageInput {
   content: string;
 }
 
+export interface CopilotContextCard {
+  scopeLabel: string;
+  title: string;
+  summary: string;
+  risk: string | null;
+  nextStep: string | null;
+  highlights: string[];
+}
+
 export interface CopilotReplayPayload {
   messages?: CopilotReplayMessageInput[];
   metadata?: CopilotSessionMetadata | null;
+  contextCard?: CopilotContextCard | null;
 }

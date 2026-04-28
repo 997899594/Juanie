@@ -68,8 +68,6 @@ export default async function EnvironmentDeliveryDetailPage({
       releaseId={releaseId}
       role={member.role}
       pageData={pageData}
-      releasePlanSnapshot={null}
-      incidentSnapshot={null}
       dynamicPluginPanels={dynamicPluginPanels}
       initialTaskCenter={null}
     />
