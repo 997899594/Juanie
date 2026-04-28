@@ -89,8 +89,10 @@ export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
 }
 
 if (import.meta.main) {
-  runSchemaRunnerCli().catch((error) => {
-    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-    process.exit(1);
-  });
+  runSchemaRunnerCli()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+      process.exit(1);
+    });
 }
