@@ -14,6 +14,7 @@ interface ArgoRolloutResourceLike {
   metadata?: {
     name?: string;
     namespace?: string;
+    generation?: number;
   };
   spec?: {
     paused?: boolean;
@@ -37,6 +38,7 @@ interface ArgoRolloutResourceLike {
   };
   status?: {
     phase?: string;
+    observedGeneration?: number | string;
     readyReplicas?: number;
     availableReplicas?: number;
     updatedReplicas?: number;
@@ -82,6 +84,56 @@ function isNotFoundError(error: unknown): boolean {
 
   const candidate = error as { code?: number; statusCode?: number };
   return (candidate.code ?? candidate.statusCode) === 404;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toNumber(value: number | string | undefined): number | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isArgoRolloutReady(rollout: ArgoRolloutResourceLike): boolean {
+  const generation = toNumber(rollout.metadata?.generation);
+  const observedGeneration = toNumber(rollout.status?.observedGeneration);
+
+  if (generation !== null && (observedGeneration === null || observedGeneration < generation)) {
+    return false;
+  }
+
+  const desiredReplicas = rollout.spec?.replicas ?? 1;
+
+  if (desiredReplicas === 0) {
+    return true;
+  }
+
+  return (
+    (rollout.status?.updatedReplicas ?? 0) >= desiredReplicas &&
+    (rollout.status?.availableReplicas ?? 0) >= desiredReplicas
+  );
+}
+
+function describeArgoRolloutState(rollout: ArgoRolloutResourceLike | null): string {
+  if (!rollout) {
+    return 'not found';
+  }
+
+  return [
+    `phase=${rollout.status?.phase ?? 'unknown'}`,
+    `observed=${rollout.status?.observedGeneration ?? 'unknown'}`,
+    `generation=${rollout.metadata?.generation ?? 'unknown'}`,
+    `updated=${rollout.status?.updatedReplicas ?? 0}`,
+    `available=${rollout.status?.availableReplicas ?? 0}`,
+    `desired=${rollout.spec?.replicas ?? 1}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 async function getArgocdResource<T>(ref: ArgocdResourceRef): Promise<T | null> {
@@ -258,6 +310,34 @@ export function upsertArgoRollout(spec: ArgoRolloutSpec): Promise<void> {
       name: spec.name,
     },
     buildArgoRolloutBody(spec)
+  );
+}
+
+export async function waitForArgoRolloutReady(input: {
+  namespace: string;
+  name: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<ArgoRolloutResourceLike> {
+  const timeoutMs = input.timeoutMs ?? 180_000;
+  const pollMs = input.pollMs ?? 3_000;
+  const deadline = Date.now() + timeoutMs;
+  let lastRollout: ArgoRolloutResourceLike | null = null;
+
+  while (Date.now() < deadline) {
+    lastRollout = await getArgoRollout(input.namespace, input.name);
+
+    if (lastRollout && isArgoRolloutReady(lastRollout)) {
+      return lastRollout;
+    }
+
+    await sleep(pollMs);
+  }
+
+  throw new Error(
+    `Argo Rollout ${input.namespace}/${input.name} did not become ready: ${describeArgoRolloutState(
+      lastRollout
+    )}`
   );
 }
 

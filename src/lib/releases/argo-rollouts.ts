@@ -3,6 +3,7 @@ import {
   getArgoRollout,
   resumeArgoRollout,
   upsertArgoRollout,
+  waitForArgoRolloutReady,
 } from '@/lib/argocd';
 import {
   deleteDeployment,
@@ -133,6 +134,12 @@ export async function deployArgoRolloutWorkload(input: {
       : `Created Argo Rollout ${input.rolloutName} → ${input.imageName}`
   );
 
+  await waitForArgoRolloutReady({
+    namespace: input.namespace,
+    name: input.rolloutName,
+  });
+  await input.onLog?.(`Argo Rollout ${input.rolloutName} is ready for verification`);
+
   if (input.verificationPlan.blockingPaths.length > 0) {
     await verifyServiceReachability({
       namespace: input.namespace,
@@ -183,6 +190,12 @@ export async function finalizeArgoRollout(input: {
 }): Promise<void> {
   await resumeArgoRollout(input.namespace, input.rolloutName);
   await input.onLog?.(`Resumed Argo Rollout ${input.rolloutName} for promotion`);
+
+  await waitForArgoRolloutReady({
+    namespace: input.namespace,
+    name: input.rolloutName,
+  });
+  await input.onLog?.(`Argo Rollout ${input.rolloutName} is ready after promotion`);
 
   if (input.verificationPlan.blockingPaths.length > 0) {
     await verifyServiceReachability({
