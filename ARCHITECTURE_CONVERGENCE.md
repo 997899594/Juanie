@@ -107,3 +107,11 @@ Implemented on 2026-04-28:
 - Schema action errors use the Schema Safety name at the boundary.
 - Environment route reconciliation only repairs detected sleep/wake drift, avoiding periodic route
   churn.
+- Environment details no longer block first paint on AI analysis. Core and dynamic panels lazy-load
+  through their own product APIs.
+- Environment AI reads are cache-only on `GET`; explicit refresh uses `POST` and may execute live
+  analysis, keeping navigation fast and cost predictable.
+- Migration planning distinguishes reliable empty work from degraded inspection. Missing or timed-out
+  preview data stays `unknown`, so release gates do not silently skip real database work.
+- Promotion release intelligence reads cached snapshots in bulk for list views instead of running AI
+  inside page composition.

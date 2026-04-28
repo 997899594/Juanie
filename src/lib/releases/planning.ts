@@ -20,6 +20,7 @@ import {
   resolvePromotionFlows,
 } from '@/lib/environments/promotion';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
+import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import {
   type EnvironmentPolicySnapshot,
   evaluateEnvironmentPolicy,
@@ -247,6 +248,7 @@ export function summarizeReleasePlan(input: {
   environment: PlanningEnvironmentLike;
   services: PlanningServiceLike[];
   migrationSpecs: PlanningMigrationSpecLike[];
+  migrationWarnings?: string[];
   schemaGate?: ReleaseSchemaGateSnapshot | null;
 }): ReleasePlanningSnapshot {
   const preDeploySpecs = input.migrationSpecs.filter(
@@ -276,7 +278,10 @@ export function summarizeReleasePlan(input: {
       specification: spec.specification,
     })
   );
-  const warnings = dedupe(migrationDecisions.flatMap((decision) => decision.warnings));
+  const warnings = dedupe([
+    ...migrationDecisions.flatMap((decision) => decision.warnings),
+    ...(input.migrationWarnings ?? []),
+  ]);
   const migrationSignals = dedupeMigrationSignals(
     migrationDecisions.flatMap((decision) => decision.signals)
   );
@@ -429,6 +434,25 @@ export async function buildProjectReleasePlan(input: {
       sourceCommitSha: input.sourceCommitSha,
     }),
   ]);
+  const effectiveMigrationSpecs = await Promise.all(
+    [...preDeploySpecs, ...postDeploySpecs].map(async (spec) => ({
+      spec,
+      pendingInspection: await inspectResolvedMigrationSpecPendingState(spec, {
+        sourceRef: input.sourceRef,
+        sourceCommitSha: input.sourceCommitSha,
+      }),
+    }))
+  );
+  const unknownInspectionCount = effectiveMigrationSpecs.filter(
+    ({ pendingInspection }) => pendingInspection.state === 'unknown'
+  ).length;
+  const unknownInspectionWarning =
+    unknownInspectionCount > 0
+      ? `有 ${unknownInspectionCount} 个迁移策略暂时无法确认是否存在 schema 变更，系统将按保守策略继续执行或审批。`
+      : null;
+  const filteredMigrationSpecs = effectiveMigrationSpecs
+    .filter(({ pendingInspection }) => pendingInspection.state !== 'none')
+    .map(({ spec }) => spec);
   const schemaGate = await inspectReleaseSchemaGate({
     projectId: project.id,
     environmentId: environment.id,
@@ -440,7 +464,8 @@ export async function buildProjectReleasePlan(input: {
   return summarizeReleasePlan({
     environment,
     services: plannedServices,
-    migrationSpecs: [...preDeploySpecs, ...postDeploySpecs],
+    migrationSpecs: filteredMigrationSpecs,
+    migrationWarnings: unknownInspectionWarning ? [unknownInspectionWarning] : [],
     schemaGate,
   });
 }

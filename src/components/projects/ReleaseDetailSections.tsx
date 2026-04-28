@@ -421,21 +421,21 @@ export function ReleaseExecutionSections({
         import('@/lib/ai/schemas/release-plan').ReleasePlan
       >
     >
-  >;
+  > | null;
   incidentSnapshot: Awaited<
     ReturnType<
       typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<
         import('@/lib/ai/schemas/incident-analysis').IncidentAnalysis
       >
     >
-  >;
+  > | null;
   dynamicPluginPanels?: Array<{
     pluginId: string;
     snapshot: Awaited<
       ReturnType<
         typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<DynamicPluginOutput>
       >
-    >;
+    > | null;
   }>;
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }) {

@@ -4,7 +4,8 @@ import { requireSession } from '@/lib/api/access';
 
 async function handleRequest(
   params: Promise<{ id: string; envId: string }>,
-  forceRefresh: boolean
+  forceRefresh: boolean,
+  allowLiveExecution: boolean
 ) {
   const { id: projectId, envId } = await params;
   const session = await requireSession();
@@ -15,6 +16,7 @@ async function handleRequest(
     environmentId: envId,
     pluginId: 'environment-summary',
     forceRefresh,
+    allowLiveExecution,
     notFoundMessage: '环境不存在',
     forbiddenMessage: '没有权限访问该环境',
   });
@@ -24,12 +26,12 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string; envId: string }> }
 ) {
-  return handleRequest(params, false);
+  return handleRequest(params, false, false);
 }
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string; envId: string }> }
 ) {
-  return handleRequest(params, true);
+  return handleRequest(params, true, true);
 }

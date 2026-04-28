@@ -14,6 +14,7 @@ import {
   listRepositoryDirectoryFromRepoPath,
 } from '@/lib/migrations/fetch';
 import { getDefaultMigrationPath } from '@/lib/migrations/path';
+import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
 const FILE_EXTENSIONS = ['.sql', '.js', '.ts', '.mjs', '.cjs'];
 const MAX_PREVIEW_FILES = 12;
@@ -49,6 +50,13 @@ export interface MigrationFilePreviewSnapshot {
   executedTotal: number;
   truncated: boolean;
   warning?: string | null;
+}
+
+export type MigrationPendingState = 'pending' | 'none' | 'unknown';
+
+export interface MigrationPendingInspection {
+  state: MigrationPendingState;
+  preview: MigrationFilePreviewSnapshot | null;
 }
 
 interface MigrationFilePreviewRunLike {
@@ -221,6 +229,29 @@ function buildPendingSnapshot(input: {
     truncated: normalizedPending.length > MAX_PREVIEW_FILES,
     warning: mergeWarnings(input.declaredPreview.warning, input.warning),
   };
+}
+
+export function resolveMigrationPendingState(
+  preview: MigrationFilePreviewSnapshot | null
+): MigrationPendingState {
+  if (!preview) {
+    return 'unknown';
+  }
+
+  if (isDegradedEmptyPreview(preview)) {
+    return 'unknown';
+  }
+
+  return preview.total > 0 ? 'pending' : 'none';
+}
+
+function isDegradedEmptyPreview(preview: MigrationFilePreviewSnapshot): boolean {
+  return (
+    preview.total === 0 &&
+    preview.declaredTotal === 0 &&
+    preview.executedTotal === 0 &&
+    Boolean(preview.warning?.trim())
+  );
 }
 
 function prunePreviewCache(): void {
@@ -956,4 +987,56 @@ export async function buildMigrationFilePreviewByRunId(
   }
 
   return previewByRunId;
+}
+
+export async function inspectResolvedMigrationSpecPendingState(
+  spec: ResolvedMigrationSpec,
+  options: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    forceRefresh?: boolean;
+  } = {}
+): Promise<MigrationPendingInspection> {
+  const syntheticRunId = [
+    'preview',
+    spec.specification.id,
+    spec.environment.id,
+    spec.database.id,
+    options.sourceCommitSha ?? options.sourceRef ?? spec.environment.branch ?? 'main',
+  ].join(':');
+
+  const previewByRunId = await buildMigrationFilePreviewByRunId(
+    [
+      {
+        id: syntheticRunId,
+        projectId: spec.specification.projectId,
+        specification: {
+          tool: spec.specification.tool,
+          migrationPath: spec.specification.migrationPath,
+          sourceConfigPath: spec.specification.sourceConfigPath,
+        },
+        database: {
+          id: spec.database.id,
+          type: spec.database.type,
+          connectionString: spec.database.connectionString,
+        },
+        release: {
+          sourceRef: options.sourceRef ?? null,
+          sourceCommitSha: options.sourceCommitSha ?? null,
+        },
+        environment: {
+          branch: spec.environment.branch ?? null,
+        },
+      },
+    ],
+    {
+      forceRefresh: options.forceRefresh ?? false,
+    }
+  );
+
+  const preview = previewByRunId.get(syntheticRunId) ?? null;
+  return {
+    state: resolveMigrationPendingState(preview),
+    preview,
+  };
 }

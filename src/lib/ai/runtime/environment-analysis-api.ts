@@ -6,6 +6,7 @@ export async function handleEnvironmentAnalysisRequest<TOutput>(input: {
   environmentId: string;
   pluginId: string;
   forceRefresh: boolean;
+  allowLiveExecution?: boolean;
   notFoundMessage: string;
   forbiddenMessage: string;
 }) {
@@ -16,6 +17,7 @@ export async function handleEnvironmentAnalysisRequest<TOutput>(input: {
     environmentId: input.environmentId,
     pluginId: input.pluginId,
     forceRefresh: input.forceRefresh,
+    allowLiveExecution: input.allowLiveExecution,
     notFoundMessage: input.notFoundMessage,
     forbiddenMessage: input.forbiddenMessage,
     refreshAuditAction: 'environment.ai_summary_refreshed',

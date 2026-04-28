@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
+import { getProjectEnvironmentAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
@@ -12,6 +12,36 @@ const updateEnvironmentSchema = z.object({
   deploymentStrategy: z.enum(['rolling', 'controlled', 'canary', 'blue_green']),
 });
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string; envId: string }> }
+) {
+  try {
+    const { id, envId } = await params;
+    const session = await requireSession();
+    const { environment } = await getProjectEnvironmentAccessOrThrow(id, envId, session.user.id);
+
+    return NextResponse.json({
+      id: environment.id,
+      name: environment.name,
+      namespace: environment.namespace,
+      kind: environment.kind,
+      isProduction: environment.isProduction,
+      isPreview: environment.isPreview,
+      deploymentStrategy: environment.deploymentStrategy,
+      deploymentRuntime: environment.deploymentRuntime,
+      deliveryMode: environment.deliveryMode,
+    });
+  } catch (error) {
+    if (isAccessError(error)) {
+      return toAccessErrorResponse(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; envId: string }> }
@@ -19,15 +49,11 @@ export async function PATCH(
   try {
     const { id, envId } = await params;
     const session = await requireSession();
-    const { member } = await getProjectAccessOrThrow(id, session.user.id);
-
-    const environment = await db.query.environments.findFirst({
-      where: and(eq(environments.id, envId), eq(environments.projectId, id)),
-    });
-
-    if (!environment) {
-      return NextResponse.json({ error: '环境不存在' }, { status: 404 });
-    }
+    const { member, environment } = await getProjectEnvironmentAccessOrThrow(
+      id,
+      envId,
+      session.user.id
+    );
 
     if (!canManageEnvironment(member.role, environment)) {
       return NextResponse.json({ error: getEnvironmentGuardReason(environment) }, { status: 403 });

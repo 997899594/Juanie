@@ -19,6 +19,7 @@ import {
   executeMigrationsForDatabase,
 } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
+import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { isPlatformManagedMigrationSpec } from '@/lib/migrations/platform-managed';
 import {
@@ -268,6 +269,41 @@ export async function executeMigrationRun(
       runId,
       'MIGRATION_LOCK_CONFLICT',
       `Migration run ${conflictingRun.id} is already active for this database`
+    );
+  }
+
+  const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
+    sourceRef: options.sourceRef,
+    sourceCommitSha: options.sourceCommitSha,
+    forceRefresh: true,
+  });
+
+  if (pendingInspection.state === 'none') {
+    const finishedAt = new Date();
+    const startedAt = currentRun?.startedAt ?? finishedAt;
+
+    await appendMigrationRunLog(runId, '未检测到待执行的 schema 变更，迁移已直接完成。');
+    await db
+      .update(migrationRuns)
+      .set({
+        status: 'success',
+        startedAt,
+        finishedAt,
+        durationMs: Math.max(finishedAt.getTime() - startedAt.getTime(), 0),
+        appliedCount: 0,
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: finishedAt,
+      })
+      .where(eq(migrationRuns.id, runId));
+
+    return;
+  }
+
+  if (pendingInspection.state === 'unknown') {
+    await appendMigrationRunLog(
+      runId,
+      '暂时无法确认是否存在待执行的 schema 变更，系统将按保守策略继续执行或等待审批。'
     );
   }
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
 import { buildEnvironmentNavHref, environmentNav, isNavItemActive, mainNav } from './navigation';
@@ -10,27 +11,17 @@ import { UserMenu } from './user-menu';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [projectName, setProjectName] = useState('');
+  const project = useProjectContext();
   const [environmentName, setEnvironmentName] = useState('');
   const queryEnvironmentId =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
 
   const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
-  const projectId = projectIdMatch?.[1];
+  const projectId = project?.projectId ?? projectIdMatch?.[1];
   const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
   const environmentId = environmentIdMatch?.[1] ?? queryEnvironmentId;
   const isInEnvironment = !!projectId && !!environmentId;
-
-  useEffect(() => {
-    if (!projectId) {
-      setProjectName('');
-      return;
-    }
-    fetch(`/api/projects/${projectId}`)
-      .then((r) => r.json())
-      .then((data) => setProjectName(data?.name ?? ''))
-      .catch(() => {});
-  }, [projectId]);
+  const projectName = project?.projectName ?? '';
 
   useEffect(() => {
     if (!projectId || !environmentId) {
@@ -39,7 +30,7 @@ export function Sidebar() {
     }
 
     fetch(`/api/projects/${projectId}/environments/${environmentId}`)
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => setEnvironmentName(data?.name ?? ''))
       .catch(() => {});
   }, [environmentId, projectId]);

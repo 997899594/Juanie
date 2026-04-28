@@ -774,7 +774,7 @@ function EnvironmentOverviewPanel({
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   initialDynamicPluginPanels?: Array<{
     pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
   }>;
   runtimeAction?: ReactNode;
 }) {
@@ -933,42 +933,65 @@ function EnvironmentOverviewPanel({
         </div>
       </section>
 
-      <EnvironmentAISummaryPanel
-        projectId={projectId}
-        environmentId={environment.id}
-        initialPanel={initialAiSummary}
-      />
-      <section className="grid gap-3 lg:grid-cols-2">
-        <EnvironmentMigrationReviewPanel
-          projectId={projectId}
-          environmentId={environment.id}
-          initialPanel={initialMigrationReview}
-        />
-        <EnvironmentEnvvarRiskPanel
-          projectId={projectId}
-          environmentId={environment.id}
-          initialPanel={initialEnvvarRisk}
-        />
-      </section>
-      <EnvironmentTaskCenter
-        projectId={projectId}
-        environmentId={environment.id}
-        initialSnapshot={initialTaskCenter}
-      />
+      <details className={cn(shellClassName, 'overflow-hidden')}>
+        <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className={titleClassName}>AI 辅助</div>
+              <div className="mt-2 text-xl font-semibold tracking-[-0.02em] text-foreground">
+                分析与建议
+              </div>
+              <div className="mt-2 text-sm leading-6 text-muted-foreground">
+                默认收纳，按需展开查看环境摘要、迁移审阅、变量风险、待处理事项和插件输出。
+              </div>
+            </div>
+            <div className="inline-flex h-9 items-center rounded-full bg-[rgba(15,23,42,0.05)] px-3.5 text-xs font-medium text-[rgba(15,23,42,0.58)]">
+              {initialDynamicPluginPanels?.length
+                ? `${initialDynamicPluginPanels.length + 4} 个模块`
+                : '4 个模块'}
+            </div>
+          </div>
+        </summary>
 
-      {initialDynamicPluginPanels && initialDynamicPluginPanels.length > 0 ? (
-        <section className="grid gap-3 lg:grid-cols-2">
-          {initialDynamicPluginPanels.map((panel) => (
-            <EnvironmentDynamicPluginPanel
-              key={panel.pluginId}
+        <div className="mt-5 space-y-4 border-t border-[rgba(15,23,42,0.08)] pt-5">
+          <EnvironmentAISummaryPanel
+            projectId={projectId}
+            environmentId={environment.id}
+            initialPanel={initialAiSummary}
+          />
+          <section className="grid gap-3 lg:grid-cols-2">
+            <EnvironmentMigrationReviewPanel
               projectId={projectId}
               environmentId={environment.id}
-              pluginId={panel.pluginId}
-              initialPanel={panel.snapshot}
+              initialPanel={initialMigrationReview}
             />
-          ))}
-        </section>
-      ) : null}
+            <EnvironmentEnvvarRiskPanel
+              projectId={projectId}
+              environmentId={environment.id}
+              initialPanel={initialEnvvarRisk}
+            />
+          </section>
+          <EnvironmentTaskCenter
+            projectId={projectId}
+            environmentId={environment.id}
+            initialSnapshot={initialTaskCenter}
+          />
+
+          {initialDynamicPluginPanels && initialDynamicPluginPanels.length > 0 ? (
+            <section className="grid gap-3 lg:grid-cols-2">
+              {initialDynamicPluginPanels.map((panel) => (
+                <EnvironmentDynamicPluginPanel
+                  key={panel.pluginId}
+                  projectId={projectId}
+                  environmentId={environment.id}
+                  pluginId={panel.pluginId}
+                  initialPanel={panel.snapshot}
+                />
+              ))}
+            </section>
+          ) : null}
+        </div>
+      </details>
 
       <section>
         <div
@@ -1039,7 +1062,7 @@ function EnvironmentExpandedContent({
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   initialDynamicPluginPanels?: Array<{
     pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
   }>;
   runtimeAction?: ReactNode;
 }) {
@@ -1070,7 +1093,7 @@ interface EnvironmentsPageClientProps {
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   initialDynamicPluginPanels?: Array<{
     pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
   }>;
   initialData: {
     governance: {

@@ -11,6 +11,8 @@ export function ReleaseAIRefreshActions(input: {
   releaseId: string;
   compact?: boolean;
   showMessage?: boolean;
+  refreshPage?: boolean;
+  onRefreshed?: () => Promise<void> | void;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +66,10 @@ export function ReleaseAIRefreshActions(input: {
 
       setMessage('已刷新');
       setStatus('success');
-      router.refresh();
+      await input.onRefreshed?.();
+      if (input.refreshPage ?? true) {
+        router.refresh();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '刷新失败');
       setStatus('error');

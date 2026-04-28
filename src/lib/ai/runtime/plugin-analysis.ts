@@ -24,6 +24,7 @@ export async function resolveScopedAIPluginSnapshot<TOutput>(input: {
   releaseId?: string;
   pluginId: string;
   forceRefresh?: boolean;
+  allowLiveExecution?: boolean;
 }): Promise<ScopedAIPluginResponse<TOutput>> {
   try {
     if (input.scope === 'environment') {
@@ -41,6 +42,7 @@ export async function resolveScopedAIPluginSnapshot<TOutput>(input: {
           actorUserId: input.userId,
         },
         forceRefresh: input.forceRefresh,
+        allowLiveExecution: input.allowLiveExecution,
       });
 
       return {
@@ -66,6 +68,7 @@ export async function resolveScopedAIPluginSnapshot<TOutput>(input: {
         actorUserId: input.userId,
       },
       forceRefresh: input.forceRefresh,
+      allowLiveExecution: input.allowLiveExecution,
     });
 
     return {
@@ -93,6 +96,7 @@ export async function handleScopedAIPluginAnalysisRequest<TOutput>(input: {
   releaseId?: string;
   pluginId: string;
   forceRefresh: boolean;
+  allowLiveExecution?: boolean;
   notFoundMessage: string;
   forbiddenMessage: string;
   refreshAuditAction: 'environment.ai_summary_refreshed' | 'release.ai_analysis_refreshed';

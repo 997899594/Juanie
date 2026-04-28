@@ -1,6 +1,11 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
 import { ReleaseAIRefreshActions } from '@/components/projects/ReleaseAIRefreshActions';
 import { ReleaseDynamicPluginPanel } from '@/components/projects/ReleaseDynamicPluginPanel';
 import { Badge } from '@/components/ui/badge';
+import { incidentIntelligenceManifest } from '@/lib/ai/plugins/incident-intelligence/manifest';
+import { releaseIntelligenceManifest } from '@/lib/ai/plugins/release-intelligence/manifest';
 import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
 import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { IncidentAnalysis } from '@/lib/ai/schemas/incident-analysis';
@@ -10,11 +15,11 @@ import { formatPlatformDateTime } from '@/lib/time/format';
 interface ReleaseAISnapshotPanelProps {
   projectId: string;
   releaseId: string;
-  releasePlan: ResolvedAIPluginSnapshot<ReleasePlan>;
-  incidentAnalysis: ResolvedAIPluginSnapshot<IncidentAnalysis>;
+  releasePlan: ResolvedAIPluginSnapshot<ReleasePlan> | null;
+  incidentAnalysis: ResolvedAIPluginSnapshot<IncidentAnalysis> | null;
   dynamicPluginPanels?: Array<{
     pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
   }>;
 }
 
@@ -73,12 +78,115 @@ function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: str
   );
 }
 
+function buildUnavailableSnapshot<TOutput>(input: {
+  manifest: ResolvedAIPluginSnapshot<TOutput>['manifest'];
+  errorMessage: string;
+}): ResolvedAIPluginSnapshot<TOutput> {
+  return {
+    manifest: input.manifest,
+    availability: {
+      enabled: false,
+      providerEnabled: false,
+      pluginEnabled: true,
+      plan: 'free',
+      requiredTier: input.manifest.tier,
+      blockedReason: input.errorMessage,
+    },
+    snapshot: null,
+    source: 'none',
+    stale: false,
+    providerStatus: {
+      provider: '302.ai',
+      configured: false,
+      enabled: false,
+      models: {
+        chat: '',
+        toolCalling: '',
+        pro: '',
+        json: '',
+      },
+    },
+    errorMessage: input.errorMessage,
+  };
+}
+
 export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
-  const releasePlanSnapshot = props.releasePlan.snapshot?.output ?? null;
-  const incidentSnapshot = props.incidentAnalysis.snapshot?.output ?? null;
+  const [releasePlanPanel, setReleasePlanPanel] = useState(props.releasePlan);
+  const [incidentPanel, setIncidentPanel] = useState(props.incidentAnalysis);
+  const [loading, setLoading] = useState(!props.releasePlan || !props.incidentAnalysis);
   const shellClassName =
     'rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]';
   const subCardClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4';
+  const releasePlanSnapshot = releasePlanPanel?.snapshot?.output ?? null;
+  const incidentSnapshot = incidentPanel?.snapshot?.output ?? null;
+
+  const loadCachedAnalysis = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const [planResponse, incidentResponse] = await Promise.all([
+        fetch(`/api/projects/${props.projectId}/releases/${props.releaseId}/ai-plan`),
+        fetch(`/api/projects/${props.projectId}/releases/${props.releaseId}/ai-incident`),
+      ]);
+
+      const [planData, incidentData] = await Promise.all([
+        planResponse.json().catch(() => null),
+        incidentResponse.json().catch(() => null),
+      ]);
+
+      if (!planResponse.ok) {
+        const message =
+          planData &&
+          typeof planData === 'object' &&
+          'error' in planData &&
+          typeof planData.error === 'string'
+            ? planData.error
+            : '发布计划加载失败';
+        setReleasePlanPanel(
+          buildUnavailableSnapshot({
+            manifest: releaseIntelligenceManifest,
+            errorMessage: message,
+          })
+        );
+      } else {
+        setReleasePlanPanel(planData as ResolvedAIPluginSnapshot<ReleasePlan>);
+      }
+
+      if (!incidentResponse.ok) {
+        const message =
+          incidentData &&
+          typeof incidentData === 'object' &&
+          'error' in incidentData &&
+          typeof incidentData.error === 'string'
+            ? incidentData.error
+            : '故障归因加载失败';
+        setIncidentPanel(
+          buildUnavailableSnapshot({
+            manifest: incidentIntelligenceManifest,
+            errorMessage: message,
+          })
+        );
+      } else {
+        setIncidentPanel(incidentData as ResolvedAIPluginSnapshot<IncidentAnalysis>);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [props.projectId, props.releaseId]);
+
+  useEffect(() => {
+    setReleasePlanPanel(props.releasePlan);
+  }, [props.releasePlan]);
+
+  useEffect(() => {
+    setIncidentPanel(props.incidentAnalysis);
+  }, [props.incidentAnalysis]);
+
+  useEffect(() => {
+    if (!props.releasePlan || !props.incidentAnalysis) {
+      void loadCachedAnalysis();
+    }
+  }, [props.incidentAnalysis, props.releasePlan, loadCachedAnalysis]);
 
   return (
     <section className="space-y-4">
@@ -89,20 +197,31 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               <div className="text-sm font-semibold">发布计划</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <ReleaseAIRefreshActions projectId={props.projectId} releaseId={props.releaseId} />
-              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
-                {getSourceLabel(props.releasePlan.source, props.releasePlan.stale)}
-              </Badge>
-              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
-                {props.releasePlan.availability.plan}
-              </Badge>
+              <ReleaseAIRefreshActions
+                projectId={props.projectId}
+                releaseId={props.releaseId}
+                refreshPage={false}
+                onRefreshed={loadCachedAnalysis}
+              />
+              {releasePlanPanel ? (
+                <>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {getSourceLabel(releasePlanPanel.source, releasePlanPanel.stale)}
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {releasePlanPanel.availability.plan}
+                  </Badge>
+                </>
+              ) : null}
             </div>
           </div>
 
-          {releasePlanSnapshot ? (
+          {loading && !releasePlanPanel ? (
+            <div className="text-sm text-[rgba(15,23,42,0.48)]">分析中…</div>
+          ) : releasePlanPanel && releasePlanSnapshot ? (
             <div className="space-y-4">
-              {props.releasePlan.errorMessage && (
-                <div className={subCardClassName}>{props.releasePlan.errorMessage}</div>
+              {releasePlanPanel.errorMessage && (
+                <div className={subCardClassName}>{releasePlanPanel.errorMessage}</div>
               )}
               <div className={subCardClassName}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -126,7 +245,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   {releasePlanSnapshot.operatorNarrative}
                 </div>
                 <div className="mt-3 text-xs text-[rgba(15,23,42,0.42)]">
-                  {formatPlatformDateTime(props.releasePlan.snapshot?.generatedAt) ?? '—'}
+                  {formatPlatformDateTime(releasePlanPanel.snapshot?.generatedAt) ?? '—'}
                 </div>
               </div>
 
@@ -195,7 +314,14 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               </div>
             </div>
           ) : (
-            renderUnavailableState(props.releasePlan, '没有发布计划')
+            renderUnavailableState(
+              releasePlanPanel ??
+                buildUnavailableSnapshot({
+                  manifest: releaseIntelligenceManifest,
+                  errorMessage: '没有发布计划',
+                }),
+              '没有发布计划'
+            )
           )}
         </div>
 
@@ -205,19 +331,25 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               <div className="text-sm font-semibold">故障归因</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
-                {getSourceLabel(props.incidentAnalysis.source, props.incidentAnalysis.stale)}
-              </Badge>
-              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
-                {props.incidentAnalysis.availability.plan}
-              </Badge>
+              {incidentPanel ? (
+                <>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {getSourceLabel(incidentPanel.source, incidentPanel.stale)}
+                  </Badge>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {incidentPanel.availability.plan}
+                  </Badge>
+                </>
+              ) : null}
             </div>
           </div>
 
-          {incidentSnapshot ? (
+          {loading && !incidentPanel ? (
+            <div className="text-sm text-[rgba(15,23,42,0.48)]">分析中…</div>
+          ) : incidentPanel && incidentSnapshot ? (
             <div className="space-y-4">
-              {props.incidentAnalysis.errorMessage && (
-                <div className={subCardClassName}>{props.incidentAnalysis.errorMessage}</div>
+              {incidentPanel.errorMessage && (
+                <div className={subCardClassName}>{incidentPanel.errorMessage}</div>
               )}
               <div className={subCardClassName}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -244,7 +376,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   {incidentSnapshot.diagnosis.rootCause}
                 </div>
                 <div className="mt-3 text-xs text-[rgba(15,23,42,0.42)]">
-                  {formatPlatformDateTime(props.incidentAnalysis.snapshot?.generatedAt) ?? '—'}
+                  {formatPlatformDateTime(incidentPanel.snapshot?.generatedAt) ?? '—'}
                 </div>
               </div>
 
@@ -316,7 +448,14 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               </div>
             </div>
           ) : (
-            renderUnavailableState(props.incidentAnalysis, '没有归因')
+            renderUnavailableState(
+              incidentPanel ??
+                buildUnavailableSnapshot({
+                  manifest: incidentIntelligenceManifest,
+                  errorMessage: '没有归因',
+                }),
+              '没有归因'
+            )
           )}
         </div>
       </div>

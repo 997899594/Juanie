@@ -11,6 +11,7 @@ import {
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
+import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -161,6 +162,14 @@ export async function resolveAndCreateMigrationRuns(
 
   for (const spec of specs) {
     await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
+    const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
+      sourceRef: input.sourceRef,
+      sourceCommitSha: input.sourceCommitSha,
+    });
+
+    if (pendingInspection.state === 'none') {
+      continue;
+    }
 
     let initialStatus: MigrationRunStatus = 'queued';
 

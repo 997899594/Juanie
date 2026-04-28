@@ -46,6 +46,7 @@ export async function resolveAIPluginSnapshot<TOutput>(input: {
   pluginId: string;
   context: AIPluginContext;
   forceRefresh?: boolean;
+  allowLiveExecution?: boolean;
 }): Promise<ResolvedAIPluginSnapshot<TOutput>> {
   const plugin = await getAIPluginByIdForTeam(input.context.teamId, input.pluginId);
   if (!plugin) {
@@ -54,6 +55,32 @@ export async function resolveAIPluginSnapshot<TOutput>(input: {
   resolvePrimarySkill(plugin);
 
   const resourceId = resolveAIPluginResourceId(plugin, input.context);
+  const allowLiveExecution = input.allowLiveExecution ?? true;
+
+  if (!allowLiveExecution && !input.forceRefresh) {
+    const [availability, latestSnapshot] = await Promise.all([
+      getAIPluginAvailability({
+        teamId: input.context.teamId,
+        pluginId: plugin.manifest.id,
+        requiredTier: plugin.manifest.tier,
+      }),
+      getLatestAIPluginSnapshot<TOutput>({
+        pluginId: plugin.manifest.id,
+        teamId: input.context.teamId,
+        resourceType: plugin.manifest.resourceType,
+        resourceId,
+      }),
+    ]);
+
+    return buildResolvedAIPluginSnapshot({
+      manifest: plugin.manifest,
+      availability,
+      snapshot: latestSnapshot,
+      source: latestSnapshot ? 'cache' : 'none',
+      stale: latestSnapshot !== null,
+    });
+  }
+
   const evidence = await plugin.buildEvidence(input.context);
   const inputHash = computeAIInputHash(evidence);
 

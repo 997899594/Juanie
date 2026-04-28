@@ -1,7 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
 import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
-import { resolveAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
-import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
+import {
+  listLatestAIPluginSnapshotsByResourceIds,
+  type StoredAIPluginSnapshot,
+} from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, releases, type TeamRole } from '@/lib/db/schema';
@@ -357,52 +359,42 @@ type ProjectPromotionPlanView = Awaited<ReturnType<typeof buildPromotionPlans>>[
   ai: PromotionAIView | null;
 };
 
-async function resolvePromotionAIView(input: {
-  teamId: string;
-  projectId: string;
-  release: ReturnType<typeof buildProjectReleaseListData>[number];
-}): Promise<PromotionAIView | null> {
-  const snapshot = await resolveAIPluginSnapshot<ReleasePlan>({
-    pluginId: 'release-intelligence',
-    context: {
-      teamId: input.teamId,
-      projectId: input.projectId,
-      environmentId: input.release.environment.id,
-      releaseId: input.release.id,
-    },
-  });
-  const output = snapshot.snapshot?.output ?? null;
+function buildCachedPromotionAIView(
+  snapshot: StoredAIPluginSnapshot<ReleasePlan> | null
+): PromotionAIView | null {
+  if (!snapshot) {
+    return {
+      summary: null,
+      strategy: null,
+      confidence: null,
+      riskLevel: null,
+      reasons: [],
+      checks: [],
+      stale: false,
+      source: 'none',
+      generatedAt: null,
+      errorMessage: null,
+    };
+  }
 
-  return output
-    ? {
-        summary: output.recommendation.summary,
-        strategy: output.recommendation.strategy,
-        confidence: output.recommendation.confidence,
-        riskLevel: output.risk.level,
-        reasons: output.recommendation.why.slice(0, 3),
-        checks: output.checks.slice(0, 3).map((check) => ({
-          key: check.key,
-          label: check.label,
-          status: check.status,
-          summary: check.summary,
-        })),
-        stale: snapshot.stale,
-        source: snapshot.source,
-        generatedAt: snapshot.snapshot?.generatedAt ?? null,
-        errorMessage: snapshot.errorMessage,
-      }
-    : {
-        summary: null,
-        strategy: null,
-        confidence: null,
-        riskLevel: null,
-        reasons: [],
-        checks: [],
-        stale: snapshot.stale,
-        source: snapshot.source,
-        generatedAt: null,
-        errorMessage: snapshot.errorMessage ?? snapshot.availability.blockedReason,
-      };
+  const output = snapshot.output;
+  return {
+    summary: output.recommendation.summary,
+    strategy: output.recommendation.strategy,
+    confidence: output.recommendation.confidence,
+    riskLevel: output.risk.level,
+    reasons: output.recommendation.why.slice(0, 3),
+    checks: output.checks.slice(0, 3).map((check) => ({
+      key: check.key,
+      label: check.label,
+      status: check.status,
+      summary: check.summary,
+    })),
+    stale: true,
+    source: 'cache',
+    generatedAt: snapshot.generatedAt,
+    errorMessage: null,
+  };
 }
 
 export function buildProjectReleasesPageData(input: {
@@ -538,24 +530,20 @@ export async function getProjectReleasesPageData(input: {
     }),
     buildPromotionPlans(input.project.id).catch(() => []),
   ]);
-  const promotionPlans = await Promise.all(
-    promotionPlansRaw.map(async (plan) => {
-      const sourceRelease = plan.sourceRelease
-        ? (releaseCards.find((release) => release.id === plan.sourceRelease?.id) ?? null)
-        : null;
-
-      return {
-        ...plan,
-        ai: sourceRelease
-          ? await resolvePromotionAIView({
-              teamId: input.project.teamId,
-              projectId: input.project.id,
-              release: sourceRelease,
-            }).catch(() => null)
-          : null,
-      };
-    })
-  );
+  const promotionAISnapshots = await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
+    pluginId: 'release-intelligence',
+    teamId: input.project.teamId,
+    resourceType: 'release',
+    resourceIds: promotionPlansRaw
+      .map((plan) => plan.sourceRelease?.id ?? null)
+      .filter((releaseId): releaseId is string => Boolean(releaseId)),
+  }).catch(() => new Map<string, StoredAIPluginSnapshot<ReleasePlan>>());
+  const promotionPlans = promotionPlansRaw.map((plan) => ({
+    ...plan,
+    ai: plan.sourceRelease
+      ? buildCachedPromotionAIView(promotionAISnapshots.get(plan.sourceRelease.id) ?? null)
+      : null,
+  }));
 
   return buildProjectReleasesPageData({
     releaseItems: buildProjectReleaseListItems(releaseCards),

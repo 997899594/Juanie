@@ -25,11 +25,11 @@ interface ReleaseDetailDashboardProps {
   releaseId: string;
   role: TeamRole;
   pageData: NonNullable<Awaited<ReturnType<typeof getReleaseDetailPageData>>>;
-  releasePlanSnapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<ReleasePlan>>>;
-  incidentSnapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<IncidentAnalysis>>>;
+  releasePlanSnapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<ReleasePlan>>> | null;
+  incidentSnapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<IncidentAnalysis>>> | null;
   dynamicPluginPanels?: Array<{
     pluginId: string;
-    snapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<DynamicPluginOutput>>>;
+    snapshot: Awaited<ReturnType<typeof resolveAIPluginSnapshot<DynamicPluginOutput>>> | null;
   }>;
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }
