@@ -32,6 +32,21 @@ function buildMessageId(): string {
   return `global-ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function matchesReplayMessages(
+  currentMessages: Array<{ role: string; content: string }>,
+  replayMessages?: CopilotReplayPayload['messages']
+): boolean {
+  if (!replayMessages || currentMessages.length !== replayMessages.length) {
+    return false;
+  }
+
+  return replayMessages.every(
+    (message, index) =>
+      currentMessages[index]?.role === message.role &&
+      currentMessages[index]?.content === message.content
+  );
+}
+
 const defaultChatError = '稍后重试';
 const defaultTaskError = '提交失败';
 
@@ -140,12 +155,27 @@ export function GlobalAIPanel() {
     [conversation]
   );
 
+  const replayCurrentContext = useCallback(
+    (detail: CopilotReplayPayload | null | undefined) => {
+      if (!detail?.messages?.length) {
+        return;
+      }
+
+      if (!matchesReplayMessages(conversation.messages, detail.messages)) {
+        conversation.archiveCurrent();
+      }
+
+      applyReplayPayload(detail);
+    },
+    [applyReplayPayload, conversation]
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        if (config.kind === 'chat' && conversation.messages.length === 0) {
-          applyReplayPayload(getGlobalCopilotReplaySeed());
+        if (config.kind === 'chat') {
+          replayCurrentContext(getGlobalCopilotReplaySeed());
         }
         setOpen(true);
       }
@@ -153,7 +183,11 @@ export function GlobalAIPanel() {
 
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<CopilotReplayPayload>).detail;
-      applyReplayPayload(detail);
+      if (detail) {
+        replayCurrentContext(detail);
+      } else if (config.kind === 'chat') {
+        replayCurrentContext(getGlobalCopilotReplaySeed());
+      }
       setOpen(true);
     };
 
@@ -163,7 +197,7 @@ export function GlobalAIPanel() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener(openEventName, onOpen);
     };
-  }, [applyReplayPayload, config.kind, conversation.messages.length]);
+  }, [config.kind, replayCurrentContext]);
 
   useEffect(() => {
     viewportRef.current?.scrollTo({
@@ -402,25 +436,27 @@ export function GlobalAIPanel() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          if (config.kind === 'chat' && conversation.messages.length === 0) {
-            applyReplayPayload(getGlobalCopilotReplaySeed());
-          }
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (config.kind === 'chat') {
+              replayCurrentContext(getGlobalCopilotReplaySeed());
+            }
 
-          setOpen(true);
-        }}
-        className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(28,27,24,0.94)] text-[rgba(251,250,247,0.96)] shadow-[0_20px_36px_rgba(15,23,42,0.14)] transition duration-200 hover:scale-[1.02] hover:bg-[rgba(28,27,24,0.88)] lg:bottom-8 lg:right-8"
-        aria-label="打开 AI"
-      >
-        <Sparkles className="h-5 w-5" />
-      </button>
+            setOpen(true);
+          }}
+          className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(28,27,24,0.94)] text-[rgba(251,250,247,0.96)] shadow-[0_20px_36px_rgba(15,23,42,0.14)] transition duration-200 hover:scale-[1.02] hover:bg-[rgba(28,27,24,0.88)] lg:bottom-8 lg:right-8"
+          aria-label="打开 AI"
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-[min(100vw-1.5rem,36rem)] sm:px-0 sm:py-0 lg:mr-4 lg:ml-auto lg:mt-4 lg:h-[calc(100vh-2rem)] lg:max-h-[calc(100vh-2rem)] lg:max-w-[38rem] lg:translate-x-0 lg:translate-y-0 lg:top-0 lg:left-auto">
-          <section className="flex h-full min-h-[calc(100dvh-1rem)] flex-col overflow-hidden rounded-[32px] bg-[rgba(251,250,247,0.985)] shadow-[0_28px_80px_rgba(15,23,42,0.08)] backdrop-blur sm:min-h-[44rem] lg:min-h-0">
-            <DialogHeader className="px-5 py-4 text-left">
+        <DialogContent className="max-h-none overflow-visible border-0 bg-transparent p-0 shadow-none ring-0 sm:max-h-none sm:max-w-[min(calc(100vw-1.5rem),38rem)] sm:p-0 sm:shadow-none sm:ring-0 lg:inset-y-4 lg:right-4 lg:left-auto lg:top-4 lg:bottom-4 lg:mr-0 lg:ml-0 lg:mt-0 lg:h-auto lg:w-[38rem] lg:max-w-[38rem] lg:translate-x-0 lg:translate-y-0 [&>button]:right-3 [&>button]:top-3 [&>button]:z-20 [&>button]:h-9 [&>button]:w-9 [&>button]:bg-white/85 [&>button]:shadow-[0_12px_28px_-20px_rgba(15,23,42,0.4)] sm:[&>button]:right-4 sm:[&>button]:top-4">
+          <section className="isolate flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] min-h-0 flex-col overflow-hidden rounded-t-[32px] bg-[#fbfaf7] shadow-[0_28px_82px_rgba(15,23,42,0.16)] ring-1 ring-[rgba(15,23,42,0.06)] sm:h-[min(86vh,46rem)] sm:max-h-[86vh] sm:rounded-[32px] lg:h-full lg:max-h-none">
+            <DialogHeader className="shrink-0 px-5 py-4 pr-14 text-left sm:px-6 sm:py-5">
               <div className="flex items-center gap-3 border-b border-[rgba(15,23,42,0.05)] pb-4">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.62)]">
                   <Sparkles className="h-4.5 w-4.5" />
@@ -436,7 +472,10 @@ export function GlobalAIPanel() {
 
             {isChatMode ? (
               <>
-                <div ref={viewportRef} className="flex-1 space-y-5 overflow-y-auto px-5 pb-4">
+                <div
+                  ref={viewportRef}
+                  className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-4 sm:px-6"
+                >
                   {conversation.messages.length === 0 && suggestions.length > 0 ? (
                     <div className="pb-1">
                       <div className="flex flex-wrap gap-2">
@@ -597,8 +636,8 @@ export function GlobalAIPanel() {
                   ) : null}
                 </div>
 
-                <div className="bg-[linear-gradient(180deg,rgba(251,250,247,0)_0%,rgba(251,250,247,0.82)_18%,rgba(251,250,247,1)_100%)] px-4 pb-4 pt-3">
-                  <div className="rounded-[26px] bg-[rgba(255,255,255,0.94)] p-3 shadow-[0_18px_44px_-30px_rgba(15,23,42,0.12)] ring-1 ring-[rgba(15,23,42,0.05)] backdrop-blur">
+                <div className="shrink-0 bg-[linear-gradient(180deg,rgba(251,250,247,0)_0%,#fbfaf7_22%,#fbfaf7_100%)] px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+                  <div className="rounded-[26px] bg-white p-3 shadow-[0_18px_44px_-30px_rgba(15,23,42,0.18)] ring-1 ring-[rgba(15,23,42,0.06)]">
                     <Textarea
                       ref={composerRef}
                       value={draft}
