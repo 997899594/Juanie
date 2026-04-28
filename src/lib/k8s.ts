@@ -262,6 +262,47 @@ export async function getDeployments(namespace: string): Promise<k8s.V1Deploymen
   return response.items;
 }
 
+export async function scaleDeploymentIfExists(input: {
+  namespace: string;
+  name: string;
+  replicas: number;
+}): Promise<boolean> {
+  const { apps } = getK8sClient();
+
+  try {
+    const current = await apps.readNamespacedDeployment({
+      namespace: input.namespace,
+      name: input.name,
+    });
+    if (!current.spec?.selector || !current.spec.template) {
+      return false;
+    }
+
+    await apps.replaceNamespacedDeployment({
+      namespace: input.namespace,
+      name: input.name,
+      body: {
+        ...current,
+        spec: {
+          ...current.spec,
+          selector: current.spec.selector,
+          template: current.spec.template,
+          replicas: input.replicas,
+        },
+      },
+    });
+
+    return true;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return false;
+    }
+
+    throw e;
+  }
+}
+
 export async function getPods(namespace: string, labelSelector?: string): Promise<k8s.V1Pod[]> {
   const { core } = getK8sClient();
 

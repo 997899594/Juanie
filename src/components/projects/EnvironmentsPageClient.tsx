@@ -3,7 +3,7 @@
 import { useForm } from '@tanstack/react-form';
 import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { EnvironmentAISummaryPanel } from '@/components/projects/EnvironmentAISummaryPanel';
 import { EnvironmentDynamicPluginPanel } from '@/components/projects/EnvironmentDynamicPluginPanel';
@@ -56,10 +56,12 @@ import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
 import type { EnvironmentTaskCenterSnapshot } from '@/lib/ai/tasks/environment-task-center';
 import {
+  setEnvironmentRuntimeState as controlEnvironmentRuntime,
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
   type DeliveryRoutingRuleInput,
   deletePreviewEnvironment,
+  type EnvironmentRuntimeState,
   fetchProjectEnvironments,
   type PromotionFlowInput,
   updateEnvironmentStrategy,
@@ -269,6 +271,7 @@ interface EnvironmentRecord {
     label: string;
     summary: string;
   } | null;
+  runtimeState: EnvironmentRuntimeState | null;
   actions: {
     canConfigureStrategy: boolean;
     configureStrategySummary: string;
@@ -517,6 +520,10 @@ function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
 }
 
 function buildEnvironmentStatusSummary(environment: EnvironmentRecord): string {
+  if (environment.runtimeState?.state === 'sleeping') {
+    return environment.runtimeState.summary;
+  }
+
   if (environment.policy.primarySignal?.summary) {
     return environment.policy.primarySignal.summary;
   }
@@ -538,6 +545,39 @@ function buildEnvironmentStatusSummary(environment: EnvironmentRecord): string {
   }
 
   return '状态更新中';
+}
+
+function buildRuntimeStateLabel(runtimeState: EnvironmentRuntimeState | null): string {
+  switch (runtimeState?.state) {
+    case 'running':
+      return '运行中';
+    case 'sleeping':
+      return '已休眠';
+    case 'partial':
+      return '唤醒中';
+    case 'not_deployed':
+      return '未部署';
+    case 'unknown':
+      return '未知';
+    default:
+      return '未连接';
+  }
+}
+
+function getRuntimeAction(environment: EnvironmentRecord): 'sleep' | 'wake' | null {
+  if (environment.isProduction) {
+    return null;
+  }
+
+  switch (environment.runtimeState?.state) {
+    case 'running':
+    case 'partial':
+      return 'sleep';
+    case 'sleeping':
+      return 'wake';
+    default:
+      return null;
+  }
 }
 
 function buildEnvironmentListSummary(environment: EnvironmentRecord): string {
@@ -638,14 +678,17 @@ function buildEnvironmentDatabaseSummary(environment: EnvironmentRecord): string
 function EnvironmentListCard({
   projectId,
   environment,
+  runtimeAction,
   deleteAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  deleteAction?: React.ReactNode;
+  runtimeAction?: ReactNode;
+  deleteAction?: ReactNode;
 }) {
   const meta = buildEnvironmentHeaderMeta(environment);
   const statusBadges = [
+    environment.runtimeState?.state === 'sleeping' ? '已休眠' : null,
     environment.policy.primarySignal?.label ?? null,
     environment.previewLifecycle?.stateLabel ?? null,
   ].filter(Boolean);
@@ -693,6 +736,7 @@ function EnvironmentListCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+          {runtimeAction}
           <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
             <Link href={`/projects/${projectId}/environments/${environment.id}`}>
               进入环境
@@ -716,6 +760,7 @@ function EnvironmentOverviewPanel({
   initialEnvvarRisk,
   initialTaskCenter,
   initialDynamicPluginPanels,
+  runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -731,6 +776,7 @@ function EnvironmentOverviewPanel({
     pluginId: string;
     snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
   }>;
+  runtimeAction?: ReactNode;
 }) {
   const [variableSummary, setVariableSummary] = useState('变量状态加载中');
   const hasStrategyControl = environment.actions.canConfigureStrategy;
@@ -811,6 +857,19 @@ function EnvironmentOverviewPanel({
           </div>
         </section>
       ) : null}
+
+      <section className={shellClassName}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className={titleClassName}>运行态</div>
+            <div className={valueClassName}>{buildRuntimeStateLabel(environment.runtimeState)}</div>
+            <div className={summaryClassName}>
+              {environment.runtimeState?.summary ?? '运行态暂不可用'}
+            </div>
+          </div>
+          {runtimeAction ? <div className="shrink-0">{runtimeAction}</div> : null}
+        </div>
+      </section>
 
       <EnvironmentAISummaryPanel
         projectId={projectId}
@@ -931,6 +990,7 @@ function EnvironmentExpandedContent({
   initialEnvvarRisk,
   initialTaskCenter,
   initialDynamicPluginPanels,
+  runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -946,6 +1006,7 @@ function EnvironmentExpandedContent({
     pluginId: string;
     snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
   }>;
+  runtimeAction?: ReactNode;
 }) {
   return (
     <EnvironmentOverviewPanel
@@ -958,6 +1019,7 @@ function EnvironmentExpandedContent({
       initialEnvvarRisk={initialEnvvarRisk}
       initialTaskCenter={initialTaskCenter}
       initialDynamicPluginPanels={initialDynamicPluginPanels}
+      runtimeAction={runtimeAction}
     />
   );
 }
@@ -1031,6 +1093,7 @@ export function EnvironmentsPageClient({
   const [dialogLoading, setDialogLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
+  const [runtimeActionId, setRuntimeActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialCreateOpen) {
@@ -1158,6 +1221,47 @@ export function EnvironmentsPageClient({
     }
   };
 
+  const handleRuntimeControl = async (environment: EnvironmentRecord, action: 'sleep' | 'wake') => {
+    setRuntimeActionId(environment.id);
+
+    try {
+      await controlEnvironmentRuntime({
+        projectId,
+        environmentId: environment.id,
+        action,
+      });
+      toast.success(
+        action === 'sleep' ? `${environment.name} 已休眠` : `${environment.name} 已唤醒`
+      );
+      await fetchEnvironments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '运行态操作失败');
+    } finally {
+      setRuntimeActionId(null);
+    }
+  };
+
+  const renderRuntimeAction = (environment: EnvironmentRecord) => {
+    const action = getRuntimeAction(environment);
+
+    if (!action) {
+      return null;
+    }
+
+    return (
+      <Button
+        type="button"
+        variant={action === 'sleep' ? 'ghost' : 'default'}
+        size="sm"
+        className="h-9 rounded-full px-4"
+        disabled={runtimeActionId === environment.id}
+        onClick={() => handleRuntimeControl(environment, action)}
+      >
+        {runtimeActionId === environment.id ? '处理中...' : action === 'sleep' ? '休眠' : '唤醒'}
+      </Button>
+    );
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -1223,6 +1327,7 @@ export function EnvironmentsPageClient({
               initialEnvvarRisk={initialEnvvarRisk}
               initialTaskCenter={initialTaskCenter}
               initialDynamicPluginPanels={initialDynamicPluginPanels}
+              runtimeAction={renderRuntimeAction(focusedEnvironment)}
             />
           ) : (
             <>
@@ -1249,6 +1354,7 @@ export function EnvironmentsPageClient({
                         key={environment.id}
                         projectId={projectId}
                         environment={environment}
+                        runtimeAction={renderRuntimeAction(environment)}
                       />
                     ))}
                   </div>
@@ -1277,6 +1383,7 @@ export function EnvironmentsPageClient({
                         key={environment.id}
                         projectId={projectId}
                         environment={environment}
+                        runtimeAction={renderRuntimeAction(environment)}
                         deleteAction={
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

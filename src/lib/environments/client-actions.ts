@@ -35,6 +35,14 @@ export interface UpdateEnvironmentStrategyInput {
   deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
 }
 
+export interface EnvironmentRuntimeState {
+  state: 'running' | 'sleeping' | 'partial' | 'not_deployed' | 'unknown';
+  desiredReplicas: number;
+  readyReplicas: number;
+  workloadCount: number;
+  summary: string;
+}
+
 export interface CreatePreviewEnvironmentInput {
   projectId: string;
   branch?: string;
@@ -283,6 +291,28 @@ export async function updateEnvironmentStrategy(
   );
 
   await parseJsonResponse<{ success: boolean }>(response);
+}
+
+export async function setEnvironmentRuntimeState(input: {
+  projectId: string;
+  environmentId: string;
+  action: 'sleep' | 'wake';
+}): Promise<EnvironmentRuntimeState> {
+  const response = await fetch(
+    `/api/projects/${input.projectId}/environments/${input.environmentId}/runtime`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: input.action,
+      }),
+    }
+  );
+
+  const payload = await parseJsonResponse<{ runtimeState: EnvironmentRuntimeState }>(response);
+  return payload.runtimeState;
 }
 
 export async function updateDeliveryControl(input: {

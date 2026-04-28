@@ -37,6 +37,9 @@ interface ArgoRolloutResourceLike {
   };
   status?: {
     phase?: string;
+    readyReplicas?: number;
+    availableReplicas?: number;
+    updatedReplicas?: number;
     pauseConditions?: Array<{
       reason?: string;
     }>;
@@ -234,6 +237,19 @@ export function getArgoRollout(
   });
 }
 
+export async function listArgoRollouts(namespace: string): Promise<ArgoRolloutResourceLike[]> {
+  const { custom } = getK8sClient();
+
+  const response = (await custom.listNamespacedCustomObject({
+    group: ARGO_API_GROUP,
+    version: ARGO_API_VERSION,
+    namespace,
+    plural: 'rollouts',
+  })) as { items?: ArgoRolloutResourceLike[] };
+
+  return response.items ?? [];
+}
+
 export function upsertArgoRollout(spec: ArgoRolloutSpec): Promise<void> {
   return upsertArgocdResource(
     {
@@ -243,6 +259,35 @@ export function upsertArgoRollout(spec: ArgoRolloutSpec): Promise<void> {
     },
     buildArgoRolloutBody(spec)
   );
+}
+
+export async function scaleArgoRolloutIfExists(input: {
+  namespace: string;
+  name: string;
+  replicas: number;
+}): Promise<boolean> {
+  const current = await getArgoRollout(input.namespace, input.name);
+
+  if (!current) {
+    return false;
+  }
+
+  await upsertArgocdResource(
+    {
+      namespace: input.namespace,
+      plural: 'rollouts',
+      name: input.name,
+    },
+    {
+      ...current,
+      spec: {
+        ...current.spec,
+        replicas: input.replicas,
+      },
+    }
+  );
+
+  return true;
 }
 
 export async function resumeArgoRollout(namespace: string, name: string): Promise<void> {

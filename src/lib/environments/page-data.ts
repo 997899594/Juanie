@@ -9,6 +9,7 @@ import {
   promotionFlows,
   releases,
   schemaRepairAtlasRuns,
+  services,
   type TeamRole,
 } from '@/lib/db/schema';
 import { buildDeliveryControlSnapshot } from '@/lib/environments/control-plane';
@@ -23,6 +24,7 @@ import {
   attachEnvironmentRecentActivity,
   buildEnvironmentRuntimeIndexes,
 } from '@/lib/environments/page-runtime';
+import { getEnvironmentRuntimeState } from '@/lib/environments/runtime-control';
 import { decorateEnvironmentList } from '@/lib/environments/view';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
@@ -44,6 +46,7 @@ export async function getProjectEnvironmentListData(input: {
   project: {
     id: string;
     teamId: string;
+    slug: string;
   };
   role: TeamRole;
 }) {
@@ -57,6 +60,7 @@ export async function getProjectEnvironmentListData(input: {
     recentAuditLogs,
     latestRepairPlansResult,
     latestAtlasRuns,
+    serviceList,
     deliveryRuleList,
     promotionFlowList,
   ] = await Promise.all([
@@ -152,6 +156,13 @@ export async function getProjectEnvironmentListData(input: {
       where: eq(schemaRepairAtlasRuns.projectId, projectId),
       orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
     }),
+    db.query.services.findMany({
+      where: eq(services.projectId, projectId),
+      columns: {
+        name: true,
+        replicas: true,
+      },
+    }),
     db.query.deliveryRules.findMany({
       where: eq(deliveryRules.projectId, projectId),
       orderBy: [deliveryRules.priority],
@@ -243,6 +254,22 @@ export async function getProjectEnvironmentListData(input: {
     activeReleaseCountByEnvironment: runtimeIndexes.activeReleaseCountByEnvironment,
     recentAuditLogs,
   });
+  const runtimeStateByEnvironment = new Map(
+    await Promise.all(
+      environmentList.map(
+        async (
+          environment
+        ): Promise<[string, Awaited<ReturnType<typeof getEnvironmentRuntimeState>>]> => [
+          environment.id,
+          await getEnvironmentRuntimeState({
+            project: input.project,
+            environment,
+            services: serviceList,
+          }),
+        ]
+      )
+    )
+  );
   const decoratedEnvironments = attachEnvironmentRecentActivity(
     projectId,
     buildProjectEnvironmentListData(
@@ -285,6 +312,7 @@ export async function getProjectEnvironmentListData(input: {
         latestMigrationRun: runtimeIndexes.latestMigrationByEnvironment.get(environment.id) ?? null,
         latestGovernanceEvent:
           governanceData.latestGovernanceByEnvironment.get(environment.id) ?? null,
+        runtimeState: runtimeStateByEnvironment.get(environment.id) ?? null,
       })),
       input.role
     )
