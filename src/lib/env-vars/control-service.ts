@@ -7,8 +7,8 @@ import {
 } from '@/lib/api/access';
 import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environmentVariables } from '@/lib/db/schema';
-import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { environments, environmentVariables } from '@/lib/db/schema';
+import { syncEnvVarsToK8s, syncServiceEnvVarsToK8s } from '@/lib/env-sync';
 import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
 import { isK8sAvailable, rolloutRestartDeployments } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
@@ -193,34 +193,60 @@ async function encryptOrThrow(input: {
 async function reconcileEnvironmentRuntime(input: {
   projectId: string;
   environment: WritableEnvironmentVariableScope['environment'];
+  serviceId?: string | null;
   logContext: Record<string, unknown>;
 }): Promise<void> {
-  if (!input.environment) {
+  const targetEnvironments = input.environment
+    ? [input.environment]
+    : await db.query.environments.findMany({
+        where: eq(environments.projectId, input.projectId),
+        columns: {
+          id: true,
+          namespace: true,
+        },
+      });
+
+  if (targetEnvironments.length === 0) {
     return;
   }
 
-  await syncEnvVarsToK8s(input.projectId, input.environment.id).catch((error) => {
-    envVarLogger.warn('Failed to sync env vars to Kubernetes', {
-      ...input.logContext,
-      projectId: input.projectId,
-      environmentId: input.environment?.id,
-      reason: error instanceof Error ? error.message : String(error),
+  for (const environment of targetEnvironments) {
+    await syncEnvVarsToK8s(input.projectId, environment.id).catch((error) => {
+      envVarLogger.warn('Failed to sync env vars to Kubernetes', {
+        ...input.logContext,
+        projectId: input.projectId,
+        environmentId: environment.id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     });
-  });
 
-  if (!isK8sAvailable() || !input.environment.namespace) {
-    return;
+    if (input.serviceId && environment.namespace) {
+      await syncServiceEnvVarsToK8s(input.serviceId, environment.namespace).catch((error) => {
+        envVarLogger.warn('Failed to sync service env vars to Kubernetes', {
+          ...input.logContext,
+          projectId: input.projectId,
+          environmentId: environment.id,
+          namespace: environment.namespace,
+          serviceId: input.serviceId,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+
+    if (!isK8sAvailable() || !environment.namespace) {
+      continue;
+    }
+
+    await rolloutRestartDeployments(environment.namespace).catch((error) => {
+      envVarLogger.warn('Failed to trigger rollout restart after env var mutation', {
+        ...input.logContext,
+        projectId: input.projectId,
+        environmentId: environment.id,
+        namespace: environment.namespace,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
-
-  await rolloutRestartDeployments(input.environment.namespace).catch((error) => {
-    envVarLogger.warn('Failed to trigger rollout restart after env var mutation', {
-      ...input.logContext,
-      projectId: input.projectId,
-      environmentId: input.environment?.id,
-      namespace: input.environment?.namespace,
-      reason: error instanceof Error ? error.message : String(error),
-    });
-  });
 }
 
 export async function listEnvironmentVariablesForProject(input: {
@@ -338,6 +364,7 @@ export async function createEnvironmentVariableForProject(input: {
   await reconcileEnvironmentRuntime({
     projectId: input.projectId,
     environment: scope.environment,
+    serviceId: scope.serviceId,
     logContext: {
       key: input.key,
       serviceId: scope.serviceId,
@@ -466,6 +493,7 @@ export async function updateEnvironmentVariableForProject(input: {
   await reconcileEnvironmentRuntime({
     projectId: input.projectId,
     environment,
+    serviceId: envVar.serviceId,
     logContext: {
       variableId: envVar.id,
       environmentId: envVar.environmentId,
@@ -509,6 +537,7 @@ export async function deleteEnvironmentVariableForProject(input: {
   await reconcileEnvironmentRuntime({
     projectId: input.projectId,
     environment,
+    serviceId: envVar.serviceId,
     logContext: {
       variableId: envVar.id,
       environmentId: envVar.environmentId,

@@ -162,25 +162,20 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
 
   const namespace = environment.namespace;
 
-  // 同步 Secret（即使为空也 upsert，确保 K8s 资源存在）
-  if (Object.keys(secrets).length > 0) {
-    await upsertSecret(namespace, getK8sSecretName(environmentId), secrets);
-    envSyncLogger.info('Synced environment secrets to Kubernetes', {
-      namespace,
-      secretName: getK8sSecretName(environmentId),
-      count: Object.keys(secrets).length,
-    });
-  }
+  // 即使为空也 replace，这样删除最后一个变量时不会留下脏配置。
+  await upsertSecret(namespace, getK8sSecretName(environmentId), secrets);
+  envSyncLogger.info('Synced environment secrets to Kubernetes', {
+    namespace,
+    secretName: getK8sSecretName(environmentId),
+    count: Object.keys(secrets).length,
+  });
 
-  // 同步 ConfigMap
-  if (Object.keys(configs).length > 0) {
-    await upsertConfigMap(namespace, getK8sConfigMapName(environmentId), configs);
-    envSyncLogger.info('Synced environment config maps to Kubernetes', {
-      namespace,
-      configMapName: getK8sConfigMapName(environmentId),
-      count: Object.keys(configs).length,
-    });
-  }
+  await upsertConfigMap(namespace, getK8sConfigMapName(environmentId), configs);
+  envSyncLogger.info('Synced environment config maps to Kubernetes', {
+    namespace,
+    configMapName: getK8sConfigMapName(environmentId),
+    count: Object.keys(configs).length,
+  });
 }
 
 /**
@@ -264,23 +259,19 @@ export async function syncServiceEnvVarsToK8s(
     }
   }
 
-  if (Object.keys(secrets).length > 0) {
-    await upsertSecret(namespace, getK8sSvcSecretName(serviceId), secrets);
-    envSyncLogger.info('Synced service secrets to Kubernetes', {
-      namespace,
-      secretName: getK8sSvcSecretName(serviceId),
-      count: Object.keys(secrets).length,
-    });
-  }
+  await upsertSecret(namespace, getK8sSvcSecretName(serviceId), secrets);
+  envSyncLogger.info('Synced service secrets to Kubernetes', {
+    namespace,
+    secretName: getK8sSvcSecretName(serviceId),
+    count: Object.keys(secrets).length,
+  });
 
-  if (Object.keys(configs).length > 0) {
-    await upsertConfigMap(namespace, getK8sSvcConfigMapName(serviceId), configs);
-    envSyncLogger.info('Synced service config maps to Kubernetes', {
-      namespace,
-      configMapName: getK8sSvcConfigMapName(serviceId),
-      count: Object.keys(configs).length,
-    });
-  }
+  await upsertConfigMap(namespace, getK8sSvcConfigMapName(serviceId), configs);
+  envSyncLogger.info('Synced service config maps to Kubernetes', {
+    namespace,
+    configMapName: getK8sSvcConfigMapName(serviceId),
+    count: Object.keys(configs).length,
+  });
 
   return {
     hasSecrets: Object.keys(secrets).length > 0,

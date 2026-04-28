@@ -2138,6 +2138,18 @@ async function deployServices(
       scope: 'runtime',
     });
 
+    // Namespace is created during reconcileEnvironmentState. Sync env vars afterwards so
+    // project-level variables and provisioned database credentials are present for first deploy.
+    await syncEnvVarsToK8s(project.id, environment.id).catch((error) =>
+      projectInitLogger.warn('Failed to sync environment variables after namespace creation', {
+        projectId: project.id,
+        step: 'deploy_services',
+        environmentId: environment.id,
+        namespace: environment.namespace,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+    );
+
     await onProgress?.(
       Math.round(((i + 1) / environmentList.length) * 100),
       `已确保 ${environment.name} 环境基础服务`
