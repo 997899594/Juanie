@@ -121,6 +121,12 @@ export function buildSchemaRunnerJob(input: SchemaRunnerJobInput): V1Job {
                   drop: ['ALL'],
                 },
               },
+              resources: {
+                requests: {
+                  cpu: '25m',
+                  memory: '96Mi',
+                },
+              },
             },
           ],
         },
@@ -147,6 +153,15 @@ function isK8sNotFoundError(error: unknown): boolean {
 
   const candidate = error as { code?: number; statusCode?: number };
   return (candidate.code ?? candidate.statusCode) === 404;
+}
+
+function isK8sConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: number; statusCode?: number };
+  return (candidate.code ?? candidate.statusCode) === 409;
 }
 
 async function readSchemaRunnerJobFailure(
@@ -252,20 +267,39 @@ export async function runSchemaRunnerJobAndWait(input: {
     throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
   }
 
-  await deleteJob(namespace, input.jobName).catch(() => undefined);
+  let ownsJob = false;
+
   try {
-    await createJob(
+    const existingStatus = await getSchemaRunnerJobStatus({
       namespace,
-      buildSchemaRunnerJob({
-        namespace,
-        jobName: input.jobName,
-        image,
-        mode: input.mode,
-        env: input.env,
-        labels: input.labels,
-        waitForRedis: input.waitForRedis,
-      })
-    );
+      jobName: input.jobName,
+    });
+
+    if (existingStatus.status === 'failed') {
+      await deleteJob(namespace, input.jobName).catch(() => undefined);
+    }
+
+    if (existingStatus.status === 'missing' || existingStatus.status === 'failed') {
+      try {
+        await createJob(
+          namespace,
+          buildSchemaRunnerJob({
+            namespace,
+            jobName: input.jobName,
+            image,
+            mode: input.mode,
+            env: input.env,
+            labels: input.labels,
+            waitForRedis: input.waitForRedis,
+          })
+        );
+        ownsJob = true;
+      } catch (error) {
+        if (!isK8sConflictError(error)) {
+          throw error;
+        }
+      }
+    }
 
     const timeoutMs = input.timeoutMs ?? 240_000;
     const pollIntervalMs = input.pollIntervalMs ?? 2_000;
@@ -276,6 +310,10 @@ export async function runSchemaRunnerJobAndWait(input: {
         namespace,
         jobName: input.jobName,
       });
+
+      if (status.status === 'missing') {
+        return;
+      }
 
       if (status.status === 'succeeded') {
         return;
@@ -290,6 +328,8 @@ export async function runSchemaRunnerJobAndWait(input: {
 
     throw new Error(`Schema runner job ${input.jobName} 超时，超过 ${timeoutMs}ms 仍未完成`);
   } finally {
-    await deleteJob(namespace, input.jobName).catch(() => undefined);
+    if (ownsJob) {
+      await deleteJob(namespace, input.jobName).catch(() => undefined);
+    }
   }
 }

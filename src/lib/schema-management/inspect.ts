@@ -528,13 +528,9 @@ function buildSchemaInspectJobName(input: EnvironmentSchemaInspectionInput): str
   const digest = crypto
     .createHash('sha1')
     .update(
-      [
-        input.projectId,
-        input.databaseId,
-        input.sourceRef ?? '',
-        input.sourceCommitSha ?? '',
-        `${Date.now()}:${Math.random()}`,
-      ].join(':')
+      [input.projectId, input.databaseId, input.sourceRef ?? '', input.sourceCommitSha ?? ''].join(
+        ':'
+      )
     )
     .digest('hex')
     .slice(0, 10);
@@ -603,6 +599,7 @@ async function inspectEnvironmentSchemaStateInRunner(
       'juanie.dev/database-id': input.databaseId,
     },
     env,
+    waitForRedis: false,
   });
 
   const state = await waitForFreshSchemaState(input, startedAt);
