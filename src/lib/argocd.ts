@@ -156,11 +156,38 @@ async function getArgocdResource<T>(ref: ArgocdResourceRef): Promise<T | null> {
   }
 }
 
+function withResourceVersionForReplace(body: unknown, current: unknown): unknown {
+  if (!body || typeof body !== 'object' || !current || typeof current !== 'object') {
+    return body;
+  }
+
+  const currentMetadata = (current as { metadata?: { resourceVersion?: unknown } }).metadata;
+  const resourceVersion = currentMetadata?.resourceVersion;
+
+  if (typeof resourceVersion !== 'string' || resourceVersion.length === 0) {
+    return body;
+  }
+
+  const bodyRecord = body as Record<string, unknown>;
+  const metadata =
+    bodyRecord.metadata && typeof bodyRecord.metadata === 'object'
+      ? (bodyRecord.metadata as Record<string, unknown>)
+      : {};
+
+  return {
+    ...bodyRecord,
+    metadata: {
+      ...metadata,
+      resourceVersion,
+    },
+  };
+}
+
 async function upsertArgocdResource(ref: ArgocdResourceRef, body: unknown): Promise<void> {
   const { custom } = getK8sClient();
 
   try {
-    await custom.getNamespacedCustomObject({
+    const current = await custom.getNamespacedCustomObject({
       group: ARGO_API_GROUP,
       version: ARGO_API_VERSION,
       namespace: ref.namespace,
@@ -173,7 +200,7 @@ async function upsertArgocdResource(ref: ArgocdResourceRef, body: unknown): Prom
       namespace: ref.namespace,
       plural: ref.plural,
       name: ref.name,
-      body,
+      body: withResourceVersionForReplace(body, current),
     });
   } catch (error) {
     if (isNotFoundError(error)) {
