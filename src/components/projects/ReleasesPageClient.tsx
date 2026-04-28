@@ -221,7 +221,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                 title={promoteButtonTitle}
               >
                 <ArrowUpCircle className="h-3.5 w-3.5" />
-                {promoting ? '提升中...' : '提升发布'}
+                {promoting ? '创建中...' : '提升发布'}
               </Button>
             )}
             {selectedEnvironment ? (
@@ -409,7 +409,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               title={promoteButtonTitle}
             >
               <ArrowUpCircle className="h-3.5 w-3.5" />
-              提升
+              {promoting ? '创建中...' : '提升'}
             </Button>
           )}
         </div>

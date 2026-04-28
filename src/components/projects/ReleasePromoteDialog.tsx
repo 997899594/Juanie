@@ -282,7 +282,11 @@ export function ReleasePromoteDialog({
                     ) : null}
                   </div>
                 ) : (
-                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
+                  <EmptyState
+                    title="没有可用检查"
+                    description="当前没有可执行的提升链路，先在环境治理里配置来源和目标环境。"
+                    className="min-h-40 rounded-[20px]"
+                  />
                 )}
               </div>
             </div>
@@ -302,7 +306,7 @@ export function ReleasePromoteDialog({
             onClick={onPromote}
             disabled={promoting || !canPromote}
           >
-            {promoting ? '提升中...' : '确认提升'}
+            {promoting ? '创建中...' : '确认提升'}
           </Button>
         </DialogFooter>
       </DialogContent>
