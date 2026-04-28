@@ -551,14 +551,6 @@ export function ReleaseExecutionSections({
       </div>
 
       <div className="space-y-4">
-        <ReleaseTaskCenter
-          projectId={projectId}
-          releaseId={releaseId}
-          canManageActions={releaseActions.canManage}
-          disabledSummary={releaseActions.summary}
-          initialSnapshot={initialTaskCenter}
-        />
-
         <section className={releaseShellClassName}>
           <div className="mb-4 text-sm font-semibold">迁移记录</div>
           {release.migrationRuns.length === 0 ? (
@@ -591,8 +583,23 @@ export function ReleaseExecutionSections({
           )}
         </section>
 
-        <details className={releaseShellClassName}>
-          <summary className="cursor-pointer list-none text-sm font-semibold">分析</summary>
+        <details className={cn(releaseShellClassName, 'overflow-hidden')}>
+          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className={releaseSectionTitleClassName}>AI 辅助</div>
+                <div className="mt-2 text-xl font-semibold tracking-[-0.02em] text-foreground">
+                  分析与建议
+                </div>
+                <div className="mt-2 text-sm leading-6 text-muted-foreground">
+                  默认收纳，只先保留发布主链路。需要时再展开查看事项、计划、归因和插件输出。
+                </div>
+              </div>
+              <div className="inline-flex h-9 items-center rounded-full bg-[rgba(15,23,42,0.05)] px-3.5 text-xs font-medium text-[rgba(15,23,42,0.58)]">
+                {3 + (dynamicPluginPanels?.length ?? 0)} 个模块
+              </div>
+            </div>
+          </summary>
           <div className="mt-4 space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               {release.sourceCommitSha && (
@@ -611,6 +618,13 @@ export function ReleaseExecutionSections({
                 </div>
               </div>
             </div>
+            <ReleaseTaskCenter
+              projectId={projectId}
+              releaseId={releaseId}
+              canManageActions={releaseActions.canManage}
+              disabledSummary={releaseActions.summary}
+              initialSnapshot={initialTaskCenter}
+            />
             <ReleaseAISnapshotPanel
               projectId={projectId}
               releaseId={releaseId}

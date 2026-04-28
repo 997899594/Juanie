@@ -190,6 +190,10 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
 
   return (
     <section className="space-y-4">
+      <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3 text-sm text-[rgba(15,23,42,0.56)]">
+        这里默认展示结论。检查项、执行步骤、证据链和插件输出都收在下一层，避免和发布主流程抢注意力。
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-2">
         <div className={shellClassName}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -249,69 +253,80 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                  检查
-                </div>
-                {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
-                  <div key={check.key} className={subCardClassName}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium">{check.label}</div>
-                      <Badge
-                        variant={getCheckBadgeVariant(check.status)}
-                        className="rounded-full border-0 shadow-none"
-                      >
-                        {check.status}
-                      </Badge>
+              <details className={subCardClassName}>
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                  展开执行细节
+                </summary>
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
+                      检查
                     </div>
-                    <div className="mt-1 text-sm text-[rgba(15,23,42,0.56)]">{check.summary}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className={subCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                    步骤
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
-                    {releasePlanSnapshot.executionSteps.slice(0, 5).map((step, index) => (
-                      <div key={`${step.type}:${step.step}`} className="flex gap-2">
-                        <span className="text-foreground">{index + 1}.</span>
-                        <span>
-                          {step.step}
-                          {!step.required && '（可选）'}
-                        </span>
+                    {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
+                      <div key={check.key} className="rounded-[16px] bg-white/70 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium">{check.label}</div>
+                          <Badge
+                            variant={getCheckBadgeVariant(check.status)}
+                            className="rounded-full border-0 shadow-none"
+                          >
+                            {check.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 text-sm text-[rgba(15,23,42,0.56)]">
+                          {check.summary}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className={subCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                    回滚
-                  </div>
-                  <div className="mt-3 text-sm text-foreground">
-                    {releasePlanSnapshot.rollbackPlan.summary}
-                  </div>
-                  {releasePlanSnapshot.rollbackPlan.target && (
-                    <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
-                      {releasePlanSnapshot.rollbackPlan.target}
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-[16px] bg-white/70 px-4 py-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
+                        步骤
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
+                        {releasePlanSnapshot.executionSteps.slice(0, 5).map((step, index) => (
+                          <div key={`${step.type}:${step.step}`} className="flex gap-2">
+                            <span className="text-foreground">{index + 1}.</span>
+                            <span>
+                              {step.step}
+                              {!step.required && '（可选）'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  {releasePlanSnapshot.rollbackPlan.triggerSignals.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {releasePlanSnapshot.rollbackPlan.triggerSignals.slice(0, 4).map((signal) => (
-                        <Badge
-                          key={signal}
-                          className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none"
-                        >
-                          {signal}
-                        </Badge>
-                      ))}
+                    <div className="rounded-[16px] bg-white/70 px-4 py-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
+                        回滚
+                      </div>
+                      <div className="mt-3 text-sm text-foreground">
+                        {releasePlanSnapshot.rollbackPlan.summary}
+                      </div>
+                      {releasePlanSnapshot.rollbackPlan.target && (
+                        <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
+                          {releasePlanSnapshot.rollbackPlan.target}
+                        </div>
+                      )}
+                      {releasePlanSnapshot.rollbackPlan.triggerSignals.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {releasePlanSnapshot.rollbackPlan.triggerSignals
+                            .slice(0, 4)
+                            .map((signal) => (
+                              <Badge
+                                key={signal}
+                                className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none"
+                              >
+                                {signal}
+                              </Badge>
+                            ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              </details>
             </div>
           ) : (
             renderUnavailableState(
@@ -380,72 +395,84 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className={subCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                    过程
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    {incidentSnapshot.causalChain.slice(0, 4).map((item, index) => (
-                      <div key={`${item.at ?? 'na'}:${item.event}:${index}`} className="text-sm">
-                        <div className="font-medium text-foreground">{item.event}</div>
-                        <div className="mt-1 text-[rgba(15,23,42,0.56)]">{item.impact}</div>
-                        {item.at && (
-                          <div className="mt-1 text-xs text-[rgba(15,23,42,0.42)]">{item.at}</div>
-                        )}
+              <details className={subCardClassName}>
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                  展开证据与动作
+                </summary>
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-[16px] bg-white/70 px-4 py-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
+                        过程
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div className={subCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                    证据
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
-                    {incidentSnapshot.evidence.slice(0, 5).map((item, index) => (
-                      <div key={`${item.source}:${index}`}>
-                        <span className="font-medium text-foreground">{item.source}</span>
-                        {' · '}
-                        {item.summary}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className={subCardClassName}>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  动作
-                </div>
-                <div className="mt-3 space-y-3">
-                  {incidentSnapshot.actions.safe.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-foreground">可直接执行</div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {incidentSnapshot.actions.safe.map((action) => (
-                          <Badge key={action.key} variant="secondary">
-                            {action.label}
-                          </Badge>
+                      <div className="mt-3 space-y-3">
+                        {incidentSnapshot.causalChain.slice(0, 4).map((item, index) => (
+                          <div
+                            key={`${item.at ?? 'na'}:${item.event}:${index}`}
+                            className="text-sm"
+                          >
+                            <div className="font-medium text-foreground">{item.event}</div>
+                            <div className="mt-1 text-[rgba(15,23,42,0.56)]">{item.impact}</div>
+                            {item.at && (
+                              <div className="mt-1 text-xs text-[rgba(15,23,42,0.42)]">
+                                {item.at}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
-                  )}
-                  {incidentSnapshot.actions.manual.length > 0 && (
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      {incidentSnapshot.actions.manual.slice(0, 4).map((action, index) => (
-                        <div key={`${action.label}:${index}`}>
-                          <span className="font-medium text-foreground">{action.label}</span>
-                          {' · '}
-                          {action.summary}
-                        </div>
-                      ))}
+                    <div className="rounded-[16px] bg-white/70 px-4 py-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
+                        证据
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
+                        {incidentSnapshot.evidence.slice(0, 5).map((item, index) => (
+                          <div key={`${item.source}:${index}`}>
+                            <span className="font-medium text-foreground">{item.source}</span>
+                            {' · '}
+                            {item.summary}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  <div className="text-sm text-muted-foreground">
-                    {incidentSnapshot.operatorNarrative}
+                  </div>
+
+                  <div className="rounded-[16px] bg-white/70 px-4 py-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      动作
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {incidentSnapshot.actions.safe.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-foreground">可直接执行</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {incidentSnapshot.actions.safe.map((action) => (
+                              <Badge key={action.key} variant="secondary">
+                                {action.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {incidentSnapshot.actions.manual.length > 0 && (
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          {incidentSnapshot.actions.manual.slice(0, 4).map((action, index) => (
+                            <div key={`${action.label}:${index}`}>
+                              <span className="font-medium text-foreground">{action.label}</span>
+                              {' · '}
+                              {action.summary}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-sm text-muted-foreground">
+                        {incidentSnapshot.operatorNarrative}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </details>
             </div>
           ) : (
             renderUnavailableState(
@@ -461,17 +488,22 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
       </div>
 
       {props.dynamicPluginPanels && props.dynamicPluginPanels.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {props.dynamicPluginPanels.map((panel) => (
-            <ReleaseDynamicPluginPanel
-              key={panel.pluginId}
-              projectId={props.projectId}
-              releaseId={props.releaseId}
-              pluginId={panel.pluginId}
-              initialPanel={panel.snapshot}
-            />
-          ))}
-        </div>
+        <details className={subCardClassName}>
+          <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+            展开插件输出（{props.dynamicPluginPanels.length}）
+          </summary>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            {props.dynamicPluginPanels.map((panel) => (
+              <ReleaseDynamicPluginPanel
+                key={panel.pluginId}
+                projectId={props.projectId}
+                releaseId={props.releaseId}
+                pluginId={panel.pluginId}
+                initialPanel={panel.snapshot}
+              />
+            ))}
+          </div>
+        </details>
       ) : null}
     </section>
   );

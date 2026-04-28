@@ -111,6 +111,8 @@ Implemented on 2026-04-28:
   through their own product APIs.
 - Environment AI reads are cache-only on `GET`; explicit refresh uses `POST` and may execute live
   analysis, keeping navigation fast and cost predictable.
+- Release AI keeps conclusions visible but moves checks, execution steps, evidence and plugin output
+  behind secondary disclosure.
 - Migration planning distinguishes reliable empty work from degraded inspection. Missing or timed-out
   preview data stays `unknown`, so release gates do not silently skip real database work.
 - Promotion release intelligence reads cached snapshots in bulk for list views instead of running AI
