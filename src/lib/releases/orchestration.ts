@@ -229,6 +229,7 @@ export async function startReleaseMigrationPhase(
       sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
       sourceCommitMessage: release.summary,
       serviceIds: release.artifacts.map((artifact) => artifact.serviceId),
+      deferPendingInspectionToRunner: true,
     }
   );
 

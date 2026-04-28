@@ -17,6 +17,7 @@ import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
 import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
 import type { EnvironmentTaskCenterSnapshot } from '@/lib/ai/tasks/environment-task-center';
+import { hasTaskCenterActionItems } from '@/lib/ai/tasks/view-model';
 
 function mergeHighlights(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])].slice(0, 4);
@@ -221,6 +222,15 @@ export function EnvironmentAIInfoWindow(input: {
     };
   }, [replayPayload]);
 
+  const showTaskCenterInline = hasTaskCenterActionItems(taskCenter?.tasks ?? []);
+  const taskCenterElement = (
+    <EnvironmentTaskCenter
+      projectId={input.projectId}
+      environmentId={input.environmentId}
+      initialSnapshot={taskCenter}
+    />
+  );
+
   return (
     <AIInfoWindow
       scopeLabel="当前环境"
@@ -237,12 +247,9 @@ export function EnvironmentAIInfoWindow(input: {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
       detailsTitle="查看结构化分析"
+      priorityChildren={showTaskCenterInline ? taskCenterElement : null}
     >
-      <EnvironmentTaskCenter
-        projectId={input.projectId}
-        environmentId={input.environmentId}
-        initialSnapshot={taskCenter}
-      />
+      {showTaskCenterInline ? null : taskCenterElement}
       <EnvironmentAISummaryPanel
         projectId={input.projectId}
         environmentId={input.environmentId}

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { assertDeclaredDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { assertDeclaredDatabaseRuntimeAccess } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
-import { releases } from '@/lib/db/schema';
+import { type ReleaseStatus, releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
@@ -16,6 +16,44 @@ import {
 } from '@/lib/releases/orchestration';
 import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import type { ReleaseJobData } from './index';
+
+const releaseStatusesRequiringFailureReconciliation: ReleaseStatus[] = [
+  'queued',
+  'planning',
+  'migration_pre_running',
+  'deploying',
+  'awaiting_rollout',
+  'verifying',
+  'migration_post_running',
+];
+
+export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
+  return releaseStatusesRequiringFailureReconciliation.includes(status as ReleaseStatus);
+}
+
+export async function reconcileUnexpectedReleaseJobFailure(releaseId: string, error: unknown) {
+  const release = await db.query.releases.findFirst({
+    where: eq(releases.id, releaseId),
+    columns: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!release) {
+    return { reconciled: false, reason: 'release_missing' as const };
+  }
+
+  if (!shouldReconcileUnexpectedReleaseJobFailure(release.status)) {
+    return { reconciled: false, reason: 'release_state_not_match' as const };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  await failReleaseForCurrentPhase(release.id, message);
+  await persistReleaseRecapSafely(release.id);
+
+  return { reconciled: true, reason: 'release_updated' as const };
+}
 
 export async function processRelease(job: Job<ReleaseJobData>) {
   const release = await loadReleaseForOrchestration(job.data.releaseId);

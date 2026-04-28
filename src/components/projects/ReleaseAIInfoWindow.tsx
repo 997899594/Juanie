@@ -13,6 +13,7 @@ import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output
 import type { IncidentAnalysis } from '@/lib/ai/schemas/incident-analysis';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
+import { hasTaskCenterActionItems } from '@/lib/ai/tasks/view-model';
 
 function mergeHighlights(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])].slice(0, 4);
@@ -193,6 +194,17 @@ export function ReleaseAIInfoWindow(input: {
     };
   }, [replayPayload]);
 
+  const showTaskCenterInline = hasTaskCenterActionItems(taskCenter?.tasks ?? []);
+  const taskCenterElement = (
+    <ReleaseTaskCenter
+      projectId={input.projectId}
+      releaseId={input.releaseId}
+      canManageActions={input.canManageActions}
+      disabledSummary={input.disabledSummary}
+      initialSnapshot={taskCenter}
+    />
+  );
+
   return (
     <AIInfoWindow
       scopeLabel="当前发布"
@@ -209,14 +221,9 @@ export function ReleaseAIInfoWindow(input: {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
       detailsTitle="查看结构化分析"
+      priorityChildren={showTaskCenterInline ? taskCenterElement : null}
     >
-      <ReleaseTaskCenter
-        projectId={input.projectId}
-        releaseId={input.releaseId}
-        canManageActions={input.canManageActions}
-        disabledSummary={input.disabledSummary}
-        initialSnapshot={taskCenter}
-      />
+      {showTaskCenterInline ? null : taskCenterElement}
       <ReleaseAISnapshotPanel
         projectId={input.projectId}
         releaseId={input.releaseId}

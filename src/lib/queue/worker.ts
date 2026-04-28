@@ -5,7 +5,7 @@ import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker, reconcileUnexpectedMigrationJobFailure } from './migration';
 import { createProjectDeleteWorker } from './project-delete';
 import { createProjectInitWorker } from './project-init';
-import { createReleaseWorker } from './release';
+import { createReleaseWorker, reconcileUnexpectedReleaseJobFailure } from './release';
 import { startSchedulerRuntime } from './scheduler-runtime';
 import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
 
@@ -50,6 +50,18 @@ releaseWorker.on('completed', (job) => {
 
 releaseWorker.on('failed', (job, err) => {
   workerLogger.error('Release job failed', err, { jobId: job?.id, queue: 'release' });
+  const releaseId = job?.data?.releaseId;
+  if (!releaseId) {
+    return;
+  }
+
+  void reconcileUnexpectedReleaseJobFailure(releaseId, err).catch((reconcileError) => {
+    workerLogger.error('Failed to reconcile release job failure', reconcileError, {
+      jobId: job?.id,
+      queue: 'release',
+      releaseId,
+    });
+  });
 });
 
 deploymentWorker.on('completed', (job) => {

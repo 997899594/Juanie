@@ -8,6 +8,7 @@ import {
   shouldFailMissingSchemaRunnerJob,
   shouldFailStaleSchemaRunnerRun,
 } from '@/lib/queue/migration-state-healing';
+import { shouldReconcileUnexpectedReleaseJobFailure } from '@/lib/queue/release';
 
 describe('migration queue failure reconciliation', () => {
   it('only reconciles unexpected queue failures for active runs', () => {
@@ -64,5 +65,16 @@ describe('migration queue failure reconciliation', () => {
         staleMinutes: 30,
       })
     ).toBe(false);
+  });
+});
+
+describe('release queue failure reconciliation', () => {
+  it('only reconciles unexpected queue failures for active release phases', () => {
+    expect(shouldReconcileUnexpectedReleaseJobFailure('queued')).toBe(true);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('migration_pre_running')).toBe(true);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('deploying')).toBe(true);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('awaiting_approval')).toBe(false);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('succeeded')).toBe(false);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('failed')).toBe(false);
   });
 });

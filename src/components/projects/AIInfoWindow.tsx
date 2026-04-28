@@ -43,6 +43,7 @@ export function AIInfoWindow(input: {
   onRefresh: () => void;
   onContinue: () => void;
   detailsTitle?: string;
+  priorityChildren?: ReactNode;
   children?: ReactNode;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -103,6 +104,8 @@ export function AIInfoWindow(input: {
           </div>
         )}
       </div>
+
+      {input.priorityChildren ? <div className="mt-5">{input.priorityChildren}</div> : null}
 
       {input.children ? (
         <details

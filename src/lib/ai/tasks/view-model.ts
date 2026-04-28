@@ -44,6 +44,12 @@ export function buildAITaskCenterSnapshot<TTask extends AITaskCenterItem>(input:
   };
 }
 
+export function hasTaskCenterActionItems(
+  tasks: Array<Pick<AITaskCenterItem, 'actionLabel' | 'kind'>>
+): boolean {
+  return tasks.some((task) => task.kind !== 'ai_analysis' || Boolean(task.actionLabel));
+}
+
 export function formatAITaskStatusLabel(status: GenericAITaskRecord['status']): string {
   if (status === 'succeeded') {
     return '已完成';
