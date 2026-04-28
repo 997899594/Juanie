@@ -81,9 +81,10 @@ ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 # 复制 Next.js standalone
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=1001:1001 /app/.next/standalone ./
+COPY --from=builder --chown=1001:1001 /app/.next/static ./.next/static
+COPY --from=builder --chown=1001:1001 /app/public ./public
+RUN mkdir -p ./.next/cache && chown -R 1001:1001 ./.next/cache
 
 EXPOSE 3001
 

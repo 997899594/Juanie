@@ -101,8 +101,14 @@ export function getK8sClient(): {
   };
 }
 
-export async function createNamespace(name: string): Promise<void> {
+export async function createNamespace(
+  name: string,
+  labels: Record<string, string | null | undefined> = {}
+): Promise<void> {
   const { core } = getK8sClient();
+  const normalizedLabels = Object.fromEntries(
+    Object.entries(labels).filter((entry): entry is [string, string] => Boolean(entry[1]))
+  );
 
   try {
     await core.readNamespace({ name });
@@ -113,7 +119,10 @@ export async function createNamespace(name: string): Promise<void> {
         body: {
           apiVersion: 'v1',
           kind: 'Namespace',
-          metadata: { name },
+          metadata: {
+            name,
+            labels: normalizedLabels,
+          },
         },
       });
     } else {

@@ -325,6 +325,16 @@ domains:
               prune: true,
               selfHeal: true,
             },
+            managedNamespaceMetadata: {
+              labels: {
+                'app.kubernetes.io/managed-by': 'juanie',
+                'juanie.dev/project-id': '{{ .projectId }}',
+                'juanie.dev/project-slug': '{{ .projectSlug }}',
+                'juanie.dev/environment-id': '{{ .environmentId }}',
+                'juanie.dev/environment-name': '{{ .environmentName }}',
+                'juanie.dev/environment-kind': 'preview',
+              },
+            },
             syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'],
           },
         },

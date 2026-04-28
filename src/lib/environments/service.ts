@@ -140,6 +140,7 @@ export interface ReconcileEnvironmentStateInput {
 }
 
 export async function ensureEnvironmentNamespace(input: {
+  projectId?: string;
   projectSlug: string;
   environment: {
     id: string;
@@ -168,6 +169,27 @@ export async function ensureEnvironmentNamespace(input: {
   }
 
   return namespace;
+}
+
+function buildEnvironmentNamespaceLabels(input: {
+  projectId?: string;
+  projectSlug: string;
+  environment: {
+    id: string;
+    name: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
+    isProduction?: boolean | null;
+    isPreview?: boolean | null;
+  };
+}): Record<string, string> {
+  return {
+    'app.kubernetes.io/managed-by': 'juanie',
+    'juanie.dev/project-id': input.projectId ?? '',
+    'juanie.dev/project-slug': input.projectSlug,
+    'juanie.dev/environment-id': input.environment.id,
+    'juanie.dev/environment-name': input.environment.name,
+    'juanie.dev/environment-kind': resolveEnvironmentKindForScaffold(input.environment),
+  };
 }
 
 async function finalizePreviewEnvironment(input: {
@@ -305,6 +327,7 @@ export async function reconcileEnvironmentState(input: ReconcileEnvironmentState
   services: NonNullable<ReconcileEnvironmentStateInput['services']>;
 }> {
   const namespace = await ensureEnvironmentNamespace({
+    projectId: input.project.id,
     projectSlug: input.project.slug,
     environment: input.environment,
   });
@@ -320,7 +343,14 @@ export async function reconcileEnvironmentState(input: ReconcileEnvironmentState
         namespace,
       });
     } else {
-      await createNamespace(namespace);
+      await createNamespace(
+        namespace,
+        buildEnvironmentNamespaceLabels({
+          projectId: input.project.id,
+          projectSlug: input.project.slug,
+          environment: input.environment,
+        })
+      );
 
       for (const service of serviceList) {
         const serviceName = buildProjectScopedK8sName(input.project.slug, service.name);
