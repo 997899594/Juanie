@@ -445,6 +445,7 @@ export function buildProjectReleasesPageData(input: {
   promotionPlans: ProjectPromotionPlanView[];
   envFilter?: string | null;
   riskFilter?: string | null;
+  fixedEnvFilter?: boolean;
 }) {
   const governance = buildReleasePageGovernanceSnapshot({
     role: input.role,
@@ -456,11 +457,27 @@ export function buildProjectReleasesPageData(input: {
       ),
   });
   const selectedEnv = input.envFilter && input.envFilter.length > 0 ? input.envFilter : 'all';
-  const selectedRisk = normalizeReleaseRiskFilterState(input.riskFilter);
+  const defaultRiskFilter = input.fixedEnvFilter ? 'all' : 'attention';
+  const selectedRisk =
+    input.riskFilter && input.riskFilter.length > 0
+      ? normalizeReleaseRiskFilterState(input.riskFilter)
+      : defaultRiskFilter;
   const filteredReleaseItems = filterLightweightReleaseItems(input.releaseItems, {
     env: selectedEnv,
     risk: selectedRisk,
   });
+  const environmentOptions =
+    input.fixedEnvFilter && selectedEnv !== 'all'
+      ? input.environments
+          .filter((environment) => environment.id === selectedEnv)
+          .map((environment) => ({
+            value: environment.id,
+            label: environment.name ?? '环境',
+          }))
+      : input.environments.map((environment) => ({
+          value: environment.id,
+          label: environment.name ?? '环境',
+        }));
 
   return {
     releaseItems: input.releaseItems,
@@ -468,15 +485,12 @@ export function buildProjectReleasesPageData(input: {
     manualReleaseSources: input.manualReleaseSources,
     environments: input.environments,
     governance,
-    environmentOptions: [
-      { value: 'all', label: '全部环境' },
-      ...input.environments.map((environment) => ({
-        value: environment.id,
-        label: environment.name ?? '环境',
-      })),
-    ],
+    environmentOptions: input.fixedEnvFilter
+      ? environmentOptions
+      : [{ value: 'all', label: '全部环境' }, ...environmentOptions],
     selectedEnv,
     selectedRisk,
+    defaultRiskFilter,
     stats: [
       ...buildLightweightReleaseListStats(filteredReleaseItems),
       { label: '实时', value: '离线' as const },
@@ -491,6 +505,7 @@ export async function getProjectReleasesPageData(input: {
   role: TeamRole;
   envFilter?: string | null;
   riskFilter?: string | null;
+  fixedEnvFilter?: boolean;
 }) {
   const [releaseCards, environmentList, promotionPlansRaw] = await Promise.all([
     getProjectReleaseListData(input.project),
@@ -554,6 +569,7 @@ export async function getProjectReleasesPageData(input: {
     promotionPlans,
     envFilter: input.envFilter,
     riskFilter: input.riskFilter,
+    fixedEnvFilter: input.fixedEnvFilter,
   });
 }
 

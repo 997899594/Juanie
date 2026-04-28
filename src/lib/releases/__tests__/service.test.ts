@@ -1,7 +1,147 @@
 import { describe, expect, it } from 'bun:test';
-import { buildReleaseDetailPageData } from '@/lib/releases/service';
+import { buildProjectReleasesPageData, buildReleaseDetailPageData } from '@/lib/releases/service';
 
 describe('release service', () => {
+  it('defaults fixed environment release pages to all statuses', () => {
+    const result = buildProjectReleasesPageData({
+      releaseItems: [
+        {
+          id: 'rel-1',
+          displayTitle: 'main 发布 · abcdef1',
+          status: 'succeeded',
+          statusDecoration: { color: 'success', pulse: false, label: '成功' },
+          riskLabel: '低风险',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abcdef1234567890',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          recap: null,
+          approvalRunsCount: 0,
+          failedMigrationRunsCount: 0,
+          previewSourceMeta: {
+            kind: 'branch',
+            label: 'main',
+            title: 'main',
+            reference: 'refs/heads/main',
+            detail: null,
+            stateLabel: null,
+            authorName: null,
+            webUrl: null,
+          },
+          platformSignals: {
+            chips: [],
+            primarySummary: null,
+            nextActionLabel: null,
+          },
+          primaryDomainUrl: null,
+          environmentScope: 'staging',
+          environment: {
+            id: 'env-staging',
+            name: 'staging',
+            isProduction: false,
+            isPreview: false,
+            scopeLabel: '长期环境',
+            sourceLabel: 'main',
+          },
+          artifacts: [],
+        },
+      ],
+      manualReleaseSources: [],
+      environments: [
+        {
+          id: 'env-staging',
+          name: 'staging',
+          kind: 'persistent',
+          autoDeploy: true,
+          isProduction: false,
+        },
+        {
+          id: 'env-production',
+          name: 'production',
+          kind: 'production',
+          autoDeploy: false,
+          isProduction: true,
+        },
+      ],
+      role: 'member',
+      promotionPlans: [],
+      envFilter: 'env-staging',
+      riskFilter: null,
+      fixedEnvFilter: true,
+    });
+
+    expect(result.defaultRiskFilter).toBe('all');
+    expect(result.selectedRisk).toBe('all');
+    expect(result.filteredReleaseItems.length).toBe(1);
+    expect(result.environmentOptions).toEqual([{ value: 'env-staging', label: 'staging' }]);
+  });
+
+  it('keeps project release pages on attention by default', () => {
+    const result = buildProjectReleasesPageData({
+      releaseItems: [
+        {
+          id: 'rel-1',
+          displayTitle: 'main 发布 · abcdef1',
+          status: 'succeeded',
+          statusDecoration: { color: 'success', pulse: false, label: '成功' },
+          riskLabel: '低风险',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abcdef1234567890',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          recap: null,
+          approvalRunsCount: 0,
+          failedMigrationRunsCount: 0,
+          previewSourceMeta: {
+            kind: 'branch',
+            label: 'main',
+            title: 'main',
+            reference: 'refs/heads/main',
+            detail: null,
+            stateLabel: null,
+            authorName: null,
+            webUrl: null,
+          },
+          platformSignals: {
+            chips: [],
+            primarySummary: null,
+            nextActionLabel: null,
+          },
+          primaryDomainUrl: null,
+          environmentScope: 'staging',
+          environment: {
+            id: 'env-staging',
+            name: 'staging',
+            isProduction: false,
+            isPreview: false,
+            scopeLabel: '长期环境',
+            sourceLabel: 'main',
+          },
+          artifacts: [],
+        },
+      ],
+      manualReleaseSources: [],
+      environments: [
+        {
+          id: 'env-staging',
+          name: 'staging',
+          kind: 'persistent',
+          autoDeploy: true,
+          isProduction: false,
+        },
+      ],
+      role: 'member',
+      promotionPlans: [],
+      riskFilter: null,
+    });
+
+    expect(result.defaultRiskFilter).toBe('attention');
+    expect(result.selectedRisk).toBe('attention');
+    expect(result.filteredReleaseItems.length).toBe(0);
+    expect(result.environmentOptions).toEqual([
+      { value: 'all', label: '全部环境' },
+      { value: 'env-staging', label: 'staging' },
+    ]);
+  });
+
   it('builds release detail page data and previous release link', () => {
     const result = buildReleaseDetailPageData({
       projectId: 'proj-1',

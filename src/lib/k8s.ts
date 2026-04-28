@@ -852,7 +852,7 @@ export async function updateDeployment(
  * ConfigMap / Secret values from envFrom.
  */
 export async function rolloutRestartDeployments(namespace: string): Promise<void> {
-  const { apps } = getK8sClient();
+  const { apps, custom } = getK8sClient();
 
   let deploymentNames: string[] = [];
   try {
@@ -865,14 +865,38 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
       namespace,
       errorMessage: e instanceof Error ? e.message : String(e),
     });
-    return;
   }
 
-  if (deploymentNames.length === 0) return;
+  let rolloutNames: string[] = [];
+  try {
+    const response = (await custom.listNamespacedCustomObject({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      namespace,
+      plural: 'rollouts',
+    })) as {
+      items?: Array<{
+        metadata?: {
+          name?: string;
+        };
+      }>;
+    };
+
+    rolloutNames = (response.items || [])
+      .map((rollout) => rollout.metadata?.name)
+      .filter((name): name is string => Boolean(name));
+  } catch (e) {
+    k8sLogger.warn('Could not list Argo Rollouts for workload restart', {
+      namespace,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  if (deploymentNames.length === 0 && rolloutNames.length === 0) return;
 
   const restartedAt = new Date().toISOString();
-  await Promise.all(
-    deploymentNames.map(async (deploymentName) => {
+  await Promise.all([
+    ...deploymentNames.map(async (deploymentName) => {
       try {
         const current = await apps.readNamespacedDeployment({ namespace, name: deploymentName });
         if (!current.spec?.selector) return;
@@ -904,13 +928,51 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
           errorMessage: e instanceof Error ? e.message : String(e),
         });
       }
-    })
-  );
+    }),
+    ...rolloutNames.map(async (rolloutName) => {
+      try {
+        const current = (await custom.getNamespacedCustomObject({
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          namespace,
+          plural: 'rollouts',
+          name: rolloutName,
+        })) as {
+          spec?: Record<string, unknown>;
+        };
 
-  k8sLogger.info('Rolling restart triggered for deployments', {
+        // Argo Rollouts supports spec.restartAt for in-place workload restarts
+        // without manufacturing a new release artifact or relying on Deployment APIs.
+        await custom.replaceNamespacedCustomObject({
+          group: 'argoproj.io',
+          version: 'v1alpha1',
+          namespace,
+          plural: 'rollouts',
+          name: rolloutName,
+          body: {
+            ...current,
+            spec: {
+              ...(current.spec ?? {}),
+              restartAt: restartedAt,
+            },
+          },
+        });
+      } catch (e) {
+        k8sLogger.warn('Failed to restart Argo Rollout', {
+          namespace,
+          rolloutName,
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }),
+  ]);
+
+  k8sLogger.info('Rolling restart triggered for workloads', {
     namespace,
     deploymentCount: deploymentNames.length,
     deploymentNames,
+    rolloutCount: rolloutNames.length,
+    rolloutNames,
   });
 }
 

@@ -37,6 +37,7 @@ export default async function EnvironmentDeliveryPage({
     role: access.member.role,
     envFilter: envId,
     riskFilter: resolvedSearchParams?.risk,
+    fixedEnvFilter: true,
   });
 
   return <ReleasesPageClient projectId={id} initialData={pageData} />;

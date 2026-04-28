@@ -109,6 +109,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     }
   };
 
+  const environments = initialData.environments;
+  const governance = initialData.governance;
+  const filter = initialData.selectedEnv;
+  const riskFilter = initialData.selectedRisk;
+  const defaultRiskFilter = initialData.defaultRiskFilter;
   const updateFilters = (next: {
     env?: string;
     risk?: 'all' | 'attention' | 'approval' | 'failed';
@@ -120,17 +125,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     if (nextEnv === 'all') params.delete('env');
     else params.set('env', nextEnv);
 
-    if (nextRisk === 'attention') params.delete('risk');
+    if (nextRisk === defaultRiskFilter) params.delete('risk');
     else params.set('risk', nextRisk);
 
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
-
-  const environments = initialData.environments;
-  const governance = initialData.governance;
-  const filter = initialData.selectedEnv;
-  const riskFilter = initialData.selectedRisk;
   const selectedEnvironment =
     filter !== 'all'
       ? (environments.find((environment) => environment.id === filter) ?? null)
