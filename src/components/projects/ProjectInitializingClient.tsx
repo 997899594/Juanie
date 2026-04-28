@@ -200,32 +200,32 @@ export function ProjectInitializingClient({
       </div>
 
       <div className="ui-floating console-list overflow-hidden px-0 py-0">
-        {overview.steps.map((step) => (
-          <div key={step.id} className="flex gap-4 px-5 py-4">
-            <div className="mt-0.5 shrink-0">
-              <StepIcon status={step.status} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span
-                  className={`text-sm font-semibold ${
-                    step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'
-                  }`}
-                >
-                  {step.label}
-                </span>
-                {step.status === 'running' && step.progress > 0 && (
-                  <span className="text-xs text-muted-foreground">{step.progress}%</span>
-                )}
+        {overview.steps.map((step) => {
+          return (
+            <div key={step.id} className="flex gap-4 px-5 py-4">
+              <div className="mt-0.5 shrink-0">
+                <StepIcon status={step.status} />
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{step.summary}</p>
-              {step.message && !step.error && (
-                <p className="mt-1 text-xs text-muted-foreground">{step.message}</p>
-              )}
-              {step.error && <p className="mt-1 text-xs text-destructive">{step.error}</p>}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span
+                    className={`text-sm font-semibold ${
+                      step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                  {step.status === 'running' && step.progress > 0 && (
+                    <span className="text-xs text-muted-foreground">{step.progress}%</span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{step.summary}</p>
+                {step.detail && <p className="mt-1 text-xs text-muted-foreground">{step.detail}</p>}
+                {step.error && <p className="mt-1 text-xs text-destructive">{step.error}</p>}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap justify-center gap-3">

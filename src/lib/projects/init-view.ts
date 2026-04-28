@@ -18,11 +18,11 @@ export interface ProjectInitStepCard {
   step: string;
   label: string;
   status: InitStepStatus;
-  message: string | null;
   progress: number;
   errorCode?: string | null;
   error: string | null;
   summary: string;
+  detail: string | null;
 }
 
 export interface ProjectInitOverview {
@@ -88,14 +88,6 @@ export const PROJECT_INIT_STEP_WEIGHTS: Record<string, number> = {
 };
 
 function buildStepSummary(step: ProjectInitStepLike): string {
-  if (step.error) {
-    return step.error;
-  }
-
-  if (step.message) {
-    return step.message;
-  }
-
   switch (step.status) {
     case 'completed':
       return '已完成';
@@ -110,6 +102,10 @@ function buildStepSummary(step: ProjectInitStepLike): string {
   }
 }
 
+function buildStepDetail(step: ProjectInitStepLike): string | null {
+  return step.message;
+}
+
 function buildProjectInitIssue(
   step: ProjectInitStepLike | undefined
 ): ProjectInitIssueSnapshot | null {
@@ -117,7 +113,7 @@ function buildProjectInitIssue(
     return null;
   }
 
-  const error = step.error || buildStepSummary(step);
+  const error = step.error || step.message || buildStepSummary(step);
 
   switch (step.errorCode) {
     case 'repository_missing':
@@ -529,11 +525,11 @@ export function buildProjectInitOverview(
       step: step.step,
       label: PROJECT_INIT_STEP_LABELS[step.step] || step.step,
       status: step.status,
-      message: step.message,
       progress: step.progress ?? 0,
       errorCode: step.errorCode,
       error: step.error,
       summary: buildStepSummary(step),
+      detail: buildStepDetail(step),
     })),
   };
 }
