@@ -12,6 +12,33 @@ let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
 const k8sLogger = logger.child({ component: 'k8s' });
 
+interface K8sCustomObjectLike {
+  metadata?: {
+    resourceVersion?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+function withCurrentResourceVersion<T extends { metadata?: Record<string, unknown> }>(
+  manifest: T,
+  current: K8sCustomObjectLike | null
+): T {
+  const resourceVersion = current?.metadata?.resourceVersion;
+
+  if (!resourceVersion) {
+    return manifest;
+  }
+
+  return {
+    ...manifest,
+    metadata: {
+      ...(manifest.metadata ?? {}),
+      resourceVersion,
+    },
+  };
+}
+
 export function initK8sClient(): void {
   if (initAttempted) return;
   initAttempted = true;
@@ -937,7 +964,7 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
           namespace,
           plural: 'rollouts',
           name: rolloutName,
-        })) as {
+        })) as K8sCustomObjectLike & {
           spec?: Record<string, unknown>;
         };
 
@@ -949,13 +976,16 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
           namespace,
           plural: 'rollouts',
           name: rolloutName,
-          body: {
-            ...current,
-            spec: {
-              ...(current.spec ?? {}),
-              restartAt: restartedAt,
+          body: withCurrentResourceVersion(
+            {
+              ...current,
+              spec: {
+                ...(current.spec ?? {}),
+                restartAt: restartedAt,
+              },
             },
-          },
+            current
+          ),
         });
       } catch (e) {
         k8sLogger.warn('Failed to restart Argo Rollout', {
@@ -1113,20 +1143,20 @@ export async function upsertCloudNativePgCluster(
   const { custom } = getK8sClient();
 
   try {
-    await custom.getNamespacedCustomObject({
+    const current = (await custom.getNamespacedCustomObject({
       group: 'postgresql.cnpg.io',
       version: 'v1',
       namespace: manifest.metadata.namespace,
       plural: 'clusters',
       name: manifest.metadata.name,
-    });
+    })) as K8sCustomObjectLike;
     await custom.replaceNamespacedCustomObject({
       group: 'postgresql.cnpg.io',
       version: 'v1',
       namespace: manifest.metadata.namespace,
       plural: 'clusters',
       name: manifest.metadata.name,
-      body: manifest,
+      body: withCurrentResourceVersion(manifest, current),
     });
   } catch (e: unknown) {
     const error = e as { code?: number; statusCode?: number };
