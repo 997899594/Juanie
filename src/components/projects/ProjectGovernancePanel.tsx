@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { DetailsSection } from '@/components/ui/details-section';
 import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
@@ -6,22 +6,8 @@ interface ProjectGovernancePanelProps {
   governance: ProjectGovernanceSnapshot;
 }
 
-function GovernanceDetails(props: { title: string; summary?: string; children: ReactNode }) {
-  return (
-    <details className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
-        <span>{props.title}</span>
-        <span className="text-xs font-normal text-muted-foreground">展开</span>
-      </summary>
-      <div className="mt-4 space-y-4">
-        {props.summary ? (
-          <div className="text-sm text-muted-foreground">{props.summary}</div>
-        ) : null}
-        {props.children}
-      </div>
-    </details>
-  );
-}
+const detailsClassName =
+  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
 
 export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelProps) {
   return (
@@ -33,7 +19,11 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
         </div>
       </div>
 
-      <GovernanceDetails title="权限说明" summary={governance.primarySummary}>
+      <DetailsSection
+        title="权限说明"
+        summary={governance.primarySummary}
+        className={detailsClassName}
+      >
         <PlatformSignalChipList chips={governance.signals} />
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {governance.capabilities.map((capability) => (
@@ -55,9 +45,9 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
             </div>
           ))}
         </div>
-      </GovernanceDetails>
+      </DetailsSection>
 
-      <GovernanceDetails title="角色矩阵">
+      <DetailsSection title="角色矩阵" className={detailsClassName}>
         <div className="overflow-hidden rounded-[18px] bg-white/72">
           <div className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             <div>项目能力</div>
@@ -77,7 +67,7 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
             </div>
           ))}
         </div>
-      </GovernanceDetails>
+      </DetailsSection>
     </div>
   );
 }

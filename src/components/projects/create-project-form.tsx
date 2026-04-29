@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DetailsSection } from '@/components/ui/details-section';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -301,42 +302,38 @@ function DisclosurePanel({ title, meta, open, onToggle, children }: DisclosurePa
 
 function TeamAccessDetails({ team }: { team: CreateProjectFormProps['teamScopes'][number] }) {
   return (
-    <details className={cn(reviewShellClassName, 'px-4 py-3')}>
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
-        <span>权限与授权</span>
-        <span className="text-xs font-normal text-muted-foreground">展开</span>
-      </summary>
-      <div className="mt-4 space-y-3">
-        <div className="grid gap-3 text-sm md:grid-cols-3">
-          <div className={reviewSubtleClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              当前角色
-            </div>
-            <div className="mt-2 font-medium text-foreground">{team.roleLabel}</div>
+    <DetailsSection
+      title="权限与授权"
+      className={cn(reviewShellClassName, 'px-4 py-3')}
+      contentClassName="space-y-3"
+    >
+      <div className="grid gap-3 text-sm md:grid-cols-3">
+        <div className={reviewSubtleClassName}>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            当前角色
           </div>
-          <div className={reviewSubtleClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              导入仓库
-            </div>
-            <div className="mt-2 text-muted-foreground">{team.importSummary}</div>
-          </div>
-          <div className={reviewSubtleClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              新建仓库
-            </div>
-            <div className="mt-2 text-muted-foreground">{team.createSummary}</div>
-          </div>
+          <div className="mt-2 font-medium text-foreground">{team.roleLabel}</div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          {team.providerLabels.length
-            ? `代码托管授权：${team.providerLabels.join(' / ')}`
-            : '还没有可用代码托管授权'}
+        <div className={reviewSubtleClassName}>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            导入仓库
+          </div>
+          <div className="mt-2 text-muted-foreground">{team.importSummary}</div>
         </div>
-        <PlatformSignalChipList
-          chips={[...team.importSignals.chips, ...team.createSignals.chips]}
-        />
+        <div className={reviewSubtleClassName}>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            新建仓库
+          </div>
+          <div className="mt-2 text-muted-foreground">{team.createSummary}</div>
+        </div>
       </div>
-    </details>
+      <div className="text-xs text-muted-foreground">
+        {team.providerLabels.length
+          ? `代码托管授权：${team.providerLabels.join(' / ')}`
+          : '还没有可用代码托管授权'}
+      </div>
+      <PlatformSignalChipList chips={[...team.importSignals.chips, ...team.createSignals.chips]} />
+    </DetailsSection>
   );
 }
 
