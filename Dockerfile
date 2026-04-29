@@ -70,7 +70,8 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 # ============================================
 # Stage 6: Web Runner
 # ============================================
-FROM node:20-bookworm-slim AS web
+# Web 保持 Next standalone 的 Node server 语义；Bun 作为构建、测试、worker 与 schema-runner 基线。
+FROM node:24-bookworm-slim AS web
 WORKDIR /app
 
 ENV NODE_ENV=production

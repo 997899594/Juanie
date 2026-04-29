@@ -7,17 +7,17 @@ import {
   toPlatformDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
+import {
+  injectDatabaseEnvVars,
+  provisionDatabase,
+  removeInjectedDatabaseEnvVars,
+} from '@/lib/databases/provisioning';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import { isK8sAvailable } from '@/lib/k8s';
-import {
-  injectDatabaseEnvVars,
-  provisionDatabase,
-  removeInjectedDatabaseEnvVars,
-} from '@/lib/queue/project-init';
 
 export async function syncPreviewEnvironmentDatabases(input: {
   projectId: string;

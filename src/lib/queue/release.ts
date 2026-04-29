@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { assertDeclaredDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { assertDeclaredDatabaseRuntimeAccess } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
-import { type ReleaseStatus, releases } from '@/lib/db/schema';
+import { releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
@@ -14,21 +14,12 @@ import {
   startReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
+import { releaseStatusesRequiringFailureReconciliation } from '@/lib/releases/state-machine';
 import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import type { ReleaseJobData } from './index';
 
-const releaseStatusesRequiringFailureReconciliation: ReleaseStatus[] = [
-  'queued',
-  'planning',
-  'migration_pre_running',
-  'deploying',
-  'awaiting_rollout',
-  'verifying',
-  'migration_post_running',
-];
-
 export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
-  return releaseStatusesRequiringFailureReconciliation.includes(status as ReleaseStatus);
+  return (releaseStatusesRequiringFailureReconciliation as readonly string[]).includes(status);
 }
 
 export async function reconcileUnexpectedReleaseJobFailure(releaseId: string, error: unknown) {

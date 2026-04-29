@@ -16,13 +16,13 @@ import {
   platformDatabaseProvisionTypes,
   platformDatabaseTypes,
 } from '@/lib/databases/platform-support';
+import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/databases/provisioning';
 import { db } from '@/lib/db';
 import { databases, environments, services } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { pickProductionEnvironment } from '@/lib/environments/model';
 import { isK8sAvailable } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
-import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
 const routeLogger = logger.child({ route: 'api/projects/databases' });
 

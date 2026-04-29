@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildInitialAutoDeploySummary,
   resolveInitialAutoDeployRefs,
-} from '@/lib/queue/project-init';
+} from '@/lib/projects/initial-auto-deploy';
 
 describe('project init initial build trigger helpers', () => {
   it('deduplicates persistent auto-deploy refs', () => {

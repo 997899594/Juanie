@@ -1,20 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { encrypt } from '@/lib/crypto';
+import { and, eq } from 'drizzle-orm';
 import {
   type DatabaseCapability,
   normalizeDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
-import { provisionManagedDatabase } from '@/lib/databases/provider';
+import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/databases/provisioning';
 import { db } from '@/lib/db';
 import {
   databases,
   domains,
   environments,
-  environmentVariables,
   projectInitSteps,
   projects,
   repositories,
@@ -41,6 +39,11 @@ import {
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
+import {
+  buildInitialAutoDeploySummary,
+  resolveInitialAutoDeployEnvironmentsForRef,
+  resolveInitialAutoDeployRefs,
+} from '@/lib/projects/initial-auto-deploy';
 import { getProjectProductionBranch } from '@/lib/projects/refs';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
@@ -1871,71 +1874,6 @@ async function configureReleaseTrigger(
   });
 }
 
-export function resolveInitialAutoDeployRefs(
-  environmentList: Array<{
-    branch?: string | null;
-    autoDeploy?: boolean | null;
-    isPreview?: boolean | null;
-  }>
-): string[] {
-  return Array.from(
-    new Set(
-      environmentList
-        .filter((environment) => environment.autoDeploy && !environment.isPreview)
-        .map((environment) => environment.branch?.trim())
-        .filter((branch): branch is string => Boolean(branch))
-        .map((branch) => (branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`))
-    )
-  );
-}
-
-function formatInitialAutoDeployRefs(refs: string[]): string {
-  return refs.map((ref) => ref.replace(/^refs\/heads\//, '')).join('、');
-}
-
-export function buildInitialAutoDeploySummary(input: {
-  refs: string[];
-  triggeredRefs: string[];
-  missingRefs: string[];
-}): string {
-  if (input.refs.length === 0) {
-    return '没有需要触发的首发构建';
-  }
-
-  const segments: string[] = [];
-
-  if (input.triggeredRefs.length > 0) {
-    segments.push(`已触发 ${input.triggeredRefs.length} 个首发构建`);
-  }
-
-  if (input.missingRefs.length > 0) {
-    segments.push(`跳过不存在的分支：${formatInitialAutoDeployRefs(input.missingRefs)}`);
-  }
-
-  return segments.join('，') || '没有可触发的首发构建';
-}
-
-function normalizeInitialAutoDeployRef(branch: string | null | undefined): string | null {
-  const normalized = branch?.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  return normalized.startsWith('refs/heads/') ? normalized : `refs/heads/${normalized}`;
-}
-
-function resolveInitialAutoDeployEnvironmentsForRef(
-  environmentsForProject: Array<typeof environments.$inferSelect>,
-  ref: string
-): Array<typeof environments.$inferSelect> {
-  return environmentsForProject.filter(
-    (environment) =>
-      environment.autoDeploy &&
-      !environment.isPreview &&
-      normalizeInitialAutoDeployRef(environment.branch) === ref
-  );
-}
-
 async function triggerInitialAutoDeployBuilds(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -2214,24 +2152,6 @@ async function provisionDatabases(
   await onProgress?.(100, '数据库配置与环境变量同步完成');
 }
 
-/**
- * Provision a single database based on its provisionType.
- * - shared: reuse Juanie's own PG/Redis infrastructure (independent DB/user per project)
- * - standalone: create isolated K8s StatefulSet/Deployment
- * - external: connection string already provided, just mark running
- */
-export async function provisionDatabase(
-  database: typeof databases.$inferSelect,
-  project: typeof projects.$inferSelect,
-  hasK8s: boolean
-): Promise<void> {
-  await provisionManagedDatabase({
-    database,
-    project,
-    hasK8s,
-  });
-}
-
 async function configureDns(
   project: typeof projects.$inferSelect,
   hasK8s: boolean,
@@ -2294,228 +2214,6 @@ async function configureDns(
       `已确保 ${environment.name} 环境域名与路由`
     );
   }
-}
-
-// ============================================
-// Database Env Var Injection
-// ============================================
-
-/** Parse a postgres/mysql/redis/mongodb connection string into its components. */
-function parseConnUrl(connStr: string): {
-  host: string;
-  port: string;
-  user: string;
-  password: string;
-  database: string;
-} {
-  try {
-    const url = new URL(connStr);
-    return {
-      host: url.hostname,
-      port: url.port,
-      user: url.username ? decodeURIComponent(url.username) : '',
-      password: url.password ? decodeURIComponent(url.password) : '',
-      database: url.pathname?.length > 1 ? url.pathname.slice(1) : '',
-    };
-  } catch {
-    return { host: '', port: '', user: '', password: '', database: '' };
-  }
-}
-
-/**
- * Keys whose values must be stored encrypted and synced to K8s Secret (not ConfigMap).
- */
-const SENSITIVE_ENV_KEYS = new Set([
-  'DATABASE_URL',
-  'POSTGRES_PASSWORD',
-  'REDIS_URL',
-  'REDIS_PASSWORD',
-  'MYSQL_URL',
-  'MYSQL_PASSWORD',
-  'MONGODB_URL',
-  'MONGODB_PASSWORD',
-]);
-
-/**
- * Upsert an environment variable.
- *
- * @param environmentId  null → project-scoped (applies to all environments via env-sync merge)
- *                       string → scoped to a specific environment only
- * @param isSecret       override sensitivity; defaults to SENSITIVE_ENV_KEYS lookup
- */
-async function upsertEnvVar(
-  projectId: string,
-  environmentId: string | null,
-  key: string,
-  value: string,
-  isSecret?: boolean
-): Promise<void> {
-  const sensitive = isSecret ?? SENSITIVE_ENV_KEYS.has(key);
-  const envIdClause = environmentId
-    ? eq(environmentVariables.environmentId, environmentId)
-    : isNull(environmentVariables.environmentId);
-
-  const existing = await db.query.environmentVariables.findFirst({
-    where: and(
-      eq(environmentVariables.projectId, projectId),
-      eq(environmentVariables.key, key),
-      envIdClause,
-      isNull(environmentVariables.serviceId)
-    ),
-  });
-
-  if (sensitive) {
-    const { encryptedValue, iv, authTag } = await encrypt(value);
-    if (existing) {
-      await db
-        .update(environmentVariables)
-        .set({ value: null, isSecret: true, encryptedValue, iv, authTag, updatedAt: new Date() })
-        .where(eq(environmentVariables.id, existing.id));
-    } else {
-      await db.insert(environmentVariables).values({
-        projectId,
-        environmentId,
-        key,
-        value: null,
-        isSecret: true,
-        encryptedValue,
-        iv,
-        authTag,
-        injectionType: 'runtime',
-      });
-    }
-  } else {
-    if (existing) {
-      await db
-        .update(environmentVariables)
-        .set({ value, updatedAt: new Date() })
-        .where(eq(environmentVariables.id, existing.id));
-    } else {
-      await db.insert(environmentVariables).values({
-        projectId,
-        environmentId,
-        key,
-        value,
-        isSecret: false,
-        injectionType: 'runtime',
-      });
-    }
-  }
-}
-
-/**
- * Inject database connection info as environment variables.
- *
- * Naming convention matches renderEnvTemplate and common framework expectations:
- *   postgresql → DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER,
- *                POSTGRES_PASSWORD, POSTGRES_DB
- *   redis      → REDIS_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD[, REDIS_DB]
- *   mysql      → MYSQL_URL, MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE
- *   mongodb    → MONGODB_URL, MONGODB_HOST, MONGODB_PORT, MONGODB_USER, MONGODB_PASSWORD, MONGODB_DATABASE
- *
- * @param environmentId  null = project-scoped (env-sync merges into every environment)
- *                       pass a specific env ID for per-environment isolation
- */
-export async function injectDatabaseEnvVars(
-  database: typeof databases.$inferSelect,
-  project: typeof projects.$inferSelect,
-  environmentId: string | null = null
-): Promise<void> {
-  if (!database.connectionString) return;
-
-  const c = parseConnUrl(database.connectionString);
-  const vars: Record<string, string> = {};
-
-  switch (database.type) {
-    case 'postgresql':
-      vars['DATABASE_URL'] = database.connectionString;
-      if (c.host) vars['POSTGRES_HOST'] = c.host;
-      if (c.port) vars['POSTGRES_PORT'] = c.port;
-      if (c.user) vars['POSTGRES_USER'] = c.user;
-      if (c.password) vars['POSTGRES_PASSWORD'] = c.password;
-      if (c.database) vars['POSTGRES_DB'] = c.database;
-      break;
-    case 'redis':
-      vars['REDIS_URL'] = database.connectionString;
-      if (c.host) vars['REDIS_HOST'] = c.host;
-      if (c.port) vars['REDIS_PORT'] = c.port;
-      if (c.password) vars['REDIS_PASSWORD'] = c.password;
-      // db index only relevant for shared Redis (stored in pathname e.g. /1)
-      if (c.database && c.database !== '0') vars['REDIS_DB'] = c.database;
-      break;
-    case 'mysql':
-      vars['MYSQL_URL'] = database.connectionString;
-      if (c.host) vars['MYSQL_HOST'] = c.host;
-      if (c.port) vars['MYSQL_PORT'] = c.port;
-      if (c.user) vars['MYSQL_USER'] = c.user;
-      if (c.password) vars['MYSQL_PASSWORD'] = c.password;
-      if (c.database) vars['MYSQL_DATABASE'] = c.database;
-      break;
-    case 'mongodb':
-      vars['MONGODB_URL'] = database.connectionString;
-      if (c.host) vars['MONGODB_HOST'] = c.host;
-      if (c.port) vars['MONGODB_PORT'] = c.port;
-      if (c.user) vars['MONGODB_USER'] = c.user;
-      if (c.password) vars['MONGODB_PASSWORD'] = c.password;
-      if (c.database) vars['MONGODB_DATABASE'] = c.database;
-      break;
-  }
-
-  for (const [key, value] of Object.entries(vars)) {
-    await upsertEnvVar(project.id, environmentId, key, value);
-  }
-
-  const scope = environmentId ? `env:${environmentId.slice(0, 8)}` : 'project-scoped';
-  projectInitLogger.info('Injected database environment variables', {
-    projectId: project.id,
-    databaseId: database.id,
-    databaseName: database.name,
-    scope,
-    variableCount: Object.keys(vars).length,
-    variableKeys: Object.keys(vars),
-  });
-}
-
-const DATABASE_ENV_KEYS = [
-  'DATABASE_URL',
-  'POSTGRES_HOST',
-  'POSTGRES_PORT',
-  'POSTGRES_USER',
-  'POSTGRES_PASSWORD',
-  'POSTGRES_DB',
-  'REDIS_URL',
-  'REDIS_HOST',
-  'REDIS_PORT',
-  'REDIS_PASSWORD',
-  'REDIS_DB',
-  'MYSQL_URL',
-  'MYSQL_HOST',
-  'MYSQL_PORT',
-  'MYSQL_USER',
-  'MYSQL_PASSWORD',
-  'MYSQL_DATABASE',
-  'MONGODB_URL',
-  'MONGODB_HOST',
-  'MONGODB_PORT',
-  'MONGODB_USER',
-  'MONGODB_PASSWORD',
-  'MONGODB_DATABASE',
-] as const;
-
-export async function removeInjectedDatabaseEnvVars(
-  projectId: string,
-  environmentId: string
-): Promise<void> {
-  await db
-    .delete(environmentVariables)
-    .where(
-      and(
-        eq(environmentVariables.projectId, projectId),
-        eq(environmentVariables.environmentId, environmentId),
-        isNull(environmentVariables.serviceId),
-        inArray(environmentVariables.key, [...DATABASE_ENV_KEYS])
-      )
-    );
 }
 
 export function createProjectInitWorker() {

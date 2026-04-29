@@ -1,4 +1,9 @@
-import type { DeploymentStatus, MigrationPhase, ReleaseStatus } from '@/lib/db/schema';
+import type {
+  DeploymentStatus,
+  MigrationPhase,
+  MigrationRunStatus,
+  ReleaseStatus,
+} from '@/lib/db/schema';
 
 export const activeReleaseStatuses = [
   'queued',
@@ -11,6 +16,30 @@ export const activeReleaseStatuses = [
 ] as const satisfies ReleaseStatus[];
 
 export type ActiveReleaseStatus = (typeof activeReleaseStatuses)[number];
+
+export const releaseStatusesRequiringFailureReconciliation = [
+  'queued',
+  'planning',
+  'migration_pre_running',
+  'deploying',
+  'awaiting_rollout',
+  'verifying',
+  'migration_post_running',
+] as const satisfies ReleaseStatus[];
+
+export const supersedableReleaseStatuses = [
+  'queued',
+  'planning',
+  'awaiting_approval',
+  'awaiting_external_completion',
+] as const satisfies ReleaseStatus[];
+
+export const supersedableMigrationRunStatuses = [
+  'queued',
+  'planning',
+  'awaiting_approval',
+  'awaiting_external_completion',
+] as const satisfies MigrationRunStatus[];
 
 export type ObservedDeploymentTerminalStatus =
   | 'running'

@@ -25,23 +25,12 @@ import {
   postDeploymentReleaseStatuses,
   resolveReleaseDeploymentResolution,
   resolveReleaseFailureStatus,
+  supersedableMigrationRunStatuses,
+  supersedableReleaseStatuses,
 } from '@/lib/releases/state-machine';
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
 
-const supersedableReleaseStatuses: ReleaseStatus[] = [
-  'queued',
-  'planning',
-  'awaiting_approval',
-  'awaiting_external_completion',
-];
-
-const supersedableRunStatuses: MigrationRunStatus[] = [
-  'queued',
-  'planning',
-  'awaiting_approval',
-  'awaiting_external_completion',
-];
 const releaseOrchestrationLogger = logger.child({ component: 'release-orchestration' });
 
 export type StartReleaseMigrationPhaseResult =
@@ -142,7 +131,7 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
     .where(
       and(
         inArray(migrationRuns.releaseId, candidateIds),
-        inArray(migrationRuns.status, supersedableRunStatuses)
+        inArray(migrationRuns.status, [...supersedableMigrationRunStatuses])
       )
     );
 
@@ -154,7 +143,10 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
       updatedAt: now,
     })
     .where(
-      and(inArray(releases.id, candidateIds), inArray(releases.status, supersedableReleaseStatuses))
+      and(
+        inArray(releases.id, candidateIds),
+        inArray(releases.status, [...supersedableReleaseStatuses])
+      )
     );
 
   await publishReleaseRealtimeSnapshots(candidateIds);
