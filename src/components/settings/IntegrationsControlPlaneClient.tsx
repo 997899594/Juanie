@@ -151,9 +151,7 @@ export function IntegrationsControlPlaneClient({
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{team.name}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        @{team.slug} · {team.roleLabel}
-                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">@{team.slug}</div>
                     </div>
                   </div>
                   {team.summary ? (

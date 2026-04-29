@@ -133,7 +133,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
       : undefined;
   const overviewStats = [
     { label: '团队', value: project.teamName },
-    { label: '角色', value: project.governance.roleLabel },
     { label: '状态', value: project.statusLabel },
   ];
 

@@ -109,7 +109,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
                     )}
                   </div>
                   <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                    {[project.roleLabel, project.createdAtLabel].filter(Boolean).join(' · ')}
+                    {project.createdAtLabel}
                   </div>
                 </div>
               </div>

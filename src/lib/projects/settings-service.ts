@@ -81,7 +81,6 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       headerDescription: `${team?.name ?? '团队'} · ${runtimeStatus.statusLabel}`,
       stats: [
         { label: '团队', value: team?.name ?? '—' },
-        { label: '角色', value: governance.roleLabel },
         { label: '状态', value: runtimeStatus.statusLabel },
       ],
     },

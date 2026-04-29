@@ -296,11 +296,6 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
 
   const signals: TeamGovernanceSignal[] = [
     {
-      key: `role:${role}`,
-      label: `当前角色：${formatRoleLabel(role)}`,
-      tone: role === 'member' ? 'neutral' : 'danger',
-    },
-    {
       key: isOwner ? 'owner-controls' : canManageMembers ? 'admin-controls' : 'member-controls',
       label: isOwner ? '拥有完整治理权限' : canManageMembers ? '可管理成员与邀请' : '以协作为主',
       tone: isOwner ? 'danger' : 'neutral',

@@ -379,7 +379,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               status={isConnected ? 'success' : 'neutral'}
               label={isConnected ? '实时同步' : '未连接'}
             />
-            <span>{governance.roleLabel}</span>
             {selectedEnvironment ? <span>{selectedEnvironment.name}</span> : null}
             {!selectedEnvironment ? <span>跨环境</span> : <span>单环境</span>}
           </div>

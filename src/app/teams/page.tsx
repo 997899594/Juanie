@@ -65,9 +65,7 @@ export default async function TeamsPage() {
                     </Avatar>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{team.name}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        @{team.slug} · {team.roleLabel}
-                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">@{team.slug}</div>
                     </div>
                   </div>
                   <div className="text-[11px] text-muted-foreground">团队</div>

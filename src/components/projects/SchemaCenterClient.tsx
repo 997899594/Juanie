@@ -256,7 +256,7 @@ export function SchemaCenterClient({
       />
 
       <div className={shellClassName}>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className={subCardClassName}>
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               数据库
@@ -280,12 +280,6 @@ export function SchemaCenterClient({
             <div className="mt-2 text-lg font-semibold text-foreground">
               {data.summary.pendingCount}
             </div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              当前权限
-            </div>
-            <div className="mt-2 text-sm font-medium text-foreground">{data.roleLabel}</div>
           </div>
         </div>
       </div>

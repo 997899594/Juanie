@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -295,6 +296,47 @@ function DisclosurePanel({ title, meta, open, onToggle, children }: DisclosurePa
 
       {open ? <div className="console-divider-top space-y-4 px-5 py-4">{children}</div> : null}
     </div>
+  );
+}
+
+function TeamAccessDetails({ team }: { team: CreateProjectFormProps['teamScopes'][number] }) {
+  return (
+    <details className={cn(reviewShellClassName, 'px-4 py-3')}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+        <span>权限与授权</span>
+        <span className="text-xs font-normal text-muted-foreground">展开</span>
+      </summary>
+      <div className="mt-4 space-y-3">
+        <div className="grid gap-3 text-sm md:grid-cols-3">
+          <div className={reviewSubtleClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              当前角色
+            </div>
+            <div className="mt-2 font-medium text-foreground">{team.roleLabel}</div>
+          </div>
+          <div className={reviewSubtleClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              导入仓库
+            </div>
+            <div className="mt-2 text-muted-foreground">{team.importSummary}</div>
+          </div>
+          <div className={reviewSubtleClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              新建仓库
+            </div>
+            <div className="mt-2 text-muted-foreground">{team.createSummary}</div>
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {team.providerLabels.length
+            ? `代码托管授权：${team.providerLabels.join(' / ')}`
+            : '还没有可用代码托管授权'}
+        </div>
+        <PlatformSignalChipList
+          chips={[...team.importSignals.chips, ...team.createSignals.chips]}
+        />
+      </div>
+    </details>
   );
 }
 
@@ -744,7 +786,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <div className="grid gap-4 md:grid-cols-2">
                 <ChoiceCardButton
                   title="导入仓库"
-                  description={selectedTeam?.importSummary ?? '连接现有 Git 仓库'}
+                  description="连接现有 Git 仓库"
                   selected={formData.mode === 'import'}
                   onClick={() => switchMode('import')}
                   dense
@@ -752,12 +794,14 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
                 <ChoiceCardButton
                   title="新建仓库"
-                  description={selectedTeam?.createSummary ?? '从平台模板直接创建一个新仓库'}
+                  description="从平台模板创建新仓库"
                   selected={formData.mode === 'create'}
                   onClick={() => switchMode('create')}
                   dense
                 />
               </div>
+
+              {selectedTeam ? <TeamAccessDetails team={selectedTeam} /> : null}
             </div>
           </div>
         )}
@@ -768,20 +812,14 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium">{selectedTeam?.name}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {selectedTeam?.roleLabel} ·{' '}
-                    {selectedTeam?.providerLabels.length
-                      ? selectedTeam.providerLabels.join(' / ')
-                      : '还没有可用代码托管授权'}
-                  </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {formData.mode === 'import'
-                    ? selectedTeam?.importSummary
-                    : selectedTeam?.createSummary}
+                  {formData.mode === 'import' ? '导入现有仓库' : '创建新仓库'}
                 </div>
               </div>
             </div>
+
+            {selectedTeam ? <TeamAccessDetails team={selectedTeam} /> : null}
 
             {formData.mode === 'import' ? (
               <>

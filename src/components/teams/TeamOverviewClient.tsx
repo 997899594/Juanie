@@ -99,7 +99,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{project.name}</p>
                 <p className="mt-1 text-xs text-muted-foreground capitalize">
-                  {[project.statusLabel, project.governance.roleLabel].filter(Boolean).join(' · ')}
+                  {project.statusLabel}
                 </p>
               </div>
             </Link>

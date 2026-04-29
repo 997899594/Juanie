@@ -318,7 +318,6 @@ export function buildTeamMembersView(input: {
     stats: [
       { label: '成员', value: input.members.length.toString() },
       { label: '待处理邀请', value: input.invitations.length.toString() },
-      { label: '当前角色', value: formatRoleLabel(input.role) },
     ],
     governance: buildTeamGovernanceSnapshot(input.role),
     members: input.members.map((member) => ({
@@ -353,9 +352,8 @@ export function buildTeamSettingsView(input: {
   const canDelete = input.role === 'owner';
 
   return {
-    headerDescription: canEdit ? '拥有者权限' : '只读',
+    headerDescription: canEdit ? '可管理团队设置' : '只读',
     stats: [
-      { label: '角色', value: governance.roleLabel },
       { label: '项目', value: input.projectCount.toString() },
       { label: '成员', value: input.memberCount.toString() },
     ],
@@ -459,7 +457,6 @@ export function buildTeamIntegrationsView(input: {
     stats: [
       { label: '活跃绑定', value: activeCount.toString() },
       { label: '异常提醒', value: degradedCount.toString() },
-      { label: '当前角色', value: formatRoleLabel(input.role) },
     ],
     canManage,
     bindings: input.bindings.map((binding) => {

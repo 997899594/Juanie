@@ -1,8 +1,26 @@
+import type { ReactNode } from 'react';
 import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import type { TeamGovernanceSnapshot } from '@/lib/teams/governance-view';
 
 interface TeamGovernancePanelProps {
   governance: TeamGovernanceSnapshot;
+}
+
+function GovernanceDetails(props: { title: string; summary?: string; children: ReactNode }) {
+  return (
+    <details className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+        <span>{props.title}</span>
+        <span className="text-xs font-normal text-muted-foreground">展开</span>
+      </summary>
+      <div className="mt-4 space-y-4">
+        {props.summary ? (
+          <div className="text-sm text-muted-foreground">{props.summary}</div>
+        ) : null}
+        {props.children}
+      </div>
+    </details>
+  );
 }
 
 function GovernanceMatrix(props: {
@@ -74,18 +92,19 @@ export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
   return (
     <div className="space-y-4">
       <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
-        <div className="text-sm font-medium">{governance.primarySummary}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{governance.roleLabel}</div>
+        <div className="text-sm font-medium">当前角色：{governance.roleLabel}</div>
       </div>
-      <PlatformSignalChipList chips={governance.signals} />
-      <GovernanceCapabilityGrid items={governance.capabilities} />
-      <GovernanceMatrix title="团队治理" rows={governance.matrix} />
 
-      <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
-        <div className="text-sm font-medium">{governance.platformSummary}</div>
-      </div>
-      <GovernanceCapabilityGrid items={governance.platformCapabilities} />
-      <GovernanceMatrix title="平台能力" rows={governance.platformMatrix} />
+      <GovernanceDetails title="团队权限说明" summary={governance.primarySummary}>
+        <PlatformSignalChipList chips={governance.signals} />
+        <GovernanceCapabilityGrid items={governance.capabilities} />
+        <GovernanceMatrix title="团队治理" rows={governance.matrix} />
+      </GovernanceDetails>
+
+      <GovernanceDetails title="平台权限说明" summary={governance.platformSummary}>
+        <GovernanceCapabilityGrid items={governance.platformCapabilities} />
+        <GovernanceMatrix title="平台能力" rows={governance.platformMatrix} />
+      </GovernanceDetails>
     </div>
   );
 }

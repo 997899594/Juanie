@@ -182,14 +182,6 @@ export function buildProjectGovernanceSnapshot(input: {
       };
     });
 
-  const roleSignals: ProjectGovernanceSignal[] = [
-    {
-      key: `role:${input.role}`,
-      label: `当前角色：${formatRoleLabel(input.role)}`,
-      tone: input.role === 'member' ? 'neutral' : 'danger',
-    },
-  ];
-
   return {
     roleLabel: formatRoleLabel(input.role),
     primarySummary:
@@ -200,6 +192,6 @@ export function buildProjectGovernanceSnapshot(input: {
           : '你可以参与常规环境发布，但生产和手动迁移受保护',
     capabilities,
     matrix,
-    signals: dedupeSignals([...roleSignals, ...policySignals]),
+    signals: dedupeSignals(policySignals),
   };
 }

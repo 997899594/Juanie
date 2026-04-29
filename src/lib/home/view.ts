@@ -376,7 +376,7 @@ export function buildHomeCommandCenter<
             title: project.name,
             description: `${project.repositoryLabel} · ${project.statusLabel}`,
             href: `/projects/${project.id}`,
-            meta: project.roleLabel ?? '项目成员',
+            meta: '项目状态',
             tone: project.status === 'failed' ? 'danger' : 'neutral',
           }) satisfies HomeCommandCenterFocusItem
       ),

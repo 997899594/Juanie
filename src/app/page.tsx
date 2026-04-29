@@ -127,7 +127,7 @@ export default async function HomePage() {
                           {project.repositoryLabel}
                         </div>
                         <div className="mt-1 text-[11px] text-muted-foreground">
-                          {[project.roleLabel, project.statusLabel].filter(Boolean).join(' · ')}
+                          {project.statusLabel}
                         </div>
                       </div>
                     </div>
