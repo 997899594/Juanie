@@ -83,6 +83,7 @@ async function attachReleaseMigrationFilePreviews<
             connectionString: run.database.connectionString,
           }
         : null,
+      status: run.status,
       release: {
         sourceRef: release.sourceRef,
         sourceCommitSha: run.sourceCommitSha ?? release.sourceCommitSha,
@@ -90,7 +91,10 @@ async function attachReleaseMigrationFilePreviews<
       environment: {
         branch: release.environment.branch,
       },
-    }))
+    })),
+    {
+      executionStateMode: 'run_status',
+    }
   );
 
   return {

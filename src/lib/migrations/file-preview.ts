@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { Client as PgClient } from 'pg';
 import { db } from '@/lib/db';
-import { databaseMigrations } from '@/lib/db/schema';
+import { databaseMigrations, type MigrationRunStatus, migrationRunStatuses } from '@/lib/db/schema';
 import {
   diffDatabaseSchemaAgainstDesiredSchema,
   extractAtlasMigrationVersion,
@@ -72,6 +72,7 @@ interface MigrationFilePreviewRunLike {
     type?: string | null;
     connectionString?: string | null;
   } | null;
+  status?: string | null;
   release?: {
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
@@ -89,6 +90,7 @@ interface DeclaredMigrationPreview {
 
 interface BuildPreviewOptions {
   forceRefresh?: boolean;
+  executionStateMode?: 'live' | 'run_status' | 'declared_only';
 }
 
 type SupportedMigrationTool = (typeof SUPPORTED_MIGRATION_TOOLS)[number];
@@ -145,6 +147,13 @@ function asSupportedDatabaseType(value?: string | null): SupportedDatabaseType |
   if (!value) return null;
   return SUPPORTED_DATABASE_TYPES.includes(value as SupportedDatabaseType)
     ? (value as SupportedDatabaseType)
+    : null;
+}
+
+function asMigrationRunStatus(value?: string | null): MigrationRunStatus | null {
+  if (!value) return null;
+  return migrationRunStatuses.includes(value as MigrationRunStatus)
+    ? (value as MigrationRunStatus)
     : null;
 }
 
@@ -228,6 +237,23 @@ function buildPendingSnapshot(input: {
     executedTotal: Math.min(Math.max(input.executedTotal, 0), declaredTotal),
     truncated: normalizedPending.length > MAX_PREVIEW_FILES,
     warning: mergeWarnings(input.declaredPreview.warning, input.warning),
+  };
+}
+
+function resolveRunStatusExecutionState(input: {
+  run: MigrationFilePreviewRunLike;
+  declaredPreview: DeclaredMigrationPreview;
+}): ExecutionStateSnapshot | null {
+  const status = asMigrationRunStatus(input.run.status);
+  if (!status) {
+    return null;
+  }
+
+  return {
+    mode: 'names',
+    executedNames: new Set(
+      status === 'success' || status === 'skipped' ? input.declaredPreview.declaredFiles : []
+    ),
   };
 }
 
@@ -385,16 +411,8 @@ async function resolveSqlDeclaredPreview(
   );
 }
 
-async function resolveDrizzleDeclaredPreview(
-  sourceConfigPath: string | null
-): Promise<DeclaredMigrationPreview> {
-  return buildDeclaredPreview(
-    'Desired schema',
-    ['desired-schema.sql'],
-    sourceConfigPath
-      ? `基于 ${sourceConfigPath} 导出`
-      : '未指定 schema.config，平台会自动发现 Drizzle 配置'
-  );
+async function resolveDrizzleDeclaredPreview(): Promise<DeclaredMigrationPreview> {
+  return buildDeclaredPreview('Desired schema', ['desired-schema.sql']);
 }
 
 async function resolvePrismaDeclaredPreview(
@@ -490,7 +508,7 @@ async function resolveDeclaredPreviewForRun(
     return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision);
   }
   if (tool === 'drizzle') {
-    return resolveDrizzleDeclaredPreview(normalizeRefValue(run.specification?.sourceConfigPath));
+    return resolveDrizzleDeclaredPreview();
   }
   if (tool === 'prisma') {
     return resolvePrismaDeclaredPreview(run.projectId, migrationPath, revision);
@@ -900,6 +918,10 @@ export async function buildMigrationFilePreviewByRunId(
   const localDeclaredPreview = new Map<string, DeclaredMigrationPreview | null>();
   const runtimeExecutionStateByKey = new Map<string, ExecutionStateSnapshot>();
   const forceRefresh = options.forceRefresh ?? false;
+  const executionStateMode = options.executionStateMode ?? 'live';
+  const needsPlatformExecutedNames =
+    executionStateMode === 'live' &&
+    runs.some((run) => asSupportedMigrationTool(run.specification?.tool) === 'sql');
 
   const databaseIds = Array.from(
     new Set(
@@ -908,7 +930,9 @@ export async function buildMigrationFilePreviewByRunId(
         .filter((databaseId): databaseId is string => Boolean(databaseId))
     )
   );
-  const platformExecutedByDatabase = await loadPlatformExecutedNamesByDatabase(databaseIds);
+  const platformExecutedByDatabase = needsPlatformExecutedNames
+    ? await loadPlatformExecutedNamesByDatabase(databaseIds)
+    : new Map<string, Set<string>>();
 
   for (const run of runs) {
     const tool = asSupportedMigrationTool(run.specification?.tool);
@@ -938,6 +962,32 @@ export async function buildMigrationFilePreviewByRunId(
     }
 
     if (!declaredPreview) {
+      continue;
+    }
+
+    if (executionStateMode === 'run_status') {
+      previewByRunId.set(
+        run.id,
+        applyExecutionState({
+          declaredPreview,
+          executionState: resolveRunStatusExecutionState({ run, declaredPreview }) ?? {
+            mode: 'unknown',
+          },
+        })
+      );
+      continue;
+    }
+
+    if (executionStateMode === 'declared_only') {
+      previewByRunId.set(
+        run.id,
+        applyExecutionState({
+          declaredPreview,
+          executionState: {
+            mode: 'unknown',
+          },
+        })
+      );
       continue;
     }
 

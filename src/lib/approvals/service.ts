@@ -116,6 +116,7 @@ export async function getApprovalsPageData(input: {
             connectionString: run.database.connectionString,
           }
         : null,
+      status: run.status,
       release: run.release
         ? {
             sourceRef: run.release.sourceRef,
@@ -127,7 +128,10 @@ export async function getApprovalsPageData(input: {
             branch: run.environment.branch,
           }
         : null,
-    }))
+    })),
+    {
+      executionStateMode: 'run_status',
+    }
   );
 
   const data = buildApprovalsPageData({

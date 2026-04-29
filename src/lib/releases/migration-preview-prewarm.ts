@@ -62,5 +62,6 @@ export async function prewarmReleaseMigrationPreviewCache(
 
   await buildMigrationFilePreviewByRunId(runs, {
     forceRefresh: true,
+    executionStateMode: 'declared_only',
   });
 }

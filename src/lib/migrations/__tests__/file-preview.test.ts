@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildMigrationFilePreviewByRunId,
   type MigrationFilePreviewSnapshot,
   resolveMigrationPendingState,
 } from '@/lib/migrations/file-preview';
@@ -49,5 +50,44 @@ describe('migration file preview pending state', () => {
     };
 
     expect(resolveMigrationPendingState(preview)).toBe('pending');
+  });
+
+  it('uses persisted run status for read-model drizzle previews', async () => {
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-success',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle' },
+          status: 'success',
+        },
+        {
+          id: 'run-queued',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle' },
+          status: 'queued',
+        },
+      ],
+      { executionStateMode: 'run_status' }
+    );
+
+    expect(previewByRunId.get('run-success')).toEqual({
+      sourceLabel: 'Desired schema',
+      files: [],
+      total: 0,
+      declaredTotal: 1,
+      executedTotal: 1,
+      truncated: false,
+      warning: null,
+    });
+    expect(previewByRunId.get('run-queued')).toEqual({
+      sourceLabel: 'Desired schema',
+      files: ['desired-schema.sql'],
+      total: 1,
+      declaredTotal: 1,
+      executedTotal: 0,
+      truncated: false,
+      warning: null,
+    });
   });
 });
