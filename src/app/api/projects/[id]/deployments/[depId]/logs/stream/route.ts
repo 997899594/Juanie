@@ -10,6 +10,7 @@ import {
   loadDeploymentRealtimeSummary,
   loadScopedDeploymentRealtimeLogs,
 } from '@/lib/realtime/deployments';
+import { createSafeSSEWriter, sseResponseHeaders } from '@/lib/realtime/sse';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,8 +47,7 @@ export async function GET(
 
     const stream = new ReadableStream({
       async start(controller) {
-        const encoder = new TextEncoder();
-        let closed = false;
+        const sse = createSafeSSEWriter(controller);
         let unsubscribe: (() => Promise<void>) | null = null;
         let pollingTimer: ReturnType<typeof setInterval> | null = null;
         let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -55,13 +55,10 @@ export async function GET(
         let sentCount = 0;
 
         const sendEvent = (data: object) => {
-          if (closed) return;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          sse.send(data);
         };
 
         const close = () => {
-          if (closed) return;
-          closed = true;
           if (pollingTimer) {
             clearInterval(pollingTimer);
             pollingTimer = null;
@@ -70,7 +67,7 @@ export async function GET(
             clearInterval(heartbeatTimer);
             heartbeatTimer = null;
           }
-          controller.close();
+          sse.close();
         };
 
         const runSerialized = (task: () => Promise<void>) => {
@@ -198,11 +195,7 @@ export async function GET(
     });
 
     return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
+      headers: sseResponseHeaders,
     });
   } catch (error) {
     if (isAccessError(error)) {

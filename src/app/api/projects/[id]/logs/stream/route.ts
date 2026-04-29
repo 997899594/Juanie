@@ -7,6 +7,7 @@ import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
 import { getK8sClient, isK8sAvailable } from '@/lib/k8s';
+import { createSafeSSEWriter } from '@/lib/realtime/sse';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,28 +39,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return new Response('Kubernetes not connected', { status: 503 });
     }
 
-    const encoder = new TextEncoder();
-    let closed = false;
-
     const stream = new ReadableStream({
       async start(controller) {
+        const sse = createSafeSSEWriter(controller);
         const send = (data: object) => {
-          if (closed) return;
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          } catch {
-            // controller already closed
-          }
+          sse.send(data);
         };
 
         const close = () => {
-          if (closed) return;
-          closed = true;
-          try {
-            controller.close();
-          } catch {
-            // already closed
-          }
+          sse.close();
         };
 
         send({ type: 'connected', pod: podName, namespace: env.namespace });
