@@ -5,6 +5,7 @@ import { listAIPluginsForTeam } from '@/lib/ai/runtime/plugin-registry';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDetailPageData } from '@/lib/releases/service';
 
 export default async function EnvironmentDeliveryDetailPage({
@@ -43,7 +44,7 @@ export default async function EnvironmentDeliveryDetailPage({
 
   const releaseEnvironmentId = pageData.release.environment?.id ?? pageData.release.environmentId;
   if (releaseEnvironmentId !== envId) {
-    notFound();
+    redirect(buildReleaseDetailPath(id, releaseEnvironmentId, releaseId));
   }
 
   const dynamicPluginPanels = await listAIPluginsForTeam(project.teamId).then((plugins) => {

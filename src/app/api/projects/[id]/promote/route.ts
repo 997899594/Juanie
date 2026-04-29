@@ -14,6 +14,7 @@ import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/
 import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
@@ -169,18 +170,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             sourceCommitSha: promotedRelease.sourceCommitSha,
           })
         : null;
+    const promotedReleaseEnvironmentId =
+      promotedRelease?.environmentId ?? promotion.targetEnvironment.id;
 
     return NextResponse.json(
       {
         success: true,
         releaseId: promotedRelease?.id,
+        releasePath: promotedRelease?.id
+          ? buildReleaseDetailPath(id, promotedReleaseEnvironmentId, promotedRelease.id)
+          : null,
         artifacts: promotedRelease?.artifacts.map((artifact) => ({
           service: artifact.service.name,
           imageUrl: artifact.imageUrl,
         })),
         commitSha: sourceRelease.sourceCommitSha,
         promotionFlowId: promotion.flow?.id ?? null,
-        targetEnvironmentId: promotion.targetEnvironment.id,
+        targetEnvironmentId: promotedReleaseEnvironmentId,
         targetEnvironmentName: promotion.targetEnvironment.name,
         tagName,
       },

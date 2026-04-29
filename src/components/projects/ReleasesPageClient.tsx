@@ -147,6 +147,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
       );
       setPromoteDialogOpen(false);
+      if (data.releasePath) {
+        router.push(data.releasePath);
+        return;
+      }
+
       if (data.releaseId && data.targetEnvironmentId) {
         router.push(buildReleaseDetailPath(projectId, data.targetEnvironmentId, data.releaseId));
         return;

@@ -188,6 +188,7 @@ export interface DeploymentRolloutPlanResponse {
 export interface PromoteReleaseResponse {
   success: boolean;
   releaseId?: string;
+  releasePath?: string | null;
   tagName?: string | null;
   promotionFlowId?: string | null;
   targetEnvironmentId?: string | null;
