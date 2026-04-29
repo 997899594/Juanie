@@ -1,6 +1,18 @@
 import { existsSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
+import {
+  describeDeploymentPodIssues,
+  formatPodWarningEvent,
+  getEventTimestamp,
+  getPodStatusMessage,
+  isReadinessWarning,
+} from '@/lib/k8s/pod-diagnostics';
+import {
+  buildServiceVerificationScript,
+  buildVerificationPodName,
+  SERVICE_VERIFY_IMAGE,
+} from '@/lib/k8s/service-verification';
 import { logger } from '@/lib/logger';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
@@ -1410,85 +1422,6 @@ export interface DeploymentSnapshot {
   memoryLimit?: string;
 }
 
-function getContainerWaitingMessage(containerStatus?: k8s.V1ContainerStatus): string | null {
-  const waiting = containerStatus?.state?.waiting;
-  if (!waiting) {
-    return null;
-  }
-
-  return waiting.message
-    ? `${waiting.reason ?? 'Waiting'}: ${waiting.message}`
-    : (waiting.reason ?? 'Waiting');
-}
-
-function getContainerTerminatedMessage(containerStatus?: k8s.V1ContainerStatus): string | null {
-  const terminated = containerStatus?.state?.terminated;
-  if (!terminated) {
-    return null;
-  }
-
-  return terminated.message
-    ? `${terminated.reason ?? 'Terminated'}: ${terminated.message}`
-    : (terminated.reason ?? 'Terminated');
-}
-
-function describeDeploymentPodIssues(pods: k8s.V1Pod[]): string | null {
-  for (const pod of pods) {
-    const statuses = pod.status?.containerStatuses ?? [];
-
-    for (const status of statuses) {
-      const waitingMessage = getContainerWaitingMessage(status);
-      if (
-        waitingMessage &&
-        ['ImagePullBackOff', 'ErrImagePull', 'CrashLoopBackOff', 'CreateContainerConfigError'].some(
-          (reason) => waitingMessage.includes(reason)
-        )
-      ) {
-        return `${pod.metadata?.name ?? 'pod'} · ${waitingMessage}`;
-      }
-
-      const terminatedMessage = getContainerTerminatedMessage(status);
-      if (terminatedMessage) {
-        return `${pod.metadata?.name ?? 'pod'} · ${terminatedMessage}`;
-      }
-    }
-  }
-
-  return null;
-}
-
-function getEventTimestamp(event: k8s.CoreV1Event): number {
-  const timestamp = event.eventTime ?? event.lastTimestamp ?? event.firstTimestamp;
-  if (!timestamp) {
-    return 0;
-  }
-
-  const value = new Date(timestamp).getTime();
-  return Number.isNaN(value) ? 0 : value;
-}
-
-function formatPodWarningEvent(event: k8s.CoreV1Event): string {
-  const reason = event.reason ?? 'Warning';
-  if (!event.message) {
-    return reason;
-  }
-
-  return `${reason}: ${event.message}`;
-}
-
-function isReadinessWarning(event: k8s.CoreV1Event): boolean {
-  const reason = event.reason ?? '';
-  const message = event.message ?? '';
-  const text = `${reason} ${message}`;
-  return [
-    'Unhealthy',
-    'Readiness probe failed',
-    'Liveness probe failed',
-    'Startup probe failed',
-    'Back-off restarting failed container',
-  ].some((keyword) => text.includes(keyword));
-}
-
 async function describeDeploymentEventIssues(
   namespace: string,
   pods: k8s.V1Pod[]
@@ -1596,48 +1529,8 @@ export async function waitForDeploymentReady(input: {
   throw new Error(lastObservedIssue ?? `Deployment ${input.name} rollout timed out`);
 }
 
-function normalizeServiceVerificationPath(path: string): string {
-  if (!path.startsWith('/')) {
-    return `/${path}`;
-  }
-
-  return path;
-}
-
-const SERVICE_VERIFY_IMAGE = 'curlimages/curl:8.7.1';
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function buildVerificationPodName(serviceName: string): string {
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${serviceName}-verify-${suffix}`.replace(/[^a-z0-9-]/g, '-').slice(0, 63);
-}
-
-function getPodStatusMessage(pod: k8s.V1Pod): string | null {
-  const statuses = [
-    ...(pod.status?.initContainerStatuses ?? []),
-    ...(pod.status?.containerStatuses ?? []),
-  ];
-
-  for (const status of statuses) {
-    const waitingMessage = getContainerWaitingMessage(status);
-    if (waitingMessage) {
-      return waitingMessage;
-    }
-
-    const terminatedMessage = getContainerTerminatedMessage(status);
-    if (terminatedMessage) {
-      return terminatedMessage;
-    }
-  }
-
-  return pod.status?.message ?? pod.status?.reason ?? null;
 }
 
 async function waitForPodCompletion(input: {
@@ -1687,31 +1580,14 @@ export async function verifyServiceReachability(input: {
   const attemptCount = Math.max(1, Math.ceil(timeoutMs / pollMs));
   const sleepSeconds = Math.max(1, Math.ceil(pollMs / 1000));
   const requestTimeoutSeconds = Math.max(1, Math.ceil(requestTimeoutMs / 1000));
-  const normalizedPaths = input.paths.map(normalizeServiceVerificationPath);
-  const verificationCommands = normalizedPaths.map((path) =>
-    [
-      `last_error=''`,
-      `attempt=1`,
-      `while [ "$attempt" -le ${attemptCount} ]; do`,
-      `  if code=$(curl --silent --show-error --output /tmp/verify-body --write-out '%{http_code}' --max-time ${requestTimeoutSeconds} ${shellQuote(`http://${input.serviceName}:${input.port}${path}`)} 2>/tmp/verify-error); then`,
-      `    if [ "$code" -lt 400 ]; then`,
-      `      break`,
-      `    fi`,
-      `    last_error=${shellQuote(`${path} returned `)}"$code"`,
-      `  else`,
-      `    last_error=$(cat /tmp/verify-error 2>/dev/null || true)`,
-      `    [ -n "$last_error" ] || last_error='request failed'`,
-      `  fi`,
-      `  if [ "$attempt" -eq ${attemptCount} ]; then`,
-      `    echo "$last_error" >&2`,
-      `    exit 1`,
-      `  fi`,
-      `  attempt=$((attempt + 1))`,
-      `  sleep ${sleepSeconds}`,
-      `done`,
-    ].join('\n')
-  );
-  const script = ['set -eu', ...verificationCommands, 'echo verification_ok'].join('\n');
+  const script = buildServiceVerificationScript({
+    serviceName: input.serviceName,
+    port: input.port,
+    paths: input.paths,
+    attemptCount,
+    sleepSeconds,
+    requestTimeoutSeconds,
+  });
 
   await core.createNamespacedPod({
     namespace: input.namespace,
