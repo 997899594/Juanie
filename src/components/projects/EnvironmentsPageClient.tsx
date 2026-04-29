@@ -47,7 +47,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
-import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
 import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
@@ -753,7 +752,6 @@ function EnvironmentOverviewPanel({
   initialMigrationReview,
   initialEnvvarRisk,
   initialTaskCenter,
-  initialDynamicPluginPanels,
   runtimeAction,
 }: {
   projectId: string;
@@ -766,10 +764,6 @@ function EnvironmentOverviewPanel({
   initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
   initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
-  initialDynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
-  }>;
   runtimeAction?: ReactNode;
 }) {
   const [variableSummary, setVariableSummary] = useState('变量状态加载中');
@@ -934,7 +928,6 @@ function EnvironmentOverviewPanel({
         initialMigrationReview={initialMigrationReview}
         initialEnvvarRisk={initialEnvvarRisk}
         initialTaskCenter={initialTaskCenter}
-        initialDynamicPluginPanels={initialDynamicPluginPanels}
       />
 
       <section>
@@ -991,7 +984,6 @@ function EnvironmentExpandedContent({
   initialMigrationReview,
   initialEnvvarRisk,
   initialTaskCenter,
-  initialDynamicPluginPanels,
   runtimeAction,
 }: {
   projectId: string;
@@ -1004,10 +996,6 @@ function EnvironmentExpandedContent({
   initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
   initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
-  initialDynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
-  }>;
   runtimeAction?: ReactNode;
 }) {
   return (
@@ -1020,7 +1008,6 @@ function EnvironmentExpandedContent({
       initialMigrationReview={initialMigrationReview}
       initialEnvvarRisk={initialEnvvarRisk}
       initialTaskCenter={initialTaskCenter}
-      initialDynamicPluginPanels={initialDynamicPluginPanels}
       runtimeAction={runtimeAction}
     />
   );
@@ -1035,10 +1022,6 @@ interface EnvironmentsPageClientProps {
   initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
   initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
-  initialDynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
-  }>;
   initialData: {
     governance: {
       roleLabel: string;
@@ -1086,7 +1069,6 @@ export function EnvironmentsPageClient({
   initialMigrationReview,
   initialEnvvarRisk,
   initialTaskCenter,
-  initialDynamicPluginPanels,
   initialData,
 }: EnvironmentsPageClientProps) {
   const [environments, setEnvironments] = useState(initialData.environments);
@@ -1328,7 +1310,6 @@ export function EnvironmentsPageClient({
               initialMigrationReview={initialMigrationReview}
               initialEnvvarRisk={initialEnvvarRisk}
               initialTaskCenter={initialTaskCenter}
-              initialDynamicPluginPanels={initialDynamicPluginPanels}
               runtimeAction={renderRuntimeAction(focusedEnvironment)}
             />
           ) : (

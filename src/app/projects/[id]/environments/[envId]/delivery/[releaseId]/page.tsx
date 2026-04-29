@@ -1,7 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
 import { ReleaseDetailDashboard } from '@/components/projects/ReleaseDetailDashboard';
-import { listAIPluginsForTeam } from '@/lib/ai/runtime/plugin-registry';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
@@ -47,29 +46,12 @@ export default async function EnvironmentDeliveryDetailPage({
     redirect(buildReleaseDetailPath(id, releaseEnvironmentId, releaseId));
   }
 
-  const dynamicPluginPanels = await listAIPluginsForTeam(project.teamId).then((plugins) => {
-    const dynamicPlugins = plugins.filter(
-      (plugin) =>
-        plugin.manifest.kind !== 'core' &&
-        plugin.manifest.scope === 'release' &&
-        plugin.manifest.surfaces.some((surface) =>
-          ['inline-card', 'action-center', 'task-center'].includes(surface)
-        )
-    );
-
-    return dynamicPlugins.map((plugin) => ({
-      pluginId: plugin.manifest.id,
-      snapshot: null,
-    }));
-  });
-
   return (
     <ReleaseDetailDashboard
       projectId={id}
       releaseId={releaseId}
       role={member.role}
       pageData={pageData}
-      dynamicPluginPanels={dynamicPluginPanels}
       initialTaskCenter={null}
     />
   );

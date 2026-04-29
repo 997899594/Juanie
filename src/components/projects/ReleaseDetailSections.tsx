@@ -8,7 +8,6 @@ import { ReleaseAIInfoWindow } from '@/components/projects/ReleaseAIInfoWindow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
-import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
@@ -405,21 +404,12 @@ export function ReleaseExecutionSections({
   releaseId,
   role,
   release,
-  dynamicPluginPanels,
   initialTaskCenter,
 }: {
   projectId: string;
   releaseId: string;
   role: TeamRole;
   release: ReleasePageData['release'];
-  dynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: Awaited<
-      ReturnType<
-        typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<DynamicPluginOutput>
-      >
-    > | null;
-  }>;
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }) {
   const releaseActions = buildReleaseEnvironmentActionSnapshot(role, release.environment);
@@ -571,7 +561,6 @@ export function ReleaseExecutionSections({
           releaseId={releaseId}
           canManageActions={releaseActions.canManage}
           disabledSummary={releaseActions.summary}
-          dynamicPluginPanels={dynamicPluginPanels}
           initialTaskCenter={initialTaskCenter}
         >
           <div className="grid gap-3 md:grid-cols-2">

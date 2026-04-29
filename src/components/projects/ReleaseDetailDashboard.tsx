@@ -10,7 +10,6 @@ import {
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
@@ -22,14 +21,6 @@ interface ReleaseDetailDashboardProps {
   releaseId: string;
   role: TeamRole;
   pageData: NonNullable<Awaited<ReturnType<typeof getReleaseDetailPageData>>>;
-  dynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: Awaited<
-      ReturnType<
-        typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<DynamicPluginOutput>
-      >
-    > | null;
-  }>;
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }
 
@@ -38,7 +29,6 @@ export function ReleaseDetailDashboard({
   releaseId,
   role,
   pageData,
-  dynamicPluginPanels,
   initialTaskCenter,
 }: ReleaseDetailDashboardProps) {
   const { release, previousReleaseLink, sourceReleaseLink } = pageData;
@@ -99,7 +89,6 @@ export function ReleaseDetailDashboard({
           releaseId={releaseId}
           role={role}
           release={release}
-          dynamicPluginPanels={dynamicPluginPanels}
           initialTaskCenter={initialTaskCenter}
         />
       </div>

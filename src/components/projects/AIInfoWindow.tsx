@@ -54,7 +54,7 @@ export function AIInfoWindow(input: {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            AI 信息窗
+            AI 总结
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant={tone.variant} className="rounded-full border-0 px-3 py-1 shadow-none">
@@ -114,7 +114,7 @@ export function AIInfoWindow(input: {
           onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
         >
           <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
-            {input.detailsTitle ?? '查看结构化分析'}
+            {input.detailsTitle ?? '查看证据与上下文'}
           </summary>
           {detailsOpen ? <div className="mt-4 space-y-4">{input.children}</div> : null}
         </details>

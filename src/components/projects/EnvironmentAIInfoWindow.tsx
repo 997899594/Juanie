@@ -4,15 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { openGlobalAIPanelWithReplay } from '@/components/layout/global-ai-panel';
 import { AIInfoWindow } from '@/components/projects/AIInfoWindow';
 import { fetchJSONWithTimeout } from '@/components/projects/ai-info-fetch';
-import { EnvironmentAISummaryPanel } from '@/components/projects/EnvironmentAISummaryPanel';
-import { EnvironmentDynamicPluginPanel } from '@/components/projects/EnvironmentDynamicPluginPanel';
-import { EnvironmentEnvvarRiskPanel } from '@/components/projects/EnvironmentEnvvarRiskPanel';
-import { EnvironmentMigrationReviewPanel } from '@/components/projects/EnvironmentMigrationReviewPanel';
 import { EnvironmentTaskCenter } from '@/components/projects/EnvironmentTaskCenter';
 import { setGlobalCopilotReplaySeed } from '@/lib/ai/copilot/context-seed';
 import { buildCopilotContextMarkdown, buildCopilotReplayPayload } from '@/lib/ai/copilot/replay';
 import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
-import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
 import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
@@ -56,10 +51,6 @@ export function EnvironmentAIInfoWindow(input: {
   initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
   initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
   initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
-  initialDynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
-  }>;
 }) {
   const [summaryPanel, setSummaryPanel] = useState(input.initialAiSummary ?? null);
   const [migrationPanel, setMigrationPanel] = useState(input.initialMigrationReview ?? null);
@@ -236,50 +227,14 @@ export function EnvironmentAIInfoWindow(input: {
       scopeLabel="当前环境"
       markdown={markdown}
       tone={bundle.tone}
-      modulesLabel={
-        input.initialDynamicPluginPanels?.length
-          ? `${input.initialDynamicPluginPanels.length + 4} 个来源`
-          : '4 个来源'
-      }
+      modulesLabel="AI 总结"
       refreshing={refreshing}
       onRefresh={() => void load(true)}
       onContinue={() => {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
-      detailsTitle="查看结构化分析"
+      detailsTitle="查看任务上下文"
       priorityChildren={showTaskCenterInline ? taskCenterElement : null}
-    >
-      {showTaskCenterInline ? null : taskCenterElement}
-      <EnvironmentAISummaryPanel
-        projectId={input.projectId}
-        environmentId={input.environmentId}
-        initialPanel={summaryPanel}
-      />
-      <section className="grid gap-3 lg:grid-cols-2">
-        <EnvironmentMigrationReviewPanel
-          projectId={input.projectId}
-          environmentId={input.environmentId}
-          initialPanel={migrationPanel}
-        />
-        <EnvironmentEnvvarRiskPanel
-          projectId={input.projectId}
-          environmentId={input.environmentId}
-          initialPanel={envvarPanel}
-        />
-      </section>
-      {input.initialDynamicPluginPanels && input.initialDynamicPluginPanels.length > 0 ? (
-        <section className="grid gap-3 lg:grid-cols-2">
-          {input.initialDynamicPluginPanels.map((panel) => (
-            <EnvironmentDynamicPluginPanel
-              key={panel.pluginId}
-              projectId={input.projectId}
-              environmentId={input.environmentId}
-              pluginId={panel.pluginId}
-              initialPanel={panel.snapshot}
-            />
-          ))}
-        </section>
-      ) : null}
-    </AIInfoWindow>
+    />
   );
 }

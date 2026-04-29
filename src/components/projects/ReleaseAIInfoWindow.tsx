@@ -4,12 +4,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { openGlobalAIPanelWithReplay } from '@/components/layout/global-ai-panel';
 import { AIInfoWindow } from '@/components/projects/AIInfoWindow';
 import { fetchJSONWithTimeout } from '@/components/projects/ai-info-fetch';
-import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
 import { ReleaseTaskCenter } from '@/components/projects/ReleaseTaskCenter';
 import { setGlobalCopilotReplaySeed } from '@/lib/ai/copilot/context-seed';
 import { buildCopilotContextMarkdown, buildCopilotReplayPayload } from '@/lib/ai/copilot/replay';
 import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
-import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
 import type { IncidentAnalysis } from '@/lib/ai/schemas/incident-analysis';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
@@ -50,10 +48,6 @@ export function ReleaseAIInfoWindow(input: {
   releaseId: string;
   canManageActions: boolean;
   disabledSummary?: string | null;
-  dynamicPluginPanels?: Array<{
-    pluginId: string;
-    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput> | null;
-  }>;
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
   children?: ReactNode;
 }) {
@@ -210,27 +204,15 @@ export function ReleaseAIInfoWindow(input: {
       scopeLabel="当前发布"
       markdown={markdown}
       tone={bundle.tone}
-      modulesLabel={
-        input.dynamicPluginPanels?.length
-          ? `${input.dynamicPluginPanels.length + 3} 个来源`
-          : '3 个来源'
-      }
+      modulesLabel="AI 总结"
       refreshing={refreshing}
       onRefresh={() => void load(true)}
       onContinue={() => {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
-      detailsTitle="查看结构化分析"
+      detailsTitle="查看发布上下文"
       priorityChildren={showTaskCenterInline ? taskCenterElement : null}
     >
-      {showTaskCenterInline ? null : taskCenterElement}
-      <ReleaseAISnapshotPanel
-        projectId={input.projectId}
-        releaseId={input.releaseId}
-        releasePlan={planPanel}
-        incidentAnalysis={incidentPanel}
-        dynamicPluginPanels={input.dynamicPluginPanels}
-      />
       {input.children}
     </AIInfoWindow>
   );
