@@ -97,7 +97,7 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {projectCards.length === 0 ? (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] p-6 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+              <div className="console-inset flex min-h-64 flex-col items-center justify-center p-6 text-center">
                 <div className="mb-4 rounded-[18px] bg-background/80 p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -115,7 +115,7 @@ export default async function HomePage() {
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
-                    className="flex items-center justify-between rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)] transition-colors hover:bg-white/90"
+                    className="console-inset flex items-center justify-between px-4 py-3 transition-colors hover:bg-white/90"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background/90 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
@@ -151,7 +151,7 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {attentionItems.length === 0 ? (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] p-6 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+              <div className="console-inset flex min-h-64 flex-col items-center justify-center p-6 text-center">
                 <div className="mb-4 rounded-[18px] bg-background/80 p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -163,7 +163,7 @@ export default async function HomePage() {
                   <Link
                     key={run.id}
                     href={run.href}
-                    className="flex items-center justify-between rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)] transition-colors hover:bg-white/90"
+                    className="console-inset flex items-center justify-between px-4 py-3 transition-colors hover:bg-white/90"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div

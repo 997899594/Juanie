@@ -47,7 +47,7 @@ export function PageShell({
 }
 
 type PagePanelElement = 'div' | 'section' | 'article' | 'aside';
-type PagePanelVariant = 'panel' | 'surface' | 'floating' | 'card' | 'muted' | 'plain';
+type PagePanelVariant = 'panel' | 'surface' | 'floating' | 'card' | 'muted' | 'inset' | 'plain';
 type PagePanelPadding = 'none' | 'sm' | 'md' | 'lg';
 
 interface PagePanelProps {
@@ -64,6 +64,7 @@ const pagePanelVariantClassName: Record<PagePanelVariant, string> = {
   floating: 'ui-floating',
   card: 'console-card',
   muted: 'ui-control-muted',
+  inset: 'console-inset',
   plain: '',
 };
 

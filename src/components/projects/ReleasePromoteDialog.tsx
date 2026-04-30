@@ -26,8 +26,7 @@ import { formatPlatformDateTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
 const dialogPanelClassName = 'console-panel p-5 sm:p-6';
-const dialogSubtleClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const dialogSubtleClassName = 'console-inset px-4 py-3';
 
 function getStrategyLabel(
   strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null

@@ -4,11 +4,9 @@ import { Database, ExternalLink, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
-import { PageShell } from '@/components/ui/page-shell';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import {
   createDatabaseRepairPlan,
@@ -144,8 +142,7 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
 
 const shellClassName = 'console-panel px-5 py-5';
 
-const subCardClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const subCardClassName = 'console-inset px-4 py-4';
 
 export function SchemaCenterClient({
   projectId,
@@ -240,26 +237,23 @@ export function SchemaCenterClient({
       : null) ?? null;
 
   return (
-    <PageShell size="section">
-      <PageHeader
-        title={`${focusedEnvironment?.name ?? '环境'} · 数据`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {focusedEnvironment ? (
-              <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
-                <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
-                  环境
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
-
-      {focusedEnvironment ? (
-        <EnvironmentSectionNav projectId={projectId} environmentId={focusedEnvironment.id} />
-      ) : null}
-
+    <EnvironmentPageFrame
+      projectId={projectId}
+      environmentId={focusedEnvironment?.id}
+      showEnvironmentNav={Boolean(focusedEnvironment)}
+      title={`${focusedEnvironment?.name ?? '环境'} · 数据`}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          {focusedEnvironment ? (
+            <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
+              <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
+                环境
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      }
+    >
       <div className={shellClassName}>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className={subCardClassName}>
@@ -503,7 +497,7 @@ export function SchemaCenterClient({
                     </div>
 
                     {repairPlan && repairSummary ? (
-                      <div className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
+                      <div className="console-inset mt-4 px-4 py-3">
                         <div className="text-sm font-medium text-foreground">处理建议</div>
                         <div className="mt-1 text-sm text-muted-foreground">{repairSummary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -520,7 +514,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
+                      <div className="console-inset mt-4 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
                           <Badge variant="secondary">
@@ -540,7 +534,7 @@ export function SchemaCenterClient({
                             {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
                               <div
                                 key={`${database.id}-schema-center-artifact-${file}`}
-                                className="rounded-[14px] bg-[rgba(243,240,233,0.58)] px-4 py-3"
+                                className="console-surface rounded-[14px] px-4 py-3"
                               >
                                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {file}
@@ -556,7 +550,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
+                      <details className="console-inset mt-4 px-4 py-3">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>
@@ -572,6 +566,6 @@ export function SchemaCenterClient({
           </section>
         ))}
       </div>
-    </PageShell>
+    </EnvironmentPageFrame>
   );
 }

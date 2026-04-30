@@ -10,10 +10,14 @@ interface EnvironmentPageFrameProps {
   environmentId?: string | null;
   title: string;
   description?: string;
+  eyebrow?: string;
+  meta?: ReactNode;
   actions?: ReactNode;
+  beforeHeader?: ReactNode;
   children: ReactNode;
   className?: string;
   size?: PageShellSize;
+  showEnvironmentNav?: boolean;
 }
 
 export function EnvironmentPageFrame({
@@ -21,15 +25,28 @@ export function EnvironmentPageFrame({
   environmentId,
   title,
   description,
+  eyebrow,
+  meta,
   actions,
+  beforeHeader,
   children,
   className,
   size = 'section',
+  showEnvironmentNav = true,
 }: EnvironmentPageFrameProps) {
   return (
     <PageShell size={size} className={className}>
-      <PageHeader title={title} description={description} actions={actions} />
-      <EnvironmentSectionNav projectId={projectId} environmentId={environmentId} />
+      {beforeHeader}
+      <PageHeader
+        title={title}
+        description={description}
+        eyebrow={eyebrow}
+        meta={meta}
+        actions={actions}
+      />
+      {showEnvironmentNav ? (
+        <EnvironmentSectionNav projectId={projectId} environmentId={environmentId} />
+      ) : null}
       {children}
     </PageShell>
   );

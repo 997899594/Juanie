@@ -131,7 +131,7 @@ interface ManualReleaseDialogProps {
 }
 
 const dialogPanelClassName = 'console-panel p-5 sm:p-6';
-const dialogSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
+const dialogSubtleClassName = 'console-inset px-4 py-3';
 
 export function ManualReleaseDialog({
   projectId,
@@ -300,7 +300,7 @@ export function ManualReleaseDialog({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.16fr)_minmax(380px,0.84fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-4 py-3 text-sm text-muted-foreground">
+                <div className="console-inset rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}

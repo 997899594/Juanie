@@ -49,7 +49,7 @@ export function AIInfoWindow(input: {
   const tone = getToneBadge(input.tone);
 
   return (
-    <section className="rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,241,0.94))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_24px_60px_rgba(55,53,47,0.06)]">
+    <section className="console-panel px-5 py-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -90,7 +90,7 @@ export function AIInfoWindow(input: {
       {input.compactSummary ? (
         <div className="mt-4 text-sm text-[rgba(15,23,42,0.56)]">{input.compactSummary}</div>
       ) : (
-        <div className="mt-5 rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-5">
+        <div className="console-inset mt-5 rounded-[20px] px-5 py-5">
           <div className="text-sm leading-7 text-[rgba(15,23,42,0.86)]">
             <StreamdownMessage content={input.markdown} />
           </div>
@@ -101,7 +101,7 @@ export function AIInfoWindow(input: {
 
       {input.children ? (
         <details
-          className="mt-5 rounded-[20px] bg-[rgba(15,23,42,0.03)] px-4 py-4"
+          className="console-inset mt-5 rounded-[20px] px-4 py-4"
           open={detailsOpen}
           onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
         >

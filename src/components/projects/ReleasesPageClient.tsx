@@ -5,14 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
-import { PageShell } from '@/components/ui/page-shell';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
@@ -370,57 +368,50 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   });
 
   return (
-    <PageShell size="section">
-      <PageHeader
-        title={`${selectedEnvironment?.name ?? '环境'} · 发布`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusIndicator
-              status={isConnected ? 'success' : 'neutral'}
-              label={isConnected ? '在线' : '离线'}
-              pulse={isConnected}
-            />
-            <ManualReleaseDialog
-              projectId={projectId}
-              environments={manageableEnvironments}
-              releases={manualReleaseSources}
-              disabledSummary={governance.primarySummary}
-              onCreated={async () => {
-                router.refresh();
-              }}
-            />
-            {hasPromotionTarget && (
-              <Button
-                size="sm"
-                className="h-9 px-4"
-                onClick={() => setPromoteDialogOpen(true)}
-                disabled={promoting || !governance.promotion.allowed}
-                title={promoteButtonTitle}
-              >
-                <ArrowUpCircle className="h-3.5 w-3.5" />
-                {promoting ? '创建中...' : '提升发布'}
-              </Button>
-            )}
-            {selectedEnvironment ? (
-              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-                <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}>
-                  返回环境
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
-
-      {selectedEnvironment ? (
-        <EnvironmentSectionNav projectId={projectId} environmentId={selectedEnvironment.id} />
-      ) : null}
-
-      {error && (
-        <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
-          {error}
+    <EnvironmentPageFrame
+      projectId={projectId}
+      environmentId={selectedEnvironment?.id}
+      showEnvironmentNav={Boolean(selectedEnvironment)}
+      title={`${selectedEnvironment?.name ?? '环境'} · 发布`}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusIndicator
+            status={isConnected ? 'success' : 'neutral'}
+            label={isConnected ? '在线' : '离线'}
+            pulse={isConnected}
+          />
+          <ManualReleaseDialog
+            projectId={projectId}
+            environments={manageableEnvironments}
+            releases={manualReleaseSources}
+            disabledSummary={governance.primarySummary}
+            onCreated={async () => {
+              router.refresh();
+            }}
+          />
+          {hasPromotionTarget && (
+            <Button
+              size="sm"
+              className="h-9 px-4"
+              onClick={() => setPromoteDialogOpen(true)}
+              disabled={promoting || !governance.promotion.allowed}
+              title={promoteButtonTitle}
+            >
+              <ArrowUpCircle className="h-3.5 w-3.5" />
+              {promoting ? '创建中...' : '提升发布'}
+            </Button>
+          )}
+          {selectedEnvironment ? (
+            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+              <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}>
+                返回环境
+              </Link>
+            </Button>
+          ) : null}
         </div>
-      )}
+      }
+    >
+      {error && <div className="console-inset px-4 py-3 text-sm text-foreground">{error}</div>}
 
       <ReleasePromoteDialog
         open={promoteDialogOpen}
@@ -474,7 +465,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                     key={
                       plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
                     }
-                    className="rounded-2xl bg-secondary/72 px-3 py-2.5 text-sm text-foreground"
+                    className="console-inset px-3 py-2.5 text-sm text-foreground"
                   >
                     {`${plan.sourceEnvironment?.name ?? '来源环境'} -> ${plan.targetEnvironment?.name ?? '当前环境'}`}
                   </div>
@@ -501,7 +492,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                     key={
                       plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
                     }
-                    className="rounded-2xl bg-secondary/72 px-3 py-2.5 text-sm text-foreground"
+                    className="console-inset px-3 py-2.5 text-sm text-foreground"
                   >
                     {`${plan.sourceEnvironment?.name ?? '当前环境'} -> ${plan.targetEnvironment?.name ?? '目标环境'}`}
                   </div>
@@ -564,6 +555,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           )}
         </div>
       </div>
-    </PageShell>
+    </EnvironmentPageFrame>
   );
 }

@@ -90,8 +90,6 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
     return email[0]?.toUpperCase() ?? '?';
   };
   const shellClassName = 'console-panel';
-  const subtleClassName =
-    'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.78),rgba(255,255,255,0.88))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.03)]';
 
   return (
     <div className="space-y-6">
@@ -111,7 +109,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className={`${subtleClassName} rounded-[20px] px-4 py-3`}>
+          <div key={stat.label} className="console-inset rounded-[20px] px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -168,7 +166,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                 <FormLabel htmlFor="user-email">邮箱地址</FormLabel>
                 <div
                   id="user-email"
-                  className="rounded-[18px] bg-[rgba(243,240,233,0.72)] px-4 py-3 text-sm text-muted-foreground"
+                  className="console-inset px-4 py-3 text-sm text-muted-foreground"
                 >
                   {user.email}
                 </div>
@@ -199,15 +197,12 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         </div>
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
-            <div className="flex min-h-40 items-center justify-center rounded-[18px] bg-[rgba(243,240,233,0.66)] text-sm text-muted-foreground">
+            <div className="console-inset flex min-h-40 items-center justify-center text-sm text-muted-foreground">
               暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (
-              <div
-                key={integration.id}
-                className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset,0_0_0_1px_rgba(17,17,17,0.028)]"
-              >
+              <div key={integration.id} className="console-inset px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.provider}</div>

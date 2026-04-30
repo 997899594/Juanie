@@ -80,7 +80,7 @@ export function AITaskDetailDialog(input: {
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
                     输入
                   </div>
-                  <div className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-4 text-sm leading-7 text-foreground">
+                  <div className="console-inset rounded-[20px] px-5 py-4 text-sm leading-7 text-foreground">
                     {task.inputSummary}
                   </div>
                 </section>

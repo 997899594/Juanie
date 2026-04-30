@@ -36,7 +36,7 @@ type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
 const shellClassName = 'console-panel px-5 py-5';
 
-const subCardClassName = 'rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4';
+const subCardClassName = 'console-inset rounded-[16px] px-4 py-4';
 
 interface LogsPageClientProps {
   projectId: string;

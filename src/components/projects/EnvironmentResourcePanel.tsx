@@ -112,8 +112,7 @@ interface EnvironmentResourcePanelProps {
 type ResourceType = 'diagnostics' | 'pods' | 'services' | 'deployments' | 'events';
 
 const resourceShellClassName = 'console-panel px-5 py-5';
-const resourceSubtleClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const resourceSubtleClassName = 'console-inset px-4 py-4';
 const resourceEyebrowClassName =
   'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
 

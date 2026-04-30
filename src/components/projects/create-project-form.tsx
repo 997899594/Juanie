@@ -195,7 +195,7 @@ function getPillChoiceClass(selected: boolean, disabled = false): string {
 
 const reviewShellClassName = 'console-panel px-5 py-5';
 
-const reviewSubtleClassName = 'rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4';
+const reviewSubtleClassName = 'console-inset rounded-[16px] px-4 py-4';
 
 interface SectionHeadingProps {
   title: string;
@@ -709,7 +709,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
   return (
     <div className="w-full">
-      <div className="mb-8 rounded-[24px] bg-[rgba(251,250,248,0.72)] px-2 py-2">
+      <div className="console-panel mb-8 px-2 py-2">
         <div className="mb-3 flex items-center justify-between gap-3 px-2">
           <div>
             <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -1190,7 +1190,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="mt-5 space-y-3">
                 {formData.initialVariables.length === 0 ? (
-                  <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-6">
+                  <div className="console-inset px-4 py-6">
                     <EmptyState
                       icon={<Shield className="h-5 w-5 opacity-40" />}
                       title="没有启动变量"
@@ -1354,7 +1354,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               onToggle={() => setReviewVariablesOpen((current) => !current)}
             >
               {readyInitialVariables.length === 0 ? (
-                <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
+                <div className="console-card overflow-hidden">
                   <EmptyState title="没有预置启动变量" className="min-h-32 rounded-none" />
                 </div>
               ) : (
@@ -1362,7 +1362,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   {readyInitialVariables.map((variable) => (
                     <div
                       key={variable._id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-3"
+                      className="console-inset flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-3"
                     >
                       <div className="font-mono text-sm font-medium">
                         {normalizeVariableKey(variable.key)}
@@ -1382,7 +1382,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             >
               <div className="space-y-3">
                 {formData.services.length === 0 ? (
-                  <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
+                  <div className="console-card overflow-hidden">
                     <EmptyState title="没有识别到服务" className="min-h-40 rounded-none" />
                   </div>
                 ) : (
@@ -1418,7 +1418,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       {!service.disabled && (
                         <div className="mt-4 space-y-4 pl-11">
                           {service.type === 'web' && (
-                            <div className="flex items-center justify-between rounded-[14px] bg-[rgba(15,23,42,0.03)] px-4 py-3">
+                            <div className="console-inset flex items-center justify-between rounded-[14px] px-4 py-3">
                               <div>
                                 <div className="text-sm font-medium">公网入口</div>
                                 <div className="mt-1 text-xs text-muted-foreground">
@@ -1614,7 +1614,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="space-y-3">
                 {formData.databases.length === 0 ? (
-                  <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
+                  <div className="console-card overflow-hidden">
                     <EmptyState
                       icon={<Database className="h-5 w-5 opacity-40" />}
                       title="没有数据库"

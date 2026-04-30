@@ -19,10 +19,7 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
         <PlatformSignalChipList chips={governance.signals} />
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {governance.capabilities.map((capability) => (
-            <div
-              key={capability.key}
-              className="rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]"
-            >
+            <div key={capability.key} className="console-inset px-4 py-4">
               <div className="flex items-center gap-2">
                 <div
                   className={
@@ -40,7 +37,7 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
       </DetailsSection>
 
       <DetailsSection title="角色矩阵" className={detailsClassName}>
-        <div className="overflow-hidden rounded-[18px] bg-white/72">
+        <div className="console-card overflow-hidden">
           <div className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             <div>项目能力</div>
             <div className="text-center">Owner</div>

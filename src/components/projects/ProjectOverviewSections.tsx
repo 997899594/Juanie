@@ -90,15 +90,13 @@ export function ProjectEnvironmentIndex({
 
       <div className="space-y-3 p-3">
         {environments.length === 0 ? (
-          <div className="rounded-[18px] bg-[rgba(243,240,233,0.66)] px-5 py-8 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
-            还没有环境
-          </div>
+          <div className="console-inset px-5 py-8 text-sm text-muted-foreground">还没有环境</div>
         ) : (
           sortedEnvironments.map((environment) => (
             <Link
               key={environment.id}
               href={`/projects/${projectId}/environments/${environment.id}`}
-              className="block rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset] transition-colors hover:bg-[rgba(243,240,233,0.82)]"
+              className="console-inset block px-4 py-4 transition-colors hover:bg-white/90"
             >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">

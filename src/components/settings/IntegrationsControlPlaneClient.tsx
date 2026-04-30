@@ -15,8 +15,7 @@ export function IntegrationsControlPlaneClient({
 }: IntegrationsControlPlaneClientProps) {
   const overview = initialData.overview;
   const shellClassName = 'console-panel';
-  const subtleClassName =
-    'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+  const insetClassName = 'console-inset';
 
   return (
     <div className="space-y-6">
@@ -24,7 +23,7 @@ export function IntegrationsControlPlaneClient({
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className={`${subtleClassName} rounded-[20px]`}>
+          <div key={stat.label} className={`${insetClassName} rounded-[20px] px-4 py-3`}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -40,13 +39,13 @@ export function IntegrationsControlPlaneClient({
         <div className="space-y-2 p-3">
           {overview.integrations.length === 0 ? (
             <div
-              className={`${subtleClassName} flex min-h-40 items-center justify-center text-sm text-muted-foreground`}
+              className={`${insetClassName} flex min-h-40 items-center justify-center px-4 py-3 text-sm text-muted-foreground`}
             >
               {overview.emptySummary}
             </div>
           ) : (
             overview.integrations.map((integration) => (
-              <div key={integration.id} className={`${subtleClassName} px-4 py-4`}>
+              <div key={integration.id} className={`${insetClassName} px-4 py-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.providerLabel}</div>
@@ -66,10 +65,10 @@ export function IntegrationsControlPlaneClient({
                     : '暂无能力快照'}
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className={`${subtleClassName} px-3 py-3 text-xs text-muted-foreground`}>
+                  <div className={`${insetClassName} px-3 py-3 text-xs text-muted-foreground`}>
                     {integration.repositoryCountLabel}
                   </div>
-                  <div className={`${subtleClassName} px-3 py-3 text-xs text-muted-foreground`}>
+                  <div className={`${insetClassName} px-3 py-3 text-xs text-muted-foreground`}>
                     {integration.boundProjectsLabel}
                   </div>
                 </div>
@@ -90,13 +89,13 @@ export function IntegrationsControlPlaneClient({
           <div className="space-y-2 p-3">
             {overview.repositories.length === 0 ? (
               <div
-                className={`${subtleClassName} flex min-h-40 items-center justify-center text-sm text-muted-foreground`}
+                className={`${insetClassName} flex min-h-40 items-center justify-center px-4 py-3 text-sm text-muted-foreground`}
               >
                 暂无仓库
               </div>
             ) : (
               overview.repositories.map((repository) => (
-                <div key={repository.id} className={`${subtleClassName} px-4 py-4`}>
+                <div key={repository.id} className={`${insetClassName} px-4 py-4`}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{repository.fullName}</div>
@@ -137,15 +136,15 @@ export function IntegrationsControlPlaneClient({
           <div className="space-y-2 p-3">
             {overview.teamScopes.length === 0 ? (
               <div
-                className={`${subtleClassName} flex min-h-40 items-center justify-center text-sm text-muted-foreground`}
+                className={`${insetClassName} flex min-h-40 items-center justify-center px-4 py-3 text-sm text-muted-foreground`}
               >
                 暂无团队
               </div>
             ) : (
               overview.teamScopes.map((team) => (
-                <div key={team.id} className={`${subtleClassName} px-4 py-4`}>
+                <div key={team.id} className={`${insetClassName} px-4 py-4`}>
                   <div className="flex items-center gap-3">
-                    <div className="rounded-[18px] bg-white/82 p-3 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
+                    <div className="console-card p-3">
                       <FolderGit2 className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="min-w-0">

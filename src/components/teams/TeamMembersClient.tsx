@@ -465,7 +465,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
 
       <div className="grid gap-2 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-4">
+          <div key={stat.label} className="console-inset rounded-[20px] px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>

@@ -374,7 +374,7 @@ function PreviewEnvironmentDialog({
             <FormSection className="space-y-4 px-0 py-0 shadow-none">
               {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
 
-              <div className="rounded-[24px] bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset,0_0_0_1px_rgba(17,17,17,0.028)] sm:p-5">
+              <div className="console-inset rounded-[24px] p-4 sm:p-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   <form.Field name="branch">
                     {(field) => (
@@ -728,10 +728,7 @@ function EnvironmentOverviewPanel({
         <div className={titleClassName}>主链路</div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           {mainFlowItems.map((item, index) => (
-            <div
-              key={item.key}
-              className="relative min-w-0 rounded-[18px] bg-white/70 px-4 py-4 shadow-[0_0_0_1px_rgba(17,17,17,0.04)]"
-            >
+            <div key={item.key} className="console-inset relative min-w-0 px-4 py-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {item.label}
               </div>
@@ -1155,7 +1152,7 @@ export function EnvironmentsPageClient({
                   ) : null}
                 </div>
                 {standardEnvironments.length === 0 ? (
-                  <div className="rounded-[20px] bg-[rgba(243,240,233,0.68)] px-5 py-8 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+                  <div className="console-inset rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                     暂无环境
                   </div>
                 ) : (

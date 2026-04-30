@@ -129,8 +129,7 @@ function getErrorMessage(errors: unknown[]): string | null {
 
 const shellClassName = 'console-panel px-5 py-5';
 
-const subCardClassName =
-  'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const subCardClassName = 'console-inset rounded-[16px] px-4 py-4';
 
 function EnvVarDialog({
   projectId,
@@ -571,7 +570,7 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
               </span>
             </div>
           </div>
-          <div className="overflow-hidden rounded-[18px] bg-white/72">
+          <div className="console-card overflow-hidden">
             {group.variables.map((variable) => (
               <ReadonlyEnvVarRow
                 key={variable.id}
@@ -715,7 +714,7 @@ export function EnvVarManager({
             </div>
 
             {loading ? (
-              <div className="overflow-hidden rounded-[18px] bg-white/72">
+              <div className="console-card overflow-hidden">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -751,7 +750,7 @@ export function EnvVarManager({
                 />
               </div>
             ) : (
-              <div className={cn('overflow-hidden rounded-[18px] bg-white/72')}>
+              <div className={cn('console-card overflow-hidden')}>
                 {directVars.map((v) => (
                   <EnvVarRow
                     key={v.id}
@@ -772,7 +771,7 @@ export function EnvVarManager({
         <TabsContent value="effective">
           <div className={shellClassName}>
             {loading ? (
-              <div className="overflow-hidden rounded-[18px] bg-white/72">
+              <div className="console-card overflow-hidden">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -789,7 +788,7 @@ export function EnvVarManager({
                 <p className="text-sm text-muted-foreground">没有生效变量</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-[18px] bg-white/72">
+              <div className="console-card overflow-hidden">
                 {effectiveVars.map((envVar) => (
                   <ReadonlyEnvVarRow
                     key={envVar.id}

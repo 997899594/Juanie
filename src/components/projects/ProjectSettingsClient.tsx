@@ -109,7 +109,7 @@ const postgresCapabilityOptions: Array<{
 ];
 
 const settingsPanelClassName = 'console-panel';
-const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
+const settingsSubtleClassName = 'console-inset px-4 py-3';
 
 export function ProjectSettingsClient({ projectId, initialData }: ProjectSettingsClientProps) {
   const router = useRouter();

@@ -1,6 +1,6 @@
 import { ArrowLeft, ScrollText } from 'lucide-react';
 import Link from 'next/link';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
   ReleaseDiffSection,
@@ -10,8 +10,6 @@ import {
   ReleaseTopSummarySection,
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
-import { PageShell } from '@/components/ui/page-shell';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
@@ -41,38 +39,39 @@ export function ReleaseDetailDashboard({
   const releaseTitle = getReleaseDisplayTitle(release);
 
   return (
-    <PageShell size="wide">
-      <ReleaseDetailLiveSync
-        projectId={projectId}
-        releaseId={releaseId}
-        initialStatus={release.status}
-        initialStateKey={releaseStateKey}
-      />
-      <PageHeader
-        title={releaseTitle}
-        description={release.sourceRef}
-        eyebrow="发布"
-        meta="看这次发生了什么。"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild size="sm" className="h-9 px-4">
-              <Link href={environmentLogsHref}>
-                <ScrollText className="h-3.5 w-3.5" />
-                日志
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-              <Link href={releasesHref}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                返回发布
-              </Link>
-            </Button>
-          </div>
-        }
-      />
-
-      <EnvironmentSectionNav projectId={projectId} environmentId={environmentId} />
-
+    <EnvironmentPageFrame
+      projectId={projectId}
+      environmentId={environmentId}
+      size="wide"
+      title={releaseTitle}
+      description={release.sourceRef}
+      eyebrow="发布"
+      meta="看这次发生了什么。"
+      beforeHeader={
+        <ReleaseDetailLiveSync
+          projectId={projectId}
+          releaseId={releaseId}
+          initialStatus={release.status}
+          initialStateKey={releaseStateKey}
+        />
+      }
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild size="sm" className="h-9 px-4">
+            <Link href={environmentLogsHref}>
+              <ScrollText className="h-3.5 w-3.5" />
+              日志
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+            <Link href={releasesHref}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              返回发布
+            </Link>
+          </Button>
+        </div>
+      }
+    >
       <ReleaseTopSummarySection release={release} />
 
       <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
@@ -94,6 +93,6 @@ export function ReleaseDetailDashboard({
         release={release}
         initialTaskCenter={initialTaskCenter}
       />
-    </PageShell>
+    </EnvironmentPageFrame>
   );
 }

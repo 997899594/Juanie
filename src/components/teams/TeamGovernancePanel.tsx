@@ -6,8 +6,7 @@ interface TeamGovernancePanelProps {
   governance: TeamGovernanceSnapshot;
 }
 
-const detailsClassName =
-  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+const detailsClassName = 'console-inset px-4 py-3';
 
 function GovernanceMatrix(props: {
   title: string;
@@ -53,10 +52,7 @@ function GovernanceCapabilityGrid(props: {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {props.items.map((item) => (
-        <div
-          key={item.key}
-          className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]"
-        >
+        <div key={item.key} className="console-inset px-4 py-3">
           <div className="flex items-center gap-2">
             <div
               className={

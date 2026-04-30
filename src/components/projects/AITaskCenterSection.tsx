@@ -34,7 +34,7 @@ export function AITaskCenterSection<TTask extends AITaskCenterItem>(input: {
   const [selectedTask, setSelectedTask] = useState<TTask | null>(null);
 
   return (
-    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)]">
+    <section className="console-panel px-5 py-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
@@ -62,7 +62,7 @@ export function AITaskCenterSection<TTask extends AITaskCenterItem>(input: {
           {input.tasks.map((task) => (
             <div
               key={task.id}
-              className="flex flex-col gap-3 rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between"
+              className="console-inset flex flex-col gap-3 px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

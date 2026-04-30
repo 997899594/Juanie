@@ -37,8 +37,7 @@ function getRolloutActionLabel(strategyLabel?: string | null): string {
 }
 
 const dialogPanelClassName = 'console-panel p-5 sm:p-6';
-const dialogSubtleClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const dialogSubtleClassName = 'console-inset px-4 py-3';
 
 export function DeploymentRolloutAction({
   projectId,
@@ -127,7 +126,7 @@ export function DeploymentRolloutAction({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)]">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="rounded-[20px] bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+                <div className="console-inset rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
