@@ -103,18 +103,19 @@ Worker 处理
 ```
 push main
     ↓
-CI quality + build web/worker/schema-runner images
+CI quality + build web/runtime images
     ↓
 CI 更新 deploy/k8s/charts/juanie/values-gitops.yaml 并提交 [skip ci]
     ↓
 Argo CD Application 同步 deploy/k8s/charts/juanie
     ↓
-PreSync schema-runner Job 执行控制面 Atlas 迁移
+PreSync schema-runner command 执行控制面 Atlas 迁移
     ↓
 Helm chart 同步 Web / Worker / Scheduler
 ```
 
 平台自身发布不再走 SSH 到服务器执行 Helm。不要恢复 `.github/scripts/deploy*.sh` 这类第二条部署路径；如需排障，优先看 Argo CD Application、PreSync Job 和 Helm chart 渲染结果。
+worker、scheduler、schema-runner 共享同一个 Bun runtime 镜像，通过 command 区分入口，避免推送/拉取重复运行时镜像。
 
 ## Code Style Guidelines
 

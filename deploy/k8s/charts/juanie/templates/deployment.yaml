@@ -140,8 +140,8 @@ spec:
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: worker
-          image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
-          imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
+          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./worker"]
           {{- if or .Values.worker.insecureSkipTlsVerify .Values.worker.runScheduler }}
           env:
@@ -209,8 +209,8 @@ spec:
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
       containers:
         - name: scheduler
-          image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
-          imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
+          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./scheduler"]
           {{- if .Values.scheduler.insecureSkipTlsVerify }}
           env:

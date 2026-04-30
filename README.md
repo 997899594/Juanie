@@ -80,9 +80,9 @@ Juanie uses one active control-plane migration flow:
 
 平台生产发布同样走 GitOps：
 
-- CI 构建镜像后只更新 `deploy/k8s/charts/juanie/values-gitops.yaml`
+- CI 构建 `web` 和共享 `runtime` 镜像后只更新 `deploy/k8s/charts/juanie/values-gitops.yaml`
 - Argo CD Application 读取 `values-prod.yaml + values-gitops.yaml` 同步 Helm chart
-- 控制面 Atlas 迁移由 chart 内的 Argo PreSync `schema-runner` Job 执行
+- 控制面 Atlas 迁移由 chart 内的 Argo PreSync Job 调用 runtime 镜像内的 `schema-runner` 执行
 - SSH 远程 Helm 部署脚本已删除，避免平台自身发布出现第二条路径
 
 Commands:

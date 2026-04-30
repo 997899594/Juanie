@@ -4,6 +4,11 @@ crds:
 
 createClusterRoles: true
 
+configs:
+  params:
+    controller.repo.server.timeout.seconds: "300"
+    reposerver.git.request.timeout: "300s"
+
 dex:
   enabled: false
 
@@ -14,21 +19,21 @@ controller:
   replicas: 1
   resources:
     requests:
-      cpu: 150m
-      memory: 256Mi
-    limits:
-      cpu: 500m
+      cpu: 250m
       memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
 
 repoServer:
   replicas: 1
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
+      cpu: 250m
       memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
 
 server:
   replicas: 1

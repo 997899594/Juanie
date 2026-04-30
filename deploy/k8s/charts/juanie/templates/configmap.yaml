@@ -31,5 +31,5 @@ data:
   AI_MODEL_PRO: {{ .Values.env.AI_MODEL_PRO | default "gpt-5.2-pro" | quote }}
   AI_MODEL_TOOL: {{ .Values.env.AI_MODEL_TOOL | default "gpt-5.2" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
-  SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.schemaRunner.repository | quote }}
-  SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.schemaRunner.tag | quote }}
+  SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.runtime.repository | quote }}
+  SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.runtime.tag | quote }}

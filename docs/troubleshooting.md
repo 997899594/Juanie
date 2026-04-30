@@ -138,6 +138,12 @@ bash deploy/k8s/scripts/init-server.sh
 
 CI 现在只更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]`，不会再 SSH 到服务器执行 Helm。
 
+如果 `juanie-platform` 是 `sync=Unknown`，且 `argocd-repo-server` 日志里出现
+`git fetch origin --tags --force --prune failed timeout`，根因通常是 Argo CD repo-server
+首次拉取平台仓库超时。不要手工改 `juanie-web` / `juanie-worker` Deployment；先按
+`deploy/k8s/infrastructure/argocd/values.yaml` 重新升级 Argo CD，让 repo-server Git timeout
+和 controller repo-server timeout 使用平台基线，然后刷新 `juanie-platform` Application。
+
 ### 6. DNS 解析问题
 
 **症状：** 域名无法解析或解析到错误 IP

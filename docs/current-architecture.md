@@ -9,7 +9,7 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | 层面 | 基线 | 原因 |
 | --- | --- | --- |
 | 包管理、测试、本地脚本 | Bun | 仓库脚本、测试与 worker 编译已经围绕 Bun 建模 |
-| worker、scheduler、schema-runner | Bun 编译产物 | 后台任务不依赖 Next standalone server，适合 Bun 主运行时 |
+| worker、scheduler、schema-runner | 同一个 Bun runtime 镜像内的编译产物 | 后台任务不依赖 Next standalone server，适合 Bun 主运行时；用 command 区分入口，避免重复镜像 |
 | Web 生产服务 | Node 24 LTS + Next standalone | 保持 Next 生产服务的官方 Node server 语义，避免把用户入口压到兼容风险上 |
 
 ## 产品主链路
@@ -43,13 +43,15 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 
 Juanie 平台自身不再通过 CI SSH 到服务器执行 Helm。当前主线是：
 
-1. CI 构建 `web`、`worker`、`schema-runner` 镜像。
+1. CI 构建 `web` 和 `runtime` 镜像。
 2. CI 更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]` GitOps 指针。
 3. `deploy/k8s/infrastructure/argocd/platform-application.yaml` 由 bootstrap 同步成 Argo CD Application。
 4. Argo CD 读取 `values-prod.yaml + values-gitops.yaml` 并同步 Helm chart。
-5. `schemaSync.enabled=true` 时，控制面 Atlas 迁移由 Argo PreSync `schema-runner` Job 执行。
+5. `schemaSync.enabled=true` 时，控制面 Atlas 迁移由 Argo PreSync Job 调用 runtime 镜像内的 `schema-runner` 执行。
 
 这条链路的真源是 Git；`.github/scripts/*` 的 SSH 部署路径已经删除，避免 CI 远程命令和 GitOps 双轨并存。
+Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-server / controller
+资源与 Git 拉取超时，重新 bootstrap 时必须带上这份基线，避免平台仓库首次拉取超时后自动同步被跳过。
 
 ## 安全与 Trace 基线
 

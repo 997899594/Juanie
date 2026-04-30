@@ -31,8 +31,8 @@ spec:
           command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
       containers:
         - name: schema-sync
-          image: "{{ .Values.images.schemaRunner.repository }}:{{ .Values.images.schemaRunner.tag }}"
-          imagePullPolicy: {{ .Values.images.schemaRunner.pullPolicy }}
+          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./schema-runner", "control-plane-apply"]
           env:
             - name: HOME

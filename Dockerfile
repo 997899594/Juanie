@@ -92,9 +92,9 @@ EXPOSE 3001
 CMD ["node", "server.js"]
 
 # ============================================
-# Stage 7: Worker Runner
+# Stage 7: Runtime Runner
 # ============================================
-FROM oven/bun:1.3.9 AS worker
+FROM oven/bun:1.3.9 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -129,10 +129,3 @@ RUN chmod +x ./scheduler
 RUN chmod +x ./schema-runner
 
 CMD ["./worker"]
-
-# ============================================
-# Stage 8: Schema Runner
-# ============================================
-FROM worker AS schema-runner
-
-CMD ["./schema-runner"]

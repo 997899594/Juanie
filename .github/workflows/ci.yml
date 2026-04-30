@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [web, worker, schema-runner]
+        target: [web, runtime]
     steps:
       - uses: actions/checkout@v4
 

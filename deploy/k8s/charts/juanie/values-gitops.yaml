@@ -3,10 +3,7 @@ images:
   web:
     repository: ghcr.io/997899594/juanie
     tag: "web-fba4a5d34278d87431949cadd6d85fc2d637833f"
-  worker:
-    repository: ghcr.io/997899594/juanie
-    tag: "worker-fba4a5d34278d87431949cadd6d85fc2d637833f"
-  schemaRunner:
+  runtime:
     repository: ghcr.io/997899594/juanie
     tag: "schema-runner-fba4a5d34278d87431949cadd6d85fc2d637833f"
 

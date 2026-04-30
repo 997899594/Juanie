@@ -18,12 +18,9 @@ images:
   web:
     repository: ${imageRepository}
     tag: "web-${sha}"
-  worker:
+  runtime:
     repository: ${imageRepository}
-    tag: "worker-${sha}"
-  schemaRunner:
-    repository: ${imageRepository}
-    tag: "schema-runner-${sha}"
+    tag: "runtime-${sha}"
 
 schemaSync:
   enabled: true
