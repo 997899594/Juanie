@@ -2,13 +2,13 @@
 images:
   web:
     repository: ghcr.io/997899594/juanie
-    tag: "web-9c1d2a95f4ea5eb992786671f5d996d6c0a25021"
+    tag: "web-fba4a5d34278d87431949cadd6d85fc2d637833f"
   worker:
     repository: ghcr.io/997899594/juanie
-    tag: "worker-9c1d2a95f4ea5eb992786671f5d996d6c0a25021"
+    tag: "worker-fba4a5d34278d87431949cadd6d85fc2d637833f"
   schemaRunner:
     repository: ghcr.io/997899594/juanie
-    tag: "schema-runner-9c1d2a95f4ea5eb992786671f5d996d6c0a25021"
+    tag: "schema-runner-fba4a5d34278d87431949cadd6d85fc2d637833f"
 
 schemaSync:
   enabled: true
