@@ -145,6 +145,8 @@ export function ReleaseAIInfoWindow(input: {
     const provider = planPanel?.providerStatus.provider ?? incidentPanel?.providerStatus.provider;
     const model =
       planPanel?.providerStatus.models.chat ?? incidentPanel?.providerStatus.models.chat;
+    const hasRealSummary =
+      !!planOutput || !!incidentOutput || (taskCenter?.actionableCount ?? 0) > 0;
 
     return {
       tone,
@@ -155,6 +157,7 @@ export function ReleaseAIInfoWindow(input: {
       highlights,
       provider,
       model,
+      compactSummary: hasRealSummary ? null : '暂无 AI 摘要，刷新后会在这里显示重点判断。',
     };
   }, [incidentPanel, planPanel, taskCenter]);
 
@@ -204,13 +207,13 @@ export function ReleaseAIInfoWindow(input: {
       scopeLabel="当前发布"
       markdown={markdown}
       tone={bundle.tone}
-      modulesLabel="AI 总结"
+      compactSummary={bundle.compactSummary}
       refreshing={refreshing}
       onRefresh={() => void load(true)}
       onContinue={() => {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
-      detailsTitle="查看发布上下文"
+      detailsTitle="展开依据"
       priorityChildren={showTaskCenterInline ? taskCenterElement : null}
     >
       {input.children}

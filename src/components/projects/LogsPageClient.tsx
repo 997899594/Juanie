@@ -178,7 +178,14 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="日志" description={selectedEnvironment?.name} />
+      <PageHeader
+        title="日志"
+        description={
+          selectedEnvironment
+            ? `${selectedEnvironment.name} · 按 Pod 查看运行日志`
+            : '按环境和 Pod 查看运行日志'
+        }
+      />
       <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
 
       <div className={shellClassName}>

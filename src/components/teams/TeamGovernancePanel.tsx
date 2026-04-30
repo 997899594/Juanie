@@ -75,14 +75,14 @@ function GovernanceCapabilityGrid(props: {
 }
 
 export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
+  const shouldShowPlatformGovernance = governance.platformCapabilities.some(
+    (capability) => capability.key !== 'preview_create' && capability.allowed
+  );
+
   return (
     <div className="space-y-4">
-      <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
-        <div className="text-sm font-medium">当前角色：{governance.roleLabel}</div>
-      </div>
-
       <DetailsSection
-        title="团队权限说明"
+        title={`团队权限 · ${governance.roleLabel}`}
         summary={governance.primarySummary}
         className={detailsClassName}
       >
@@ -91,14 +91,16 @@ export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
         <GovernanceMatrix title="团队治理" rows={governance.matrix} />
       </DetailsSection>
 
-      <DetailsSection
-        title="平台权限说明"
-        summary={governance.platformSummary}
-        className={detailsClassName}
-      >
-        <GovernanceCapabilityGrid items={governance.platformCapabilities} />
-        <GovernanceMatrix title="平台能力" rows={governance.platformMatrix} />
-      </DetailsSection>
+      {shouldShowPlatformGovernance ? (
+        <DetailsSection
+          title="平台权限"
+          summary={governance.platformSummary}
+          className={detailsClassName}
+        >
+          <GovernanceCapabilityGrid items={governance.platformCapabilities} />
+          <GovernanceMatrix title="平台能力" rows={governance.platformMatrix} />
+        </DetailsSection>
+      ) : null}
     </div>
   );
 }

@@ -95,10 +95,6 @@ export function AITaskCenterSection<TTask extends AITaskCenterItem>(input: {
             </div>
           ))}
         </div>
-      ) : !input.loading ? (
-        <div className="mt-5 rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4 text-sm text-[rgba(15,23,42,0.48)]">
-          暂无事项
-        </div>
       ) : null}
 
       <AITaskDetailDialog

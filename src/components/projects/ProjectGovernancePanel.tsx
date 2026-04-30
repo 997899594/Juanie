@@ -12,15 +12,8 @@ const detailsClassName =
 export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelProps) {
   return (
     <div className="space-y-4">
-      <div className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]">
-        <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">治理</div>
-        <div className="mt-2 text-sm font-medium text-foreground">
-          当前角色：{governance.roleLabel}
-        </div>
-      </div>
-
       <DetailsSection
-        title="权限说明"
+        title={`权限说明 · ${governance.roleLabel}`}
         summary={governance.primarySummary}
         className={detailsClassName}
       >

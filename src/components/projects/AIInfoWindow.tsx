@@ -37,8 +37,7 @@ export function AIInfoWindow(input: {
   scopeLabel: string;
   markdown: string;
   tone: AIInfoTone;
-  modulesLabel?: string | null;
-  loading?: boolean;
+  compactSummary?: string | null;
   refreshing?: boolean;
   onRefresh: () => void;
   onContinue: () => void;
@@ -63,11 +62,6 @@ export function AIInfoWindow(input: {
             <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.58)] shadow-none">
               {input.scopeLabel}
             </Badge>
-            {input.modulesLabel ? (
-              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.58)] shadow-none">
-                {input.modulesLabel}
-              </Badge>
-            ) : null}
           </div>
         </div>
 
@@ -93,17 +87,15 @@ export function AIInfoWindow(input: {
         </div>
       </div>
 
-      <div className="mt-5 rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-5">
-        {input.loading ? (
-          <div className="text-sm leading-7 text-[rgba(15,23,42,0.58)]">
-            正在整理当前页面的 AI 汇总…
-          </div>
-        ) : (
+      {input.compactSummary ? (
+        <div className="mt-4 text-sm text-[rgba(15,23,42,0.56)]">{input.compactSummary}</div>
+      ) : (
+        <div className="mt-5 rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-5">
           <div className="text-sm leading-7 text-[rgba(15,23,42,0.86)]">
             <StreamdownMessage content={input.markdown} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {input.priorityChildren ? <div className="mt-5">{input.priorityChildren}</div> : null}
 
@@ -114,7 +106,7 @@ export function AIInfoWindow(input: {
           onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
         >
           <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
-            {input.detailsTitle ?? '查看证据与上下文'}
+            {input.detailsTitle ?? '展开依据'}
           </summary>
           {detailsOpen ? <div className="mt-4 space-y-4">{input.children}</div> : null}
         </details>

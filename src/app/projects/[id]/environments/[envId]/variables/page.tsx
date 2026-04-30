@@ -29,7 +29,7 @@ export default async function ProjectEnvironmentVariablesPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeader title="变量" description={environment.name} />
+      <PageHeader title="变量" description={`${environment.name} · 管理直配、继承和服务覆盖`} />
       <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvVarManager
         projectId={id}

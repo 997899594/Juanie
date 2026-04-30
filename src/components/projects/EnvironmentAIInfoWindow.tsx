@@ -170,6 +170,11 @@ export function EnvironmentAIInfoWindow(input: {
       summaryPanel?.providerStatus.provider ?? migrationPanel?.providerStatus.provider;
     const model =
       summaryPanel?.providerStatus.models.chat ?? migrationPanel?.providerStatus.models.chat;
+    const hasRealSummary =
+      !!summaryOutput ||
+      !!migrationOutput ||
+      !!envvarOutput ||
+      (taskCenter?.actionableCount ?? 0) > 0;
 
     return {
       tone,
@@ -180,6 +185,7 @@ export function EnvironmentAIInfoWindow(input: {
       highlights,
       provider,
       model,
+      compactSummary: hasRealSummary ? null : '暂无 AI 摘要，刷新后会在这里显示重点判断。',
     };
   }, [envvarPanel, migrationPanel, summaryPanel, taskCenter]);
 
@@ -227,13 +233,13 @@ export function EnvironmentAIInfoWindow(input: {
       scopeLabel="当前环境"
       markdown={markdown}
       tone={bundle.tone}
-      modulesLabel="AI 总结"
+      compactSummary={bundle.compactSummary}
       refreshing={refreshing}
       onRefresh={() => void load(true)}
       onContinue={() => {
         openGlobalAIPanelWithReplay(replayPayload);
       }}
-      detailsTitle="查看任务上下文"
+      detailsTitle="展开依据"
       priorityChildren={showTaskCenterInline ? taskCenterElement : null}
     />
   );

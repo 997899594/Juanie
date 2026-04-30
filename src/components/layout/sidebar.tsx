@@ -6,7 +6,16 @@ import { useEffect, useState } from 'react';
 import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
-import { buildEnvironmentNavHref, environmentNav, isNavItemActive, mainNav } from './navigation';
+import {
+  buildEnvironmentNavHref,
+  buildProjectNavHref,
+  environmentNav,
+  getProjectIdFromPathname,
+  isNavItemActive,
+  isProjectNavItemActive,
+  mainNav,
+  projectNav,
+} from './navigation';
 import { UserMenu } from './user-menu';
 
 export function Sidebar() {
@@ -16,8 +25,7 @@ export function Sidebar() {
   const queryEnvironmentId =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
 
-  const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
-  const projectId = project?.projectId ?? projectIdMatch?.[1];
+  const projectId = project?.projectId ?? getProjectIdFromPathname(pathname);
   const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
   const environmentId = environmentIdMatch?.[1] ?? queryEnvironmentId;
   const isInEnvironment = !!projectId && !!environmentId;
@@ -71,10 +79,41 @@ export function Sidebar() {
             })}
           </nav>
 
+          {projectId && (
+            <div className="mt-6">
+              <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                当前项目
+              </div>
+              <nav className="space-y-1">
+                {projectNav.map((item) => {
+                  const href = buildProjectNavHref(projectId, item.href);
+                  const isActive = isProjectNavItemActive(pathname, projectId, item.href);
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
+                        isActive
+                          ? 'bg-secondary text-foreground'
+                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
+
           {isInEnvironment && projectId && environmentId && (
             <div className="mt-6">
               <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {environmentName || projectName || '环境'}
+                {environmentName || projectName || '当前环境'}
               </div>
               <nav className="space-y-1">
                 {environmentNav.map((item) => {

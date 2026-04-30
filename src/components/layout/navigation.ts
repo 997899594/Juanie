@@ -16,6 +16,8 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const mainNav: NavItem[] = [
   {
     title: '指挥台',
@@ -47,6 +49,24 @@ export const mainNav: NavItem[] = [
 export const mobileMainNav = [mainNav[0], mainNav[1], mainNav[2], mainNav[4]].filter(
   Boolean
 ) as NavItem[];
+
+export const projectNav: NavItem[] = [
+  {
+    title: '总览',
+    href: '',
+    icon: Home,
+  },
+  {
+    title: '环境',
+    href: '/environments',
+    icon: Globe,
+  },
+  {
+    title: '设置',
+    href: '/settings',
+    icon: Settings,
+  },
+] as const;
 
 export const environmentNav: NavItem[] = [
   {
@@ -95,4 +115,24 @@ export function buildEnvironmentNavHref(
   href: string
 ): string {
   return `/projects/${projectId}/environments/${environmentId}${href}`;
+}
+
+export function buildProjectNavHref(projectId: string, href: string): string {
+  return `/projects/${projectId}${href}`;
+}
+
+export function isProjectNavItemActive(pathname: string, projectId: string, href: string): boolean {
+  const baseHref = `/projects/${projectId}`;
+  const targetHref = buildProjectNavHref(projectId, href);
+
+  if (href === '') {
+    return pathname === baseHref || pathname === `${baseHref}/initializing`;
+  }
+
+  return pathname === targetHref || pathname.startsWith(`${targetHref}/`);
+}
+
+export function getProjectIdFromPathname(pathname: string): string | null {
+  const projectId = pathname.match(/\/projects\/([^/]+)/)?.[1];
+  return projectId && uuidPattern.test(projectId) ? projectId : null;
 }

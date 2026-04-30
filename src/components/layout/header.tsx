@@ -9,7 +9,16 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
-import { buildEnvironmentNavHref, environmentNav, isNavItemActive, mainNav } from './navigation';
+import {
+  buildEnvironmentNavHref,
+  buildProjectNavHref,
+  environmentNav,
+  getProjectIdFromPathname,
+  isNavItemActive,
+  isProjectNavItemActive,
+  mainNav,
+  projectNav,
+} from './navigation';
 import { UserMenu } from './user-menu';
 
 interface BreadcrumbItem {
@@ -22,12 +31,27 @@ export function Header() {
   const project = useProjectContext();
   const queryEnvironmentId =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
-  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const projectId = project?.projectId ?? getProjectIdFromPathname(pathname);
+  const shellProject = projectId
+    ? {
+        projectId,
+        projectName: project?.projectName ?? '当前项目',
+      }
+    : undefined;
+  const breadcrumbs = generateBreadcrumbs(pathname, shellProject);
   const currentTitle = breadcrumbs[breadcrumbs.length - 1]?.title ?? '首页';
-  const projectId = project?.projectId ?? null;
   const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
   const environmentId = environmentIdMatch?.[1] ?? queryEnvironmentId;
+  const mobileProjectTabs = useMemo(() => {
+    if (!projectId) {
+      return [];
+    }
+    return projectNav.map((item) => ({
+      ...item,
+      href: buildProjectNavHref(projectId, item.href),
+    }));
+  }, [projectId]);
   const mobileEnvironmentTabs = useMemo(() => {
     if (!projectId || !environmentId) {
       return [];
@@ -47,6 +71,14 @@ export function Header() {
     }
 
     return pathname === href || pathname.startsWith(`${href}/`);
+  };
+  const isMobileProjectTabActive = (href: string) => {
+    if (!projectId) {
+      return false;
+    }
+
+    const navItem = projectNav.find((item) => buildProjectNavHref(projectId, item.href) === href);
+    return navItem ? isProjectNavItemActive(pathname, projectId, navItem.href) : false;
   };
 
   return (
@@ -85,9 +117,9 @@ export function Header() {
               <Menu className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
-              {project ? (
+              {shellProject ? (
                 <div className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {project.projectName}
+                  {shellProject.projectName}
                 </div>
               ) : (
                 <BrandLockup
@@ -105,30 +137,57 @@ export function Header() {
           <UserMenu />
         </div>
 
-        {mobileEnvironmentTabs.length > 0 && (
-          <div className="overflow-x-auto px-1 pb-2.5 pt-2.5">
-            <nav className="flex min-w-max items-center gap-2">
-              {mobileEnvironmentTabs.map((item) => {
-                const Icon = item.icon;
-                const isActive = isMobileTabActive(item.href);
+        {(mobileProjectTabs.length > 0 || mobileEnvironmentTabs.length > 0) && (
+          <div className="space-y-2 overflow-x-auto px-1 pb-2.5 pt-2.5">
+            {mobileProjectTabs.length > 0 && (
+              <nav className="flex min-w-max items-center gap-2">
+                {mobileProjectTabs.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = isMobileProjectTabActive(item.href);
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
-                      isActive
-                        ? 'bg-secondary text-foreground'
-                        : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{item.title}</span>
-                  </Link>
-                );
-              })}
-            </nav>
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
+                        isActive
+                          ? 'bg-secondary text-foreground'
+                          : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
+
+            {mobileEnvironmentTabs.length > 0 && (
+              <nav className="flex min-w-max items-center gap-2">
+                {mobileEnvironmentTabs.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = isMobileTabActive(item.href);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
+                        isActive
+                          ? 'bg-foreground text-background'
+                          : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
           </div>
         )}
       </div>
@@ -180,6 +239,37 @@ export function Header() {
                   })}
                 </nav>
               </div>
+
+              {mobileProjectTabs.length > 0 && (
+                <div className="mt-6">
+                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    当前项目
+                  </div>
+                  <nav className="space-y-2">
+                    {mobileProjectTabs.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = isMobileProjectTabActive(item.href);
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
+                            isActive
+                              ? 'bg-secondary text-foreground'
+                              : 'bg-card text-foreground hover:bg-secondary'
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </div>
+              )}
 
               {mobileEnvironmentTabs.length > 0 && (
                 <div className="mt-6">

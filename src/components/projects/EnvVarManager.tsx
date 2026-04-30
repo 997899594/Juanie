@@ -683,7 +683,7 @@ export function EnvVarManager({
               生效
             </div>
             <div className="mt-2 text-lg font-semibold text-foreground">{effectiveVars.length}</div>
-            <div className="mt-1 text-sm text-muted-foreground">当前环境实际拿到的变量总数</div>
+            <div className="mt-1 text-sm text-muted-foreground">含继承与覆盖</div>
           </div>
           <div className={subCardClassName}>
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
