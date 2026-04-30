@@ -709,7 +709,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <div className="mb-8 rounded-[24px] bg-[rgba(251,250,248,0.72)] px-2 py-2">
         <div className="mb-3 flex items-center justify-between gap-3 px-2">
           <div>

@@ -93,34 +93,3 @@ export function PagePanel({
     </Component>
   );
 }
-
-interface PageSectionHeaderProps {
-  title: string;
-  description?: string | null;
-  actions?: ReactNode;
-  className?: string;
-}
-
-export function PageSectionHeader({
-  title,
-  description,
-  actions,
-  className,
-}: PageSectionHeaderProps) {
-  return (
-    <div
-      className={cn(
-        'console-divider-bottom flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between',
-        className
-      )}
-    >
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-foreground">{title}</div>
-        {description ? (
-          <div className="mt-1 text-xs leading-5 text-muted-foreground">{description}</div>
-        ) : null}
-      </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
-    </div>
-  );
-}
