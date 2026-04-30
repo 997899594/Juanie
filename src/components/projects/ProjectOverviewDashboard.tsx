@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ProjectEnvironmentIndex } from '@/components/projects/ProjectOverviewSections';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 
 interface ProjectOverviewDashboardProps {
@@ -10,8 +11,7 @@ interface ProjectOverviewDashboardProps {
   pageData: ProjectOverviewPageData;
 }
 
-const overviewShellClassName =
-  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+const overviewShellClassName = 'console-panel px-5 py-5';
 
 export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
   const { project, environmentCards, overview, collaboration } = pageData;
@@ -20,7 +20,7 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
     productionEnvironment?.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <PageShell size="content" spacing="tight">
       <PageHeader
         title={project.name}
         description={overview.description ?? undefined}
@@ -116,6 +116,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       </section>
 
       <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
-    </div>
+    </PageShell>
   );
 }

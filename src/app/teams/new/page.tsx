@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 
 const createTeamSchema = z.object({
   name: z.string().trim().min(1, '请输入团队名称'),
@@ -83,7 +84,7 @@ export default function NewTeamPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <PageShell size="narrow">
       <PageHeader
         title="新建团队"
         actions={
@@ -188,6 +189,6 @@ export default function NewTeamPage() {
           </div>
         </FormSection>
       </form>
-    </div>
+    </PageShell>
   );
 }

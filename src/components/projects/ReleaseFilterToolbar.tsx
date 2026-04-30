@@ -20,7 +20,7 @@ export function ReleaseFilterToolbar({
   onChange,
 }: ReleaseFilterToolbarProps) {
   return (
-    <div className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]">
+    <div className="console-panel px-4 py-4">
       <div className="space-y-3">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
           发布筛选

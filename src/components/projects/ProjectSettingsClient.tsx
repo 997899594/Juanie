@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import {
   Select,
   SelectContent,
@@ -270,7 +271,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <PageShell size="form">
       <PageHeader title="设置" description={statusDescription} />
 
       <div className="grid gap-2 md:grid-cols-2">
@@ -604,6 +605,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

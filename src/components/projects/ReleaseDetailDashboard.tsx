@@ -1,5 +1,6 @@
 import { ArrowLeft, ScrollText } from 'lucide-react';
 import Link from 'next/link';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
   ReleaseDiffSection,
@@ -10,6 +11,7 @@ import {
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
@@ -39,59 +41,59 @@ export function ReleaseDetailDashboard({
   const releaseTitle = getReleaseDisplayTitle(release);
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <PageShell size="wide">
       <ReleaseDetailLiveSync
         projectId={projectId}
         releaseId={releaseId}
         initialStatus={release.status}
         initialStateKey={releaseStateKey}
       />
-      <div className="space-y-6">
-        <PageHeader
-          title={releaseTitle}
-          description={release.sourceRef}
-          eyebrow="发布"
-          meta="看这次发生了什么。"
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button asChild size="sm" className="h-9 px-4">
-                <Link href={environmentLogsHref}>
-                  <ScrollText className="h-3.5 w-3.5" />
-                  日志
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-                <Link href={releasesHref}>
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  返回发布
-                </Link>
-              </Button>
-            </div>
-          }
-        />
+      <PageHeader
+        title={releaseTitle}
+        description={release.sourceRef}
+        eyebrow="发布"
+        meta="看这次发生了什么。"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" className="h-9 px-4">
+              <Link href={environmentLogsHref}>
+                <ScrollText className="h-3.5 w-3.5" />
+                日志
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+              <Link href={releasesHref}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                返回发布
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
-        <ReleaseTopSummarySection release={release} />
+      <EnvironmentSectionNav projectId={projectId} environmentId={environmentId} />
 
-        <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-          <ReleaseNarrativeSection release={release} />
-          <ReleaseTimelineSection release={release} />
-        </section>
+      <ReleaseTopSummarySection release={release} />
 
-        <ReleaseDiffSection
-          projectId={projectId}
-          sourceReleaseLink={sourceReleaseLink}
-          previousReleaseLink={previousReleaseLink}
-          release={release}
-        />
+      <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+        <ReleaseNarrativeSection release={release} />
+        <ReleaseTimelineSection release={release} />
+      </section>
 
-        <ReleaseExecutionSections
-          projectId={projectId}
-          releaseId={releaseId}
-          role={role}
-          release={release}
-          initialTaskCenter={initialTaskCenter}
-        />
-      </div>
-    </div>
+      <ReleaseDiffSection
+        projectId={projectId}
+        sourceReleaseLink={sourceReleaseLink}
+        previousReleaseLink={previousReleaseLink}
+        release={release}
+      />
+
+      <ReleaseExecutionSections
+        projectId={projectId}
+        releaseId={releaseId}
+        role={role}
+        release={release}
+        initialTaskCenter={initialTaskCenter}
+      />
+    </PageShell>
   );
 }

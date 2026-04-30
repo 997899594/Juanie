@@ -4,9 +4,11 @@ import { Database, ExternalLink, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import {
   createDatabaseRepairPlan,
@@ -140,8 +142,7 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
   });
 }
 
-const shellClassName =
-  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+const shellClassName = 'console-panel px-5 py-5';
 
 const subCardClassName =
   'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
@@ -239,7 +240,7 @@ export function SchemaCenterClient({
       : null) ?? null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <PageShell size="section">
       <PageHeader
         title={`${focusedEnvironment?.name ?? '环境'} · 数据`}
         actions={
@@ -254,6 +255,10 @@ export function SchemaCenterClient({
           </div>
         }
       />
+
+      {focusedEnvironment ? (
+        <EnvironmentSectionNav projectId={projectId} environmentId={focusedEnvironment.id} />
+      ) : null}
 
       <div className={shellClassName}>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -567,6 +572,6 @@ export function SchemaCenterClient({
           </section>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

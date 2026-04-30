@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { PlatformSignalBlock } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { retryProjectInitialization } from '@/lib/projects/init-client-actions';
@@ -155,7 +156,7 @@ export function ProjectInitializingClient({
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <PageShell size="content">
       <PageHeader
         title={
           overview.status === 'active'
@@ -268,6 +269,6 @@ export function ProjectInitializingClient({
           <div className="text-sm text-muted-foreground">通常需要几分钟，请稍候。</div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

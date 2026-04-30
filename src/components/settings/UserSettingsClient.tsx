@@ -89,8 +89,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
     return email[0]?.toUpperCase() ?? '?';
   };
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
   const subtleClassName =
     'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.78),rgba(255,255,255,0.88))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.03)]';
 

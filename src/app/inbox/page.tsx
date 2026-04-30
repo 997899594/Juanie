@@ -5,6 +5,7 @@ import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationA
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { getApprovalsPageData } from '@/lib/approvals/service';
 import {
@@ -44,11 +45,10 @@ export default async function InboxPage({
     filterState,
     actorUserId: session.user.id,
   });
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <PageShell size="wide">
       <PageHeader title="待处理" />
 
       <div className="grid gap-2 md:grid-cols-5">
@@ -198,6 +198,6 @@ export default async function InboxPage({
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

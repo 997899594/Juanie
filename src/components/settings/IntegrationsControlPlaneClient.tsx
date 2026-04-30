@@ -14,13 +14,12 @@ export function IntegrationsControlPlaneClient({
   initialData,
 }: IntegrationsControlPlaneClientProps) {
   const overview = initialData.overview;
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
   const subtleClassName =
     'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <PageHeader title="集成" />
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">

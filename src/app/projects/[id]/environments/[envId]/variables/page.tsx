@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
-import { PageHeader } from '@/components/ui/page-header';
 import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
 
@@ -28,9 +27,12 @@ export default async function ProjectEnvironmentVariablesPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeader title="变量" description={`${environment.name} · 管理直配、继承和服务覆盖`} />
-      <EnvironmentSectionNav projectId={id} environmentId={envId} />
+    <EnvironmentPageFrame
+      projectId={id}
+      environmentId={envId}
+      title="变量"
+      description={`${environment.name} · 管理直配、继承和服务覆盖`}
+    >
       <EnvVarManager
         projectId={id}
         environmentId={environment.id}
@@ -42,6 +44,6 @@ export default async function ProjectEnvironmentVariablesPage({
             : '环境变量变更只允许 owner 或 admin'
         }
       />
-    </div>
+    </EnvironmentPageFrame>
   );
 }

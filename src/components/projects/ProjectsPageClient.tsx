@@ -4,7 +4,9 @@ import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PagePanel, PageShell } from '@/components/ui/page-shell';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import type { ProjectListCard, ProjectListStat } from '@/lib/projects/list-view';
 import { getRuntimeStatusDotClass } from '@/lib/runtime/status-presentation';
@@ -19,8 +21,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
   const stats = initialStats.map((stat) =>
     stat.label === '项目' ? { ...stat, value: projectCards.length } : stat
   );
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
 
   useProjectsRealtime({
     projectIds: projectCards.map((project) => project.id),
@@ -45,7 +46,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
   });
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <PageShell size="wide">
       <PageHeader
         title="项目"
         actions={
@@ -60,30 +61,22 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
 
       <div className="grid gap-2 md:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className={`${shellClassName} px-4 py-3`}>
+          <PagePanel key={stat.label} padding="sm">
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               {stat.label}
             </div>
             <div className="mt-2 text-sm font-semibold text-foreground">{stat.value}</div>
-          </div>
+          </PagePanel>
         ))}
       </div>
 
       {projectCards.length === 0 ? (
-        <div
-          className={`${shellClassName} flex min-h-80 flex-col items-center justify-center text-center`}
-        >
-          <div className="mb-4 rounded-[18px] bg-secondary/80 p-4">
-            <FolderKanban className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-lg font-medium">没有项目</h2>
-          <Button asChild variant="ghost" className="mt-5 rounded-full px-4">
-            <Link href="/projects/new">
-              <Plus className="h-4 w-4" />
-              新建项目
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={<FolderKanban className="h-8 w-8" />}
+          title="没有项目"
+          action={{ label: '新建项目', href: '/projects/new' }}
+          className="min-h-80"
+        />
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
           {projectCards.map((project) => (
@@ -127,6 +120,6 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

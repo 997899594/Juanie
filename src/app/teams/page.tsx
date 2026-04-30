@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { auth } from '@/lib/auth';
 import { getTeamsListPageData } from '@/lib/teams/list-service';
 
@@ -15,11 +17,10 @@ export default async function TeamsPage() {
   }
 
   const { teamCards } = await getTeamsListPageData(session.user.id);
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <PageShell size="wide">
       <PageHeader
         title="团队"
         actions={
@@ -33,20 +34,12 @@ export default async function TeamsPage() {
       />
 
       {teamCards.length === 0 ? (
-        <div
-          className={`${shellClassName} flex min-h-80 flex-col items-center justify-center text-center`}
-        >
-          <div className="mb-4 rounded-[18px] bg-secondary/80 p-4">
-            <Users className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-lg font-medium">还没有团队</h2>
-          <Button asChild variant="ghost" className="mt-5 rounded-full px-4">
-            <Link href="/teams/new">
-              <Plus className="h-4 w-4" />
-              新建团队
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Users className="h-8 w-8" />}
+          title="还没有团队"
+          action={{ label: '新建团队', href: '/teams/new' }}
+          className="min-h-80"
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teamCards.map((team) => {
@@ -88,6 +81,6 @@ export default async function TeamsPage() {
           </Link>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

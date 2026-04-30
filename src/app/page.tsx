@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { PriorityDeck, type PriorityDeckItem } from '@/components/ui/priority-deck';
 import { auth } from '@/lib/auth';
 import { getHomePageData } from '@/lib/home/service';
@@ -57,11 +58,10 @@ export default async function HomePage() {
     });
   }
 
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel';
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <PageShell size="wide">
       <PageHeader
         title="指挥台"
         actions={
@@ -232,6 +232,6 @@ export default async function HomePage() {
           </div>
         </Link>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
-import { PageHeader } from '@/components/ui/page-header';
 import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
 
@@ -28,9 +27,12 @@ export default async function ProjectEnvironmentDiagnosticsPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeader title="诊断" description={`${environment.name} · 定位资源异常和运行阻塞`} />
-      <EnvironmentSectionNav projectId={id} environmentId={envId} />
+    <EnvironmentPageFrame
+      projectId={id}
+      environmentId={envId}
+      title="诊断"
+      description={`${environment.name} · 定位资源异常和运行阻塞`}
+    >
       <EnvironmentResourcePanel
         projectId={id}
         environmentId={environment.id}
@@ -42,6 +44,6 @@ export default async function ProjectEnvironmentDiagnosticsPage({
             : '生产级治理动作只允许 owner 或 admin'
         }
       />
-    </div>
+    </EnvironmentPageFrame>
   );
 }

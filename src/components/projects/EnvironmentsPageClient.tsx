@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import {
   Select,
   SelectContent,
@@ -630,8 +631,7 @@ function EnvironmentOverviewPanel({
     : environment.actions.configureStrategySummary !== environment.strategyLabel
       ? environment.actions.configureStrategySummary
       : null;
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+  const shellClassName = 'console-panel px-5 py-5';
   const titleClassName =
     'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
   const valueClassName =
@@ -1075,7 +1075,7 @@ export function EnvironmentsPageClient({
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <PageShell size="section">
       <PageHeader
         title={focusMode && focusedEnvironment ? focusedEnvironment.name : '环境'}
         description={focusMode ? focusedEnvironmentMeta : undefined}
@@ -1254,6 +1254,6 @@ export function EnvironmentsPageClient({
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

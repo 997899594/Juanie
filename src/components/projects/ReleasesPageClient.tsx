@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PageShell } from '@/components/ui/page-shell';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
@@ -259,8 +261,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     ((selectedEnvironment.deliveryRules?.length ?? 0) > 0 ||
       incomingPromotionPlans.length > 0 ||
       outgoingPromotionPlans.length > 0);
-  const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const shellClassName = 'console-panel px-5 py-5';
 
   useEffect(
     () => () => {
@@ -369,7 +370,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <PageShell size="section">
       <PageHeader
         title={`${selectedEnvironment?.name ?? '环境'} · 发布`}
         actions={
@@ -410,6 +411,10 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           </div>
         }
       />
+
+      {selectedEnvironment ? (
+        <EnvironmentSectionNav projectId={projectId} environmentId={selectedEnvironment.id} />
+      ) : null}
 
       {error && (
         <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
@@ -559,6 +564,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

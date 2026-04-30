@@ -2,9 +2,8 @@
 
 import { RefreshCw, ScrollText, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -35,8 +34,7 @@ interface LogLine {
 
 type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
-const shellClassName =
-  'rounded-[22px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]';
+const shellClassName = 'console-panel px-5 py-5';
 
 const subCardClassName = 'rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4';
 
@@ -177,17 +175,17 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
   const lastLineLabel = formatPlatformRelativeTime(lastLineAt) ?? null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader
-        title="日志"
-        description={
-          selectedEnvironment
-            ? `${selectedEnvironment.name} · 按 Pod 查看运行日志`
-            : '按环境和 Pod 查看运行日志'
-        }
-      />
-      <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
-
+    <EnvironmentPageFrame
+      projectId={projectId}
+      environmentId={envId || null}
+      size="wide"
+      title="日志"
+      description={
+        selectedEnvironment
+          ? `${selectedEnvironment.name} · 按 Pod 查看运行日志`
+          : '按环境和 Pod 查看运行日志'
+      }
+    >
       <div className={shellClassName}>
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <ScrollText className="h-4 w-4 text-muted-foreground" />
@@ -376,7 +374,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           </Button>
         </div>
       </div>
-    </div>
+    </EnvironmentPageFrame>
   );
 }
 
