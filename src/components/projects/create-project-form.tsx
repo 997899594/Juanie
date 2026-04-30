@@ -193,8 +193,7 @@ function getPillChoiceClass(selected: boolean, disabled = false): string {
   );
 }
 
-const reviewShellClassName =
-  'rounded-[22px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]';
+const reviewShellClassName = 'console-panel px-5 py-5';
 
 const reviewSubtleClassName = 'rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4';
 

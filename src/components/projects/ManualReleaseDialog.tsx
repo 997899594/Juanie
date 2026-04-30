@@ -130,8 +130,7 @@ interface ManualReleaseDialogProps {
   onCreated?: () => Promise<void> | void;
 }
 
-const dialogPanelClassName =
-  'rounded-[20px] bg-[rgba(251,250,247,0.96)] p-5 shadow-[0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
+const dialogPanelClassName = 'console-panel p-5 sm:p-6';
 const dialogSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function ManualReleaseDialog({

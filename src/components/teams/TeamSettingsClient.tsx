@@ -38,8 +38,7 @@ interface TeamSettingsClientProps {
   initialData: NonNullable<Awaited<ReturnType<typeof getTeamSettingsPageData>>>;
 }
 
-const settingsPanelClassName =
-  'rounded-[22px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsPanelClassName = 'console-panel px-5 py-5';
 const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientProps) {

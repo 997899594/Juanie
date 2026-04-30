@@ -108,8 +108,7 @@ const postgresCapabilityOptions: Array<{
   { value: 'pg_trgm', label: 'pg_trgm', description: '模糊搜索与相似度匹配' },
 ];
 
-const settingsPanelClassName =
-  'rounded-[22px] bg-[rgba(251,250,247,0.96)] shadow-[0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsPanelClassName = 'console-panel';
 const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function ProjectSettingsClient({ projectId, initialData }: ProjectSettingsClientProps) {

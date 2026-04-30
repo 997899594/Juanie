@@ -80,7 +80,7 @@ export function ProjectEnvironmentIndex({
   });
 
   return (
-    <section className="overflow-hidden rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]">
+    <section className="console-panel overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">环境</div>
