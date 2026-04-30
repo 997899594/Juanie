@@ -9,6 +9,7 @@ export * from './input';
 export * from './label';
 export * from './page-shell';
 export * from './priority-deck';
+export * from './section-nav';
 export * from './select';
 export * from './separator';
 export * from './sonner';
