@@ -31,12 +31,34 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | 能力 | 开源组件 |
 | --- | --- |
 | GitOps / preview scaffold | Argo CD ApplicationSet |
+| 平台自身发布 | Argo CD Application + Helm values-gitops |
 | 受控放量 | Argo Rollouts |
 | 托管 PostgreSQL | CloudNativePG |
 | TLS / 证书 | cert-manager |
 | 外部密钥能力 | External Secrets Operator |
 | Schema diff / control-plane migration | Atlas |
 | 后台队列 | BullMQ + Redis |
+
+## 平台自身 GitOps
+
+Juanie 平台自身不再通过 CI SSH 到服务器执行 Helm。当前主线是：
+
+1. CI 构建 `web`、`worker`、`schema-runner` 镜像。
+2. CI 更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]` GitOps 指针。
+3. `deploy/k8s/infrastructure/argocd/platform-application.yaml` 由 bootstrap 同步成 Argo CD Application。
+4. Argo CD 读取 `values-prod.yaml + values-gitops.yaml` 并同步 Helm chart。
+5. `schemaSync.enabled=true` 时，控制面 Atlas 迁移由 Argo PreSync `schema-runner` Job 执行。
+
+这条链路的真源是 Git；`.github/scripts/*` 的 SSH 部署路径已经删除，避免 CI 远程命令和 GitOps 双轨并存。
+
+## 安全与 Trace 基线
+
+| 能力 | 当前设计 |
+| --- | --- |
+| Secret | Helm 支持 `existingSecret`、内置 Secret 和 ExternalSecret；生产优先使用已有 Secret 或 External Secrets Operator |
+| TLS | chart 不再默认注入 `NODE_TLS_REJECT_UNAUTHORIZED=0`，只有显式打开 `worker/scheduler.insecureSkipTlsVerify` 才会渲染 |
+| RBAC | 高风险能力集中在 `rbac.*` 开关，`pods/exec` 默认关闭 |
+| Trace | release id 派生稳定 W3C trace id，release/deployment/migration 队列 job 透传同一个 `traceId` 和 `traceparent` |
 
 ## 后续重构边界
 
@@ -58,3 +80,4 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 4. preview 可提升到 staging。
 5. staging 可提升到 production，并在 production release detail 完成放量。
 6. 删除项目进入 deleting 状态，后台完成后通过 SSE 从列表消失。
+7. 平台自身发布只更新 GitOps 指针，由 Argo CD 完成同步，PreSync Job 先跑控制面迁移。

@@ -98,6 +98,24 @@ Worker 处理
 更新 deployment status
 ```
 
+### 平台自身发布流程
+
+```
+push main
+    ↓
+CI quality + build web/worker/schema-runner images
+    ↓
+CI 更新 deploy/k8s/charts/juanie/values-gitops.yaml 并提交 [skip ci]
+    ↓
+Argo CD Application 同步 deploy/k8s/charts/juanie
+    ↓
+PreSync schema-runner Job 执行控制面 Atlas 迁移
+    ↓
+Helm chart 同步 Web / Worker / Scheduler
+```
+
+平台自身发布不再走 SSH 到服务器执行 Helm。不要恢复 `.github/scripts/deploy*.sh` 这类第二条部署路径；如需排障，优先看 Argo CD Application、PreSync Job 和 Helm chart 渲染结果。
+
 ## Code Style Guidelines
 
 ### Formatting (Biome)
@@ -234,22 +252,26 @@ const { core, apps, custom } = getK8sClient()
 await createNamespace('my-namespace')
 ```
 
-### Flux CD (Custom Resources)
+### Argo CD / Argo Rollouts
 
-```typescript
-import { createGitRepository, createKustomization } from '@/lib/flux'
+- 预览环境脚手架通过 Argo CD ApplicationSet 管理，入口见 `src/lib/environments/application-set.ts`
+- Juanie 平台自身通过 `deploy/k8s/infrastructure/argocd/platform-application.yaml` 注册 Argo CD Application
+- CI 只更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 镜像指针，Argo CD 负责同步
+- 生产受控放量通过 Argo Rollouts 管理，入口见 `src/lib/releases/argo-rollouts.ts`
+- 不再新增 Flux 相关实现；历史 Flux 方案只保留在 `docs/plans/` 作为归档参考
 
-await createGitRepository(name, namespace, { 
-  url, 
-  ref: { branch },
-  secretRef: { name: 'git-credentials' }
-})
-await createKustomization(name, namespace, { 
-  sourceRef: { kind: 'GitRepository', name },
-  path: './k8s',
-  prune: true
-})
-```
+### Secret / TLS / RBAC 基线
+
+- chart 支持 `secret.existingSecret`、内置 Secret 和 `externalSecret.enabled`
+- 生产优先使用已有 Secret 或 External Secrets Operator，不要把真实密钥写进 values 文件
+- `NODE_TLS_REJECT_UNAUTHORIZED=0` 默认不渲染；只有显式开启 `worker.insecureSkipTlsVerify` 或 `scheduler.insecureSkipTlsVerify` 才允许
+- `pods/exec` 默认关闭；需要时通过 `rbac.allowPodExec=true` 明确打开
+
+### Trace
+
+- `src/lib/trace/context.ts` 统一生成 W3C 风格 `traceId` / `traceparent`
+- release 创建后使用 release id 派生稳定 trace，并透传到 release/deployment/migration BullMQ job
+- 新增发布链路日志时应带 `buildTraceLogFields(...)`，避免只靠 releaseId 或 jobId 手工拼排障线索
 
 ### API 访问控制与错误处理
 
@@ -321,11 +343,7 @@ src/
 │   │   ├── new/           # 创建项目
 │   │   └── [id]/
 │   │       ├── initializing/  # 初始化进度
-│   │       ├── deployments/   # 部署列表
 │   │       ├── environments/  # 环境管理
-│   │       ├── resources/     # K8s 资源浏览器
-│   │       ├── pipelines/     # CI/CD 流水线
-│   │       ├── webhooks/      # Webhook 管理
 │   │       └── settings/      # 项目设置
 │   ├── teams/             # 团队页面
 │   ├── settings/          # 用户设置
@@ -363,16 +381,16 @@ src/
 │   ├── queue/             # BullMQ 队列
 │   ├── auth.ts            # NextAuth configuration
 │   ├── k8s.ts             # Kubernetes client
-│   ├── flux.ts            # Flux CD integration
+│   ├── argocd.ts          # Argo CD / Argo Rollouts helpers
+│   ├── schema-safety/     # Schema 门禁对外入口
+│   ├── schema-management/ # Schema inspect / repair / runner internals
 │   ├── audit.ts           # 审计追踪
 │   ├── notifications.ts   # 通知系统
 │   ├── templates.ts       # 模板渲染引擎
 │   └── utils.ts           # Utility functions (cn)
 ├── types/                 # TypeScript type augmentations
 └── env.d.ts               # 环境变量类型声明
-k8s/                       # Kubernetes 部署清单
-├── base/                  # 基础资源（Namespace, Deployment, RBAC, HPA, PDB）
-└── overlays/production/   # 生产环境 Kustomize 覆盖层
+deploy/k8s/                # Helm chart 与平台 bootstrap 脚本
 templates/                 # 项目模板（用于 Create 模式）
 migrations/                # Atlas 控制面迁移目录（唯一活跃迁移链）
 archive/legacy-control-plane-migrations/  # 归档的旧控制面 SQL 迁移

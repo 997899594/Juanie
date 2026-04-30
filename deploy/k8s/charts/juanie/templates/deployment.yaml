@@ -143,13 +143,17 @@ spec:
           image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           command: ["./worker"]
+          {{- if or .Values.worker.insecureSkipTlsVerify .Values.worker.runScheduler }}
           env:
+            {{- if .Values.worker.insecureSkipTlsVerify }}
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
+            {{- end }}
             {{- if .Values.worker.runScheduler }}
             - name: JUANIE_WORKER_RUN_SCHEDULER
               value: "true"
             {{- end }}
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
@@ -208,9 +212,11 @@ spec:
           image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
           imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           command: ["./scheduler"]
+          {{- if .Values.scheduler.insecureSkipTlsVerify }}
           env:
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config

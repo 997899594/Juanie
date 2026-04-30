@@ -3,14 +3,18 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { isK8sAvailable } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
 import { resumeReleaseAfterDeploymentProgress } from '@/lib/releases/orchestration';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import { cleanupCandidateResources } from '@/lib/releases/workloads';
+import { buildTraceLogFields } from '@/lib/trace/context';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
 import type { DeploymentJobData } from './index';
+
+const deploymentWorkerLogger = logger.child({ component: 'deployment-worker' });
 
 function classifyDeploymentFailureStatus(message: string) {
   const verificationSignals = [
@@ -70,6 +74,14 @@ async function cleanupFailedCandidateResources(deploymentId: string): Promise<bo
 }
 
 export async function processDeployment(job: Job<DeploymentJobData>) {
+  const traceFields = buildTraceLogFields({
+    traceId: job.data.traceId,
+    projectId: job.data.projectId,
+    environmentId: job.data.environmentId,
+    deploymentId: job.data.deploymentId,
+    jobId: job.id,
+    queue: 'deployment',
+  });
   const deployment = await db.query.deployments.findFirst({
     where: eq(deployments.id, job.data.deploymentId),
   });
@@ -77,6 +89,12 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
   if (!deployment) {
     throw new Error(`Deployment ${job.data.deploymentId} not found`);
   }
+
+  deploymentWorkerLogger.info('Processing deployment job', {
+    ...traceFields,
+    releaseId: deployment.releaseId,
+    serviceId: deployment.serviceId,
+  });
 
   try {
     await executeDeploymentWorkload(deployment.id, async (value) => {

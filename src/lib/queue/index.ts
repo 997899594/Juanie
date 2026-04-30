@@ -1,6 +1,7 @@
 import { type ConnectionOptions, Queue } from 'bullmq';
 import type { AITaskKind } from '@/lib/ai/tasks/catalog';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
+import { createTraceId } from '@/lib/trace/context';
 
 function getConnection(): ConnectionOptions {
   return resolveRedisConnectionOptions({
@@ -79,15 +80,18 @@ export type DeploymentJobData = {
   deploymentId: string;
   projectId: string;
   environmentId: string;
+  traceId?: string;
 };
 
 export type ReleaseJobData = {
   releaseId: string;
+  traceId?: string;
 };
 
 export type MigrationJobData = {
   runId: string;
   allowApprovalBypass?: boolean;
+  traceId?: string;
 };
 
 export type SchemaRepairAtlasJobData = {
@@ -139,11 +143,17 @@ export async function addProjectDeleteJob(projectId: string) {
 export async function addDeploymentJob(
   deploymentId: string,
   projectId: string,
-  environmentId: string
+  environmentId: string,
+  options?: { traceId?: string | null }
 ) {
   return getDeploymentQueue().add(
     'deploy',
-    { deploymentId, projectId, environmentId },
+    {
+      deploymentId,
+      projectId,
+      environmentId,
+      traceId: options?.traceId ?? createTraceId(deploymentId),
+    },
     {
       attempts: 1,
       jobId: `deployment-${deploymentId}`,
@@ -151,10 +161,10 @@ export async function addDeploymentJob(
   );
 }
 
-export async function addReleaseJob(releaseId: string) {
+export async function addReleaseJob(releaseId: string, options?: { traceId?: string | null }) {
   return getReleaseQueue().add(
     'release',
-    { releaseId },
+    { releaseId, traceId: options?.traceId ?? createTraceId(releaseId) },
     {
       attempts: 1,
       jobId: `release-${releaseId}`,
@@ -162,12 +172,16 @@ export async function addReleaseJob(releaseId: string) {
   );
 }
 
-export async function addMigrationJob(runId: string, options?: { allowApprovalBypass?: boolean }) {
+export async function addMigrationJob(
+  runId: string,
+  options?: { allowApprovalBypass?: boolean; traceId?: string | null }
+) {
   return getMigrationQueue().add(
     'migrate',
     {
       runId,
       allowApprovalBypass: options?.allowApprovalBypass ?? false,
+      traceId: options?.traceId ?? createTraceId(runId),
     },
     {
       attempts: 1,

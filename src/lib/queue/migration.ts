@@ -2,13 +2,16 @@ import { Job, Worker } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { dispatchMigrationRunToSchemaRunner } from '@/lib/migrations/runner-job';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
+import { buildTraceLogFields } from '@/lib/trace/context';
 import type { MigrationJobData } from './index';
 
 const activeMigrationRunStatuses = ['queued', 'planning', 'running'] as const;
 const activeMigrationItemStatuses = ['queued', 'planning', 'running'] as const;
+const migrationWorkerLogger = logger.child({ component: 'migration-worker' });
 
 export function shouldReconcileUnexpectedMigrationJobFailure(status: string): boolean {
   return activeMigrationRunStatuses.includes(status as (typeof activeMigrationRunStatuses)[number]);
@@ -76,17 +79,33 @@ export async function reconcileUnexpectedMigrationJobFailure(runId: string, erro
 }
 
 export async function processMigration(job: Job<MigrationJobData>) {
+  const traceFields = buildTraceLogFields({
+    traceId: job.data.traceId,
+    migrationRunId: job.data.runId,
+    jobId: job.id,
+    queue: 'migration',
+  });
   const run = await db.query.migrationRuns.findFirst({
     where: (table, { eq }) => eq(table.id, job.data.runId),
     columns: {
       id: true,
       status: true,
+      projectId: true,
+      environmentId: true,
+      releaseId: true,
     },
   });
 
   if (!run) {
     throw new Error(`Migration run ${job.data.runId} not found`);
   }
+
+  migrationWorkerLogger.info('Processing migration job', {
+    ...traceFields,
+    projectId: run.projectId,
+    environmentId: run.environmentId,
+    releaseId: run.releaseId,
+  });
 
   if (['success', 'failed', 'canceled', 'skipped'].includes(run.status)) {
     return { success: run.status === 'success', skipped: true };

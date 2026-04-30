@@ -82,6 +82,7 @@ interface ReleasePromoteDialogProps {
   canPromote: boolean;
   promoting: boolean;
   loadingPlan?: boolean;
+  refreshingPlan?: boolean;
   planError?: string | null;
   onPromote: () => void;
 }
@@ -95,6 +96,7 @@ export function ReleasePromoteDialog({
   canPromote,
   promoting,
   loadingPlan = false,
+  refreshingPlan = false,
   planError = null,
   onPromote,
 }: ReleasePromoteDialogProps) {
@@ -109,6 +111,8 @@ export function ReleasePromoteDialog({
       })
     : null;
   const schemaRefresh = selectedPlan?.plan.schema.refresh ?? null;
+  const schemaRefreshActive =
+    (schemaRefresh?.queuedCount ?? 0) + (schemaRefresh?.runningCount ?? 0) > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -213,8 +217,8 @@ export function ReleasePromoteDialog({
 
                 {loadingPlan ? (
                   <EmptyState
-                    title="正在读取提升计划"
-                    description="先展示持久门禁快照，Schema 深度检查会在后台继续刷新。"
+                    title="正在读取最新门禁"
+                    description="弹窗会先打开，Schema 检查在后台刷新，完成后这里会自动更新。"
                     className="min-h-40 rounded-[20px]"
                   />
                 ) : planError ? (
@@ -233,7 +237,13 @@ export function ReleasePromoteDialog({
                     {schemaRefresh?.missingCount ? (
                       <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
                         还有 {schemaRefresh.missingCount}{' '}
-                        个数据库尚无持久检查结果；创建发布时会强校验。
+                        个数据库尚无持久检查结果；后台检查完成后会自动更新。
+                      </div>
+                    ) : null}
+
+                    {schemaRefreshActive || refreshingPlan ? (
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
+                        Schema 检查正在后台刷新，完成后会自动同步最新门禁。
                       </div>
                     ) : null}
 

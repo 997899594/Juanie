@@ -1,5 +1,6 @@
 import { initK8sClient } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
+import { buildTraceLogFields } from '@/lib/trace/context';
 import { createAITaskWorker } from './ai-task';
 import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker, reconcileUnexpectedMigrationJobFailure } from './migration';
@@ -12,6 +13,31 @@ import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
 // 启动时初始化 K8s 客户端（in-cluster ServiceAccount 或 KUBECONFIG）
 initK8sClient();
 const workerLogger = logger.child({ component: 'queue-worker' });
+
+interface TraceableJobLike {
+  id?: string | number;
+  data?: {
+    traceId?: string;
+    projectId?: string;
+    environmentId?: string;
+    releaseId?: string;
+    deploymentId?: string;
+    runId?: string;
+  };
+}
+
+function buildJobTraceFields(job: TraceableJobLike | undefined, queue: string) {
+  return buildTraceLogFields({
+    traceId: job?.data?.traceId,
+    projectId: job?.data?.projectId,
+    environmentId: job?.data?.environmentId,
+    releaseId: job?.data?.releaseId,
+    deploymentId: job?.data?.deploymentId,
+    migrationRunId: job?.data?.runId,
+    jobId: job?.id,
+    queue,
+  });
+}
 
 workerLogger.info('Starting Juanie workers');
 
@@ -45,11 +71,11 @@ projectDeleteWorker.on('failed', (job, err) => {
 });
 
 releaseWorker.on('completed', (job) => {
-  workerLogger.info('Release job completed', { jobId: job.id, queue: 'release' });
+  workerLogger.info('Release job completed', buildJobTraceFields(job, 'release'));
 });
 
 releaseWorker.on('failed', (job, err) => {
-  workerLogger.error('Release job failed', err, { jobId: job?.id, queue: 'release' });
+  workerLogger.error('Release job failed', err, buildJobTraceFields(job, 'release'));
   const releaseId = job?.data?.releaseId;
   if (!releaseId) {
     return;
@@ -65,19 +91,19 @@ releaseWorker.on('failed', (job, err) => {
 });
 
 deploymentWorker.on('completed', (job) => {
-  workerLogger.info('Deployment job completed', { jobId: job.id, queue: 'deployment' });
+  workerLogger.info('Deployment job completed', buildJobTraceFields(job, 'deployment'));
 });
 
 deploymentWorker.on('failed', (job, err) => {
-  workerLogger.error('Deployment job failed', err, { jobId: job?.id, queue: 'deployment' });
+  workerLogger.error('Deployment job failed', err, buildJobTraceFields(job, 'deployment'));
 });
 
 migrationWorker.on('completed', (job) => {
-  workerLogger.info('Migration job completed', { jobId: job.id, queue: 'migration' });
+  workerLogger.info('Migration job completed', buildJobTraceFields(job, 'migration'));
 });
 
 migrationWorker.on('failed', (job, err) => {
-  workerLogger.error('Migration job failed', err, { jobId: job?.id, queue: 'migration' });
+  workerLogger.error('Migration job failed', err, buildJobTraceFields(job, 'migration'));
   const runId = job?.data?.runId;
   if (!runId) {
     return;

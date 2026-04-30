@@ -78,23 +78,35 @@ jobs:
           cache-from: type=gha,scope=juanie-docker-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=juanie-docker-${{ matrix.target }}
 
-  deploy:
+  promote-gitops:
     needs: build-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        run: bash .github/scripts/configure-ssh.sh
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
 
-      - name: Deploy On Server
+      - name: Update Platform GitOps Values
+        run: bun scripts/update-platform-gitops-values.ts
+
+      - name: Commit Platform GitOps Revision
         env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
-        run: bash .github/scripts/deploy.sh
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if git diff --quiet -- deploy/k8s/charts/juanie/values-gitops.yaml; then
+            echo "GitOps values already point to ${COMMIT_SHA}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/k8s/charts/juanie/values-gitops.yaml
+          git commit -m "chore(gitops): promote juanie ${COMMIT_SHA::7} [skip ci]"
+          git push origin HEAD:main

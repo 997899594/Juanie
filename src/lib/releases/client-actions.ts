@@ -332,19 +332,30 @@ export async function createPromotionRelease(input: {
   return parseJsonResponse<PromoteReleaseResponse>(response, '创建提升发布失败');
 }
 
-export async function fetchPromotionPlan(input: {
+export function buildPromotionPlanUrl(input: {
   projectId: string;
   flowId?: string | null;
-}): Promise<PromotionPlanResponse> {
+  refreshSchema?: boolean;
+}): string {
   const params = new URLSearchParams();
   if (input.flowId) {
     params.set('flowId', input.flowId);
   }
 
+  if (input.refreshSchema) {
+    params.set('refreshSchema', 'true');
+  }
+
   const query = params.toString();
-  const response = await fetch(
-    `/api/projects/${input.projectId}/promote${query ? `?${query}` : ''}`
-  );
+  return `/api/projects/${input.projectId}/promote${query ? `?${query}` : ''}`;
+}
+
+export async function fetchPromotionPlan(input: {
+  projectId: string;
+  flowId?: string | null;
+  refreshSchema?: boolean;
+}): Promise<PromotionPlanResponse> {
+  const response = await fetch(buildPromotionPlanUrl(input));
 
   return parseJsonResponse<PromotionPlanResponse>(response, '加载提升预检失败');
 }

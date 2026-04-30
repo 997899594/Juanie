@@ -10,6 +10,7 @@ import {
 import { executeMigrationRun } from '@/lib/migrations/runner';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
 import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
+import { buildTraceLogFields } from '@/lib/trace/context';
 
 const migrationExecutionLogger = logger.child({ component: 'migration-execution-service' });
 
@@ -44,6 +45,13 @@ export async function executeMigrationRunInExecutionService(input: {
     return { success: run.status === 'success', skipped: true };
   }
 
+  const traceFields = buildTraceLogFields({
+    projectId: run.projectId,
+    environmentId: run.environmentId,
+    releaseId: run.releaseId,
+    migrationRunId: run.id,
+  });
+
   const sourceRef = run.release?.sourceRef ?? null;
   const sourceCommitSha =
     run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha;
@@ -68,6 +76,7 @@ export async function executeMigrationRunInExecutionService(input: {
   }
 
   try {
+    migrationExecutionLogger.info('Executing migration run', traceFields);
     await executeMigrationRun(run.id, spec, {
       allowApprovalBypass: input.allowApprovalBypass,
       sourceRef,

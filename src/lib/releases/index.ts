@@ -28,6 +28,7 @@ import {
 } from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
+import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
@@ -206,7 +207,18 @@ async function persistRelease(
     await clearEnvironmentSourceBuildState(environment.id);
   }
 
-  await addReleaseJob(release.id);
+  const traceId = createTraceId(release.id);
+  releaseServiceLogger.info('Release queued', {
+    ...buildTraceLogFields({
+      traceId,
+      projectId: project.id,
+      environmentId: environment.id,
+      releaseId: release.id,
+    }),
+    serviceCount: artifacts.length,
+  });
+
+  await addReleaseJob(release.id, { traceId });
   await publishReleaseRealtimeSnapshot(release.id);
 
   void (async () => {

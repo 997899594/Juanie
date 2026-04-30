@@ -5,6 +5,7 @@ import { assertDeclaredDatabaseRuntimeAccess } from '@/lib/databases/runtime-acc
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
+import { logger } from '@/lib/logger';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
   failReleaseForCurrentPhase,
@@ -16,7 +17,10 @@ import {
 } from '@/lib/releases/orchestration';
 import { releaseStatusesRequiringFailureReconciliation } from '@/lib/releases/state-machine';
 import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
+import { buildTraceLogFields } from '@/lib/trace/context';
 import type { ReleaseJobData } from './index';
+
+const releaseWorkerLogger = logger.child({ component: 'release-worker' });
 
 export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
   return (releaseStatusesRequiringFailureReconciliation as readonly string[]).includes(status);
@@ -47,11 +51,23 @@ export async function reconcileUnexpectedReleaseJobFailure(releaseId: string, er
 }
 
 export async function processRelease(job: Job<ReleaseJobData>) {
+  const traceFields = buildTraceLogFields({
+    traceId: job.data.traceId,
+    releaseId: job.data.releaseId,
+    jobId: job.id,
+    queue: 'release',
+  });
   const release = await loadReleaseForOrchestration(job.data.releaseId);
 
   if (!release) {
     throw new Error(`Release ${job.data.releaseId} not found`);
   }
+
+  releaseWorkerLogger.info('Processing release job', {
+    ...traceFields,
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+  });
 
   if (release.artifacts.length === 0) {
     await updateReleaseStatus(release.id, 'failed', 'Release has no artifacts to deploy');

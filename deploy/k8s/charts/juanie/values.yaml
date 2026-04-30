@@ -25,6 +25,21 @@ replicaCount:
 
 worker:
   runScheduler: false
+  insecureSkipTlsVerify: false
+
+scheduler:
+  insecureSkipTlsVerify: false
+
+schemaSync:
+  enabled: false
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+
+rbac:
+  create: true
+  allowPodExec: false
+  allowSecretMutation: true
+  extraRules: []
 
 deployment:
   progressDeadlineSeconds: 900
@@ -117,3 +132,13 @@ secret:
   atlasDevUrl: ""
   atlasDevUrlPostgresql: ""
   atlasDevUrlMysql: ""
+
+externalSecret:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: ""
+  targetName: ""
+  data: []
+  dataFrom: []

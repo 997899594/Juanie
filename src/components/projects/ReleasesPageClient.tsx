@@ -3,7 +3,7 @@
 import { ArrowUpCircle, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
+import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -63,6 +64,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     key: string;
     message: string;
   } | null>(null);
+  const [promotionPlanRefreshingKey, setPromotionPlanRefreshingKey] = useState<string | null>(null);
+  const promotionPlanRealtimeRefreshTimerRef = useRef<number | null>(null);
   const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
     initialData.promotionPlans.find((plan) =>
       plan.targetEnvironment
@@ -222,6 +225,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   );
   const loadingPromotionPlan =
     promoteDialogOpen && promotionPlanLoadingKey === selectedPromotionPlanKey;
+  const refreshingPromotionPlan =
+    promoteDialogOpen && promotionPlanRefreshingKey === selectedPromotionPlanKey;
   const selectedPromotionPlanError =
     promotionPlanError?.key === selectedPromotionPlanKey ? promotionPlanError.message : null;
   const selectedPromotionPlanLoaded = loadedPromotionPlanKeys.has(selectedPromotionPlanKey);
@@ -257,6 +262,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const shellClassName =
     'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
+  useEffect(
+    () => () => {
+      if (promotionPlanRealtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(promotionPlanRealtimeRefreshTimerRef.current);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     if (!promoteDialogOpen || !hasPromotionTarget) {
       return;
@@ -268,7 +282,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     setPromotionPlanLoadingKey(key);
     setPromotionPlanError(null);
 
-    fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId })
+    fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId, refreshSchema: true })
       .then((plan) => {
         if (cancelled) {
           return;
@@ -308,6 +322,51 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       cancelled = true;
     };
   }, [hasPromotionTarget, projectId, promoteDialogOpen, selectedPromotionFlowId]);
+
+  useSchemaRepairs({
+    projectId,
+    envId: promoteDialogOpen ? selectedPromotionPlan?.targetEnvironment?.id : null,
+    enabled: promoteDialogOpen && Boolean(selectedPromotionPlan?.targetEnvironment?.id),
+    onRepair: (repair) => {
+      if (
+        !promoteDialogOpen ||
+        !selectedPromotionPlan?.targetEnvironment ||
+        repair.environmentId !== selectedPromotionPlan.targetEnvironment.id
+      ) {
+        return;
+      }
+
+      const key = selectedPromotionPlanKey;
+      if (promotionPlanRealtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(promotionPlanRealtimeRefreshTimerRef.current);
+      }
+
+      promotionPlanRealtimeRefreshTimerRef.current = window.setTimeout(() => {
+        setPromotionPlanRefreshingKey(key);
+        fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId })
+          .then((plan) => {
+            setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
+            setLoadedPromotionPlanKeys((currentKeys) => {
+              const nextKeys = new Set(currentKeys);
+              nextKeys.add(key);
+              return nextKeys;
+            });
+            setPromotionPlanError((currentError) =>
+              currentError?.key === key ? null : currentError
+            );
+          })
+          .catch((fetchError) => {
+            setPromotionPlanError({
+              key,
+              message: fetchError instanceof Error ? fetchError.message : '同步最新提升预检失败',
+            });
+          })
+          .finally(() => {
+            setPromotionPlanRefreshingKey((currentKey) => (currentKey === key ? null : currentKey));
+          });
+      }, 180);
+    },
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -367,6 +426,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         canPromote={canPromote}
         promoting={promoting}
         loadingPlan={loadingPromotionPlan}
+        refreshingPlan={refreshingPromotionPlan}
         planError={selectedPromotionPlanError}
         onPromote={handlePromote}
       />

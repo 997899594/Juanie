@@ -1,3 +1,4 @@
+{{- if .Values.rbac.create }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -9,8 +10,13 @@ rules:
     verbs: ["get", "list", "create", "delete"]
   # Core workload resources
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "pods/exec"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  {{- if .Values.rbac.allowPodExec }}
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  {{- end }}
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
@@ -19,7 +25,11 @@ rules:
     verbs: ["get", "list", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["secrets"]
+    {{- if .Values.rbac.allowSecretMutation }}
     verbs: ["get", "list", "create", "update", "patch", "delete"]
+    {{- else }}
+    verbs: ["get", "list"]
+    {{- end }}
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "create", "delete"]
@@ -42,6 +52,9 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applicationsets", "rollouts"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -55,3 +68,4 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Chart.Name }}
     namespace: {{ .Values.namespace }}
+{{- end }}

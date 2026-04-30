@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: __JUANIE_PLATFORM_GITOPS_APPLICATION_NAME__
+  namespace: __JUANIE_ARGOCD_NAMESPACE__
+  labels:
+    app.kubernetes.io/name: juanie
+    app.kubernetes.io/component: platform
+    app.kubernetes.io/managed-by: juanie-bootstrap
+spec:
+  project: __JUANIE_ARGOCD_PROJECT_NAME__
+  source:
+    repoURL: __JUANIE_PLATFORM_GITOPS_REPO_URL__
+    targetRevision: __JUANIE_PLATFORM_GITOPS_TARGET_REVISION__
+    path: deploy/k8s/charts/juanie
+    helm:
+      releaseName: juanie
+      valueFiles:
+        - values-prod.yaml
+        - values-gitops.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: __JUANIE_PLATFORM_NAMESPACE__
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

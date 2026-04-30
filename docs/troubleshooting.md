@@ -60,7 +60,7 @@ dnsNames:
 
 ```bash
 kubectl delete certificate juanie-wildcard-tls -n juanie
-# 等待 Flux 或手动重新创建
+# 由 Helm/Argo CD 重新同步，或在排障窗口内手动应用当前 chart
 ```
 
 ### 3. 重定向循环 (ERR_TOO_MANY_REDIRECTS)
@@ -103,22 +103,40 @@ kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg16 -n j
 - 数据库密码不匹配
 - AUTH_TRUST_HOST 未设置
 
-### 5. Flux 同步失败
+### 5. Argo CD 同步失败
 
-**症状：** HelmRelease 处于失败状态
+**症状：** Application 或 ApplicationSet 处于失败状态
 
 **检查步骤：**
 
 ```bash
-# 检查 HelmRelease 状态
-flux get helmreleases -A
+# 检查 Application / ApplicationSet 状态
+kubectl get applications,argocdapplicationsets -A 2>/dev/null || \
+  kubectl get applications,applicationsets -n argocd
 
 # 检查详细错误
-kubectl describe helmrelease juanie -n flux-system
+kubectl describe application -n argocd
 
-# 强制重新同步
-flux reconcile helmrelease juanie -n flux-system --force
+# 如已安装 argocd CLI，可重新同步目标应用
+argocd app sync <app-name>
 ```
+
+平台自身发布的应用名默认是 `juanie-platform`：
+
+```bash
+kubectl get application juanie-platform -n argocd -o wide
+kubectl describe application juanie-platform -n argocd
+kubectl get job -n juanie -l app.kubernetes.io/component=schema-sync
+kubectl logs job/juanie-schema-sync -n juanie --tail=200
+```
+
+如果 `juanie-platform` 不存在，先运行 bootstrap：
+
+```bash
+bash deploy/k8s/scripts/init-server.sh
+```
+
+CI 现在只更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]`，不会再 SSH 到服务器执行 Helm。
 
 ### 6. DNS 解析问题
 
@@ -168,3 +186,4 @@ echo "完成！"
 2. **证书包含两个域名** - `*.juanie.art` 和 `juanie.art`
 3. **设置 AUTH_TRUST_HOST=true** - NextAuth v5 必需
 4. **正确的数据库组件配置** - host/name/user/password/sslmode 必须一致
+5. **平台自身发布只走 GitOps** - 排障从 `juanie-platform` Application 和 PreSync schema-runner Job 开始

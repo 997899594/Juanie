@@ -1,19 +1,26 @@
-# Juanie - Modern DevOps Platform
+# Juanie - AI DevOps Platform
 
-A modern AI-driven DevOps platform built with Next.js, PostgreSQL, Atlas, and Kubernetes.
+Juanie 是一个面向项目交付、预览环境、受控放量和数据库 Schema 治理的 AI DevOps 平台。
 
-## Features
+当前架构真源：[`docs/current-architecture.md`](./docs/current-architecture.md)。
 
-- **Multi-team Support**: Create and manage teams with role-based access control
-- **Project Management**: Create projects from templates with automatic environment setup
-- **GitOps Integration**: Automatic deployment via Flux CD
-- **Kubernetes Integration**: Seamless K8s namespace and resource management
-- **Real-time Deployments**: Live deployment status via Server-Sent Events (SSE)
-- **CI/CD Pipeline**: GitHub Actions integration
-- **Pod Logs & Exec**: View logs and execute commands in pods
-- **Secrets & ConfigMaps**: Manage Kubernetes secrets and config maps
-- **Audit Logging**: Track all team activities
-- **Atlas Migrations**: Single control-plane migration system with validation in CI
+`docs/plans/` 只保留历史方案和取舍记录，不作为实现真源。
+
+## 主能力
+
+- 多团队与团队级 Git 集成绑定
+- 创建/导入项目并注入 Juanie 管理的 CI 与 `juanie.yaml`
+- preview / staging / production 环境主线
+- 基于 Argo CD ApplicationSet 的预览环境脚手架
+- 基于 Argo CD Application 的平台自身 GitOps 发布
+- 基于 Argo Rollouts 的生产受控放量
+- CloudNativePG 托管 PostgreSQL
+- Atlas 控制面迁移与应用 Schema 门禁
+- External Secrets / cert-manager / RBAC 安全基线
+- BullMQ + Redis 后台队列
+- release / deployment / migration 统一 trace id
+- SSE 实时推送初始化、发布、部署和 Schema 修复状态
+- AI 摘要、任务中心、动态插件与 eval 校验
 
 ## Tech Stack
 
@@ -22,15 +29,16 @@ A modern AI-driven DevOps platform built with Next.js, PostgreSQL, Atlas, and Ku
 - **Auth**: NextAuth.js (GitHub/GitLab OAuth)
 - **K8s SDK**: @kubernetes/client-node
 - **UI**: Tailwind CSS + Radix UI
-- **GitOps**: Flux CD
+- **GitOps / Rollout**: Argo CD ApplicationSet + Argo Rollouts
 - **Queue**: BullMQ + Redis
+- **Runtime**: Bun-first; Web production uses Node 24 + Next standalone
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 22+
-- Bun
+- Node.js 24+
+- Bun 1.3.9+
 - PostgreSQL database
 - Docker (recommended for Atlas dev diff/validation)
 - Kubernetes cluster (optional, for deployments)
@@ -70,6 +78,13 @@ Juanie uses one active control-plane migration flow:
 - `migrations/` contains the only active control-plane migration history
 - `archive/legacy-control-plane-migrations/` stores the retired SQL chain for reference only
 
+平台生产发布同样走 GitOps：
+
+- CI 构建镜像后只更新 `deploy/k8s/charts/juanie/values-gitops.yaml`
+- Argo CD Application 读取 `values-prod.yaml + values-gitops.yaml` 同步 Helm chart
+- 控制面 Atlas 迁移由 chart 内的 Argo PreSync `schema-runner` Job 执行
+- SSH 远程 Helm 部署脚本已删除，避免平台自身发布出现第二条路径
+
 Commands:
 
 ```bash
@@ -104,7 +119,7 @@ Notes:
 | GITLAB_CLIENT_SECRET | No | GitLab OAuth app client secret |
 | KUBECONFIG | No | Kubernetes config path |
 
-## Project Structure
+## 当前结构入口
 
 ```text
 src/
@@ -115,11 +130,15 @@ src/
     ├── db/                 # Drizzle ORM schema and DB client
     ├── queue/              # Worker and scheduler runtime
     ├── k8s.ts              # K8s client
-    ├── flux.ts             # Flux CD integration
+    ├── argocd.ts           # Argo CD / Argo Rollouts helpers
+    ├── schema-safety/      # Schema 门禁对外入口
+    ├── schema-management/  # Schema inspect / repair / runner internals
     └── git/                # GitHub/GitLab provider abstraction
+deploy/k8s/                 # Helm chart and platform bootstrap scripts
 migrations/                 # Active Atlas migration directory
 archive/legacy-control-plane-migrations/
 atlas.hcl                   # Atlas project config
+scripts/update-platform-gitops-values.ts # CI 更新平台 GitOps 镜像指针
 ```
 
 ## API Endpoints
@@ -135,7 +154,8 @@ atlas.hcl                   # Atlas project config
 
 ## Architecture Notes
 
-- [Deployment Architecture](./DEPLOYMENT_ARCHITECTURE.md)
+- [当前架构入口](./docs/current-architecture.md)
+- [部署架构历史说明](./DEPLOYMENT_ARCHITECTURE.md)
 
 ## License
 

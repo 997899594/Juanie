@@ -9,6 +9,7 @@ import {
 interface UseSchemaRepairsOptions {
   projectId: string;
   envId?: string | null;
+  enabled?: boolean;
   initialStateByDatabaseId?: Record<string, string>;
   onRepair?: (repair: SchemaRepairRealtimeRecord) => void;
 }
@@ -16,6 +17,7 @@ interface UseSchemaRepairsOptions {
 export function useSchemaRepairs({
   projectId,
   envId,
+  enabled = true,
   initialStateByDatabaseId,
   onRepair,
 }: UseSchemaRepairsOptions) {
@@ -37,7 +39,7 @@ export function useSchemaRepairs({
   }, [initialStateByDatabaseId]);
 
   useEffect(() => {
-    if (!projectId) {
+    if (!enabled || !projectId) {
       setIsConnected(false);
       setError(null);
       return;
@@ -110,7 +112,7 @@ export function useSchemaRepairs({
       eventSource.close();
       setIsConnected(false);
     };
-  }, [envId, projectId, streamToken]);
+  }, [enabled, envId, projectId, streamToken]);
 
   return {
     isConnected,

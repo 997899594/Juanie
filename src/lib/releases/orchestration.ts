@@ -28,6 +28,7 @@ import {
   supersedableMigrationRunStatuses,
   supersedableReleaseStatuses,
 } from '@/lib/releases/state-machine';
+import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
 
@@ -178,7 +179,10 @@ async function driveReleaseMigrationPhaseForward(
           release.id,
       };
     case 'start_run':
-      await addMigrationJob(action.runId, { allowApprovalBypass: false });
+      await addMigrationJob(action.runId, {
+        allowApprovalBypass: false,
+        traceId: createTraceId(release.id),
+      });
       return {
         kind: 'queued',
         runId: action.runId,
@@ -209,6 +213,15 @@ export async function startReleaseMigrationPhase(
   release: OrchestratedRelease,
   phase: 'preDeploy' | 'postDeploy'
 ): Promise<StartReleaseMigrationPhaseResult> {
+  releaseOrchestrationLogger.info('Starting release migration phase', {
+    ...buildTraceLogFields({
+      projectId: release.projectId,
+      environmentId: release.environmentId,
+      releaseId: release.id,
+    }),
+    phase,
+  });
+
   const createdRuns = await resolveAndCreateMigrationRuns(
     release.projectId,
     release.environmentId,
@@ -256,6 +269,15 @@ export async function startReleaseDeploymentStage(
     await updateReleaseStatus(release.id, 'deploying');
   }
 
+  releaseOrchestrationLogger.info('Starting release deployment stage', {
+    ...buildTraceLogFields({
+      projectId: release.projectId,
+      environmentId: release.environmentId,
+      releaseId: release.id,
+    }),
+    serviceCount: release.artifacts.length,
+  });
+
   const existingDeployments = await db.query.deployments.findMany({
     where: eq(deployments.releaseId, release.id),
   });
@@ -295,7 +317,9 @@ export async function startReleaseDeploymentStage(
     }
 
     if (deployment.status === 'queued') {
-      await addDeploymentJob(deployment.id, release.projectId, release.environmentId);
+      await addDeploymentJob(deployment.id, release.projectId, release.environmentId, {
+        traceId: createTraceId(release.id),
+      });
     }
 
     releaseDeployments.push(deployment);
