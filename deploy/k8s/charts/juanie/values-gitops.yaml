@@ -2,10 +2,10 @@
 images:
   web:
     repository: ghcr.io/997899594/juanie
-    tag: "web-420e4908e07d77c0022b2f5fe7169b3f1f22f16a"
+    tag: "web-d7b27f82dafe5c2373dcbb48f52510e5e95afa82"
   runtime:
     repository: ghcr.io/997899594/juanie
-    tag: "runtime-420e4908e07d77c0022b2f5fe7169b3f1f22f16a"
+    tag: "runtime-d7b27f82dafe5c2373dcbb48f52510e5e95afa82"
 
 schemaSync:
   enabled: true
