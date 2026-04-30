@@ -28,7 +28,7 @@ function shouldBypass(pathname: string): boolean {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hostname = normalizeHostname(request.headers.get('host'));
 
   if (!hostname || !isManagedApplicationHost(hostname) || shouldBypass(request.nextUrl.pathname)) {

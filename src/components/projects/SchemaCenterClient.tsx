@@ -316,6 +316,14 @@ export function SchemaCenterClient({
                         .filter(Boolean)
                         .join(' · ')
                     : null;
+                const stateSummary =
+                  state?.summary &&
+                  ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(state.status)
+                    ? state.summary
+                    : null;
+                const repairSummary = repairPlan
+                  ? (repairPlan.summary ?? repairPresentation?.summary ?? null)
+                  : null;
                 const canGenerateSuggestion =
                   !!state &&
                   ['drifted', 'unmanaged', 'blocked'].includes(state.status) &&
@@ -353,9 +361,9 @@ export function SchemaCenterClient({
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {state?.summary ?? '未纳管'}
-                        </div>
+                        {stateSummary ? (
+                          <div className="text-sm text-muted-foreground">{stateSummary}</div>
+                        ) : null}
                         <div className="text-xs text-muted-foreground">
                           {[
                             database.status ? `运行 ${database.status}` : null,
@@ -489,15 +497,10 @@ export function SchemaCenterClient({
                       </div>
                     </div>
 
-                    {repairPlan && repairPresentation?.summary ? (
+                    {repairPlan && repairSummary ? (
                       <div className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
                         <div className="text-sm font-medium text-foreground">处理建议</div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          {repairPlan.summary}
-                        </div>
-                        <div className="mt-2 rounded-[14px] bg-[rgba(243,240,233,0.64)] px-3 py-2 text-sm text-foreground">
-                          {repairPresentation.summary}
-                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">{repairSummary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
                           {[
                             repairPlan.riskLevel ? `风险 ${repairPlan.riskLevel}` : null,

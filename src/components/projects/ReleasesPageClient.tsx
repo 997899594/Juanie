@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpCircle, Database, ScrollText } from 'lucide-react';
+import { ArrowUpCircle, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -17,7 +17,6 @@ import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/clien
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
-import { cn } from '@/lib/utils';
 
 interface ReleasesPageClientProps {
   projectId: string;
@@ -371,39 +370,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         planError={selectedPromotionPlanError}
         onPromote={handlePromote}
       />
-
-      <section className={cn(shellClassName, 'px-4 py-4')}>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2.5 text-sm text-muted-foreground">
-            <StatusIndicator
-              status={isConnected ? 'success' : 'neutral'}
-              label={isConnected ? '实时同步' : '未连接'}
-            />
-            {selectedEnvironment ? <span>{selectedEnvironment.name}</span> : null}
-            {!selectedEnvironment ? <span>跨环境</span> : <span>单环境</span>}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedEnvironment ? (
-              <>
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                  <Link
-                    href={`/projects/${projectId}/environments/${selectedEnvironment.id}/schema`}
-                  >
-                    <Database className="h-3.5 w-3.5" />
-                    数据
-                  </Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                  <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}/logs`}>
-                    <ScrollText className="h-3.5 w-3.5" />
-                    日志
-                  </Link>
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </section>
 
       {shouldShowEnvironmentFlow ? (
         <section className="grid gap-3 lg:grid-cols-3">

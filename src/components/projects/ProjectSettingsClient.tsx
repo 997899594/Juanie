@@ -273,7 +273,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader title="设置" description={statusDescription} />
 
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-2">
         {overviewStats.map((stat) => (
           <div key={stat.label} className={settingsSubtleClassName}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -318,21 +318,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   disabled={!canEdit}
                 />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className={settingsSubtleClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    团队
-                  </div>
-                  <div className="mt-2 text-sm font-medium">{project.teamName}</div>
-                </div>
-                <div className={settingsSubtleClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    状态
-                  </div>
-                  <div className="mt-2 text-sm font-medium">{project.statusLabel}</div>
-                </div>
               </div>
 
               {canEdit && (
