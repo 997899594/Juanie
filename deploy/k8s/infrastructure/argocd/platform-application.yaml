@@ -21,6 +21,22 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: __JUANIE_PLATFORM_NAMESPACE__
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .metadata.labels."app.kubernetes.io/managed-by"
+        - .metadata.annotations."meta.helm.sh/release-name"
+        - .metadata.annotations."meta.helm.sh/release-namespace"
+        - .spec.volumeClaimTemplates[].apiVersion
+        - .spec.volumeClaimTemplates[].kind
+        - .spec.volumeClaimTemplates[].status
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      jqPathExpressions:
+        - .metadata.labels."app.kubernetes.io/managed-by"
+        - .metadata.annotations."meta.helm.sh/release-name"
+        - .metadata.annotations."meta.helm.sh/release-namespace"
   syncPolicy:
     automated:
       prune: true
@@ -28,3 +44,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true

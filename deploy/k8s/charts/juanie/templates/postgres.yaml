@@ -6,6 +6,15 @@ metadata:
 spec:
   serviceName: postgres
   replicas: 1
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 10
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
   selector:
     matchLabels:
       app: postgres
@@ -14,11 +23,18 @@ spec:
       labels:
         app: postgres
     spec:
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
       containers:
         - name: postgres
           image: {{ .Values.postgres.image }}
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432
+              protocol: TCP
           env:
             - name: POSTGRES_DB
               value: {{ .Values.env.DATABASE_NAME }}
@@ -39,11 +55,16 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
   volumeClaimTemplates:
-    - metadata:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: postgres-data
       spec:
         accessModes: ["ReadWriteOnce"]
+        volumeMode: Filesystem
         resources:
           requests:
             storage: {{ .Values.postgres.storage }}
