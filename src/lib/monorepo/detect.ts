@@ -6,7 +6,7 @@
 /**
  * Supported monorepo types
  */
-export type MonorepoType = 'turborepo' | 'nx' | 'pnpm' | 'none';
+export type MonorepoType = 'turborepo' | 'none';
 
 /**
  * Monorepo configuration from project config
@@ -21,33 +21,17 @@ export interface MonorepoConfig {
  *
  * Detection priority:
  * 1. turbo.json -> Turborepo
- * 2. pnpm-workspace.yaml -> pnpm workspaces
- * 3. nx.json or lerna.json -> Nx
- * 4. packages/ or apps/ directories -> pnpm (fallback)
+ *
+ * Juanie currently supports Turborepo only. Other workspace layouts are
+ * treated as single-repo projects until their build and deploy contracts are
+ * implemented end-to-end.
  *
  * @param files - Array of file paths in the repository root
  * @returns The detected monorepo type, or 'none' if not a monorepo
  */
 export function detectMonorepoType(files: string[]): MonorepoType {
-  // 1. Check for turbo.json (Turborepo)
   if (files.includes('turbo.json')) {
     return 'turborepo';
-  }
-
-  // 2. Check for pnpm-workspace.yaml (pnpm workspaces)
-  if (files.includes('pnpm-workspace.yaml')) {
-    return 'pnpm';
-  }
-
-  // 3. Check for nx.json or lerna.json (Nx)
-  if (files.includes('nx.json') || files.includes('lerna.json')) {
-    return 'nx';
-  }
-
-  // 4. Check for common monorepo directory structure
-  // If there are files in packages/ or apps/ directories, assume pnpm-style monorepo
-  if (files.some((f) => f.startsWith('packages/') || f.startsWith('apps/'))) {
-    return 'pnpm';
   }
 
   return 'none';
@@ -64,12 +48,8 @@ export function getMonorepoBuildCommand(monorepoType: MonorepoType, appName: str
   switch (monorepoType) {
     case 'turborepo':
       return `turbo run build --filter=${appName}`;
-    case 'nx':
-      return `nx build ${appName}`;
-    case 'pnpm':
-      return `pnpm --filter ${appName} build`;
     default:
-      return 'pnpm build';
+      return 'npm run build';
   }
 }
 
@@ -82,12 +62,9 @@ export function getMonorepoBuildCommand(monorepoType: MonorepoType, appName: str
 export function getMonorepoInstallCommand(monorepoType: MonorepoType): string {
   switch (monorepoType) {
     case 'turborepo':
-    case 'pnpm':
       return 'pnpm install';
-    case 'nx':
-      return 'npm ci';
     default:
-      return 'pnpm install';
+      return 'npm install';
   }
 }
 

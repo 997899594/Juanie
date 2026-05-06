@@ -269,7 +269,7 @@ export class GitLabProvider implements GitProvider {
     const perPage = options?.perPage || 100;
     const data = (await client.Projects.all({
       orderBy: 'updated_at',
-      owned: true,
+      membership: true,
       search: options?.search,
       ...(options?.page ? ({ page } as Record<string, number>) : {}),
       ...(options?.perPage ? ({ perPage } as Record<string, number>) : {}),

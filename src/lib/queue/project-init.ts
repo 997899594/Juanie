@@ -936,8 +936,7 @@ function buildServiceBuildLines(
   const dockerContext = service.dockerContext ?? '.';
   const dockerfile = service.dockerfile?.trim();
   const bakeDefinition = automation.bakeDefinition ?? null;
-  const bakeTarget =
-    automation.monorepoType === 'none' ? resolveBakeTarget(service, automation) : null;
+  const bakeTarget = resolveBakeTarget(service, automation);
 
   lines.push(`      command: ${buildCommand}`);
 

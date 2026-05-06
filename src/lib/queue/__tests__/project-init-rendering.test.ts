@@ -384,6 +384,51 @@ describe('project init migration inference', () => {
     expect(config).not.toContain('migrate:');
   });
 
+  it('keeps bake targets when rendering Turborepo service builds', () => {
+    const config = renderJuanieConfig(
+      {
+        id: 'project_1',
+        slug: 'nexusnote',
+        name: 'NexusNote',
+        productionBranch: 'main',
+        repositoryId: 'repo_1',
+      } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
+      {
+        services: [
+          {
+            id: 'service_web',
+            projectId: 'project_1',
+            name: 'web',
+            type: 'web',
+            buildCommand: 'bun run build',
+            startCommand: 'bun run start',
+            port: 3000,
+          } as typeof services.$inferSelect,
+        ],
+        databases: [],
+      },
+      {
+        monorepoType: 'turborepo',
+        rootFiles: ['package.json', 'turbo.json', 'docker-bake.hcl'],
+        packageManager: 'bun',
+        bakeDefinition: 'docker-bake.hcl',
+        bakeTargets: ['web'],
+        atlasConfigPath: null,
+        atlasConfigContent: null,
+        migrationScriptContents: {},
+        packageJson: {
+          scripts: {
+            build: 'turbo run build',
+          },
+        },
+      }
+    );
+
+    expect(config).toContain('strategy: bake');
+    expect(config).toContain('definition: docker-bake.hcl');
+    expect(config).toContain('target: web');
+  });
+
   it('builds yarn commands without run', () => {
     expect(buildRunScriptCommand('yarn', 'db:migrate')).toBe('yarn db:migrate');
   });

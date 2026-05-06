@@ -149,4 +149,48 @@ describe('GitLabProvider preview build trigger', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('lists repositories the token can access, including group projects', async () => {
+    const captured: Array<Record<string, unknown>> = [];
+    const provider = new GitLabProvider({
+      type: 'gitlab',
+      clientId: '',
+      clientSecret: '',
+      redirectUri: '',
+      serverUrl: 'https://gitlab.example.com',
+    });
+
+    (provider as unknown as { getClient: (accessToken: string) => unknown }).getClient = () => ({
+      Projects: {
+        all: async (options: Record<string, unknown>) => {
+          captured.push(options);
+          return [
+            {
+              id: 1,
+              name: 'nexusnote',
+              path_with_namespace: 'acme/nexusnote',
+              default_branch: 'main',
+              visibility: 'private',
+              web_url: 'https://gitlab.example.com/acme/nexusnote',
+              http_url_to_repo: 'https://gitlab.example.com/acme/nexusnote.git',
+              ssh_url_to_repo: 'git@gitlab.example.com:acme/nexusnote.git',
+            },
+          ];
+        },
+      },
+    });
+
+    const repositories = await provider.getRepositories('token', {
+      search: 'nexus',
+      page: 2,
+      perPage: 20,
+    });
+
+    expect(captured[0]?.membership).toBe(true);
+    expect(captured[0]?.search).toBe('nexus');
+    expect(captured[0]?.page).toBe(2);
+    expect(captured[0]?.perPage).toBe(20);
+    expect(captured[0]?.owned).toBeUndefined();
+    expect(repositories[0]?.fullName).toBe('acme/nexusnote');
+  });
 });

@@ -20,9 +20,12 @@ export interface AnalyzeServiceResponse {
   port?: number;
   schedule?: string;
   build?: {
+    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
     command?: string;
     dockerfile?: string;
     context?: string;
+    target?: string;
+    definition?: string;
   };
   run?: {
     command: string;
@@ -54,9 +57,12 @@ export interface ServiceWithId {
   appDir: string;
   schedule?: string;
   build?: {
+    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
     command?: string;
     dockerfile?: string;
     context?: string;
+    target?: string;
+    definition?: string;
   };
   run: {
     command: string;
