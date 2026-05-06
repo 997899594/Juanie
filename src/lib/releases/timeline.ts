@@ -1,5 +1,6 @@
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import type { ReleaseTimelineItem, ReleaseViewLike } from '@/lib/releases/release-view-shared';
@@ -129,8 +130,9 @@ export function buildReleaseTimeline(input: {
 
   for (const deployment of release.deployments) {
     const serviceName =
-      release.artifacts.find((artifact) => artifact.service.id === deployment.serviceId)?.service
-        .name ?? '服务';
+      getDeployableReleaseArtifacts(release.artifacts).find(
+        (artifact) => artifact.service?.id === deployment.serviceId
+      )?.service?.name ?? '服务';
 
     items.push({
       key: `deployment-${deployment.id ?? `${deployment.serviceId ?? 'service'}-${deployment.status}`}`,

@@ -15,6 +15,7 @@ import {
   publishReleaseRealtimeSnapshot,
   publishReleaseRealtimeSnapshots,
 } from '@/lib/realtime/releases';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
 import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
@@ -233,7 +234,9 @@ export async function startReleaseMigrationPhase(
       sourceRef: release.sourceRef,
       sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
       sourceCommitMessage: release.summary,
-      serviceIds: release.artifacts.map((artifact) => artifact.serviceId),
+      serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
+        (artifact) => artifact.serviceId!
+      ),
       deferPendingInspectionToRunner: true,
     }
   );
@@ -260,7 +263,9 @@ export async function startReleaseDeploymentStage(
     throw new Error(`Release ${releaseId} not found`);
   }
 
-  if (release.artifacts.length === 0) {
+  const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
+
+  if (deployableArtifacts.length === 0) {
     await updateReleaseStatus(release.id, 'failed', 'Release has no artifacts to deploy');
     throw new Error('Release has no artifacts to deploy');
   }
@@ -275,7 +280,7 @@ export async function startReleaseDeploymentStage(
       environmentId: release.environmentId,
       releaseId: release.id,
     }),
-    serviceCount: release.artifacts.length,
+    serviceCount: deployableArtifacts.length,
   });
 
   const existingDeployments = await db.query.deployments.findMany({
@@ -288,7 +293,12 @@ export async function startReleaseDeploymentStage(
   );
 
   const releaseDeployments = [];
-  for (const artifact of release.artifacts) {
+  for (const artifact of deployableArtifacts) {
+    const artifactUri = getReleaseArtifactUri(artifact);
+    if (!artifact.serviceId || !artifactUri) {
+      continue;
+    }
+
     const existingDeployment = deploymentsByServiceId.get(artifact.serviceId);
     const deployment =
       existingDeployment ??
@@ -303,7 +313,7 @@ export async function startReleaseDeploymentStage(
             commitSha: release.sourceCommitSha,
             commitMessage:
               release.summary || `Release ${release.sourceCommitSha?.slice(0, 7) ?? ''}`,
-            imageUrl: artifact.imageUrl,
+            imageUrl: artifactUri,
             status: 'queued',
             deployedById: release.triggeredByUserId ?? null,
           })

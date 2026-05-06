@@ -37,6 +37,78 @@ describe('repository topology inspection', () => {
     expect(topology.services[0]?.build?.target).toBe('worker');
   });
 
+  it('keeps managed monorepo affected rules and runtime artifact metadata', async () => {
+    const topology = await inspectRepositoryTopology(
+      {
+        async listRootFiles() {
+          return ['turbo.json', 'juanie.yaml'];
+        },
+        async getFileContent(_repo, path) {
+          if (path === 'juanie.yaml') {
+            return `
+monorepo:
+  type: turborepo
+  packageManager: pnpm
+  affected:
+    strategy: turbo
+    inputs:
+      - kit/**
+services:
+  - name: dualx-server
+    type: web
+    runtime:
+      language: node
+      framework: nest
+      nodeVersion: "22"
+    monorepo:
+      appDir: apps/dualx-server
+    build:
+      command: pnpm --filter dualx-server build
+      package:
+        strategy: pnpm-deploy
+      outputs:
+        - from: apps/dualx-server/dist
+          to: app/dist
+    run:
+      command: ./bin/start
+      port: 6014
+deliverables:
+  - name: kit
+    type: package
+    monorepo:
+      appDir: kit
+    variants:
+      - name: sdk
+        build:
+          command: pnpm --filter @dualx/kit build:sdk
+        package:
+          format: tgz
+          platform: any
+`;
+          }
+
+          return null;
+        },
+        async listDirectory() {
+          return [];
+        },
+      },
+      'acme/dualx',
+      'main'
+    );
+
+    expect(topology.source).toBe('juanie_config');
+    expect(topology.configMonorepo?.affected?.inputs).toEqual(['kit/**']);
+    expect(topology.services[0]?.runtime?.framework).toBe('nest');
+    expect(topology.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
+    expect(topology.services[0]?.build?.outputs?.[0]).toEqual({
+      from: 'apps/dualx-server/dist',
+      to: 'app/dist',
+    });
+    expect(topology.configDeliverables?.[0]?.name).toBe('kit');
+    expect(topology.managedConfigContent).toContain('deliverables:');
+  });
+
   it('detects apps and packages services and infers worker or cron roles', async () => {
     const topology = await inspectRepositoryTopology(
       {

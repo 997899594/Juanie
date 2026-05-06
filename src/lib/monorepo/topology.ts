@@ -1,4 +1,4 @@
-import { parseJuanieConfig, type ServiceConfig } from '@/lib/config/parser';
+import { type JuanieConfig, parseJuanieConfig, type ServiceConfig } from '@/lib/config/parser';
 import { detectMonorepoType, type MonorepoType } from './detect';
 
 type ServiceType = 'web' | 'worker' | 'cron';
@@ -25,6 +25,13 @@ export interface RepositoryTopologyBuild {
   context?: string;
   target?: string;
   definition?: string;
+  outputs?: Array<{
+    from: string;
+    to: string;
+  }>;
+  package?: {
+    strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
+  };
 }
 
 export interface RepositoryTopologyService {
@@ -54,6 +61,11 @@ export interface RepositoryTopologyService {
     memoryRequest?: string;
     memoryLimit?: string;
   };
+  runtime?: {
+    language: 'node' | 'bun' | 'static' | 'custom';
+    framework?: string;
+    nodeVersion?: string;
+  };
   isPublic?: boolean;
 }
 
@@ -75,6 +87,9 @@ export interface RepositoryTopology {
   bakeDefinitionPath: string | null;
   rootPackageJson: PackageJsonShape | null;
   services: RepositoryTopologyService[];
+  configMonorepo?: JuanieConfig['monorepo'];
+  configDeliverables?: JuanieConfig['deliverables'];
+  managedConfigContent?: string | null;
   source: 'juanie_config' | 'turborepo_scan' | 'docker_bake' | 'package_json' | 'default';
 }
 
@@ -278,6 +293,8 @@ function toTopologyServiceFromConfig(service: ServiceConfig): RepositoryTopology
           context: service.build.context,
           target: service.build.target,
           definition: service.build.definition,
+          outputs: service.build.outputs,
+          package: service.build.package,
         }
       : undefined,
     run: {
@@ -287,6 +304,7 @@ function toTopologyServiceFromConfig(service: ServiceConfig): RepositoryTopology
     healthcheck: service.healthcheck,
     scaling: service.scaling,
     resources: service.resources,
+    runtime: service.runtime,
     isPublic: service.isPublic,
   };
 }
@@ -434,6 +452,9 @@ export async function inspectRepositoryTopology(
         bakeDefinitionPath,
         rootPackageJson,
         services: parsedConfig.services.map(toTopologyServiceFromConfig),
+        configMonorepo: parsedConfig.monorepo,
+        configDeliverables: parsedConfig.deliverables,
+        managedConfigContent: managedConfigContentResolved,
         source: 'juanie_config',
       };
     }

@@ -24,12 +24,15 @@ env:
   JUANIE_RELEASE_REF: ${{ inputs.juanie_release_ref || github.ref }}
   JUANIE_FORCE_FULL_BUILD: ${{ inputs.juanie_force_full_build || 'false' }}
   JUANIE_SERVICE_MATRIX_B64: {{JUANIE_SERVICE_MATRIX_B64}}
+  JUANIE_DELIVERABLE_MATRIX_B64: {{JUANIE_DELIVERABLE_MATRIX_B64}}
+  JUANIE_AFFECTED_RULES_B64: {{JUANIE_AFFECTED_RULES_B64}}
 
 jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.detect.outputs.services }}
+      deliverables: ${{ steps.detect.outputs.deliverables }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,20 +51,16 @@ jobs:
           const services = JSON.parse(
             Buffer.from(process.env.JUANIE_SERVICE_MATRIX_B64 ?? '', 'base64').toString('utf8')
           );
+          const deliverables = JSON.parse(
+            Buffer.from(process.env.JUANIE_DELIVERABLE_MATRIX_B64 ?? '', 'base64').toString('utf8')
+          );
+          const affectedRules = JSON.parse(
+            Buffer.from(process.env.JUANIE_AFFECTED_RULES_B64 ?? '', 'base64').toString('utf8')
+          );
           const serviceDirs = services.map((service) => service.appDir);
-          const globalFiles = new Set([
-            'package.json',
-            'pnpm-lock.yaml',
-            'yarn.lock',
-            'package-lock.json',
-            'bun.lock',
-            'bun.lockb',
-            'turbo.json',
-            'juanie.yaml',
-            'juanie.yml',
-            'docker-bake.hcl',
-            'docker-bake.json',
-          ]);
+          const deliverableDirs = deliverables.map((deliverable) => deliverable.appDir);
+          const globalInputs = affectedRules.global ?? [];
+          const sharedInputs = affectedRules.inputs ?? [];
           const globalPrefixes = ['.github/', '.gitlab/'];
           const beforeSha = process.env.BEFORE_SHA;
           const sourceSha = process.env.JUANIE_SOURCE_SHA;
@@ -78,17 +77,33 @@ jobs:
             changedFiles = output.split('\n').map((line) => line.trim()).filter(Boolean);
           }
 
-          const isSharedPackageFile = (file) =>
-            file.startsWith('packages/') &&
-            !serviceDirs.some((appDir) => file === appDir || file.startsWith(`${appDir}/`));
+          const matchesInput = (file, pattern) => {
+            if (!pattern) return false;
+            if (pattern.endsWith('/**')) return file.startsWith(pattern.slice(0, -2));
+            if (pattern.endsWith('/*')) {
+              const prefix = pattern.slice(0, -1);
+              return file.startsWith(prefix) && !file.slice(prefix.length).includes('/');
+            }
+            if (pattern.endsWith('/')) return file.startsWith(pattern);
+            return file === pattern;
+          };
+
+          const matchesAnyInput = (file, patterns) =>
+            patterns.some((pattern) => matchesInput(file, pattern));
+
+          const isSharedInputFile = (file) =>
+            matchesAnyInput(file, sharedInputs) &&
+            ![...serviceDirs, ...deliverableDirs].some(
+              (appDir) => file === appDir || file.startsWith(`${appDir}/`)
+            );
 
           const shouldBuildAll =
             fullBuild ||
             changedFiles.some(
               (file) =>
-                globalFiles.has(file) ||
+                matchesAnyInput(file, globalInputs) ||
                 globalPrefixes.some((prefix) => file.startsWith(prefix)) ||
-                isSharedPackageFile(file)
+                isSharedInputFile(file)
             );
 
           const selected = shouldBuildAll
@@ -98,8 +113,20 @@ jobs:
                   (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
                 )
               );
+          const selectedDeliverables = shouldBuildAll
+            ? deliverables
+            : deliverables.filter((deliverable) =>
+                changedFiles.some(
+                  (file) =>
+                    file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
+                )
+              );
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `services=${JSON.stringify(selected)}\n`);
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `deliverables=${JSON.stringify(selectedDeliverables)}\n`
+          );
           NODE
 
   build:
@@ -225,3 +252,188 @@ jobs:
 
           echo "Timed out waiting for Juanie release ${RELEASE_ID}"
           exit 1
+
+  deliver:
+    needs: detect
+    if: ${{ needs.detect.outputs.deliverables != '[]' }}
+    strategy:
+      matrix:
+        deliverable: ${{ fromJson(needs.detect.outputs.deliverables) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+        if: ${{ hashFiles('bun.lock', 'bun.lockb') != '' }}
+        with:
+          bun-version: latest
+
+      - name: Install workspace dependencies
+        run: |
+          set -euo pipefail
+
+          if [ -f bun.lock ] || [ -f bun.lockb ]; then
+            bun install --frozen-lockfile
+          elif [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --immutable
+          elif [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build customer artifact
+        env:
+          JUANIE_DELIVERABLE_JSON: ${{ toJson(matrix.deliverable) }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE' > .juanie-deliverable.env
+          const fs = require('node:fs');
+          const deliverable = JSON.parse(process.env.JUANIE_DELIVERABLE_JSON);
+          const safe = (value) => String(value ?? 'artifact').replace(/[^a-zA-Z0-9_.-]/g, '-');
+          const name = safe(deliverable.name);
+          const variant = safe(deliverable.variant?.name);
+          const format = deliverable.variant?.package?.format ?? 'tgz';
+          const platform = deliverable.variant?.platform ?? deliverable.variant?.package?.platform ?? 'any';
+          const base = `.juanie/deliverables/${name}-${variant}`;
+          const archiveName = `${name}-${variant}-${platform}.${format === 'tar.gz' ? 'tar.gz' : format}`;
+          console.log(`DELIVERABLE_NAME=${name}`);
+          console.log(`DELIVERABLE_VARIANT=${variant}`);
+          console.log(`DELIVERABLE_PLATFORM=${platform}`);
+          console.log(`DELIVERABLE_FORMAT=${format}`);
+          console.log(`DELIVERABLE_BASE=${base}`);
+          console.log(`DELIVERABLE_STAGE=${base}/stage`);
+          console.log(`DELIVERABLE_PATH=${base}/${archiveName}`);
+          fs.writeFileSync('.juanie-deliverable.command', deliverable.variant?.build?.command ?? '');
+          fs.writeFileSync(
+            '.juanie-deliverable.checks.json',
+            JSON.stringify(deliverable.variant?.checks ?? [])
+          );
+          fs.writeFileSync(
+            '.juanie-deliverable.outputs.json',
+            JSON.stringify(deliverable.variant?.build?.outputs ?? [])
+          );
+          NODE
+
+          set -a
+          source .juanie-deliverable.env
+          set +a
+          mkdir -p "$DELIVERABLE_STAGE"
+
+          BUILD_COMMAND="$(cat .juanie-deliverable.command)"
+          if [ -n "$BUILD_COMMAND" ]; then
+            bash -lc "$BUILD_COMMAND"
+          fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { execFileSync } = require('node:child_process');
+          const outputs = JSON.parse(fs.readFileSync('.juanie-deliverable.outputs.json', 'utf8'));
+          const stage = process.env.DELIVERABLE_STAGE;
+          for (const output of outputs) {
+            const target = path.join(stage, output.to || '.');
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            execFileSync('cp', ['-R', output.from, target], { stdio: 'inherit' });
+          }
+          if (outputs.length === 0) {
+            const appDir = JSON.parse(process.env.JUANIE_DELIVERABLE_JSON).appDir || '.';
+            execFileSync('cp', ['-R', `${appDir}/.`, stage], { stdio: 'inherit' });
+          }
+          NODE
+
+          CHECKS=$(node -p 'JSON.parse(require("node:fs").readFileSync(".juanie-deliverable.checks.json", "utf8")).map((item) => item.command).join("\n")')
+          while IFS= read -r CHECK_COMMAND; do
+            [ -z "$CHECK_COMMAND" ] && continue
+            bash -lc "$CHECK_COMMAND"
+          done <<< "$CHECKS"
+
+          mkdir -p "$(dirname "$DELIVERABLE_PATH")"
+          case "$DELIVERABLE_FORMAT" in
+            tgz|tar.gz)
+              tar -czf "$DELIVERABLE_PATH" -C "$DELIVERABLE_STAGE" .
+              ;;
+            zip)
+              ABS_DELIVERABLE_PATH="$PWD/$DELIVERABLE_PATH"
+              (cd "$DELIVERABLE_STAGE" && zip -qr "$ABS_DELIVERABLE_PATH" .)
+              ;;
+            directory)
+              DELIVERABLE_PATH="$DELIVERABLE_STAGE"
+              ;;
+            *)
+              echo "Unsupported deliverable format: $DELIVERABLE_FORMAT"
+              exit 1
+              ;;
+          esac
+
+          echo "DELIVERABLE_PATH=$DELIVERABLE_PATH" >> "$GITHUB_ENV"
+          echo "DELIVERABLE_NAME=$DELIVERABLE_NAME" >> "$GITHUB_ENV"
+          echo "DELIVERABLE_VARIANT=$DELIVERABLE_VARIANT" >> "$GITHUB_ENV"
+          echo "DELIVERABLE_PLATFORM=$DELIVERABLE_PLATFORM" >> "$GITHUB_ENV"
+          echo "DELIVERABLE_FORMAT=$DELIVERABLE_FORMAT" >> "$GITHUB_ENV"
+
+      - name: Upload customer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DELIVERABLE_NAME }}-${{ env.DELIVERABLE_VARIANT }}-${{ env.DELIVERABLE_PLATFORM }}
+          path: ${{ env.DELIVERABLE_PATH }}
+          if-no-files-found: error
+
+      - name: Register Juanie delivery artifact
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_URI="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RELEASE_PAYLOAD=$(jq -cn \
+            --arg repository "${{ github.repository }}" \
+            --arg sha "${{ env.JUANIE_SOURCE_SHA }}" \
+            --arg ref "${{ env.JUANIE_RELEASE_REF }}" \
+            --arg kind "${{ matrix.deliverable.type }}" \
+            --arg name "$DELIVERABLE_NAME" \
+            --arg variant "$DELIVERABLE_VARIANT" \
+            --arg platform "$DELIVERABLE_PLATFORM" \
+            --arg format "$DELIVERABLE_FORMAT" \
+            --arg uri "$ARTIFACT_URI" \
+            '{
+              repository: $repository,
+              sha: $sha,
+              ref: $ref,
+              artifacts: [
+                {
+                  kind: $kind,
+                  name: $name,
+                  variant: $variant,
+                  platform: $platform,
+                  format: $format,
+                  uri: $uri
+                }
+              ]
+            }')
+
+          RELEASE_RESPONSE_FILE="$(mktemp)"
+          RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -d "$RELEASE_PAYLOAD")
+          RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
+          rm -f "$RELEASE_RESPONSE_FILE"
+
+          echo "$RELEASE_RESPONSE"
+
+          if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
+            echo "Juanie delivery artifact request failed with HTTP ${RELEASE_STATUS}"
+            exit 1
+          fi

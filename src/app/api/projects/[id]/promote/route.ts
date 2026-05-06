@@ -13,6 +13,7 @@ import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildPromotionPlan } from '@/lib/releases/planning';
@@ -136,7 +137,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     });
 
-    if (!sourceRelease || sourceRelease.artifacts.length === 0) {
+    const sourceArtifacts = sourceRelease
+      ? getDeployableReleaseArtifacts(sourceRelease.artifacts)
+      : [];
+
+    if (!sourceRelease || sourceArtifacts.length === 0) {
       return NextResponse.json(
         { error: `${promotion.sourceEnvironment.name} 来源发布缺少可复用制品，请先重新发布` },
         { status: 400 }
@@ -146,10 +151,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const promotedRelease = await createProjectRelease({
       projectId: id,
       environmentId: promotion.targetEnvironment.id,
-      services: sourceRelease.artifacts.map((artifact) => ({
-        id: artifact.serviceId,
-        name: artifact.service.name,
-        image: artifact.imageUrl,
+      services: sourceArtifacts.map((artifact) => ({
+        id: artifact.serviceId ?? undefined,
+        name: artifact.service?.name,
+        image: getReleaseArtifactUri(artifact) ?? '',
         digest: artifact.imageDigest,
       })),
       sourceRepository: project.repository?.fullName ?? project.name,
@@ -180,10 +185,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         releasePath: promotedRelease?.id
           ? buildReleaseDetailPath(id, promotedReleaseEnvironmentId, promotedRelease.id)
           : null,
-        artifacts: promotedRelease?.artifacts.map((artifact) => ({
-          service: artifact.service.name,
-          imageUrl: artifact.imageUrl,
-        })),
+        artifacts: promotedRelease
+          ? getDeployableReleaseArtifacts(promotedRelease.artifacts).map((artifact) => ({
+              service: artifact.service?.name ?? artifact.name ?? 'service',
+              imageUrl: getReleaseArtifactUri(artifact),
+            }))
+          : [],
         commitSha: sourceRelease.sourceCommitSha,
         promotionFlowId: promotion.flow?.id ?? null,
         targetEnvironmentId: promotedReleaseEnvironmentId,

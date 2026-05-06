@@ -31,8 +31,17 @@ describe('release detail view', () => {
         artifacts: [
           {
             service: { id: 'svc-1', name: 'web' },
+            serviceId: 'svc-1',
+            kind: 'image',
             imageUrl: 'ghcr.io/demo/web:2',
             imageDigest: null,
+          },
+          {
+            kind: 'package',
+            name: 'kit',
+            variant: 'sdk',
+            platform: 'any',
+            uri: 'https://ci.example.com/artifacts/kit-sdk.tgz',
           },
         ],
         deployments: [{ id: 'dep-1', status: 'running', serviceId: 'svc-1' }],
@@ -52,6 +61,8 @@ describe('release detail view', () => {
         artifacts: [
           {
             service: { id: 'svc-1', name: 'web' },
+            serviceId: 'svc-1',
+            kind: 'image',
             imageUrl: 'ghcr.io/demo/web:1',
             imageDigest: null,
           },
@@ -62,9 +73,9 @@ describe('release detail view', () => {
 
     expect(release.riskLabel).toBe('高风险');
     expect(release.primaryDomainUrl).toBe('https://preview.example.com');
-    expect(release.diff.changedArtifacts.length).toBe(1);
+    expect(release.diff.changedArtifacts.length).toBe(2);
     expect(release.approvalRunsCount).toBe(1);
-    expect(release.stats.map((item) => item.label)).toEqual(['服务', '部署', '迁移']);
+    expect(release.stats.map((item) => item.label)).toEqual(['服务', '交付物', '部署', '迁移']);
     expect(release.platformSignals.nextActionLabel).toBe('处理迁移审批');
     expect(
       release.metadataItems.some((item) => item.label === '发布 ID' && item.mono === true)

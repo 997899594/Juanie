@@ -187,4 +187,88 @@ databases:
       'databases.0.externalUrl: Redis 外部连接串必须使用 redis: / rediss: 协议'
     );
   });
+
+  it('accepts monorepo affected rules, service runtime metadata, and deliverable variants', () => {
+    const parsed = parseJuanieConfig(`
+monorepo:
+  type: turborepo
+  packageManager: pnpm
+  affected:
+    strategy: turbo
+    global:
+      - package.json
+      - pnpm-lock.yaml
+    inputs:
+      - kit/**
+      - acs/**
+services:
+  - name: dualx-server
+    type: web
+    runtime:
+      language: node
+      framework: nest
+      nodeVersion: "22"
+    monorepo:
+      appDir: apps/dualx-server
+    build:
+      command: pnpm --filter dualx-server build
+      package:
+        strategy: pnpm-deploy
+      outputs:
+        - from: apps/dualx-server/dist
+          to: app/dist
+    run:
+      command: ./bin/start
+      port: 6014
+deliverables:
+  - name: kit
+    type: package
+    monorepo:
+      appDir: kit
+    variants:
+      - name: sdk
+        build:
+          command: pnpm --filter @dualx/kit build:sdk
+          outputs:
+            - from: kit/dist/sdk
+              to: package
+        package:
+          format: tgz
+          platform: any
+        checks:
+          - command: pnpm --filter @dualx/kit test
+`);
+
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.monorepo?.affected?.inputs).toEqual(['kit/**', 'acs/**']);
+    expect(parsed.services[0]?.runtime?.framework).toBe('nest');
+    expect(parsed.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
+    expect(parsed.deliverables?.[0]?.variants[0]?.package.format).toBe('tgz');
+  });
+
+  it('keeps package deliverables from becoming fake services', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: npm start
+      port: 3000
+deliverables:
+  - name: kit
+    type: package
+    variants:
+      - name: sdk
+        build:
+          command: npm run build:sdk
+        package:
+          format: tgz
+          platform: any
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors).toContain(
+      'deliverables.0.monorepo.appDir: package deliverables must declare monorepo.appDir'
+    );
+  });
 });

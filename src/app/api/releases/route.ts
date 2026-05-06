@@ -11,12 +11,20 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     const body = await request.json();
-    const { repository, sha, ref, services, serviceId, serviceName, image, summary } = body;
+    const { repository, sha, ref, services, artifacts, serviceId, serviceName, image, summary } =
+      body;
 
-    if (!repository || !ref || (!image && (!Array.isArray(services) || services.length === 0))) {
+    if (
+      !repository ||
+      !ref ||
+      (!image &&
+        (!Array.isArray(services) || services.length === 0) &&
+        (!Array.isArray(artifacts) || artifacts.length === 0))
+    ) {
       return NextResponse.json(
         {
-          error: 'Missing required fields: repository, ref, and either image or services[]',
+          error:
+            'Missing required fields: repository, ref, and at least one of image, services[], or artifacts[]',
         },
         { status: 400 }
       );
@@ -29,6 +37,7 @@ export async function POST(request: Request) {
       ref,
       sha,
       services,
+      artifacts,
       serviceId,
       serviceName,
       image,

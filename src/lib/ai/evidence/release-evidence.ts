@@ -1,5 +1,6 @@
 import { loadAIReleaseContext } from '@/lib/ai/evidence/load-release-context';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
+import { getReleaseArtifactDisplayName } from '@/lib/releases/artifacts';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 
 export interface ReleaseEvidencePack {
@@ -41,7 +42,7 @@ export async function buildReleaseEvidencePack(input: {
   const changedServices =
     decoratedRelease.diff.changedArtifacts.length > 0
       ? decoratedRelease.diff.changedArtifacts.map((item) => item.serviceName)
-      : decoratedRelease.artifacts.map((artifact) => artifact.service.name);
+      : decoratedRelease.artifacts.map((artifact) => getReleaseArtifactDisplayName(artifact));
   const uniqueChangedServices = Array.from(new Set(changedServices));
   const capacity = decoratedRelease.infrastructureDiagnostics?.capacity ?? null;
 

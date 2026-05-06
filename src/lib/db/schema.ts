@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   index,
   integer,
@@ -73,6 +74,12 @@ export const releaseStatuses = [
   'canceled',
 ] as const;
 export type ReleaseStatus = (typeof releaseStatuses)[number];
+
+export const releaseArtifactKinds = ['image', 'package', 'baremetal', 'archive'] as const;
+export type ReleaseArtifactKind = (typeof releaseArtifactKinds)[number];
+
+export const releaseArtifactStatuses = ['pending', 'building', 'succeeded', 'failed'] as const;
+export type ReleaseArtifactStatus = (typeof releaseArtifactStatuses)[number];
 
 export const deploymentStatuses = [
   'queued',
@@ -1206,17 +1213,32 @@ export const releaseArtifacts = pgTable(
     releaseId: uuid('releaseId')
       .notNull()
       .references(() => releases.id, { onDelete: 'cascade' }),
-    serviceId: uuid('serviceId')
-      .notNull()
-      .references(() => services.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'cascade' }),
 
-    imageUrl: varchar('imageUrl', { length: 500 }).notNull(),
+    kind: varchar('kind', { length: 20 }).$type<ReleaseArtifactKind>().default('image').notNull(),
+    name: varchar('name', { length: 100 }),
+    variant: varchar('variant', { length: 100 }),
+    platform: varchar('platform', { length: 80 }),
+    format: varchar('format', { length: 40 }),
+    uri: varchar('uri', { length: 1000 }),
+    checksum: varchar('checksum', { length: 255 }),
+    sizeBytes: bigint('sizeBytes', { mode: 'number' }),
+    sbomUri: varchar('sbomUri', { length: 1000 }),
+    provenanceUri: varchar('provenanceUri', { length: 1000 }),
+    status: varchar('status', { length: 20 })
+      .$type<ReleaseArtifactStatus>()
+      .default('succeeded')
+      .notNull(),
+
+    imageUrl: varchar('imageUrl', { length: 500 }),
     imageDigest: varchar('imageDigest', { length: 255 }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
   },
   (table) => ({
     releaseIdIdx: index('releaseArtifact_releaseId_idx').on(table.releaseId),
     serviceIdIdx: index('releaseArtifact_serviceId_idx').on(table.serviceId),
+    kindIdx: index('releaseArtifact_kind_idx').on(table.kind),
+    statusIdx: index('releaseArtifact_status_idx').on(table.status),
     releaseServiceUnique: unique('releaseArtifact_release_service_unique').on(
       table.releaseId,
       table.serviceId

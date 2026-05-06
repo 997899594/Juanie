@@ -37,6 +37,7 @@ import {
   getReleaseEntryPointGuardReason,
   type ReleaseEntryPoint,
 } from '@/lib/releases/admission';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
 import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
 import {
@@ -597,7 +598,11 @@ async function buildPromotionPlanForResolution(
     },
   });
 
-  if (!sourceRelease || sourceRelease.artifacts.length === 0) {
+  const sourceArtifacts = sourceRelease
+    ? getDeployableReleaseArtifacts(sourceRelease.artifacts)
+    : [];
+
+  if (!sourceRelease || sourceArtifacts.length === 0) {
     return buildStaticPromotionPlan({
       sourceEnvironment,
       targetEnvironment,
@@ -613,10 +618,10 @@ async function buildPromotionPlanForResolution(
     ? await buildProjectReleasePlan({
         projectId,
         environmentId: resolution.targetEnvironment.id,
-        services: sourceRelease.artifacts.map((artifact) => ({
-          id: artifact.serviceId,
-          name: artifact.service.name,
-          image: artifact.imageUrl,
+        services: sourceArtifacts.map((artifact) => ({
+          id: artifact.serviceId ?? undefined,
+          name: artifact.service?.name,
+          image: getReleaseArtifactUri(artifact) ?? '',
           digest: artifact.imageDigest,
         })),
         sourceRef: sourceRelease.sourceRef,

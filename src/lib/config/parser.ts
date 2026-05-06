@@ -14,6 +14,74 @@ import {
 
 const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 const schemaSources = ['atlas', 'drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
+const serviceRuntimeLanguages = ['node', 'bun', 'static', 'custom'] as const;
+const packageFormats = ['tgz', 'zip', 'tar.gz', 'directory'] as const;
+
+const pathPatternSchema = z.string().min(1).max(300);
+
+const monorepoAffectedSchema = z
+  .object({
+    strategy: z.enum(['turbo', 'all', 'manual']).optional().default('turbo'),
+    global: z.array(pathPatternSchema).max(100).optional().default([]),
+    inputs: z.array(pathPatternSchema).max(200).optional().default([]),
+  })
+  .strict();
+
+const monorepoConfigSchema = z
+  .object({
+    type: z.enum(['turborepo']),
+    packageManager: z.enum(['bun', 'pnpm', 'yarn', 'npm']).optional(),
+    affected: monorepoAffectedSchema.optional(),
+  })
+  .strict();
+
+const runtimeSchema = z
+  .object({
+    language: z.enum(serviceRuntimeLanguages),
+    framework: z.string().min(1).max(100).optional(),
+    nodeVersion: z.string().min(1).max(20).optional(),
+  })
+  .strict();
+
+const buildOutputSchema = z
+  .object({
+    from: pathPatternSchema,
+    to: pathPatternSchema,
+  })
+  .strict();
+
+const buildPackageSchema = z
+  .object({
+    strategy: z.enum(['pnpm-deploy', 'pnpm-pack', 'npm-pack', 'copy', 'custom']),
+  })
+  .strict();
+
+const packageSchema = z
+  .object({
+    format: z.enum(packageFormats),
+    platform: z.string().min(1).max(80).optional(),
+    platforms: z.array(z.string().min(1).max(80)).max(20).optional(),
+  })
+  .strict();
+
+const checkSchema = z
+  .object({
+    command: z.string().min(1).max(500),
+  })
+  .strict();
+
+const buildSchema = z
+  .object({
+    strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
+    command: z.string().optional(),
+    dockerfile: z.string().optional(),
+    context: z.string().optional(),
+    target: z.string().optional(),
+    definition: z.string().optional(),
+    outputs: z.array(buildOutputSchema).max(100).optional(),
+    package: buildPackageSchema.optional(),
+  })
+  .strict();
 
 const schemaConfigSchema = z
   .object({
@@ -50,16 +118,9 @@ export const serviceSchema = z
       })
       .optional(),
 
-    build: z
-      .object({
-        strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
-        command: z.string().optional(),
-        dockerfile: z.string().optional(),
-        context: z.string().optional(),
-        target: z.string().optional(),
-        definition: z.string().optional(),
-      })
-      .optional(),
+    runtime: runtimeSchema.optional(),
+
+    build: buildSchema.optional(),
 
     run: z.object({
       command: z.string(),
@@ -144,11 +205,58 @@ export const environmentSchema = z.object({
   variables: z.record(z.string(), z.string()).optional(),
 });
 
+const deliverableVariantSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    platform: z.string().min(1).max(80).optional(),
+    build: buildSchema,
+    package: packageSchema,
+    checks: z.array(checkSchema).max(20).optional(),
+  })
+  .strict();
+
+const deliverableSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['package', 'baremetal', 'archive']),
+    monorepo: z
+      .object({
+        appDir: z.string().min(1).optional(),
+      })
+      .optional(),
+    source: z
+      .object({
+        service: z.string().min(1).max(100),
+      })
+      .optional(),
+    variants: z.array(deliverableVariantSchema).min(1).max(50),
+  })
+  .strict()
+  .superRefine((deliverable, ctx) => {
+    if (deliverable.type === 'baremetal' && !deliverable.source?.service) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'baremetal deliverables must declare source.service',
+        path: ['source', 'service'],
+      });
+    }
+
+    if (deliverable.type === 'package' && !deliverable.monorepo?.appDir) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'package deliverables must declare monorepo.appDir',
+        path: ['monorepo', 'appDir'],
+      });
+    }
+  });
+
 export const juanieConfigSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   framework: z.string().optional(),
+  monorepo: monorepoConfigSchema.optional(),
 
   services: z.array(serviceSchema).min(1).max(20),
+  deliverables: z.array(deliverableSchema).max(50).optional(),
   databases: z.array(databaseSchema).max(10).optional(),
   environments: z.record(z.string(), environmentSchema).optional(),
 
@@ -156,6 +264,7 @@ export const juanieConfigSchema = z.object({
 });
 
 export type ServiceConfig = z.infer<typeof serviceSchema>;
+export type DeliverableConfig = z.infer<typeof deliverableSchema>;
 export type DatabaseConfig = z.infer<typeof databaseSchema>;
 export type EnvironmentConfig = z.infer<typeof environmentSchema>;
 export type JuanieConfig = z.infer<typeof juanieConfigSchema>;

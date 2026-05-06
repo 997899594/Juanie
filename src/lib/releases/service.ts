@@ -15,6 +15,7 @@ import {
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import { buildPromotionPlans, type PromotionPlanSnapshot } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -150,7 +151,11 @@ function buildManualReleaseSources<
     sourceRef: release.sourceRef ?? '',
     sourceCommitSha: release.sourceCommitSha ?? null,
     summary: release.recap?.primarySummary ?? null,
-    artifacts: release.artifacts,
+    artifacts: getDeployableReleaseArtifacts(release.artifacts).map((artifact) => ({
+      ...artifact,
+      imageUrl: getReleaseArtifactUri(artifact) ?? '',
+      service: artifact.service!,
+    })),
   }));
 }
 
@@ -181,10 +186,10 @@ function buildProjectReleaseListItems<
       scopeLabel: getEnvironmentScopeLabel(release.environment),
       sourceLabel: getEnvironmentSourceLabel(release.environment),
     },
-    artifacts: release.artifacts.map((artifact) => ({
-      id: artifact.id ?? `${release.id}-${artifact.service.id}`,
-      imageUrl: artifact.imageUrl,
-      service: artifact.service,
+    artifacts: getDeployableReleaseArtifacts(release.artifacts).map((artifact) => ({
+      id: artifact.id ?? `${release.id}-${artifact.serviceId}`,
+      imageUrl: getReleaseArtifactUri(artifact) ?? '',
+      service: artifact.service!,
     })),
   }));
 }

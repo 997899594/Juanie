@@ -7,6 +7,7 @@ import { releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { logger } from '@/lib/logger';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
+import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
   failReleaseForCurrentPhase,
   loadReleaseForOrchestration,
@@ -70,11 +71,22 @@ export async function processRelease(job: Job<ReleaseJobData>) {
   });
 
   if (release.artifacts.length === 0) {
-    await updateReleaseStatus(release.id, 'failed', 'Release has no artifacts to deploy');
-    throw new Error('Release has no artifacts to deploy');
+    await updateReleaseStatus(release.id, 'failed', 'Release has no artifacts to verify');
+    throw new Error('Release has no artifacts to verify');
   }
 
   try {
+    const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
+    if (deployableArtifacts.length === 0) {
+      await updateReleaseStatus(release.id, 'succeeded');
+      await persistReleaseRecapSafely(release.id);
+      return {
+        success: true,
+        terminal: true,
+        artifactOnly: true,
+      };
+    }
+
     await syncProjectDatabaseRuntimeContractsFromRepo({
       projectId: release.projectId,
       sourceRef: release.sourceRef,

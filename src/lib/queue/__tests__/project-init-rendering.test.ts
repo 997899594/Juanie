@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
+  buildMonorepoCiDeliverables,
   buildMonorepoCiServices,
   buildRunScriptCommand,
   detectMigrationTool,
   detectPackageManager,
+  encodeMonorepoAffectedRules,
+  encodeMonorepoCiDeliverables,
   inferSchemaConfig,
   renderGitHubCIMonorepo,
   renderJuanieConfig,
@@ -439,6 +442,7 @@ describe('project init migration inference', () => {
         name: 'NexusNote',
         productionBranch: 'main',
         repositoryId: 'repo_1',
+        repository: null,
         configJson: {
           services: {
             worker: {
@@ -481,6 +485,10 @@ describe('project init migration inference', () => {
 
     expect(config).toContain('monorepo:');
     expect(config).toContain('appDir: packages/worker');
+    expect(config).toContain('# monorepo tells Juanie how to calculate affected services');
+    expect(config).toContain('# deliverables are customer-downloadable artifacts.');
+    expect(config).toContain('inputs:');
+    expect(config).toContain('- packages/**');
   });
 
   it('embeds packages monorepo services into CI build metadata', () => {
@@ -491,15 +499,35 @@ describe('project init migration inference', () => {
       productionBranch: 'main',
       repositoryId: 'repo_1',
       configJson: {
+        monorepo: {
+          enabled: true,
+          type: 'turborepo',
+          packageManager: 'pnpm',
+          affected: {
+            strategy: 'turbo',
+            inputs: ['kit/**', 'acs/**'],
+          },
+        },
         services: {
           worker: {
             monorepo: {
               appDir: 'packages/worker',
             },
+            runtime: {
+              language: 'node',
+              framework: 'custom',
+              nodeVersion: '22',
+            },
             build: {
               strategy: 'dockerfile',
               context: '.',
               dockerfile: 'packages/worker/Dockerfile',
+              outputs: [
+                {
+                  from: 'packages/worker/dist',
+                  to: 'app/dist',
+                },
+              ],
             },
           },
         },
@@ -518,9 +546,18 @@ describe('project init migration inference', () => {
 
     const rendered = renderGitHubCIMonorepo(project, serviceList);
     const encoded = rendered.match(/JUANIE_SERVICE_MATRIX_B64: ([A-Za-z0-9+/=]+)/)?.[1];
+    const deliverableEncoded = rendered.match(
+      /JUANIE_DELIVERABLE_MATRIX_B64: ([A-Za-z0-9+/=]+)/
+    )?.[1];
+    const affectedEncoded = rendered.match(/JUANIE_AFFECTED_RULES_B64: ([A-Za-z0-9+/=]+)/)?.[1];
 
     expect(Boolean(encoded)).toBe(true);
+    expect(Boolean(deliverableEncoded)).toBe(true);
+    expect(Boolean(affectedEncoded)).toBe(true);
     const ciServices = buildMonorepoCiServices(project, serviceList);
+    const affectedRules = JSON.parse(
+      Buffer.from(encodeMonorepoAffectedRules(project), 'base64').toString('utf8')
+    );
 
     expect(ciServices.length).toBe(1);
     expect(ciServices[0]?.name).toBe('worker');
@@ -528,6 +565,104 @@ describe('project init migration inference', () => {
     expect(ciServices[0]?.type).toBe('worker');
     expect(ciServices[0]?.build.dockerfile).toBe('packages/worker/Dockerfile');
     expect(ciServices[0]?.build.context).toBe('.');
+    expect(affectedRules.inputs).toEqual(['kit/**', 'acs/**']);
+  });
+
+  it('renders configured deliverables as real manifest entries instead of commented examples', () => {
+    const config = renderJuanieConfig(
+      {
+        id: 'project_1',
+        slug: 'dualx',
+        name: 'DualX',
+        productionBranch: 'main',
+        repositoryId: 'repo_1',
+        configJson: {
+          deliverables: [
+            {
+              name: 'kit',
+              type: 'package',
+              monorepo: {
+                appDir: 'kit',
+              },
+              variants: [
+                {
+                  name: 'sdk',
+                  build: {
+                    command: 'pnpm --filter @dualx/kit build:sdk',
+                    outputs: [{ from: 'kit/dist/sdk', to: 'package' }],
+                  },
+                  package: {
+                    format: 'tgz',
+                    platform: 'any',
+                  },
+                  checks: [{ command: 'pnpm --filter @dualx/kit test' }],
+                },
+              ],
+            },
+          ],
+        },
+      } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
+      {
+        services: [
+          {
+            id: 'service_web',
+            name: 'web',
+            type: 'web',
+            buildCommand: 'bun run build',
+            startCommand: 'bun run start',
+          } as typeof services.$inferSelect,
+        ],
+        databases: [],
+      },
+      {
+        monorepoType: 'turborepo',
+        rootFiles: ['package.json', 'turbo.json'],
+        packageManager: 'pnpm',
+        bakeDefinition: null,
+        bakeTargets: [],
+        atlasConfigPath: null,
+        atlasConfigContent: null,
+        migrationScriptContents: {},
+        packageJson: { scripts: {} },
+      }
+    );
+
+    expect(config).toContain('deliverables:');
+    expect(config).toContain('- name: kit');
+    expect(config).toContain('command: pnpm --filter @dualx/kit build:sdk');
+    expect(config).not.toContain('# deliverables:');
+
+    const projectWithDeliverableConfig = {
+      configJson: {
+        deliverables: [
+          {
+            name: 'kit',
+            type: 'package',
+            monorepo: { appDir: 'kit' },
+            variants: [
+              {
+                name: 'sdk',
+                build: {
+                  command: 'pnpm --filter @dualx/kit build:sdk',
+                  outputs: [{ from: 'kit/dist/sdk', to: 'package' }],
+                },
+                package: { format: 'tgz', platform: 'any' },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const deliverables = buildMonorepoCiDeliverables(projectWithDeliverableConfig);
+    const encodedDeliverables = JSON.parse(
+      Buffer.from(encodeMonorepoCiDeliverables(projectWithDeliverableConfig), 'base64').toString(
+        'utf8'
+      )
+    );
+
+    expect(deliverables[0]?.name).toBe('kit');
+    expect(deliverables[0]?.variant.name).toBe('sdk');
+    expect(encodedDeliverables[0]?.variant.package.format).toBe('tgz');
   });
 
   it('builds yarn commands without run', () => {

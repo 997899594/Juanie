@@ -15,6 +15,7 @@ import {
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
 import type { ProjectGovernanceCapability } from '@/lib/projects/settings-view';
+import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
   buildIssueSnapshot,
   type DatabaseManualControlSnapshot,
@@ -134,10 +135,12 @@ export interface ProjectReleaseLike {
   sourceRef?: string | null;
   summary?: string | null;
   artifacts: Array<{
-    service: {
+    kind?: string | null;
+    serviceId?: string | null;
+    service?: {
       id: string;
       name: string;
-    };
+    } | null;
   }>;
   previewReviewMetadata?: PreviewReviewMetadata | null;
 }
@@ -316,7 +319,11 @@ export function decorateProjectDatabaseCards<
       latestReleaseByScope.set(projectScopeKey, release);
     }
 
-    for (const artifact of release.artifacts) {
+    for (const artifact of getDeployableReleaseArtifacts(release.artifacts)) {
+      if (!artifact.service?.id) {
+        continue;
+      }
+
       const serviceScopeKey = getScopeKey(release.environment.id, artifact.service.id);
       if (!latestReleaseByScope.has(serviceScopeKey)) {
         latestReleaseByScope.set(serviceScopeKey, release);

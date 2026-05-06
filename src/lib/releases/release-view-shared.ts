@@ -25,6 +25,7 @@ import {
   evaluateReleasePolicy,
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
+import { getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import type { ReleaseDiffSnapshot } from '@/lib/releases/diff';
 import {
   getReleaseIntelligenceSnapshot,
@@ -95,12 +96,19 @@ export interface ReleaseViewLike {
   previewReviewMetadata?: PreviewReviewMetadata | null;
   artifacts: Array<{
     id?: string;
-    serviceId?: string;
-    service: {
+    kind?: string | null;
+    name?: string | null;
+    variant?: string | null;
+    platform?: string | null;
+    format?: string | null;
+    uri?: string | null;
+    status?: string | null;
+    serviceId?: string | null;
+    service?: {
       id: string;
       name: string;
-    };
-    imageUrl: string;
+    } | null;
+    imageUrl?: string | null;
     imageDigest?: string | null;
   }>;
   migrationRuns: Array<{
@@ -395,7 +403,7 @@ export function buildReleaseSignalChips(input: {
   if (input.diff.changedArtifacts.length > 0) {
     chips.push({
       key: 'artifact-changes',
-      label: `镜像变更 ${input.diff.changedArtifacts.length} 项`,
+      label: `制品变更 ${input.diff.changedArtifacts.length} 项`,
       tone: 'neutral',
     });
   }
@@ -431,8 +439,8 @@ export function buildDeploymentItems(
     errorMessage: deployment.errorMessage ?? null,
     statusDecoration: getDeploymentStatusDecoration(deployment.status),
     serviceName: deployment.serviceId
-      ? (release.artifacts.find((artifact) => artifact.service.id === deployment.serviceId)?.service
-          .name ?? '服务')
+      ? (release.artifacts.find((artifact) => artifact.service?.id === deployment.serviceId)
+          ?.service?.name ?? '服务')
       : '项目',
   }));
 }
@@ -465,7 +473,9 @@ export function buildMigrationItems(
     },
     statusDecoration: getMigrationStatusDecoration(run.status),
     imageUrl:
-      release.artifacts.find((artifact) => artifact.service.id === run.serviceId)?.imageUrl ?? null,
+      getReleaseArtifactUri(
+        release.artifacts.find((artifact) => artifact.service?.id === run.serviceId) ?? {}
+      ) ?? null,
     serviceName: run.service?.name ?? '服务',
     createdAtLabel: formatPlatformTimeContext(run.createdAt) ?? '—',
   }));

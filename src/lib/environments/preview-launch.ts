@@ -9,6 +9,7 @@ import {
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { createProjectRelease, type ReleaseServiceInput } from '@/lib/releases';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 
 interface PreviewLaunchProject {
@@ -30,12 +31,14 @@ interface PreviewLaunchProject {
 
 interface ReusableArtifactRelease {
   artifacts: Array<{
-    serviceId: string;
-    imageUrl: string;
-    service: {
+    kind?: string | null;
+    serviceId: string | null;
+    uri?: string | null;
+    imageUrl?: string | null;
+    service?: {
       id: string;
       name: string;
-    };
+    } | null;
   }>;
 }
 
@@ -46,15 +49,21 @@ export function collectReusableReleaseServices(input: {
   const latestImageByServiceId = new Map<string, ReleaseServiceInput>();
 
   for (const release of input.releasesForCommit) {
-    for (const artifact of release.artifacts) {
-      if (!artifact.serviceId || latestImageByServiceId.has(artifact.serviceId)) {
+    for (const artifact of getDeployableReleaseArtifacts(release.artifacts)) {
+      const artifactUri = getReleaseArtifactUri(artifact);
+      if (
+        !artifact.serviceId ||
+        !artifact.service ||
+        !artifactUri ||
+        latestImageByServiceId.has(artifact.serviceId)
+      ) {
         continue;
       }
 
       latestImageByServiceId.set(artifact.serviceId, {
         id: artifact.service.id,
         name: artifact.service.name,
-        image: artifact.imageUrl,
+        image: artifactUri,
       });
     }
   }
@@ -83,6 +92,8 @@ async function loadReusableReleaseServicesByCommit(input: {
       artifacts: {
         columns: {
           serviceId: true,
+          kind: true,
+          uri: true,
           imageUrl: true,
         },
         with: {

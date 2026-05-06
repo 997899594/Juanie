@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
+import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 
 const RELEASE_CHANNEL_PREFIX = 'realtime:releases:project:';
 const releasesRealtimeLogger = logger.child({ component: 'realtime-releases' });
@@ -88,7 +89,10 @@ export async function loadReleaseRealtimeRecord(releaseId: string): Promise<{
       artifacts: {
         columns: {
           id: true,
+          kind: true,
+          uri: true,
           imageUrl: true,
+          serviceId: true,
         },
         with: {
           service: {
@@ -124,12 +128,12 @@ export async function loadReleaseRealtimeRecord(releaseId: string): Promise<{
         id: release.environment.id,
         name: release.environment.name,
       },
-      artifacts: release.artifacts.map((artifact) => ({
+      artifacts: getDeployableReleaseArtifacts(release.artifacts).map((artifact) => ({
         id: artifact.id,
-        imageUrl: artifact.imageUrl,
+        imageUrl: getReleaseArtifactUri(artifact) ?? '',
         service: {
-          id: artifact.service.id,
-          name: artifact.service.name,
+          id: artifact.service!.id,
+          name: artifact.service!.name,
         },
       })),
     },

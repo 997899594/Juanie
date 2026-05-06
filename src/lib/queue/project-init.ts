@@ -607,6 +607,11 @@ type ProjectConfigServiceEntry = {
   monorepo?: {
     appDir?: string;
   };
+  runtime?: {
+    language?: 'node' | 'bun' | 'static' | 'custom';
+    framework?: string;
+    nodeVersion?: string;
+  };
   build?: {
     strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
     command?: string;
@@ -614,8 +619,52 @@ type ProjectConfigServiceEntry = {
     context?: string;
     target?: string;
     definition?: string;
+    outputs?: Array<{
+      from: string;
+      to: string;
+    }>;
+    package?: {
+      strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
+    };
   };
 };
+
+type ProjectConfigMonorepoEntry = {
+  enabled?: boolean;
+  type?: MonorepoType;
+  packageManager?: PackageManager;
+  affected?: MonorepoAffectedRules;
+};
+
+type ProjectConfigDeliverableEntry = {
+  name: string;
+  type: 'package' | 'baremetal' | 'archive';
+  monorepo?: {
+    appDir?: string;
+  };
+  source?: {
+    service: string;
+  };
+  variants: Array<{
+    name: string;
+    platform?: string;
+    build: ProjectConfigServiceEntry['build'];
+    package: {
+      format: 'tgz' | 'zip' | 'tar.gz' | 'directory';
+      platform?: string;
+      platforms?: string[];
+    };
+    checks?: Array<{
+      command: string;
+    }>;
+  }>;
+};
+
+interface MonorepoAffectedRules {
+  strategy?: 'turbo' | 'all' | 'manual';
+  global?: string[];
+  inputs?: string[];
+}
 
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
   return supportsDatabaseAutomatedMigrations(dbType);
@@ -638,6 +687,24 @@ function getProjectServiceConfigMap(
   return servicesConfig && typeof servicesConfig === 'object'
     ? (servicesConfig as Record<string, ProjectConfigServiceEntry>)
     : {};
+}
+
+function getProjectMonorepoConfig(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): ProjectConfigMonorepoEntry | null {
+  const config = getProjectConfigJson(project);
+  const monorepo = config.monorepo;
+
+  return monorepo && typeof monorepo === 'object' ? (monorepo as ProjectConfigMonorepoEntry) : null;
+}
+
+function getProjectDeliverablesConfig(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): ProjectConfigDeliverableEntry[] {
+  const config = getProjectConfigJson(project);
+  return Array.isArray(config.deliverables)
+    ? (config.deliverables as ProjectConfigDeliverableEntry[])
+    : [];
 }
 
 function getProjectServiceAppDir(
@@ -957,46 +1024,99 @@ function resolveBakeTarget(
 
 function buildServiceBuildLines(
   service: typeof services.$inferSelect,
-  automation: RepoAutomationContextLike
+  automation: RepoAutomationContextLike,
+  serviceConfig?: ProjectConfigServiceEntry
 ): string[] {
   const lines = ['    build:'];
-  const buildCommand = service.buildCommand ?? 'npm run build';
-  const dockerContext = service.dockerContext ?? '.';
-  const dockerfile = service.dockerfile?.trim();
-  const bakeDefinition = automation.bakeDefinition ?? null;
-  const bakeTarget = resolveBakeTarget(service, automation);
+  const configuredBuild = serviceConfig?.build;
+  const buildCommand = configuredBuild?.command ?? service.buildCommand ?? 'npm run build';
+  const dockerContext = configuredBuild?.context ?? service.dockerContext ?? '.';
+  const dockerfile = configuredBuild?.dockerfile ?? service.dockerfile?.trim();
+  const bakeDefinition = configuredBuild?.definition ?? automation.bakeDefinition ?? null;
+  const bakeTarget = configuredBuild?.target ?? resolveBakeTarget(service, automation);
+  const buildStrategy = configuredBuild?.strategy;
 
-  lines.push(`      command: ${buildCommand}`);
+  lines.push(
+    '      # command is the CI build command for this service.',
+    `      command: ${buildCommand}`
+  );
 
-  if (bakeDefinition) {
+  if (bakeDefinition || buildStrategy === 'bake') {
     lines.push(
+      '      # strategy bake uses Docker Buildx Bake targets.',
       '      strategy: bake',
-      `      definition: ${bakeDefinition}`,
+      '      # context is the Docker build context.',
       `      context: ${dockerContext}`
     );
 
+    if (bakeDefinition) {
+      lines.push('      # definition points at docker-bake.hcl or docker-bake.json.');
+      lines.push(`      definition: ${bakeDefinition}`);
+    }
+
     if (bakeTarget) {
+      lines.push('      # target selects the Bake target for this service.');
       lines.push(`      target: ${bakeTarget}`);
     }
 
     if (dockerfile) {
+      lines.push('      # dockerfile is retained when the Bake target needs it as metadata.');
       lines.push(`      dockerfile: ${dockerfile}`);
     }
 
+    appendBuildPackagingLines(lines, configuredBuild);
     return lines;
   }
 
-  if (dockerfile) {
+  if (dockerfile || buildStrategy === 'dockerfile') {
     lines.push(
+      '      # strategy dockerfile builds this service from a Dockerfile.',
       '      strategy: dockerfile',
-      `      dockerfile: ${dockerfile}`,
+      '      # context is the Docker build context.',
       `      context: ${dockerContext}`
     );
+    if (dockerfile) {
+      lines.push('      # dockerfile is the service image build file.');
+      lines.push(`      dockerfile: ${dockerfile}`);
+    }
+    appendBuildPackagingLines(lines, configuredBuild);
     return lines;
   }
 
-  lines.push('      strategy: buildpacks', `      context: ${dockerContext}`);
+  lines.push(
+    '      # strategy buildpacks lets the platform infer the image build when no Dockerfile is declared.',
+    `      strategy: ${buildStrategy ?? 'buildpacks'}`,
+    '      # context is the source directory used by the selected build strategy.',
+    `      context: ${dockerContext}`
+  );
+  appendBuildPackagingLines(lines, configuredBuild);
   return lines;
+}
+
+function appendBuildPackagingLines(lines: string[], build?: ProjectConfigServiceEntry['build']) {
+  if (build?.package) {
+    lines.push(
+      '      # package controls service runtime packaging before delivery/export.',
+      '      package:',
+      '        # strategy selects the dependency pruning/packaging tool.',
+      `        strategy: ${build.package.strategy}`
+    );
+  }
+
+  if (build?.outputs?.length) {
+    lines.push(
+      '      # outputs copy build results into a normalized artifact staging directory.',
+      '      outputs:'
+    );
+    for (const output of build.outputs) {
+      lines.push(
+        '        # from is a path produced by the build command.',
+        `        - from: ${output.from}`,
+        '          # to is the destination path inside the artifact.',
+        `          to: ${output.to}`
+      );
+    }
+  }
 }
 
 export function buildSchemaConfigLines(
@@ -1111,6 +1231,223 @@ export function buildLogicalDatabaseList(
   return [...logicalDatabases.values()];
 }
 
+const defaultMonorepoGlobalInputs = [
+  'package.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'package-lock.json',
+  'bun.lock',
+  'bun.lockb',
+  'turbo.json',
+  'juanie.yaml',
+  'juanie.yml',
+  'docker-bake.hcl',
+  'docker-bake.json',
+] as const;
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))];
+}
+
+function resolveMonorepoAffectedRules(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>,
+  automation: RepoAutomationContextLike
+): Required<MonorepoAffectedRules> {
+  const configured = getProjectMonorepoConfig(project)?.affected;
+  const inferredInputs = automation.monorepoType === 'turborepo' ? ['packages/**'] : [];
+
+  return {
+    strategy: configured?.strategy ?? (automation.monorepoType === 'turborepo' ? 'turbo' : 'all'),
+    global: uniqueStrings([...(configured?.global ?? []), ...defaultMonorepoGlobalInputs]),
+    inputs: uniqueStrings(configured?.inputs ?? inferredInputs),
+  };
+}
+
+function buildCommentedListLines(indent: string, values: string[]): string[] {
+  if (values.length === 0) {
+    return [`${indent}[]`];
+  }
+
+  return values.map((value) => `${indent}- ${value}`);
+}
+
+function buildServiceRuntimeLines(serviceConfig?: ProjectConfigServiceEntry): string[] {
+  const runtime = serviceConfig?.runtime;
+  if (!runtime?.language) {
+    return [];
+  }
+
+  return [
+    '    # runtime describes how this service runs after it is built; type still controls workload role.',
+    '    runtime:',
+    '      # language selects the runtime family used by generated packaging and verification.',
+    `      language: ${runtime.language}`,
+    ...(runtime.framework
+      ? [
+          '      # framework is descriptive metadata for smarter defaults and future checks.',
+          `      framework: ${runtime.framework}`,
+        ]
+      : []),
+    ...(runtime.nodeVersion
+      ? [
+          '      # nodeVersion pins the Node runtime when language is node.',
+          `      nodeVersion: "${runtime.nodeVersion}"`,
+        ]
+      : []),
+  ];
+}
+
+function buildDeliverablesReferenceLines(): string[] {
+  return [
+    '',
+    '# deliverables are customer-downloadable artifacts. They are not deployed or healthchecked.',
+    '# Uncomment this section when the repository has SDKs, kit packages, offline assets, or bare-metal bundles.',
+    '# deliverables:',
+    '#   # name is the product name shown on the Release detail download list.',
+    '#   - name: kit',
+    '#     # type package means a reusable package/archive; baremetal means a runnable customer bundle.',
+    '#     type: package',
+    '#     monorepo:',
+    '#       # appDir points at the source directory for this deliverable.',
+    '#       appDir: kit',
+    '#     # variants model different build shapes of the same deliverable.',
+    '#     variants:',
+    '#       # name is the variant label customers choose when downloading.',
+    '#       - name: sdk',
+    '#         build:',
+    '#           # command builds only this variant.',
+    '#           command: pnpm --filter @dualx/kit build:sdk',
+    '#           # outputs are copied into the package staging directory.',
+    '#           outputs:',
+    '#             - from: kit/dist/sdk',
+    '#               to: package',
+    '#         package:',
+    '#           # format controls the final archive/container of this customer artifact.',
+    '#           format: tgz',
+    '#           # platform any means the artifact is OS/CPU independent.',
+    '#           platform: any',
+    '#         # checks prove the artifact is usable before the Release becomes verified.',
+    '#         checks:',
+    '#           - command: pnpm --filter @dualx/kit test',
+    '#   - name: dualx-server-baremetal',
+    '#     type: baremetal',
+    '#     source:',
+    '#       # service binds this package to a verified deployable service.',
+    '#       service: dualx-server',
+    '#     variants:',
+    '#       - name: linux-amd64',
+    '#         platform: linux-amd64',
+    '#         build:',
+    '#           command: pnpm --filter dualx-server build',
+    '#         package:',
+    '#           format: tar.gz',
+    '#           platform: linux-amd64',
+  ];
+}
+
+function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverableEntry[]): string[] {
+  if (deliverables.length === 0) {
+    return buildDeliverablesReferenceLines();
+  }
+
+  const lines = [
+    '',
+    '# deliverables are customer-downloadable artifacts. They are not deployed or healthchecked.',
+    'deliverables:',
+  ];
+
+  for (const deliverable of deliverables) {
+    lines.push(
+      '  # name is shown on Release detail as the customer-facing product artifact.',
+      `  - name: ${deliverable.name}`,
+      '    # type controls delivery semantics: package, baremetal, or archive.',
+      `    type: ${deliverable.type}`
+    );
+
+    if (deliverable.monorepo?.appDir) {
+      lines.push(
+        '    # monorepo.appDir points at the source directory for this deliverable.',
+        '    monorepo:',
+        `      appDir: ${deliverable.monorepo.appDir}`
+      );
+    }
+
+    if (deliverable.source?.service) {
+      lines.push(
+        '    # source.service binds a bare-metal/export artifact to a verified deployable service.',
+        '    source:',
+        `      service: ${deliverable.source.service}`
+      );
+    }
+
+    lines.push(
+      '    # variants model selectable build outputs of the same deliverable.',
+      '    variants:'
+    );
+    for (const variant of deliverable.variants) {
+      lines.push(
+        '      # name is the variant label customers choose when downloading.',
+        `      - name: ${variant.name}`
+      );
+
+      if (variant.platform) {
+        lines.push(
+          '        # platform identifies the OS/CPU target, or any for portable artifacts.',
+          `        platform: ${variant.platform}`
+        );
+      }
+
+      lines.push(
+        '        # build.command creates this variant before packaging.',
+        '        build:'
+      );
+      if (variant.build?.command) {
+        lines.push(`          command: ${variant.build.command}`);
+      }
+
+      if (variant.build?.outputs?.length) {
+        lines.push(
+          '          # outputs copy build results into a normalized artifact staging directory.',
+          '          outputs:'
+        );
+        for (const output of variant.build.outputs) {
+          lines.push(`            - from: ${output.from}`, `              to: ${output.to}`);
+        }
+      }
+
+      lines.push(
+        '        # package controls the final archive format and platform metadata.',
+        '        package:',
+        `          format: ${variant.package.format}`
+      );
+
+      if (variant.package.platform) {
+        lines.push(`          platform: ${variant.package.platform}`);
+      }
+
+      if (variant.package.platforms?.length) {
+        lines.push(
+          '          # platforms lists all targets when one build emits multiple platform bundles.',
+          '          platforms:',
+          ...buildCommentedListLines('            ', variant.package.platforms)
+        );
+      }
+
+      if (variant.checks?.length) {
+        lines.push(
+          '        # checks prove the artifact is usable before release registration.',
+          '        checks:'
+        );
+        for (const check of variant.checks) {
+          lines.push(`          - command: ${check.command}`);
+        }
+      }
+    }
+  }
+
+  return lines;
+}
+
 export function renderJuanieConfig(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1120,9 +1457,43 @@ export function renderJuanieConfig(
 ): string {
   const targetBranch = getProjectProductionBranch(project);
   const logicalDatabases = buildLogicalDatabaseList(context.databases);
-  const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
+  const serviceConfigMap = getProjectServiceConfigMap(project);
+  const monorepoAffected = resolveMonorepoAffectedRules(project, automation);
+  const lines: string[] = [
+    '# juanie.yaml',
+    '# This file is the source of truth for Juanie build, deploy, verification, and delivery.',
+    '# Keep runtime services under services; put customer-downloadable packages under deliverables.',
+    '',
+    '# name is the stable project slug displayed in Juanie.',
+    `name: ${project.slug}`,
+  ];
+
+  if (automation.monorepoType !== 'none') {
+    lines.push(
+      '',
+      '# monorepo tells Juanie how to calculate affected services and deliverables.',
+      'monorepo:',
+      '  # type is the supported workspace orchestrator. Juanie currently supports Turborepo.',
+      `  type: ${automation.monorepoType}`,
+      '  # packageManager selects install/build command defaults.',
+      `  packageManager: ${automation.packageManager}`,
+      '  # affected controls change detection. Turbo graph is primary; inputs are explicit fallbacks.',
+      '  affected:',
+      '    # strategy turbo uses Turborepo/workspace knowledge plus the rules below.',
+      `    strategy: ${monorepoAffected.strategy}`,
+      '    # global paths trigger a full build because they can change every package.',
+      '    global:',
+      ...buildCommentedListLines('      ', monorepoAffected.global),
+      '    # inputs are non-standard shared source roots that also affect downstream artifacts.',
+      '    inputs:',
+      ...buildCommentedListLines('      ', monorepoAffected.inputs)
+    );
+  }
+
+  lines.push('', '# services are deployable workloads: web, worker, or cron.', 'services:');
 
   for (const service of context.services) {
+    const serviceConfig = serviceConfigMap[service.name];
     const autoscaling =
       service.autoscaling &&
       typeof service.autoscaling === 'object' &&
@@ -1131,12 +1502,21 @@ export function renderJuanieConfig(
         : null;
 
     lines.push(
+      `  # ${service.name} is a deployable ${service.type} workload.`,
       `  - name: ${service.name}`,
+      '    # type controls deployment behavior: routing for web, background execution for worker, schedule for cron.',
       `    type: ${service.type}`,
       ...(getProjectServiceAppDir(project, service.name)
-        ? ['    monorepo:', `      appDir: ${getProjectServiceAppDir(project, service.name)}`]
+        ? [
+            '    # monorepo.appDir points at this workload inside the repository.',
+            '    monorepo:',
+            `      appDir: ${getProjectServiceAppDir(project, service.name)}`,
+          ]
         : []),
-      ...buildServiceBuildLines(service, automation),
+      ...buildServiceRuntimeLines(serviceConfig),
+      '    # build describes how CI creates the service image or runtime artifact.',
+      ...buildServiceBuildLines(service, automation, serviceConfig),
+      '    # run describes the command Juanie starts after deployment.',
       '    run:',
       `      command: ${service.startCommand ?? 'npm start'}`
     );
@@ -1148,12 +1528,14 @@ export function renderJuanieConfig(
     const healthPath =
       service.healthcheckPath ?? (service.type === 'web' ? '/api/health' : '/health');
     lines.push(
+      '    # healthcheck is used for deployment verification and rollout readiness.',
       '    healthcheck:',
       `      path: ${healthPath}`,
       `      interval: ${service.healthcheckInterval ?? 30}`
     );
 
     lines.push(
+      '    # scaling controls desired replicas and optional autoscaling hints.',
       '    scaling:',
       `      min: ${service.replicas ?? 1}`,
       ...(autoscaling?.max ? [`      max: ${autoscaling.max}`] : []),
@@ -1161,6 +1543,7 @@ export function renderJuanieConfig(
     );
 
     lines.push(
+      '    # resources set Kubernetes requests/limits for this workload.',
       '    resources:',
       `      cpuRequest: ${service.cpuRequest ?? '100m'}`,
       `      cpuLimit: ${service.cpuLimit ?? '500m'}`,
@@ -1169,6 +1552,7 @@ export function renderJuanieConfig(
     );
 
     if (service.isPublic === false) {
+      lines.push('    # isPublic false keeps this web service internal to the project network.');
       lines.push('    isPublic: false');
     }
 
@@ -1183,21 +1567,33 @@ export function renderJuanieConfig(
     }
   }
 
+  lines.push(...buildConfiguredDeliverablesLines(getProjectDeliverablesConfig(project)));
+
   if (logicalDatabases.length > 0) {
-    lines.push('', 'databases:');
+    lines.push(
+      '',
+      '# databases declare runtime data stores and their provisioning model.',
+      'databases:'
+    );
 
     for (const database of logicalDatabases) {
       const capabilities = inferDatabaseCapabilities(automation, database);
       lines.push(
+        `  # ${database.name} is a ${database.type} database contract for this project.`,
         `  - name: ${database.name}`,
+        '    # type selects the database engine.',
         `    type: ${database.type}`,
+        '    # plan selects the platform resource size/tier.',
         `    plan: ${database.plan ?? 'starter'}`,
+        '    # scope project means shared by the project; service means owned by one service.',
         `    scope: ${database.scope ?? (database.serviceId ? 'service' : 'project')}`,
+        '    # role describes how services should treat this database binding.',
         `    role: ${database.role ?? 'primary'}`
       );
 
       if (capabilities.length > 0) {
         lines.push(
+          '    # capabilities declare required database extensions/features before migrations run.',
           '    capabilities:',
           ...capabilities.map((capability) => `      - ${capability}`)
         );
@@ -1207,9 +1603,13 @@ export function renderJuanieConfig(
 
   lines.push(
     '',
+    '# environments map logical Juanie environments to Git branches and optional variables.',
     'environments:',
+    '  # production is the customer-facing stable environment.',
     '  production:',
+    '    # branch is the Git ref used for this environment by default.',
     `    branch: ${targetBranch}`,
+    '  # staging is the pre-production environment; adjust branch when the repo has a real staging branch.',
     '  staging:',
     `    branch: ${targetBranch}`
   );
@@ -1259,6 +1659,9 @@ async function pushCicdConfig(
   const migrationScriptContents: Record<string, string> = {};
   let packageJson: RepoAutomationContext['packageJson'] = null;
   let topologyServices: RepositoryTopologyService[] = [];
+  let configMonorepo: ProjectConfigMonorepoEntry | null = null;
+  let configDeliverables: ProjectConfigDeliverableEntry[] = [];
+  let managedJuanieConfigContent: string | null = null;
 
   try {
     await onProgress?.(20, '扫描仓库根目录与构建入口');
@@ -1278,6 +1681,16 @@ async function pushCicdConfig(
     bakeTargets = topology.bakeTargets;
     packageJson = topology.rootPackageJson;
     topologyServices = topology.services;
+    configMonorepo = topology.configMonorepo
+      ? {
+          enabled: topology.monorepoType !== 'none',
+          type: topology.configMonorepo.type,
+          packageManager: topology.configMonorepo.packageManager,
+          affected: topology.configMonorepo.affected,
+        }
+      : null;
+    configDeliverables = topology.configDeliverables ?? [];
+    managedJuanieConfigContent = topology.managedConfigContent ?? null;
     scopedLogger.info('Detected repository topology for CI/CD config', {
       monorepoType,
       repositoryFullName: repository.fullName,
@@ -1415,6 +1828,7 @@ async function pushCicdConfig(
     nextServiceConfigMap[service.name] = {
       ...(existingServiceConfigMap[service.name] ?? {}),
       ...(service.appDir && service.appDir !== '.' ? { monorepo: { appDir: service.appDir } } : {}),
+      ...(service.runtime ? { runtime: service.runtime } : {}),
       ...(service.build ? { build: service.build } : {}),
     };
   }
@@ -1423,6 +1837,8 @@ async function pushCicdConfig(
     configJson: {
       ...existingConfig,
       services: nextServiceConfigMap,
+      ...(configMonorepo ? { monorepo: configMonorepo } : {}),
+      ...(configDeliverables.length > 0 ? { deliverables: configDeliverables } : {}),
     },
   };
   const automationContext: RepoAutomationContext = {
@@ -1452,7 +1868,9 @@ async function pushCicdConfig(
     files['.gitlab-ci.yml'] = ciTemplate;
   }
 
-  files['juanie.yaml'] = renderJuanieConfig(projectWithTopology, renderContext, automationContext);
+  files['juanie.yaml'] =
+    managedJuanieConfigContent ??
+    renderJuanieConfig(projectWithTopology, renderContext, automationContext);
 
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
@@ -1475,9 +1893,13 @@ async function pushCicdConfig(
         ...existingConfig,
         services: nextServiceConfigMap,
         monorepo: {
+          ...(configMonorepo ?? {}),
           enabled: isMonorepo,
           type: monorepoType,
+          packageManager: detectPackageManager(rootFiles, packageJson),
+          affected: resolveMonorepoAffectedRules(projectWithTopology, automationContext),
         },
+        ...(configDeliverables.length > 0 ? { deliverables: configDeliverables } : {}),
       },
     })
     .where(eq(projects.id, project.id));
@@ -1548,6 +1970,31 @@ interface MonorepoCiServiceEntry {
   };
 }
 
+interface MonorepoCiDeliverableEntry {
+  name: string;
+  type: 'package' | 'baremetal' | 'archive';
+  appDir: string;
+  sourceService?: string;
+  variant: {
+    name: string;
+    platform?: string;
+    build: {
+      command?: string;
+      outputs?: Array<{
+        from: string;
+        to: string;
+      }>;
+    };
+    package: {
+      format: 'tgz' | 'zip' | 'tar.gz' | 'directory';
+      platform?: string;
+    };
+    checks: Array<{
+      command: string;
+    }>;
+  };
+}
+
 export function buildMonorepoCiServices(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1582,6 +2029,32 @@ export function buildMonorepoCiServices(
   });
 }
 
+export function buildMonorepoCiDeliverables(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): MonorepoCiDeliverableEntry[] {
+  return getProjectDeliverablesConfig(project).flatMap((deliverable) =>
+    deliverable.variants.map((variant) => ({
+      name: deliverable.name,
+      type: deliverable.type,
+      appDir: deliverable.monorepo?.appDir ?? '.',
+      sourceService: deliverable.source?.service,
+      variant: {
+        name: variant.name,
+        platform: variant.platform ?? variant.package.platform,
+        build: {
+          command: variant.build?.command,
+          outputs: variant.build?.outputs,
+        },
+        package: {
+          format: variant.package.format,
+          platform: variant.package.platform ?? variant.platform,
+        },
+        checks: variant.checks ?? [],
+      },
+    }))
+  );
+}
+
 export function encodeMonorepoCiServices(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1594,6 +2067,29 @@ export function encodeMonorepoCiServices(
   ).toString('base64');
 }
 
+export function encodeMonorepoCiDeliverables(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): string {
+  return Buffer.from(JSON.stringify(buildMonorepoCiDeliverables(project)), 'utf8').toString(
+    'base64'
+  );
+}
+
+export function encodeMonorepoAffectedRules(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): string {
+  const configured = getProjectMonorepoConfig(project)?.affected;
+  const rules: Required<MonorepoAffectedRules> = {
+    strategy: configured?.strategy ?? 'turbo',
+    global: uniqueStrings([...(configured?.global ?? []), ...defaultMonorepoGlobalInputs]),
+    inputs: uniqueStrings(configured?.inputs ?? ['packages/**']),
+  };
+
+  return Buffer.from(JSON.stringify(rules), 'utf8').toString('base64');
+}
+
 export function renderGitHubCIMonorepo(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1602,13 +2098,17 @@ export function renderGitHubCIMonorepo(
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions-monorepo.yml');
   const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
+  const deliverableMatrix = encodeMonorepoCiDeliverables(project);
+  const affectedRules = encodeMonorepoAffectedRules(project);
 
   if (existsSync(templatePath)) {
     let content = readFileSync(templatePath, 'utf-8');
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
       .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix);
+      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix)
+      .replace(/\{\{JUANIE_DELIVERABLE_MATRIX_B64\}\}/g, deliverableMatrix)
+      .replace(/\{\{JUANIE_AFFECTED_RULES_B64\}\}/g, affectedRules);
     return content;
   }
 
@@ -1625,13 +2125,17 @@ export function renderGitLabCIMonorepo(
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci-monorepo.yml');
   const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
+  const deliverableMatrix = encodeMonorepoCiDeliverables(project);
+  const affectedRules = encodeMonorepoAffectedRules(project);
 
   if (existsSync(templatePath)) {
     let content = readFileSync(templatePath, 'utf-8');
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
       .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix);
+      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix)
+      .replace(/\{\{JUANIE_DELIVERABLE_MATRIX_B64\}\}/g, deliverableMatrix)
+      .replace(/\{\{JUANIE_AFFECTED_RULES_B64\}\}/g, affectedRules);
     return content;
   }
 

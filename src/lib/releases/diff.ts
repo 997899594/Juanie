@@ -1,11 +1,16 @@
 interface ReleaseArtifactLike {
-  serviceId?: string;
-  imageUrl: string;
+  kind?: string | null;
+  name?: string | null;
+  variant?: string | null;
+  platform?: string | null;
+  uri?: string | null;
+  serviceId?: string | null;
+  imageUrl?: string | null;
   imageDigest?: string | null;
-  service: {
+  service?: {
     id?: string;
     name: string;
-  };
+  } | null;
 }
 
 interface ReleaseMigrationLike {
@@ -57,7 +62,25 @@ export interface ReleaseDiffSnapshot {
 }
 
 function normalizeArtifactKey(artifact: ReleaseArtifactLike): string {
-  return artifact.serviceId ?? artifact.service.id ?? artifact.service.name;
+  if ((artifact.kind ?? 'image') === 'image') {
+    return artifact.serviceId ?? artifact.service?.id ?? artifact.service?.name ?? 'image';
+  }
+
+  return [
+    artifact.kind,
+    artifact.name,
+    artifact.variant ?? 'default',
+    artifact.platform ?? 'any',
+  ].join('::');
+}
+
+function getArtifactName(artifact: ReleaseArtifactLike): string {
+  const fallback = [artifact.name, artifact.variant, artifact.platform].filter(Boolean).join(' / ');
+  return artifact.service?.name ?? (fallback || 'artifact');
+}
+
+function getArtifactUri(artifact: ReleaseArtifactLike): string | null {
+  return artifact.uri ?? artifact.imageUrl ?? null;
 }
 
 function normalizeMigrationKey(run: ReleaseMigrationLike): string | null {
@@ -95,11 +118,11 @@ export function buildReleaseDiff(
     return {
       isFirstRelease: true,
       changedArtifacts: current.artifacts.map((artifact) => ({
-        serviceId: artifact.serviceId ?? artifact.service.id ?? artifact.service.name,
-        serviceName: artifact.service.name,
+        serviceId: normalizeArtifactKey(artifact),
+        serviceName: getArtifactName(artifact),
         change: 'added',
         previousImageUrl: null,
-        currentImageUrl: artifact.imageUrl,
+        currentImageUrl: getArtifactUri(artifact),
       })),
       changedMigrations: current.migrationRuns
         .filter((run) => run.specification)
@@ -126,25 +149,25 @@ export function buildReleaseDiff(
     const previousArtifact = previousArtifacts.get(normalizeArtifactKey(artifact));
     if (!previousArtifact) {
       changedArtifacts.push({
-        serviceId: artifact.serviceId ?? artifact.service.id ?? artifact.service.name,
-        serviceName: artifact.service.name,
+        serviceId: normalizeArtifactKey(artifact),
+        serviceName: getArtifactName(artifact),
         change: 'added',
         previousImageUrl: null,
-        currentImageUrl: artifact.imageUrl,
+        currentImageUrl: getArtifactUri(artifact),
       });
       continue;
     }
 
     if (
-      previousArtifact.imageUrl !== artifact.imageUrl ||
+      getArtifactUri(previousArtifact) !== getArtifactUri(artifact) ||
       (previousArtifact.imageDigest ?? null) !== (artifact.imageDigest ?? null)
     ) {
       changedArtifacts.push({
-        serviceId: artifact.serviceId ?? artifact.service.id ?? artifact.service.name,
-        serviceName: artifact.service.name,
+        serviceId: normalizeArtifactKey(artifact),
+        serviceName: getArtifactName(artifact),
         change: 'updated',
-        previousImageUrl: previousArtifact.imageUrl,
-        currentImageUrl: artifact.imageUrl,
+        previousImageUrl: getArtifactUri(previousArtifact),
+        currentImageUrl: getArtifactUri(artifact),
       });
     }
   }
@@ -155,10 +178,10 @@ export function buildReleaseDiff(
     }
 
     changedArtifacts.push({
-      serviceId: artifact.serviceId ?? artifact.service.id ?? artifact.service.name,
-      serviceName: artifact.service.name,
+      serviceId: normalizeArtifactKey(artifact),
+      serviceName: getArtifactName(artifact),
       change: 'removed',
-      previousImageUrl: artifact.imageUrl,
+      previousImageUrl: getArtifactUri(artifact),
       currentImageUrl: null,
     });
   }

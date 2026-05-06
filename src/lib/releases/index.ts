@@ -4,6 +4,8 @@ import {
   deliveryRules,
   environments,
   projects,
+  type ReleaseArtifactKind,
+  type ReleaseArtifactStatus,
   releaseArtifacts,
   releases,
   repositories,
@@ -29,10 +31,13 @@ import {
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
+import { getDeployableReleaseArtifacts } from './artifacts';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
 const releaseServiceLogger = logger.child({ component: 'release-service' });
+const deliveryArtifactKinds = new Set(['package', 'baremetal', 'archive']);
+const deliveryArtifactStatuses = new Set(['pending', 'building', 'succeeded', 'failed']);
 
 export interface ReleaseServiceInput {
   id?: string;
@@ -41,11 +46,26 @@ export interface ReleaseServiceInput {
   digest?: string | null;
 }
 
+export interface ReleaseDeliveryArtifactInput {
+  kind: Exclude<ReleaseArtifactKind, 'image'>;
+  name: string;
+  variant?: string | null;
+  platform?: string | null;
+  format?: string | null;
+  uri: string;
+  checksum?: string | null;
+  sizeBytes?: number | null;
+  sbomUri?: string | null;
+  provenanceUri?: string | null;
+  status?: ReleaseArtifactStatus | null;
+}
+
 export interface CreateRepositoryReleaseInput {
   repository: string;
   ref: string;
   sha?: string | null;
   services?: ReleaseServiceInput[];
+  artifacts?: ReleaseDeliveryArtifactInput[];
   serviceId?: string;
   serviceName?: string;
   image?: string;
@@ -58,6 +78,7 @@ export interface CreateProjectReleaseInput {
   projectId: string;
   environmentId: string;
   services: ReleaseServiceInput[];
+  artifacts?: ReleaseDeliveryArtifactInput[];
   sourceRepository: string;
   sourceRef: string;
   sourceCommitSha?: string | null;
@@ -109,16 +130,62 @@ async function resolveReleaseServices(
       service,
       imageUrl: input.image,
       imageDigest: input.digest ?? null,
+      kind: 'image' as const,
+      name: service.name,
+      uri: input.image,
+      status: 'succeeded' as const,
     });
   }
 
   return artifacts;
 }
 
+function normalizeReleaseDeliveryArtifacts(
+  artifacts: ReleaseDeliveryArtifactInput[]
+): ReleaseDeliveryArtifactInput[] {
+  return artifacts.map((artifact, index) => {
+    if (!deliveryArtifactKinds.has(artifact.kind)) {
+      throw new Error(`Release artifact ${index} has unsupported kind ${artifact.kind}`);
+    }
+
+    if (!artifact.name?.trim()) {
+      throw new Error(`Release artifact ${index} is missing name`);
+    }
+
+    if (!artifact.uri?.trim()) {
+      throw new Error(`Release artifact ${artifact.name} is missing uri`);
+    }
+
+    if (artifact.status && !deliveryArtifactStatuses.has(artifact.status)) {
+      throw new Error(
+        `Release artifact ${artifact.name} has unsupported status ${artifact.status}`
+      );
+    }
+
+    return {
+      ...artifact,
+      name: artifact.name.trim(),
+      uri: artifact.uri.trim(),
+      variant: artifact.variant?.trim() || null,
+      platform: artifact.platform?.trim() || null,
+      format: artifact.format?.trim() || null,
+      checksum: artifact.checksum?.trim() || null,
+      sbomUri: artifact.sbomUri?.trim() || null,
+      provenanceUri: artifact.provenanceUri?.trim() || null,
+      status: artifact.status ?? 'succeeded',
+      sizeBytes:
+        typeof artifact.sizeBytes === 'number' && Number.isFinite(artifact.sizeBytes)
+          ? Math.max(0, Math.trunc(artifact.sizeBytes))
+          : null,
+    };
+  });
+}
+
 async function persistRelease(
   project: typeof projects.$inferSelect & { services: Array<typeof services.$inferSelect> },
   environment: typeof environments.$inferSelect,
   requestedServices: ReleaseServiceInput[],
+  requestedArtifacts: ReleaseDeliveryArtifactInput[],
   meta: {
     sourceRepository: string;
     sourceRef: string;
@@ -130,8 +197,10 @@ async function persistRelease(
     summary?: string | null;
   }
 ) {
-  if (requestedServices.length === 0) {
-    throw new Error('At least one release service artifact is required');
+  const normalizedDeliveryArtifacts = normalizeReleaseDeliveryArtifacts(requestedArtifacts);
+
+  if (requestedServices.length === 0 && normalizedDeliveryArtifacts.length === 0) {
+    throw new Error('At least one release artifact is required');
   }
 
   if (
@@ -146,26 +215,35 @@ async function persistRelease(
   }
 
   const artifacts = await resolveReleaseServices(project.id, project.services, requestedServices);
-  const previewDatabaseGuard = await inspectPreviewDatabaseGuardForRelease({
-    projectId: project.id,
-    environmentId: environment.id,
-    environment,
-    serviceIds: artifacts.map((artifact) => artifact.service.id),
-    sourceRef: meta.sourceRef,
-    sourceCommitSha: meta.sourceCommitSha ?? null,
-  });
+  const deployableArtifacts = getDeployableReleaseArtifacts(artifacts);
+  const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
+
+  const previewDatabaseGuard =
+    deployableServiceIds.length > 0
+      ? await inspectPreviewDatabaseGuardForRelease({
+          projectId: project.id,
+          environmentId: environment.id,
+          environment,
+          serviceIds: deployableServiceIds,
+          sourceRef: meta.sourceRef,
+          sourceCommitSha: meta.sourceCommitSha ?? null,
+        })
+      : { canCreate: true as const };
 
   if (!previewDatabaseGuard.canCreate) {
     throw new PreviewDatabaseGuardBlockedError(previewDatabaseGuard);
   }
 
-  const schemaGate = await inspectReleaseSchemaGate({
-    projectId: project.id,
-    environmentId: environment.id,
-    serviceIds: artifacts.map((artifact) => artifact.service.id),
-    sourceRef: meta.sourceRef,
-    sourceCommitSha: meta.sourceCommitSha ?? null,
-  });
+  const schemaGate =
+    deployableServiceIds.length > 0
+      ? await inspectReleaseSchemaGate({
+          projectId: project.id,
+          environmentId: environment.id,
+          serviceIds: deployableServiceIds,
+          sourceRef: meta.sourceRef,
+          sourceCommitSha: meta.sourceCommitSha ?? null,
+        })
+      : { canCreate: true as const };
 
   if (!schemaGate.canCreate) {
     throw new ReleaseSchemaGateBlockedError(schemaGate);
@@ -194,14 +272,35 @@ async function persistRelease(
     })
     .returning();
 
-  await db.insert(releaseArtifacts).values(
-    artifacts.map((artifact) => ({
+  await db.insert(releaseArtifacts).values([
+    ...artifacts.map((artifact) => ({
       releaseId: release.id,
       serviceId: artifact.service.id,
+      kind: artifact.kind,
+      name: artifact.name,
+      uri: artifact.uri,
+      status: artifact.status,
       imageUrl: artifact.imageUrl,
       imageDigest: artifact.imageDigest,
-    }))
-  );
+    })),
+    ...normalizedDeliveryArtifacts.map((artifact) => ({
+      releaseId: release.id,
+      serviceId: null,
+      kind: artifact.kind,
+      name: artifact.name,
+      variant: artifact.variant ?? null,
+      platform: artifact.platform ?? null,
+      format: artifact.format ?? null,
+      uri: artifact.uri,
+      checksum: artifact.checksum ?? null,
+      sizeBytes: artifact.sizeBytes ?? null,
+      sbomUri: artifact.sbomUri ?? null,
+      provenanceUri: artifact.provenanceUri ?? null,
+      status: artifact.status ?? 'succeeded',
+      imageUrl: null,
+      imageDigest: null,
+    })),
+  ]);
 
   if (environment.previewBuildStatus) {
     await clearEnvironmentSourceBuildState(environment.id);
@@ -216,6 +315,7 @@ async function persistRelease(
       releaseId: release.id,
     }),
     serviceCount: artifacts.length,
+    artifactCount: artifacts.length + normalizedDeliveryArtifacts.length,
   });
 
   await addReleaseJob(release.id, { traceId });
@@ -229,7 +329,7 @@ async function persistRelease(
         environmentId: environment.id,
         sourceRef: meta.sourceRef,
         sourceCommitSha: meta.sourceCommitSha ?? null,
-        serviceIds: artifacts.map((artifact) => artifact.service.id),
+        serviceIds: deployableServiceIds,
       });
     } catch (error) {
       releaseServiceLogger.warn('Failed to prewarm migration preview cache', {
@@ -324,9 +424,10 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
             },
           ]
         : [];
+  const requestedArtifacts = Array.isArray(input.artifacts) ? input.artifacts : [];
 
   try {
-    return await persistRelease(project, environment, requestedServices, {
+    return await persistRelease(project, environment, requestedServices, requestedArtifacts, {
       sourceRepository: input.repository,
       sourceRef: input.ref,
       sourceCommitSha: input.sha ?? null,
@@ -372,7 +473,7 @@ export async function createProjectRelease(input: CreateProjectReleaseInput) {
 
   assertReleaseEntryPointAllowed(environment, input.entryPoint ?? 'manual_release');
 
-  return persistRelease(project, environment, input.services, {
+  return persistRelease(project, environment, input.services, input.artifacts ?? [], {
     sourceRepository: input.sourceRepository,
     sourceRef: input.sourceRef,
     sourceCommitSha: input.sourceCommitSha ?? null,

@@ -1,3 +1,4 @@
+import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import { buildReleaseDiff } from '@/lib/releases/diff';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { buildReleaseRecap } from '@/lib/releases/recap';
@@ -84,6 +85,8 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       ? buildReleaseRecap(release)
       : (release.recap ?? buildReleaseRecap(release));
   const statusDecoration = getReleaseStatusDecoration(release.status);
+  const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
+  const deliveryArtifactCount = release.artifacts.length - deployableArtifacts.length;
 
   return {
     ...release,
@@ -106,7 +109,8 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     approvalRunsCount,
     retryableRunsCount,
     stats: [
-      { label: '服务', value: release.artifacts.length },
+      { label: '服务', value: deployableArtifacts.length },
+      ...(deliveryArtifactCount > 0 ? [{ label: '交付物', value: deliveryArtifactCount }] : []),
       { label: '部署', value: release.deployments.length },
       { label: '迁移', value: release.migrationRuns.length },
     ],

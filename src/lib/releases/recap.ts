@@ -19,6 +19,7 @@ import {
   evaluateReleasePolicy,
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
+import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
   getReleaseIntelligenceSnapshot,
   type ReleaseIntelligenceSnapshot,
@@ -78,11 +79,17 @@ export interface ReleaseRecapSourceLike {
   };
   previewReviewMetadata?: PreviewReviewMetadata | null;
   artifacts: Array<{
-    service: {
+    kind?: string | null;
+    name?: string | null;
+    variant?: string | null;
+    platform?: string | null;
+    uri?: string | null;
+    serviceId?: string | null;
+    service?: {
       id: string;
       name: string;
-    };
-    imageUrl: string;
+    } | null;
+    imageUrl?: string | null;
   }>;
   migrationRuns: Array<{
     status: string;
@@ -125,10 +132,14 @@ function buildReleaseNarrativeSummary(input: {
   previewLifecycle: PreviewLifecycleSummary | null;
   governanceEvents?: ReleaseGovernanceEvent[] | null;
 }): ReleaseSummarySnapshot {
+  const deployableArtifactCount = getDeployableReleaseArtifacts(input.release.artifacts).length;
+  const deliveryArtifactCount = input.release.artifacts.length - deployableArtifactCount;
   const artifactSummary =
-    input.release.artifacts.length === 0
-      ? '这次发布没有镜像变更'
-      : `这次发布更新了 ${input.release.artifacts.length} 个服务镜像`;
+    deployableArtifactCount === 0
+      ? deliveryArtifactCount > 0
+        ? `这次发布更新了 ${deliveryArtifactCount} 个客户交付物`
+        : '这次发布没有镜像变更'
+      : `这次发布更新了 ${deployableArtifactCount} 个服务镜像`;
   const migrationSummary =
     input.release.migrationRuns.length > 0
       ? `，包含 ${input.release.migrationRuns.length} 个迁移步骤`

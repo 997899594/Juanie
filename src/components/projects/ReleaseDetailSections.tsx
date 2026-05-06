@@ -11,6 +11,11 @@ import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import {
+  getDeliveryReleaseArtifacts,
+  getDeployableReleaseArtifacts,
+  getReleaseArtifactKindLabel,
+} from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
@@ -39,6 +44,23 @@ function formatArtifactReference(value?: string | null): string | null {
 
   const compact = value.split('/').pop() ?? value;
   return compact.length > 44 ? `${compact.slice(0, 41)}...` : compact;
+}
+
+function getArtifactReference(artifact: ReleasePageData['release']['artifacts'][number]) {
+  return artifact.uri ?? artifact.imageUrl ?? null;
+}
+
+function getArtifactTitle(artifact: ReleasePageData['release']['artifacts'][number]) {
+  const fallback = [artifact.name, artifact.variant, artifact.platform].filter(Boolean).join(' / ');
+  return artifact.service?.name ?? (fallback || 'artifact');
+}
+
+function getArtifactMeta(artifact: ReleasePageData['release']['artifacts'][number]): string {
+  return [artifact.platform, artifact.format, artifact.status].filter(Boolean).join(' · ');
+}
+
+function isExternalArtifactReference(reference: string | null): reference is string {
+  return Boolean(reference?.startsWith('https://') || reference?.startsWith('http://'));
 }
 
 export function ReleaseTopSummarySection({ release }: { release: ReleasePageData['release'] }) {
@@ -274,7 +296,7 @@ export function ReleaseDiffSection({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              镜像变化
+              制品变化
             </div>
             {release.diff.changedArtifacts.length > 0 && (
               <Badge variant="secondary">{release.diff.changedArtifacts.length} 项</Badge>
@@ -282,7 +304,7 @@ export function ReleaseDiffSection({
           </div>
           {release.diff.changedArtifacts.length === 0 ? (
             <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-6 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-              没有镜像变化。
+              没有制品变化。
             </div>
           ) : (
             release.diff.changedArtifacts.map((item) => (
@@ -303,7 +325,7 @@ export function ReleaseDiffSection({
                       }`
                     : (formatArtifactReference(item.currentImageUrl) ??
                       formatArtifactReference(item.previousImageUrl) ??
-                      '镜像已变化')}
+                      '制品已变化')}
                 </div>
               </div>
             ))
@@ -411,6 +433,8 @@ export function ReleaseExecutionSections({
   initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }) {
   const releaseActions = buildReleaseEnvironmentActionSnapshot(role, release.environment);
+  const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
+  const deliveryArtifacts = getDeliveryReleaseArtifacts(release.artifacts);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -456,20 +480,80 @@ export function ReleaseExecutionSections({
         <section className={releaseShellClassName}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <Package2 className="h-4 w-4" />
-            镜像
+            部署镜像
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {release.artifacts.map((artifact) => (
-              <div
-                key={artifact.id ?? artifact.service.id}
-                className={cn(releaseSubtleClassName, 'break-all')}
-              >
-                <div className="mb-1 text-sm font-medium">{artifact.service.name}</div>
-                <div className="break-all text-xs text-muted-foreground">{artifact.imageUrl}</div>
-              </div>
-            ))}
-          </div>
+          {deployableArtifacts.length === 0 ? (
+            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+              这次发布没有需要部署的服务镜像。
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {deployableArtifacts.map((artifact) => (
+                <div
+                  key={artifact.id ?? artifact.service?.id ?? getArtifactTitle(artifact)}
+                  className={cn(releaseSubtleClassName, 'break-all')}
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+                    <span>{getArtifactTitle(artifact)}</span>
+                    <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+                      {getReleaseArtifactKindLabel(artifact)}
+                    </Badge>
+                  </div>
+                  <div className="break-all text-xs text-muted-foreground">
+                    {getArtifactReference(artifact) ?? '等待镜像回传'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
+
+        {deliveryArtifacts.length > 0 && (
+          <section className={releaseShellClassName}>
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+              <Package2 className="h-4 w-4" />
+              客户交付物
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {deliveryArtifacts.map((artifact) => {
+                const reference = getArtifactReference(artifact);
+
+                return (
+                  <div
+                    key={artifact.id ?? getArtifactTitle(artifact)}
+                    className={cn(releaseSubtleClassName, 'break-all')}
+                  >
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+                      <span>{getArtifactTitle(artifact)}</span>
+                      <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+                        {getReleaseArtifactKindLabel(artifact)}
+                      </Badge>
+                    </div>
+                    {getArtifactMeta(artifact) && (
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        {getArtifactMeta(artifact)}
+                      </div>
+                    )}
+                    {isExternalArtifactReference(reference) ? (
+                      <a
+                        href={reference}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-xs text-foreground underline underline-offset-4"
+                      >
+                        {formatArtifactReference(reference)}
+                      </a>
+                    ) : (
+                      <div className="break-all text-xs text-muted-foreground">
+                        {reference ?? '等待交付物回传'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className={releaseShellClassName}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
