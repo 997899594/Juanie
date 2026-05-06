@@ -508,12 +508,16 @@ export function ReleaseExecutionSections({
           )}
         </section>
 
-        {deliveryArtifacts.length > 0 && (
-          <section className={releaseShellClassName}>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-              <Package2 className="h-4 w-4" />
-              客户交付物
+        <section className={releaseShellClassName}>
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Package2 className="h-4 w-4" />
+            客户交付物
+          </div>
+          {deliveryArtifacts.length === 0 ? (
+            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+              这次发布没有客户交付物。
             </div>
+          ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {deliveryArtifacts.map((artifact) => {
                 const reference = getArtifactReference(artifact);
@@ -535,14 +539,16 @@ export function ReleaseExecutionSections({
                       </div>
                     )}
                     {isExternalArtifactReference(reference) ? (
-                      <a
-                        href={reference}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="break-all text-xs text-foreground underline underline-offset-4"
-                      >
-                        {formatArtifactReference(reference)}
-                      </a>
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Button asChild size="sm" className="rounded-full">
+                          <a href={reference} target="_blank" rel="noreferrer">
+                            下载
+                          </a>
+                        </Button>
+                        <span className="break-all text-xs text-muted-foreground">
+                          {formatArtifactReference(reference)}
+                        </span>
+                      </div>
                     ) : (
                       <div className="break-all text-xs text-muted-foreground">
                         {reference ?? '等待交付物回传'}
@@ -552,8 +558,8 @@ export function ReleaseExecutionSections({
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         <section className={releaseShellClassName}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
