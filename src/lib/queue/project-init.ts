@@ -37,8 +37,12 @@ import {
   resolveExecutionToolForSchemaSource,
 } from '@/lib/migrations/schema-source';
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
-import type { MonorepoType } from '@/lib/monorepo';
-import { detectMonorepoType } from '@/lib/monorepo';
+import {
+  inspectRepositoryTopology,
+  type MonorepoType,
+  parseDockerBakeTargets,
+  type RepositoryTopologyService,
+} from '@/lib/monorepo';
 import {
   buildInitialAutoDeploySummary,
   resolveInitialAutoDeployEnvironmentsForRef,
@@ -599,24 +603,48 @@ type RepoAutomationContextLike = Pick<
     >
   >;
 
+type ProjectConfigServiceEntry = {
+  monorepo?: {
+    appDir?: string;
+  };
+  build?: {
+    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
+    command?: string;
+    dockerfile?: string;
+    context?: string;
+    target?: string;
+    definition?: string;
+  };
+};
+
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
   return supportsDatabaseAutomatedMigrations(dbType);
 }
 
-function parseDockerBakeTargets(content: string): string[] {
-  const targets: string[] = [];
-  const targetRegex = /target\s+["']?([\w-]+)["']?\s*\{/g;
-  let match: RegExpExecArray | null = targetRegex.exec(content);
+function getProjectConfigJson(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): Record<string, unknown> {
+  return project.configJson && typeof project.configJson === 'object'
+    ? (project.configJson as Record<string, unknown>)
+    : {};
+}
 
-  while (match !== null) {
-    const targetName = match[1];
-    if (targetName && !['default', 'multi'].includes(targetName)) {
-      targets.push(targetName);
-    }
-    match = targetRegex.exec(content);
-  }
+function getProjectServiceConfigMap(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): Record<string, ProjectConfigServiceEntry> {
+  const config = getProjectConfigJson(project);
+  const servicesConfig = config.services;
 
-  return [...new Set(targets)];
+  return servicesConfig && typeof servicesConfig === 'object'
+    ? (servicesConfig as Record<string, ProjectConfigServiceEntry>)
+    : {};
+}
+
+function getProjectServiceAppDir(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>,
+  serviceName: string
+): string | null {
+  return getProjectServiceConfigMap(project)[serviceName]?.monorepo?.appDir ?? null;
 }
 
 export function detectPackageManager(
@@ -1105,6 +1133,9 @@ export function renderJuanieConfig(
     lines.push(
       `  - name: ${service.name}`,
       `    type: ${service.type}`,
+      ...(getProjectServiceAppDir(project, service.name)
+        ? ['    monorepo:', `      appDir: ${getProjectServiceAppDir(project, service.name)}`]
+        : []),
       ...buildServiceBuildLines(service, automation),
       '    run:',
       `      command: ${service.startCommand ?? 'npm start'}`
@@ -1218,7 +1249,6 @@ async function pushCicdConfig(
     requiredCapabilities: requiredCapabilitiesForStep('push_cicd_config'),
   });
 
-  // Detect monorepo type from repository root files using gateway
   let monorepoType: MonorepoType = 'none';
   let rootFiles: string[] = [];
   let bakeDefinition: string | null = null;
@@ -1228,17 +1258,32 @@ async function pushCicdConfig(
   const atlasSchemaContents: Record<string, string> = {};
   const migrationScriptContents: Record<string, string> = {};
   let packageJson: RepoAutomationContext['packageJson'] = null;
+  let topologyServices: RepositoryTopologyService[] = [];
 
   try {
     await onProgress?.(20, '扫描仓库根目录与构建入口');
-    rootFiles = await gateway.listRootFiles(session, repository.fullName, targetBranch);
-    monorepoType = detectMonorepoType(rootFiles);
+    const topology = await inspectRepositoryTopology(
+      {
+        listRootFiles: (repo, ref) => gateway.listRootFiles(session, repo, ref),
+        getFileContent: (repo, path, ref) => gateway.getFileContent(session, repo, path, ref),
+        listDirectory: (repo, path, ref) => gateway.listDirectory(session, repo, path, ref),
+      },
+      repository.fullName,
+      targetBranch
+    );
+
+    rootFiles = topology.rootFiles;
+    monorepoType = topology.monorepoType;
+    bakeDefinition = topology.bakeDefinitionPath;
+    bakeTargets = topology.bakeTargets;
+    packageJson = topology.rootPackageJson;
+    topologyServices = topology.services;
     scopedLogger.info('Detected repository topology for CI/CD config', {
       monorepoType,
       repositoryFullName: repository.fullName,
     });
 
-    if (rootFiles.includes('package.json')) {
+    if (!packageJson && rootFiles.includes('package.json')) {
       try {
         await onProgress?.(35, '读取 package.json 分析运行时');
         const packageJsonContent = await gateway.getFileContent(
@@ -1321,21 +1366,13 @@ async function pushCicdConfig(
       }
     }
 
-    const bakeDefinitionPath = rootFiles.includes('docker-bake.hcl')
-      ? 'docker-bake.hcl'
-      : rootFiles.includes('docker-bake.json')
-        ? 'docker-bake.json'
-        : null;
-
-    if (bakeDefinitionPath) {
-      bakeDefinition = bakeDefinitionPath;
-
+    if (bakeDefinition) {
       try {
         await onProgress?.(50, '分析 docker-bake 定义');
         const bakeContent = await gateway.getFileContent(
           session,
           repository.fullName,
-          bakeDefinitionPath,
+          bakeDefinition,
           targetBranch
         );
         if (bakeContent) {
@@ -1371,6 +1408,23 @@ async function pushCicdConfig(
     services: serviceList,
     databases: databaseList,
   };
+  const existingConfig = getProjectConfigJson(project);
+  const existingServiceConfigMap = getProjectServiceConfigMap(project);
+  const nextServiceConfigMap = { ...existingServiceConfigMap };
+  for (const service of topologyServices) {
+    nextServiceConfigMap[service.name] = {
+      ...(existingServiceConfigMap[service.name] ?? {}),
+      ...(service.appDir && service.appDir !== '.' ? { monorepo: { appDir: service.appDir } } : {}),
+      ...(service.build ? { build: service.build } : {}),
+    };
+  }
+  const projectWithTopology = {
+    ...project,
+    configJson: {
+      ...existingConfig,
+      services: nextServiceConfigMap,
+    },
+  };
   const automationContext: RepoAutomationContext = {
     monorepoType,
     rootFiles,
@@ -1388,17 +1442,17 @@ async function pushCicdConfig(
   const isMonorepo = monorepoType !== 'none';
   if (session.provider === 'github') {
     const ciTemplate = isMonorepo
-      ? renderGitHubCIMonorepo(project, monorepoType)
+      ? renderGitHubCIMonorepo(projectWithTopology, serviceList)
       : renderGitHubCI(project, renderContext);
     files['.github/workflows/juanie-ci.yml'] = ciTemplate;
   } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
     const ciTemplate = isMonorepo
-      ? renderGitLabCIMonorepo(project, monorepoType)
+      ? renderGitLabCIMonorepo(projectWithTopology, serviceList)
       : renderGitLabCI(project, renderContext);
     files['.gitlab-ci.yml'] = ciTemplate;
   }
 
-  files['juanie.yaml'] = renderJuanieConfig(project, renderContext, automationContext);
+  files['juanie.yaml'] = renderJuanieConfig(projectWithTopology, renderContext, automationContext);
 
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
@@ -1414,12 +1468,12 @@ async function pushCicdConfig(
     });
   }
 
-  const existingConfig = (project.configJson as Record<string, unknown>) || {};
   await db
     .update(projects)
     .set({
       configJson: {
         ...existingConfig,
+        services: nextServiceConfigMap,
         monorepo: {
           enabled: isMonorepo,
           type: monorepoType,
@@ -1480,265 +1534,110 @@ function renderGitLabCI(
   );
 }
 
-function renderGitHubCIMonorepo(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  _monorepoType: MonorepoType
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions-monorepo.yml');
-
-  if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
-    return content;
-  }
-
-  // Fallback to inline template
-  return `name: Juanie CI (Monorepo)
-
-on:
-  push:
-    branches: [main, master]
-
-env:
-  IMAGE_REGISTRY: ghcr.io
-
-jobs:
-  detect:
-    runs-on: ubuntu-latest
-    outputs:
-      services: \${{ steps.detect.outputs.services }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: oven-sh/setup-bun@v1
-
-      - name: Setup Turborepo
-        run: bun add -g turbo
-
-      - name: Detect affected services
-        id: detect
-        run: |
-          AFFECTED=$(turbo ls --filter="...[origin/main^1]" --json 2>/dev/null || echo '[]')
-          echo "services=$AFFECTED" >> $GITHUB_OUTPUT
-
-  build:
-    needs: detect
-    if: \${{ needs.detect.outputs.services != '[]' }}
-    strategy:
-      matrix:
-        service: \${{ fromJson(needs.detect.outputs.services) }}
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: \${{ env.IMAGE_REGISTRY }}
-          username: \${{ github.actor }}
-          password: \${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push \${{ matrix.service }}
-        run: |
-          export REGISTRY="\${{ env.IMAGE_REGISTRY }}"
-          IMAGE_TAG=$REGISTRY/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
-          docker build -t $IMAGE_TAG -f apps/\${{ matrix.service }}/Dockerfile .
-          docker push $IMAGE_TAG
-
-      - name: Trigger Juanie Release
-        if: success()
-        run: |
-          IMAGE_TAG=\${{ env.IMAGE_REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
-          RELEASE_RESPONSE_FILE=$(mktemp)
-          RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
-            -d '{
-              "repository": "\${{ github.repository }}",
-              "sha": "\${{ github.sha }}",
-              "ref": "\${{ github.ref }}",
-              "services": [
-                {
-                  "name": "\${{ matrix.service }}",
-                  "image": "'"$IMAGE_TAG"'"
-                }
-              ]
-            }')
-          RELEASE_RESPONSE=$(cat "$RELEASE_RESPONSE_FILE")
-          rm -f "$RELEASE_RESPONSE_FILE"
-
-          echo "$RELEASE_RESPONSE"
-
-          if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-            echo "Juanie release request failed with HTTP $RELEASE_STATUS"
-            exit 1
-          fi
-
-          RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
-          RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "Juanie did not return a release id"
-            echo "$RELEASE_RESPONSE"
-            exit 1
-          fi
-
-          for attempt in $(seq 1 180); do
-            STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
-              -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}")
-
-            RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
-            STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
-            ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
-
-            echo "Juanie release $RELEASE_ID: status=$STATUS"
-
-            case "$RESOLUTION" in
-              succeeded)
-                exit 0
-                ;;
-              action_required)
-                if [ -n "$RELEASE_PATH" ]; then
-                  echo "Juanie release requires manual action: https://juanie.art$RELEASE_PATH"
-                fi
-                exit 0
-                ;;
-              failed)
-                echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
-                exit 1
-                ;;
-            esac
-
-            sleep 10
-          done
-
-          echo "Timed out waiting for Juanie release $RELEASE_ID"
-          exit 1
-`;
+interface MonorepoCiServiceEntry {
+  name: string;
+  type: 'web' | 'worker' | 'cron';
+  appDir: string;
+  build: {
+    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
+    command?: string;
+    dockerfile?: string;
+    context?: string;
+    target?: string;
+    definition?: string;
+  };
 }
 
-function renderGitLabCIMonorepo(
+export function buildMonorepoCiServices(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
-  _monorepoType: MonorepoType
+  serviceList: Array<typeof services.$inferSelect>
+): MonorepoCiServiceEntry[] {
+  const serviceConfigMap = getProjectServiceConfigMap(project);
+
+  return serviceList.map((service) => {
+    const serviceConfig = serviceConfigMap[service.name];
+    const appDir = serviceConfig?.monorepo?.appDir ?? '.';
+    const build = serviceConfig?.build;
+    const normalizedAppDir = appDir.replace(/\/$/, '');
+    const dockerfile =
+      build?.dockerfile ?? service.dockerfile?.trim() ?? `${normalizedAppDir}/Dockerfile`;
+
+    return {
+      name: service.name,
+      type: service.type,
+      appDir,
+      build: {
+        strategy:
+          build?.strategy ??
+          (build?.definition || build?.target ? 'bake' : dockerfile ? 'dockerfile' : 'auto'),
+        command: build?.command ?? service.buildCommand ?? 'npm run build',
+        dockerfile,
+        context: build?.context ?? service.dockerContext ?? '.',
+        target: build?.target ?? (build?.strategy === 'bake' ? service.name : undefined),
+        definition: build?.definition,
+      },
+    };
+  });
+}
+
+export function encodeMonorepoCiServices(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  serviceList: Array<typeof services.$inferSelect>
 ): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci-monorepo.yml');
+  return Buffer.from(
+    JSON.stringify(buildMonorepoCiServices(project, serviceList)),
+    'utf8'
+  ).toString('base64');
+}
+
+export function renderGitHubCIMonorepo(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  serviceList: Array<typeof services.$inferSelect>
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions-monorepo.yml');
+  const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
 
   if (existsSync(templatePath)) {
     let content = readFileSync(templatePath, 'utf-8');
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
+      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix);
     return content;
   }
 
-  // Fallback to inline template
-  return `stages:
-  - detect
-  - build
+  throw new Error(
+    `Monorepo CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
+}
 
-variables:
-  REGISTRY: $CI_REGISTRY
+export function renderGitLabCIMonorepo(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  serviceList: Array<typeof services.$inferSelect>
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci-monorepo.yml');
+  const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
 
-detect:
-  stage: detect
-  image: oven/bun:1
-  script:
-    - bun add -g turbo
-    - AFFECTED=$(turbo ls --filter="...[$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
-    - echo "SERVICES=$AFFECTED" >> build.env
-  artifacts:
-    reports:
-      dotenv: build.env
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
+      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix);
+    return content;
+  }
 
-build:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
-  before_script:
-    - apk add --no-cache curl jq
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - |
-      for SERVICE in $(echo $SERVICES | jq -r '.[]'); do
-        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$CI_COMMIT_SHA
-        docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
-        docker push $IMAGE_TAG
-
-        RELEASE_RESPONSE_FILE=$(mktemp)
-        RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer $CI_JOB_TOKEN" \
-          -d "{
-            \\"repository\\": \\"$CI_PROJECT_PATH\\",
-            \\"sha\\": \\"$CI_COMMIT_SHA\\",
-            \\"ref\\": \\"$CI_COMMIT_REF_NAME\\",
-            \\"services\\": [
-              {
-                \\"name\\": \\"$SERVICE\\",
-                \\"image\\": \\"$IMAGE_TAG\\"
-              }
-            ]
-          }")
-        RELEASE_RESPONSE=$(cat "$RELEASE_RESPONSE_FILE")
-        rm -f "$RELEASE_RESPONSE_FILE"
-
-        echo "$RELEASE_RESPONSE"
-
-        if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-          echo "Juanie release request failed with HTTP $RELEASE_STATUS"
-          exit 1
-        fi
-
-        RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
-        RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-          echo "Juanie did not return a release id"
-          echo "$RELEASE_RESPONSE"
-          exit 1
-        fi
-
-        for attempt in $(seq 1 180); do
-          STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
-            -H "Authorization: Bearer $CI_JOB_TOKEN")
-
-          RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
-          STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
-          ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
-
-          echo "Juanie release $RELEASE_ID: status=$STATUS"
-
-          case "$RESOLUTION" in
-            succeeded)
-              break
-              ;;
-            action_required)
-              if [ -n "$RELEASE_PATH" ]; then
-                echo "Juanie release requires manual action: https://juanie.art$RELEASE_PATH"
-              fi
-              break
-              ;;
-            failed)
-              echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
-              exit 1
-              ;;
-          esac
-
-          sleep 10
-        done
-      done
-  rules:
-    - if: $SERVICES != '[]'
-`;
+  throw new Error(
+    `Monorepo CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
 }
 
 async function renderEnvTemplate(

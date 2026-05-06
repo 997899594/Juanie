@@ -23,6 +23,7 @@ env:
   JUANIE_SOURCE_SHA: ${{ inputs.juanie_source_sha || github.sha }}
   JUANIE_RELEASE_REF: ${{ inputs.juanie_release_ref || github.ref }}
   JUANIE_FORCE_FULL_BUILD: ${{ inputs.juanie_force_full_build || 'false' }}
+  JUANIE_SERVICE_MATRIX_B64: {{JUANIE_SERVICE_MATRIX_B64}}
 
 jobs:
   detect:
@@ -35,40 +36,71 @@ jobs:
           fetch-depth: 0
           ref: ${{ env.JUANIE_SOURCE_SHA }}
 
-      - uses: oven-sh/setup-bun@v1
-
-      - name: Setup Turborepo
-        run: bun add -g turbo
-
       - name: Detect affected services
         id: detect
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execSync } = require('node:child_process');
 
-          if [ "${JUANIE_FORCE_FULL_BUILD}" = "true" ]; then
-            SERVICES=$(
-              awk '
-                /^services:/ { in_services=1; next }
-                in_services && /^[^[:space:]-]/ { exit }
-                in_services && /^[[:space:]]*-[[:space:]]*name:/ {
-                  sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
-                  gsub(/["'\'']/,"",$0)
-                  print $0
-                }
-              ' juanie.yaml \
-                | sed 's/"/\\"/g; s/.*/"&"/' \
-                | paste -sd, -
-            )
-            if [ -n "${SERVICES}" ]; then
-              SERVICES="[${SERVICES}]"
-            else
-              SERVICES='[]'
-            fi
-          else
-            SERVICES=$(turbo ls --filter="...[origin/main^1]" --json 2>/dev/null || echo '[]')
-          fi
+          const services = JSON.parse(
+            Buffer.from(process.env.JUANIE_SERVICE_MATRIX_B64 ?? '', 'base64').toString('utf8')
+          );
+          const serviceDirs = services.map((service) => service.appDir);
+          const globalFiles = new Set([
+            'package.json',
+            'pnpm-lock.yaml',
+            'yarn.lock',
+            'package-lock.json',
+            'bun.lock',
+            'bun.lockb',
+            'turbo.json',
+            'juanie.yaml',
+            'juanie.yml',
+            'docker-bake.hcl',
+            'docker-bake.json',
+          ]);
+          const globalPrefixes = ['.github/', '.gitlab/'];
+          const beforeSha = process.env.BEFORE_SHA;
+          const sourceSha = process.env.JUANIE_SOURCE_SHA;
+          const fullBuild =
+            process.env.JUANIE_FORCE_FULL_BUILD === 'true' ||
+            !beforeSha ||
+            /^0+$/.test(beforeSha);
+          let changedFiles = [];
 
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          if (!fullBuild) {
+            const output = execSync(`git diff --name-only ${beforeSha} ${sourceSha}`, {
+              encoding: 'utf8',
+            });
+            changedFiles = output.split('\n').map((line) => line.trim()).filter(Boolean);
+          }
+
+          const isSharedPackageFile = (file) =>
+            file.startsWith('packages/') &&
+            !serviceDirs.some((appDir) => file === appDir || file.startsWith(`${appDir}/`));
+
+          const shouldBuildAll =
+            fullBuild ||
+            changedFiles.some(
+              (file) =>
+                globalFiles.has(file) ||
+                globalPrefixes.some((prefix) => file.startsWith(prefix)) ||
+                isSharedPackageFile(file)
+            );
+
+          const selected = shouldBuildAll
+            ? services
+            : services.filter((service) =>
+                changedFiles.some(
+                  (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+                )
+              );
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `services=${JSON.stringify(selected)}\n`);
+          NODE
 
   build:
     needs: detect
@@ -91,27 +123,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Build and push ${{ matrix.service.name }}
         run: |
-          export REGISTRY="${{ env.IMAGE_REGISTRY }}"
-          IMAGE_TAG=${REGISTRY}/${{ github.repository }}/${{ matrix.service }}:sha-${{ env.JUANIE_SOURCE_SHA }}
+          set -euo pipefail
 
-          if [ -f docker-bake.hcl ]; then
-            # 使用 docker-bake.hcl，Juanie 覆盖 tag
-            docker buildx bake ${{ matrix.service }} \
-              --set ${{ matrix.service }}.tags=${IMAGE_TAG} \
-              --set ${{ matrix.service }}.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }} \
+          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:sha-${{ env.JUANIE_SOURCE_SHA }}
+          BUILD_STRATEGY="${{ matrix.service.build.strategy }}"
+          BUILD_DEFINITION="${{ matrix.service.build.definition }}"
+          BUILD_TARGET="${{ matrix.service.build.target }}"
+          BUILD_CONTEXT="${{ matrix.service.build.context }}"
+          BUILD_DOCKERFILE="${{ matrix.service.build.dockerfile }}"
+
+          if [ -z "$BUILD_TARGET" ]; then
+            BUILD_TARGET="${{ matrix.service.name }}"
+          fi
+
+          if [ -z "$BUILD_DOCKERFILE" ]; then
+            BUILD_DOCKERFILE="${{ matrix.service.appDir }}/Dockerfile"
+          fi
+
+          if [ -z "$BUILD_CONTEXT" ]; then
+            BUILD_CONTEXT='.'
+          fi
+
+          if [ "$BUILD_STRATEGY" = 'bake' ] && [ -n "$BUILD_DEFINITION" ]; then
+            docker buildx bake "$BUILD_TARGET" \
+              -f "$BUILD_DEFINITION" \
+              --set "$BUILD_TARGET.tags=$IMAGE_TAG" \
+              --set "$BUILD_TARGET.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}" \
               --push
           else
-            # 回退到标准 Dockerfile
-            docker build -t $IMAGE_TAG -f apps/${{ matrix.service }}/Dockerfile .
-            docker push $IMAGE_TAG
+            docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
+            docker push "$IMAGE_TAG"
           fi
 
       - name: Trigger Juanie Release
         if: success()
         run: |
-          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ env.JUANIE_SOURCE_SHA }}
+          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:sha-${{ env.JUANIE_SOURCE_SHA }}
           RELEASE_RESPONSE_FILE="$(mktemp)"
           RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
@@ -122,7 +171,7 @@ jobs:
               "ref": "${{ env.JUANIE_RELEASE_REF }}",
               "services": [
                 {
-                  "name": "${{ matrix.service }}",
+                  "name": "${{ matrix.service.name }}",
                   "image": "'"$IMAGE_TAG"'"
                 }
               ]
@@ -139,8 +188,8 @@ jobs:
 
           RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
           RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "Juanie did not return a release id"
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
+            echo 'Juanie did not return a release id'
             echo "$RELEASE_RESPONSE"
             exit 1
           fi

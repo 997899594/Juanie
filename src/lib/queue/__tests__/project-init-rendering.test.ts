@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
+  buildMonorepoCiServices,
   buildRunScriptCommand,
   detectMigrationTool,
   detectPackageManager,
   inferSchemaConfig,
+  renderGitHubCIMonorepo,
   renderJuanieConfig,
   resolvePackageScriptCommand,
 } from '@/lib/queue/project-init';
@@ -427,6 +429,105 @@ describe('project init migration inference', () => {
     expect(config).toContain('strategy: bake');
     expect(config).toContain('definition: docker-bake.hcl');
     expect(config).toContain('target: web');
+  });
+
+  it('renders monorepo appDir from persisted project service topology', () => {
+    const config = renderJuanieConfig(
+      {
+        id: 'project_1',
+        slug: 'nexusnote',
+        name: 'NexusNote',
+        productionBranch: 'main',
+        repositoryId: 'repo_1',
+        configJson: {
+          services: {
+            worker: {
+              monorepo: {
+                appDir: 'packages/worker',
+              },
+            },
+          },
+        },
+      } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
+      {
+        services: [
+          {
+            id: 'service_worker',
+            projectId: 'project_1',
+            name: 'worker',
+            type: 'worker',
+            buildCommand: 'bun run build',
+            startCommand: 'bun run worker',
+          } as typeof services.$inferSelect,
+        ],
+        databases: [],
+      },
+      {
+        monorepoType: 'turborepo',
+        rootFiles: ['package.json', 'turbo.json'],
+        packageManager: 'bun',
+        bakeDefinition: null,
+        bakeTargets: [],
+        atlasConfigPath: null,
+        atlasConfigContent: null,
+        migrationScriptContents: {},
+        packageJson: {
+          scripts: {
+            build: 'turbo run build --filter=worker',
+          },
+        },
+      }
+    );
+
+    expect(config).toContain('monorepo:');
+    expect(config).toContain('appDir: packages/worker');
+  });
+
+  it('embeds packages monorepo services into CI build metadata', () => {
+    const project = {
+      id: 'project_1',
+      slug: 'nexusnote',
+      name: 'NexusNote',
+      productionBranch: 'main',
+      repositoryId: 'repo_1',
+      configJson: {
+        services: {
+          worker: {
+            monorepo: {
+              appDir: 'packages/worker',
+            },
+            build: {
+              strategy: 'dockerfile',
+              context: '.',
+              dockerfile: 'packages/worker/Dockerfile',
+            },
+          },
+        },
+      },
+    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
+    const serviceList = [
+      {
+        id: 'service_worker',
+        projectId: 'project_1',
+        name: 'worker',
+        type: 'worker',
+        buildCommand: 'bun run build',
+        startCommand: 'bun run worker',
+      } as typeof services.$inferSelect,
+    ];
+
+    const rendered = renderGitHubCIMonorepo(project, serviceList);
+    const encoded = rendered.match(/JUANIE_SERVICE_MATRIX_B64: ([A-Za-z0-9+/=]+)/)?.[1];
+
+    expect(Boolean(encoded)).toBe(true);
+    const ciServices = buildMonorepoCiServices(project, serviceList);
+
+    expect(ciServices.length).toBe(1);
+    expect(ciServices[0]?.name).toBe('worker');
+    expect(ciServices[0]?.appDir).toBe('packages/worker');
+    expect(ciServices[0]?.type).toBe('worker');
+    expect(ciServices[0]?.build.dockerfile).toBe('packages/worker/Dockerfile');
+    expect(ciServices[0]?.build.context).toBe('.');
   });
 
   it('builds yarn commands without run', () => {

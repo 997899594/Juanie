@@ -4,43 +4,76 @@ stages:
 
 variables:
   REGISTRY: $CI_REGISTRY
+  JUANIE_SERVICE_MATRIX_B64: {{JUANIE_SERVICE_MATRIX_B64}}
 
 detect:
   stage: detect
   image: oven/bun:1
   script:
     - |
-      set -euo pipefail
+      bun <<'BUN'
+      import { execSync } from 'node:child_process';
+      import { writeFileSync } from 'node:fs';
 
-      bun add -g turbo
+      const services = JSON.parse(
+        Buffer.from(process.env.JUANIE_SERVICE_MATRIX_B64 ?? '', 'base64').toString('utf8')
+      );
+      const serviceDirs = services.map((service) => service.appDir);
+      const globalFiles = new Set([
+        'package.json',
+        'pnpm-lock.yaml',
+        'yarn.lock',
+        'package-lock.json',
+        'bun.lock',
+        'bun.lockb',
+        'turbo.json',
+        'juanie.yaml',
+        'juanie.yml',
+        'docker-bake.hcl',
+        'docker-bake.json',
+      ]);
+      const globalPrefixes = ['.github/', '.gitlab/'];
+      const beforeSha = process.env.CI_COMMIT_BEFORE_SHA;
+      const sourceSha = process.env.JUANIE_SOURCE_SHA || process.env.CI_COMMIT_SHA;
+      const fullBuild =
+        process.env.JUANIE_FORCE_FULL_BUILD === '1' ||
+        !beforeSha ||
+        /^0+$/.test(beforeSha);
+      let changedFiles = [];
 
-      if [ "${JUANIE_FORCE_FULL_BUILD:-0}" = "1" ]; then
-        SERVICES=$(
-          awk '
-            /^services:/ { in_services=1; next }
-            in_services && /^[^[:space:]-]/ { exit }
-            in_services && /^[[:space:]]*-[[:space:]]*name:/ {
-              sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
-              gsub(/["'\'']/,"",$0)
-              print $0
-            }
-          ' juanie.yaml \
-            | sed 's/"/\\"/g; s/.*/"&"/' \
-            | paste -sd, -
-        )
-        if [ -n "${SERVICES}" ]; then
-          SERVICES="[${SERVICES}]"
-        else
-          SERVICES='[]'
-        fi
-      else
-        SERVICES=$(turbo ls --filter="...[$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
-      fi
+      if (!fullBuild) {
+        const output = execSync(`git diff --name-only ${beforeSha} ${sourceSha}`, {
+          encoding: 'utf8',
+        });
+        changedFiles = output.split('\n').map((line) => line.trim()).filter(Boolean);
+      }
 
-      echo "SERVICES=$SERVICES" >> build.env
+      const isSharedPackageFile = (file) =>
+        file.startsWith('packages/') &&
+        !serviceDirs.some((appDir) => file === appDir || file.startsWith(`${appDir}/`));
+
+      const shouldBuildAll =
+        fullBuild ||
+        changedFiles.some(
+          (file) =>
+            globalFiles.has(file) ||
+            globalPrefixes.some((prefix) => file.startsWith(prefix)) ||
+            isSharedPackageFile(file)
+        );
+
+      const selected = shouldBuildAll
+        ? services
+        : services.filter((service) =>
+            changedFiles.some(
+              (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+            )
+          );
+
+      writeFileSync('services.json', JSON.stringify(selected));
+      BUN
   artifacts:
-    reports:
-      dotenv: build.env
+    paths:
+      - services.json
 
 build:
   stage: build
@@ -56,20 +89,40 @@ build:
 
       SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
       RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+      SERVICES_JSON="$(cat services.json)"
 
-      for SERVICE in $(echo $SERVICES | jq -r '.[]'); do
-        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$SOURCE_SHA
+      if [ "$SERVICES_JSON" = '[]' ]; then
+        echo 'No affected services'
+        exit 0
+      fi
 
-        if [ -f docker-bake.hcl ]; then
-          # 使用 docker-bake.hcl，Juanie 覆盖 tag
-          docker buildx bake $SERVICE \
-            --set ${SERVICE}.tags=${IMAGE_TAG} \
-            --set ${SERVICE}.args.GIT_SHA=${SOURCE_SHA} \
+      for SERVICE in $(printf '%s' "$SERVICES_JSON" | jq -c '.[]'); do
+        SERVICE_NAME=$(printf '%s' "$SERVICE" | jq -r '.name')
+        BUILD_STRATEGY=$(printf '%s' "$SERVICE" | jq -r '.build.strategy // "dockerfile"')
+        BUILD_DEFINITION=$(printf '%s' "$SERVICE" | jq -r '.build.definition // ""')
+        BUILD_TARGET=$(printf '%s' "$SERVICE" | jq -r '.build.target // ""')
+        BUILD_CONTEXT=$(printf '%s' "$SERVICE" | jq -r '.build.context // "."')
+        BUILD_DOCKERFILE=$(printf '%s' "$SERVICE" | jq -r '.build.dockerfile // ""')
+        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE_NAME:sha-$SOURCE_SHA
+
+        if [ -z "$BUILD_TARGET" ]; then
+          BUILD_TARGET="$SERVICE_NAME"
+        fi
+
+        if [ -z "$BUILD_DOCKERFILE" ]; then
+          APP_DIR=$(printf '%s' "$SERVICE" | jq -r '.appDir')
+          BUILD_DOCKERFILE="$APP_DIR/Dockerfile"
+        fi
+
+        if [ "$BUILD_STRATEGY" = 'bake' ] && [ -n "$BUILD_DEFINITION" ]; then
+          docker buildx bake "$BUILD_TARGET" \
+            -f "$BUILD_DEFINITION" \
+            --set ${BUILD_TARGET}.tags=${IMAGE_TAG} \
+            --set ${BUILD_TARGET}.args.GIT_SHA=${SOURCE_SHA} \
             --push
         else
-          # 回退到标准 Dockerfile
-          docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
-          docker push $IMAGE_TAG
+          docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
+          docker push "$IMAGE_TAG"
         fi
 
         RELEASE_RESPONSE_FILE="$(mktemp)"
@@ -82,7 +135,7 @@ build:
             \"ref\": \"$RELEASE_REF\",
             \"services\": [
               {
-                \"name\": \"$SERVICE\",
+                \"name\": \"$SERVICE_NAME\",
                 \"image\": \"$IMAGE_TAG\"
               }
             ]
@@ -99,8 +152,8 @@ build:
 
         RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
         RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-          echo "Juanie did not return a release id"
+        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
+          echo 'Juanie did not return a release id'
           echo "$RELEASE_RESPONSE"
           exit 1
         fi
@@ -135,4 +188,4 @@ build:
         done
       done
   rules:
-    - if: $SERVICES != '[]'
+    - if: $CI_PIPELINE_SOURCE

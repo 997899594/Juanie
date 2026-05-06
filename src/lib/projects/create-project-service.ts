@@ -327,6 +327,15 @@ async function createProjectAggregate(input: {
   });
   const initStepsData = buildProjectInitStepSeeds(mode);
   const normalizedInitialVariables = normalizeInitialVariables(initialVariables);
+  const serviceTopologyConfig = Object.fromEntries(
+    serviceConfigs.map((serviceConfig) => [
+      serviceConfig.name,
+      {
+        ...(serviceConfig.monorepo ? { monorepo: serviceConfig.monorepo } : {}),
+        ...(serviceConfig.build ? { build: serviceConfig.build } : {}),
+      },
+    ])
+  );
 
   return db.transaction(async (tx) => {
     const managedHostnameBase = await allocateManagedHostnameBaseWithDb({
@@ -356,6 +365,7 @@ async function createProjectAggregate(input: {
             previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
             environmentTemplate: environmentTemplate ?? 'staging_production_preview',
           },
+          services: serviceTopologyConfig,
           routing: {
             vanitySlug: slug,
             managedHostnameBase,

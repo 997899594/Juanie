@@ -23,3 +23,11 @@ export {
   type MonorepoConfig,
   type MonorepoType,
 } from './detect';
+export {
+  inspectRepositoryTopology,
+  parseDockerBakeTargets,
+  type RepositoryTopology,
+  type RepositoryTopologyBuild,
+  type RepositoryTopologyReader,
+  type RepositoryTopologyService,
+} from './topology';
