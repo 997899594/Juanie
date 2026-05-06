@@ -113,6 +113,7 @@ Notes:
 | DATABASE_PASSWORD | Yes | PostgreSQL password for control-plane runtime config |
 | NEXTAUTH_URL | Yes | Your app URL |
 | NEXTAUTH_SECRET | Yes | Secret for NextAuth |
+| ENCRYPTION_MASTER_KEY | Local fallback | 64-char hex key for local encryption when Kubernetes Secret auto-bootstrap is unavailable |
 | GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |
 | GITHUB_CLIENT_SECRET | Yes | GitHub OAuth app client secret |
 | GITLAB_CLIENT_ID | No | GitLab OAuth app client ID |
@@ -155,7 +156,9 @@ scripts/update-platform-gitops-values.ts # CI 更新平台 GitOps 镜像指针
 ## Architecture Notes
 
 - [当前架构入口](./docs/current-architecture.md)
-- [部署架构历史说明](./DEPLOYMENT_ARCHITECTURE.md)
+- [部署架构边界](./DEPLOYMENT_ARCHITECTURE.md)
+- [生产就绪检查](./PRODUCTION_READINESS.md)
+- [当前面试/讲解入口](./interview-prep/README.md)
 
 ## License
 

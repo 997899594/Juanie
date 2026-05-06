@@ -46,15 +46,15 @@ RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
 RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=schema-runner
 
 # ============================================
-# Stage 5: Migration Builder
+# Stage 5: Runtime Postgres Dependencies
 # ============================================
-FROM oven/bun:1.3.9 AS migrate-deps
+FROM oven/bun:1.3.9 AS runtime-postgres-deps
 WORKDIR /migrate
 ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
 RUN cat <<'EOF' > package.json
 {
-  "name": "juanie-migrate",
+  "name": "juanie-runtime-postgres-deps",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -118,8 +118,8 @@ COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=worker-builder /app/schema-runner ./schema-runner
 COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations
-COPY --from=migrate-deps /migrate/package.json ./package.json
-COPY --from=migrate-deps /migrate/node_modules ./node_modules
+COPY --from=runtime-postgres-deps /migrate/package.json ./package.json
+COPY --from=runtime-postgres-deps /migrate/node_modules ./node_modules
 RUN mkdir -p ./src/lib/releases
 COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
 

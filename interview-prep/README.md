@@ -1,102 +1,63 @@
-# 面试准备材料
+# Juanie 面试与讲解入口
 
-基于 Juanie 项目的面试相关材料集合。
+这份材料只描述当前 Juanie，不保留旧版 Flux、Gemini、三层服务架构等过期叙事。
 
----
+## 一句话定位
 
-## 📁 目录结构
+Juanie 是一个 AI 原生发布控制平面，围绕 release、environment、preview、schema safety 和
+controlled rollout 帮团队把应用安全交付到 Kubernetes。
 
-```
-interview-prep/
-├── README.md                      # 本文件
-├── resume-fullstack-engineer.md    # 全栈工程师简历
-├── resume-ai-product-manager.md    # AI 产品经理简历
-├── tech-questions.md              # 技术面试题（已添加）
-├── product-questions.md            # 产品面试题（已添加）
-├── system-design.md                # 系统设计题（已添加）
-└── behavioral-questions.md         # 行为面试题（已添加）
-```
+## 当前真实技术栈
 
----
+| 方向 | 当前事实 |
+| --- | --- |
+| Web | Next.js 16 App Router, React 19, TypeScript |
+| Runtime | Bun-first scripts/workers; Web production uses Node 24 + Next standalone |
+| Persistence | PostgreSQL, Drizzle schema authoring, Atlas control-plane migrations |
+| Queue | BullMQ + Redis |
+| Git | GitHub/GitLab provider abstraction with team integration bindings |
+| Kubernetes | `@kubernetes/client-node`, Helm chart, Gateway API-oriented routing helpers |
+| Platform CD | GitHub Actions builds `web`/`runtime`; Argo CD syncs Helm from `values-gitops.yaml` |
+| Preview | Argo CD ApplicationSet scaffold plus Juanie release state |
+| Rollout | Argo Rollouts for controlled production delivery |
+| Database ops | CloudNativePG, managed database provisioning, schema-runner, schema safety gates |
+| Observability | Structured logs, audit logs, Sentry/Loki hooks, release trace context |
+| AI | Release/environment summaries, task center, plugin runtime, eval fixtures |
 
-## 📄 简历
+## 推荐讲法
 
-### 全栈工程师简历
-**文件** : `resume-fullstack-engineer.md`
+### 架构面试
 
-基于 Juanie 项目的全栈工程师简历，重点突出：
-- AI 驱动产品的架构设计
-- Google Gemini API 与 Tool Calling 集成
-- 三层服务架构（Foundation/Business/Extension）
-- GitOps 部署流程（Flux CD + Kubernetes）
-- 数据库优化（Drizzle ORM + PostgreSQL）
-- Next.js 16 App Router 全栈架构
+- 从两个发布边界讲起：Juanie 自身发布和用户应用发布不能混成一条路径。
+- 解释为什么子应用不强制 GitOps：会制造脏历史，且不如控制面状态机实时、可审计。
+- 重点讲 release 状态机：schema gate、migration、deployment、verification、controlled rollout。
+- 说明 schema safety：Atlas 用于 diff/safety/repair，应用迁移执行仍尊重子应用自己的配置。
 
-### AI 产品经理简历
-**文件** : `resume-ai-product-manager.md`
+### 产品面试
 
-基于 Juanie 项目的 AI 产品经理简历，重点突出：
-- Gemini-First 架构决策
-- Tool-Driven Dynamic UI 设计
-- 项目创建统一化流程
-- 多团队协作产品规划
-- Context Caching 成本优化
-- 数据驱动的产品决策
+- 用户核心问题不是“会不会部署”，而是发布风险、数据库变更、预览验证和生产放量能否闭环。
+- Preview 是需求/PR 级验证环境，不是 staging 的替代品。
+- Staging 和 production 默认走提升关系，production 应以受控放量和审批为主。
+- AI 的价值是减少排障和判断成本，不是增加一个聊天挂件。
 
----
+### 工程深挖
 
-## 💡 可扩展的内容
+- 项目初始化：API 写入项目和步骤，BullMQ worker 执行仓库验证、配置注入、命名空间、数据库、DNS 和首发构建。
+- 实时性：长任务通过 Redis-backed SSE 推送，失败时保留轮询兜底。
+- 平台自身发布：CI 只移动 GitOps 指针，Argo CD 和 Helm 执行真实同步。
+- 数据库：控制面只走 Atlas；子应用迁移由 `juanie.yaml` 声明，平台做门禁、执行、审计和修复建议。
+- 安全：团队 binding 替代个人 owner fallback，Secret/TLS/RBAC 走显式基线。
 
-### 技术面试题 (`tech-questions.md`)
-- 前端：Next.js, React, TypeScript, Tailwind CSS
-- 后端：Node.js, PostgreSQL, Drizzle ORM
-- AI：Google Gemini, Vercel AI SDK, Tool Calling
-- DevOps：Kubernetes, K3s, Flux CD, GitOps
-- 可观测性：OpenTelemetry, Jaeger, Prometheus
+## 仍可诚实承认的不足
 
-### 产品面试题 (`product-questions.md`)
-- 需求分析与用户研究
-- PRD 撰写与功能规划
-- AI 产品设计与 Prompt 工程
-- 数据指标与 A/B 测试
-- 跨部门协作与项目管理
+- 部分模块仍偏大，尤其 project init、K8s helper、创建项目表单和环境页。
+- Web readiness 还不能完全表达 worker/queue/schema-runner 健康。
+- 配额、成本归因和更完整策略引擎还在后续阶段。
 
-### 系统设计题 (`system-design.md`)
-- AI 驱动的 DevOps 平台架构
-- 三层服务架构设计
-- GitOps 部署流程
-- 多租户隔离系统
-- AI 工具调用系统
+## 准备路线
 
-### 行为面试题 (`behavioral-questions.md`)
-- 基于 STAR 原则的项目案例
-- 技术难点与解决方案
-- 产品决策与权衡
-- 团队协作与沟通
-
----
-
-## 🚀 如何使用
-
-1.  **简历** ：根据目标职位选择相应简历，根据个人经历调整细节
-2.  **面试题** ：用于模拟面试和自我评估
-3.  **系统设计** ：用于架构设计面试准备
-4.  **持续更新** ：基于项目进展，不断补充新内容
-
----
-
-## 📊 Juanie 项目亮点
-
-| 领域 | 亮点 |
-|------|------|
-| **AI 集成** | Google Gemini API, Tool-Driven UI, Context Caching |
-| **架构设计** | 三层服务架构, 多租户隔离, 项目创建统一化 |
-| **云原生** | K3s, Flux CD GitOps, Kubernetes 资源管理 |
-| **可观测性** | OpenTelemetry, Jaeger, Prometheus, Grafana |
-| **开发体验** | Next.js 16, Drizzle ORM, Bun, Turborepo |
-
----
-
-## � 持续更新
-
-欢迎基于 Juanie 项目的新功能，持续补充和完善面试材料！
+1. 先读 `docs/current-architecture.md`。
+2. 再读 `DEPLOYMENT_ARCHITECTURE.md`。
+3. 对照 `src/lib/releases/` 理解 release 主链。
+4. 对照 `src/lib/schema-safety/` 和 `src/lib/schema-management/` 理解 schema safety。
+5. 对照 `src/lib/queue/project-init.ts` 理解初始化还需要继续拆分的原因。

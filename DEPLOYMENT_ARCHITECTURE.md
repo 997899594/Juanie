@@ -1,75 +1,78 @@
 # Deployment Architecture
 
-This repository intentionally keeps two different deployment paths.
+This document describes the current deployment boundary. The canonical architecture entry remains
+[`docs/current-architecture.md`](./docs/current-architecture.md).
 
-They solve different problems and should not be merged back into one generic flow.
+Juanie intentionally keeps two deployment paths because they solve different problems:
 
-## 1. Juanie Self-Deploy
+1. Juanie self-deploys the control plane.
+2. Juanie manages releases for user applications.
 
-Juanie deploying Juanie is a first-party release path.
+These paths should share platform primitives where useful, but they should not be collapsed into
+one generic GitOps story.
 
-Characteristics:
+## Juanie Self-Deploy
 
-- Single known application
-- Single known database ownership
-- Migration command is owned by this repository
-- No need for platform inference
-- No need for project-level migration policy orchestration
+Juanie self-deploy is first-party control-plane delivery.
 
-Current release chain:
+Current chain:
 
-1. CI builds three runtime images:
-   - `juanie-web`
-   - `juanie-worker`
-   - `juanie-migrate`
-2. CI connects to the target cluster
-3. CI creates a cluster-local schema sync job with `juanie-migrate`
-4. Migration must succeed before rollout continues
-5. Helm rolls out `juanie-web`
-6. Helm rolls out `juanie-worker`
-7. Rollout failure stops the release
+1. A push to `main` runs CI quality checks.
+2. CI builds two images from the platform `Dockerfile`: `web` and shared `runtime`.
+3. CI updates `deploy/k8s/charts/juanie/values-gitops.yaml` with the new image tags.
+4. CI commits the GitOps pointer back to `main` with `[skip ci]`.
+5. Argo CD syncs the `juanie-platform` Application.
+6. The Helm PreSync Job runs control-plane Atlas migrations through the runtime image
+   `schema-runner`.
+7. Helm rolls out web and worker workloads. The same runtime image also provides worker,
+   scheduler, and schema-runner commands.
 
-Design rules:
+Rules:
 
-- Migration runs inside the target cluster, not on the GitHub runner
-- Failed migration must block rollout
-- Web, worker, and migration artifacts must remain separate
-- Self-deploy does not go through Juanie's own platform release domain
+- Do not restore SSH-based Helm deployment scripts.
+- Do not reintroduce separate platform `worker` or `migrate` images.
+- Control-plane schema changes go through `atlas.hcl` and `migrations/` only.
+- Argo CD and Helm own desired-state sync; CI only builds images and moves the GitOps pointer.
 
-## 2. Platform-Managed Application Deploy
+Operational checks:
 
-This is the multi-tenant control-plane path for user projects such as `nexusnote`.
+- GitHub Actions `quality`, `build-images`, and `promote-gitops`.
+- `deploy/k8s/charts/juanie/values-gitops.yaml` for the promoted image revision.
+- Argo CD Application `juanie-platform`.
+- PreSync schema-runner Job logs.
+- `/api/health/ready` for web readiness.
 
-Characteristics:
+## Platform-Managed Application Releases
 
-- The platform does not inherently know the app's migration command
-- The platform does not inherently know the right database binding
-- Different services can target different databases
-- Different environments can have different migration policies
-- The platform must explain, audit, retry, diff, and attribute failures
+User applications are not deployed through the platform self-deploy path.
 
-Current release chain:
+Current chain:
 
-1. A project release is created
-2. Juanie resolves release artifacts by service
-3. Juanie reads `juanie.yaml`
-4. Juanie resolves migration specifications and database bindings
-5. Juanie runs pre-deploy migration phase
-6. Juanie deploys workloads
-7. Juanie verifies rollout and traffic state
-8. Juanie records timeline, incidents, and remediation signals
+1. Juanie creates or imports a project and injects managed CI plus `juanie.yaml`.
+2. The app repository CI builds the app image.
+3. The app repository CI calls Juanie release APIs.
+4. Juanie resolves environment policy, service artifacts, database bindings, and schema gates.
+5. Juanie runs pre-deploy migration work when configured.
+6. Juanie deploys or updates workloads in the target environment.
+7. Juanie verifies runtime state and route state.
+8. Production releases may stop at a controlled rollout gate.
+9. Juanie records release, deployment, migration, trace, and AI/task context.
 
-Design rules:
+Rules:
 
-- This path keeps release orchestration, migration policy, manual controls, and incident signals
-- Migration specs come from the repository contract, not platform guesses
-- Deployment and migration stay coupled at the workflow level but decoupled at the runtime artifact level
+- User app CI builds artifacts; Juanie owns release orchestration.
+- Subapps do not need a GitOps repo mutation for every release.
+- Migration truth comes from `juanie.yaml` and supported schema sources, not platform guesses.
+- Atlas is used for diff/safety/repair workflows, while app migration execution follows the
+  configured migration tool and policy.
+- Preview scaffold is managed through Argo CD ApplicationSet, but individual subapp releases stay
+  release-state-machine driven.
 
 ## Boundary
 
 Use the self-deploy path when Juanie ships Juanie.
 
-Use the platform-managed path when Juanie ships somebody else's application.
+Use the platform-managed path when Juanie ships a user application.
 
-If a change makes these two paths look identical again, it is probably pushing the architecture in the
-wrong direction.
+If a change makes the two paths look identical again, it is likely reintroducing accidental
+complexity or stale GitOps dogma.

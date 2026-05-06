@@ -65,6 +65,27 @@ describe('project init realtime events', () => {
     );
   });
 
+  it('publishes completion events onto the project-specific channel', async () => {
+    const { publishProjectInitRealtimeEvent } = await import('@/lib/realtime/project-init');
+
+    await publishProjectInitRealtimeEvent({
+      kind: 'completed',
+      projectId: 'proj_789',
+      status: 'active',
+      timestamp: 789,
+    });
+
+    expect(publishMock).toHaveBeenCalledWith(
+      'realtime:project-init:proj_789',
+      JSON.stringify({
+        kind: 'completed',
+        projectId: 'proj_789',
+        status: 'active',
+        timestamp: 789,
+      })
+    );
+  });
+
   it('subscribes to the project-specific channel and relays parsed events', async () => {
     const { createProjectInitRealtimeSubscriber } = await import('@/lib/realtime/project-init');
     const onEvent = mock(async () => undefined);

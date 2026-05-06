@@ -1,291 +1,52 @@
-# 生产级开发进度
+# Production Readiness
 
-## ✅ 已完成 (阶段 0-2)
+This is a current checklist, not a historical progress log. For the complete architecture map, read
+[`docs/current-architecture.md`](./docs/current-architecture.md).
 
-### 🔒 安全基础
+## Current Baseline
 
-#### 1. 统一错误处理 (`src/lib/api/errors.ts`)
-- 标准化错误响应格式
-- 错误码枚举 (UNAUTHORIZED, FORBIDDEN, VALIDATION_ERROR, etc.)
-- 生产环境不暴露敏感错误信息
-- Request ID 追踪
+| Area | Current state |
+| --- | --- |
+| Runtime | Web runs as Next standalone on Node 24. Worker, scheduler, and schema-runner share the Bun runtime image. |
+| Platform deploy | CI builds `web` and `runtime`, updates `values-gitops.yaml`, then Argo CD syncs Helm. |
+| Control-plane schema | Drizzle authors schema; Atlas owns the active migration chain in `migrations/`. |
+| User app release | App CI builds images and calls Juanie. Juanie owns release, migration, deployment, rollout, and verification state. |
+| Preview | Preview scaffold is managed by Argo CD ApplicationSet. Preview releases still flow through Juanie state. |
+| PostgreSQL | CloudNativePG-backed managed PostgreSQL and shared Postgres provisioning are modeled in platform code. |
+| Secrets | Chart supports existing Secret, built-in Secret, and ExternalSecret. Production should prefer existing Secret or External Secrets Operator. |
+| TLS | cert-manager is part of bootstrap. Insecure TLS bypass is opt-in only. |
+| RBAC | High-risk capabilities are behind explicit chart switches. `pods/exec` is disabled by default. |
+| Realtime | Project init, project list, release, deployment, and schema repair paths use SSE plus Redis-backed events where available. |
+| Observability | Structured logger, audit log, Sentry, Loki integration, and release trace context exist. |
+| Health | Web readiness checks database and configured Redis; broader worker/schema-runner diagnostics remain a follow-up. |
 
-#### 2. 请求验证 (`src/lib/api/validation.ts`)
-- Zod schemas 定义
-- 项目、团队、部署等实体的验证规则
-- `validateJson`, `validateQuery`, `validateParams` 辅助函数
+## Production Rules
 
-#### 3. API 中间件 (`src/lib/api/middleware.ts`)
-- 认证中间件 (`requireAuth`, `requireTeamMember`)
-- 验证中间件
-- 速率限制中间件
-- 组合中间件 (`withApiMiddleware`)
-- 类型安全的 API 处理器 (`createApiHandler`)
+- Do not deploy the platform by SSHing into the server and running Helm.
+- Do not create a second control-plane migration path outside Atlas.
+- Do not write real secrets into Helm values.
+- Do not mutate user app repositories for every runtime release.
+- Do not use stale `drizzle/` snapshots as migration history.
+- Do not add a new UI/tool path when `schema-safety`, release orchestration, or environment runtime already owns the concept.
 
-#### 4. Rate Limiting (`src/lib/api/rate-limit.ts`)
-- 基于 Redis 的速率限制
-- 内存存储回退（开发环境）
-- 预设规则 (strict, medium, loose, api)
-- Next.js Route Helper (`withRateLimit`)
+## Remaining Gaps
 
-### 📝 可观测性
+| Gap | Why it matters | Preferred direction |
+| --- | --- | --- |
+| Worker/runtime readiness is not fully represented by web readiness | Web can be healthy while worker or schema-runner execution is degraded | Keep DB and Redis in readiness, then add a separate control-plane diagnostics surface for workers, scheduler, and schema-runner. |
+| Production scheduler can run inside the worker | This saves resources but shares a failure domain | Keep it as an explicit low-cost mode, or split scheduler replicas for a stricter production profile. |
+| Some domain modules remain too large | Large files hide duplicate paths and make regressions easier | Continue extracting project init, K8s operations, create-project UI, and environment UI into focused modules. |
+| Quotas/cost/policy engine is still light | Multi-tenant platforms need cost and usage guardrails | Add usage accounting before expanding expensive automation. |
 
-#### 5. 结构化日志 (`src/lib/logger/`)
-- 多级别日志 (DEBUG, INFO, WARN, ERROR)
-- 开发/生产环境适配
-- 子 logger 支持 (`logger.child()`)
-- 性能测量 (`logger.measure()`)
-- HTTP 请求日志 (`logger-http.ts`)
-- 审计日志 (`logger-kv.ts`)
+## Golden Path Checks
 
-#### 6. Sentry 集成 (`src/lib/logger/logger-sentry.ts`)
-- 错误追踪
-- 性能监控
-- 用户上下文
-- 面包屑调试
-- 环境变量自动初始化
+After major architecture changes, verify:
 
-#### 7. Loki 日志聚合 (`src/lib/logger/logger-loki.ts`)
-- 批量发送日志
-- 自动刷新缓冲区
-- 标签支持
-
-#### 8. 健康检查 (`src/app/api/health/`)
-- `/health` - 完整健康检查
-- `/health/ready` - 就绪探针
-- `/health/live` - 存活探针
-- `/health/startup` - 启动探针
-- 检查数据库、Redis、Kubernetes 连接
-
-### 🐳 部署能力 (阶段 2)
-
-#### 9. 容器化
-- **Dockerfile** - 多阶段构建
-- **docker-compose.yml** - 本地开发环境
-  - PostgreSQL
-  - Redis
-  - MinIO
-  - Grafana Loki
-  - Grafana
-- **.dockerignore** - 优化构建上下文
-- **next.config.ts** - standalone 输出配置
-
-#### 10. Kubernetes 部署清单 (`k8s/`)
-```
-k8s/
-├── base/                      # 基础配置
-│   ├── namespace.yaml         # 命名空间
-│   ├── configmap.yaml         # 配置
-│   ├── secret.yaml            # 密钥
-│   ├── deployment.yaml        # Web + Worker 部署
-│   ├── service.yaml           # 服务
-│   ├── ingress.yaml           # Ingress
-│   ├── serviceaccount.yaml    # RBAC
-│   ├── hpa.yaml               # 自动扩缩容
-│   ├── pdb.yaml               # Pod 中断预算
-│   ├── networkpolicy.yaml     # 网络策略
-│   └── kustomization.yaml     # Kustomize 配置
-└── overlays/                  # 环境覆盖
-    └── production/
-        └── kustomization.yaml # 生产环境配置
-```
-
-### 💾 数据可靠性 (阶段 3)
-
-#### 11. 数据库事务 (`src/lib/db/transaction.ts`)
-- **useTransaction** - 事务包装器
-- **useTransactionWithRetry** - 带重试的事务
-- **隔离级别支持** - READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE
-- **批量操作** - batchInsert, batchUpdate
-
-#### 12. 事务辅助函数 (`src/lib/db/transaction-helpers.ts`)
-- **upsert** - 创建或更新
-- **atomicIncrement** - 原子计数器
-- **softDelete** - 软删除
-- **deleteWithRelations** - 关联删除
-- **optimisticUpdate** - 乐观锁
-- **migrateData** - 数据迁移
-
----
-
-## 📂 新增文件结构
-
-```
-src/
-├── lib/
-│   ├── api/
-│   │   ├── errors.ts           # 统一错误处理
-│   │   ├── errors-logging.ts   # 错误日志
-│   │   ├── validation.ts       # Zod 验证 schemas
-│   │   ├── rate-limit.ts       # 速率限制
-│   │   ├── rate-limit-redis.ts # Redis 存储
-│   │   └── middleware.ts       # API 中间件
-│   ├── logger/
-│   │   ├── index.ts            # 主 logger
-│   │   ├── logger-http.ts      # HTTP 日志
-│   │   ├── logger-kv.ts        # KV 存储 + 审计日志
-│   │   ├── logger-sentry.ts    # Sentry 集成
-│   │   └── logger-loki.ts      # Loki 集成
-│   └── db/
-│       ├── index.ts            # 更新: 事务支持
-│       ├── transaction.ts      # 事务包装器
-│       └── transaction-helpers.ts # 事务辅助函数
-├── app/
-│   └── api/
-│       ├── health/
-│       │   ├── route.ts
-│       │   ├── ready/route.ts
-│       │   ├── live/route.ts
-│       │   └── startup/route.ts
-│       └── _examples/
-│           └── projects.route.ts  # 重构示例
-k8s/                              # Kubernetes 清单
-├── base/
-└── overlays/production/
-Dockerfile                        # 容器化
-docker-compose.yml                # 本地开发
-config/loki-config.yml            # Loki 配置
-```
-
----
-
-## 🚀 使用示例
-
-### 部署到 Kubernetes
-
-```bash
-# 构建镜像
-docker build -t juanie/juanie:v1.0.0 .
-
-# 推送到镜像仓库
-docker push juanie/juanie:v1.0.0
-
-# 部署到生产环境
-kubectl apply -k k8s/overlays/production
-```
-
-### 使用事务
-
-```typescript
-import { useTransaction, upsert } from '@/lib/db';
-
-// 基本事务
-await useTransaction(async (tx) => {
-  await tx.insert(projects).values({ name: 'Test' });
-  await tx.insert(services).values({ name: 'api' });
-});
-
-// Upsert
-await upsert(projects, projectId, { name: 'New' }, () => ({
-  name: 'Created',
-  status: 'initializing',
-}));
-
-// 带重试的事务
-await useTransactionWithRetry(async (tx) => {
-  // 处理可能冲突的操作
-}, { maxRetries: 3 });
-```
-
-### 本地开发
-
-```bash
-# 启动所有依赖服务
-docker-compose up -d postgres redis
-
-# 启动应用
-bun run dev
-```
-
-### CI/CD 工作流
-
-```bash
-# 推送到 main 分支触发部署
-git push origin main
-
-# 创建 tag 触发发布
-git tag v1.0.0
-git push origin v1.0.0
-
-# 手动触发部署
-gh workflow run cd.yml -f environment=staging
-```
-
-### 管理 Secrets
-
-```bash
-# 首次初始化平台（安装 cert-manager / External Secrets / Argo CD / Argo Rollouts / CloudNativePG）
-DNSPOD_SECRET_ID=xxx \
-DNSPOD_SECRET_KEY=xxx \
-JUANIE_PREVIEW_APPLICATIONSET_REPO_URL=https://github.com/997899594/Juanie.git \
-./deploy/k8s/scripts/init-server.sh
-```
-
----
-
-## 📋 待完成 (优先级排序)
-
-### 🚀 阶段 5: CI/CD (已完成)
-- [x] GitHub Actions CI pipeline (.github/workflows/ci.yml)
-- [x] GitHub Actions CD pipeline (.github/workflows/cd.yml)
-- [x] 自动回滚工作流 (.github/workflows/auto-rollback.yml)
-- [x] 环境配置工作流 (.github/workflows/configure-environment.yml)
-- [x] 多环境配置 (k8s/overlays/{dev,staging,prod})
-- [x] Secrets 管理方案 (External Secrets / Sealed Secrets)
-
-### 阶段 6: 运维增强
-- [ ] 优雅关闭处理
-- [ ] 缓存层 (Redis)
-- [ ] 连接池优化
-- [ ] 启动时间优化
-
-### 阶段 7: 监控完善
-- [ ] OpenTelemetry Tracing
-- [ ] Prometheus metrics
-- [ ] Grafana Dashboards
-- [ ] 告警规则
-
----
-
-## 🔧 环境变量
-
-```bash
-# 数据库
-DATABASE_HOST=...
-DATABASE_PORT=5432
-DATABASE_NAME=juanie
-DATABASE_USER=postgres
-DATABASE_PASSWORD=...
-
-# NextAuth
-NEXTAUTH_URL=https://...
-NEXTAUTH_SECRET=...
-
-# OAuth
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=...
-
-# 日志
-LOG_LEVEL=info
-
-# 监控
-SENTRY_DSN=...
-LOKI_URL=http://loki:3100
-
-# Kubernetes (可选)
-KUBECONFIG_CONTENT=...
-```
-
----
-
-## ✨ 下一步建议
-
-1. **重构现有 API** - 使用新的中间件
-2. **添加缓存层** - Redis 热点数据缓存
-3. **实现优雅关闭** - 处理 SIGTERM
-4. **添加 Tracing** - OpenTelemetry 分布式追踪
+1. Importing a repository injects Juanie-managed CI and `juanie.yaml`.
+2. Staging first release is created from the app CI path.
+3. Preview can be created from a remote branch's latest commit.
+4. Preview can promote to staging.
+5. Staging can promote to production and finish controlled rollout from the release detail page.
+6. Schema gate blocks unsafe releases and offers the expected repair/review path.
+7. Project deletion enters deleting state, cleans runtime resources, and disappears through SSE.
+8. Platform self-deploy updates only the GitOps pointer and is reconciled by Argo CD.

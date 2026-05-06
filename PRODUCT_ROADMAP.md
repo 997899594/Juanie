@@ -122,7 +122,8 @@ Juanie 不再把自己定义为通用 CI 平台、通用 Kubernetes 面板或通
 
 ### 当前最大硬债
 
-- Drizzle 基线已在开发库重置，但历史 migration 体系仍是“开发期新基线”，不是可追溯生产迁移链
+- 少数大模块仍承担过多职责，需要继续拆小以降低重复路径回潮的概率
+- Web readiness 还不能完整表达 worker、scheduler、Redis、schema-runner 的控制面健康
 - 配额、成本、策略引擎仍未进入主线
 
 ## 设计原则
@@ -134,8 +135,8 @@ Juanie 不再把自己定义为通用 CI 平台、通用 Kubernetes 面板或通
 
 ## 当前执行决策
 
-本轮先执行：
+当前执行：
 
-1. 删除项目级 Webhook 业务入口与 CRUD API
-2. 保留 registry webhook 基础设施
-3. 后续直接进入 Preview environments 与 release intelligence 开发
+1. 保持 release / environment 为产品主线，不再扩张杂项工具入口
+2. 保持平台自身发布和用户应用发布边界清晰
+3. 优先补齐实时闭环、运行态诊断、配额与成本治理

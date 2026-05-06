@@ -16,8 +16,8 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 
 | 链路 | 当前真源 |
 | --- | --- |
-| 创建/导入项目 | `src/lib/projects/create-project-service.ts` 写项目与步骤，`src/lib/queue/project-init.ts` 只负责编排初始化步骤 |
-| 仓库配置注入 | `src/lib/queue/project-init.ts` 生成并推送 Juanie 管理的 CI 与 `juanie.yaml` |
+| 创建/导入项目 | `src/lib/projects/create-project-service.ts` 写项目与步骤，`src/lib/queue/project-init.ts` 编排初始化并承接仍待拆分的配置注入逻辑 |
+| 仓库配置注入 | 当前仍由 `src/lib/queue/project-init.ts` 生成并推送 Juanie 管理的 CI 与 `juanie.yaml`，后续应继续拆到领域模块 |
 | 环境模型 | `src/lib/db/schema.ts` + `src/lib/environments/*` |
 | 预览环境 | `src/lib/environments/preview.ts`、`preview-launch.ts`、`application-set.ts` |
 | 发布 | `src/lib/releases/index.ts` 创建 release，`src/lib/queue/release.ts` 推进发布 |

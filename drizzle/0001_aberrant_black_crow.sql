@@ -1,1 +1,0 @@
-ALTER TABLE "release" ADD COLUMN "recap" jsonb;

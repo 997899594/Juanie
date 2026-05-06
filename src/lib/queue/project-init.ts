@@ -46,6 +46,7 @@ import {
 } from '@/lib/projects/initial-auto-deploy';
 import { getProjectProductionBranch } from '@/lib/projects/refs';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
+import { publishProjectRealtimeSnapshot } from '@/lib/realtime/projects';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
@@ -183,6 +184,37 @@ async function updateStepStatus(
     projectInitLogger.warn('Failed to publish project init realtime event', {
       projectId,
       step,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
+async function publishProjectInitCompletion(projectId: string) {
+  await Promise.all([
+    publishProjectInitRealtimeEvent({
+      kind: 'completed',
+      projectId,
+      status: 'active',
+      timestamp: Date.now(),
+    }).catch((error) => {
+      projectInitLogger.warn('Failed to publish project init completion event', {
+        projectId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }),
+    publishProjectRealtimeSnapshot(projectId).catch((error) => {
+      projectInitLogger.warn('Failed to publish project realtime snapshot after init completion', {
+        projectId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  ]);
+}
+
+async function publishProjectInitFailureSnapshot(projectId: string) {
+  await publishProjectRealtimeSnapshot(projectId).catch((error) => {
+    projectInitLogger.warn('Failed to publish project realtime snapshot after init failure', {
+      projectId,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
   });
@@ -360,6 +392,7 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
         .update(projects)
         .set({ status: 'failed', updatedAt: new Date() })
         .where(eq(projects.id, projectId));
+      await publishProjectInitFailureSnapshot(projectId);
 
       if (!autoRetryPending) {
         job.discard();
@@ -368,7 +401,11 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     }
   }
 
-  await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
+  await db
+    .update(projects)
+    .set({ status: 'active', statusMessage: null, updatedAt: new Date() })
+    .where(eq(projects.id, projectId));
+  await publishProjectInitCompletion(projectId);
 }
 
 async function validateRepository(

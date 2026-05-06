@@ -200,6 +200,20 @@ export async function getReadinessResponse() {
     return failJson(response, startTime);
   }
 
+  if (isRedisConfigured()) {
+    try {
+      response.checks.redis = await checkRedis();
+    } catch (error) {
+      response.status = 'unhealthy';
+      response.checks.redis = {
+        status: 'fail',
+        message: error instanceof Error ? error.message : 'Redis connection failed',
+      };
+
+      return failJson(response, startTime);
+    }
+  }
+
   return okJson(response, startTime);
 }
 

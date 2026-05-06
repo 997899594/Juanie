@@ -5,14 +5,21 @@ import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 const PROJECT_INIT_CHANNEL_PREFIX = 'realtime:project-init:';
 const projectInitRealtimeLogger = logger.child({ component: 'realtime-project-init' });
 
-export interface ProjectInitRealtimeEvent {
-  kind: 'step_updated';
-  projectId: string;
-  step: string;
-  status: string;
-  progress: number | null;
-  timestamp: number;
-}
+export type ProjectInitRealtimeEvent =
+  | {
+      kind: 'step_updated';
+      projectId: string;
+      step: string;
+      status: string;
+      progress: number | null;
+      timestamp: number;
+    }
+  | {
+      kind: 'completed';
+      projectId: string;
+      status: 'active';
+      timestamp: number;
+    };
 
 let publisher: Redis | null = null;
 
