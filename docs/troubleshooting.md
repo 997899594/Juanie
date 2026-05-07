@@ -121,28 +121,18 @@ kubectl describe application -n argocd
 argocd app sync <app-name>
 ```
 
-平台自身发布的应用名默认是 `juanie-platform`：
+平台自身发布不再依赖 `juanie-platform` Argo CD Application。CI 会上传 Helm chart 到服务器，
+执行 `helm upgrade --install juanie`，并等待迁移、rollout 和 ready 健康检查。
 
 ```bash
-kubectl get application juanie-platform -n argocd -o wide
-kubectl describe application juanie-platform -n argocd
-kubectl get job -n juanie -l app.kubernetes.io/component=schema-sync
-kubectl logs job/juanie-schema-sync -n juanie --tail=200
+helm -n juanie status juanie
+kubectl -n juanie get jobs,pods,deploy
+kubectl -n juanie rollout status deployment/juanie-web
+kubectl -n juanie rollout status deployment/juanie-worker
 ```
 
-如果 `juanie-platform` 不存在，先运行 bootstrap：
-
-```bash
-bash deploy/k8s/scripts/init-server.sh
-```
-
-CI 现在只更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]`，不会再 SSH 到服务器执行 Helm。
-
-如果 `juanie-platform` 是 `sync=Unknown`，且 `argocd-repo-server` 日志里出现
-`git fetch origin --tags --force --prune failed timeout`，根因通常是 Argo CD repo-server
-首次拉取平台仓库超时。不要手工改 `juanie-web` / `juanie-worker` Deployment；先按
-`deploy/k8s/infrastructure/argocd/values.yaml` 重新升级 Argo CD，让 repo-server Git timeout
-和 controller repo-server timeout 使用平台基线，然后刷新 `juanie-platform` Application。
+如果线上没有更新，优先看 GitHub Actions 的 `deploy-platform` job。不要手工改
+`juanie-web` / `juanie-worker` Deployment；正确入口是重新跑 CI 或手动执行同一条 Helm 发布命令。
 
 ### 6. DNS 解析问题
 
@@ -192,4 +182,4 @@ echo "完成！"
 2. **证书包含两个域名** - `*.juanie.art` 和 `juanie.art`
 3. **设置 AUTH_TRUST_HOST=true** - NextAuth v5 必需
 4. **正确的数据库组件配置** - host/name/user/password/sslmode 必须一致
-5. **平台自身发布只走 GitOps** - 排障从 `juanie-platform` Application 和 PreSync schema-runner Job 开始
+5. **平台自身发布只走 CI Helm** - 排障从 GitHub Actions `deploy-platform`、Helm release 和 schema-sync Job 开始

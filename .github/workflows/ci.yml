@@ -78,35 +78,63 @@ jobs:
           cache-from: type=gha,scope=juanie-docker-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=juanie-docker-${{ matrix.target }}
 
-  promote-gitops:
+  deploy-platform:
     needs: build-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 30
+    env:
+      DEPLOY_CHART_DIR: /tmp/juanie-direct-deploy-${{ github.sha }}/deploy/k8s/charts/juanie
+      WEB_IMAGE_TAG: web-${{ github.sha }}
+      RUNTIME_IMAGE_TAG: runtime-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Upload Helm Chart
+        uses: appleboy/scp-action@v0.1.7
         with:
-          fetch-depth: 0
+          host: juanie.art
+          username: root
+          key: ${{ secrets.JUANIE_DEPLOY_SSH_KEY }}
+          source: deploy/k8s/charts/juanie
+          target: /tmp/juanie-direct-deploy-${{ github.sha }}
 
-      - uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Update Platform GitOps Values
-        run: bun scripts/update-platform-gitops-values.ts
-
-      - name: Commit Platform GitOps Revision
+      - name: Deploy Platform With Helm
+        uses: appleboy/ssh-action@v1.2.0
         env:
-          COMMIT_SHA: ${{ github.sha }}
-        run: |
-          if git diff --quiet -- deploy/k8s/charts/juanie/values-gitops.yaml; then
-            echo "GitOps values already point to ${COMMIT_SHA}"
-            exit 0
-          fi
+          DEPLOY_CHART_DIR: ${{ env.DEPLOY_CHART_DIR }}
+          GITHUB_SHA: ${{ github.sha }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          WEB_IMAGE_TAG: ${{ env.WEB_IMAGE_TAG }}
+          RUNTIME_IMAGE_TAG: ${{ env.RUNTIME_IMAGE_TAG }}
+        with:
+          host: juanie.art
+          username: root
+          key: ${{ secrets.JUANIE_DEPLOY_SSH_KEY }}
+          envs: DEPLOY_CHART_DIR,GITHUB_SHA,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG
+          script_stop: true
+          script: |
+            set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add deploy/k8s/charts/juanie/values-gitops.yaml
-          git commit -m "chore(gitops): promote juanie ${COMMIT_SHA::7} [skip ci]"
-          git push origin HEAD:main
+            test -d "${DEPLOY_CHART_DIR}"
+            kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+            kubectl -n juanie delete job juanie-schema-sync --ignore-not-found=true >/dev/null 2>&1 || true
+
+            helm upgrade --install juanie "${DEPLOY_CHART_DIR}" \
+              --namespace juanie \
+              --create-namespace \
+              -f "${DEPLOY_CHART_DIR}/values-prod.yaml" \
+              --set-string images.web.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
+              --set-string images.web.tag="${WEB_IMAGE_TAG}" \
+              --set-string images.runtime.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
+              --set-string images.runtime.tag="${RUNTIME_IMAGE_TAG}" \
+              --set schemaSync.enabled=true \
+              --wait \
+              --wait-for-jobs \
+              --timeout 20m
+
+            kubectl -n juanie rollout status deployment/juanie-web --timeout=10m
+            kubectl -n juanie rollout status deployment/juanie-worker --timeout=10m
+            curl -fsS https://juanie.art/api/health/ready >/dev/null
+            rm -rf "/tmp/juanie-direct-deploy-${GITHUB_SHA}"

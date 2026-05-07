@@ -12,7 +12,7 @@ Juanie 是一个面向项目交付、预览环境、受控放量和数据库 Sch
 - 创建/导入项目并注入 Juanie 管理的 CI 与 `juanie.yaml`
 - preview / staging / production 环境主线
 - 基于 Argo CD ApplicationSet 的预览环境脚手架
-- 基于 Argo CD Application 的平台自身 GitOps 发布
+- 基于 GitHub Actions + Helm 的平台自身发布
 - 基于 Argo Rollouts 的生产受控放量
 - CloudNativePG 托管 PostgreSQL
 - Atlas 控制面迁移与应用 Schema 门禁
@@ -78,12 +78,12 @@ Juanie uses one active control-plane migration flow:
 - `migrations/` contains the only active control-plane migration history
 - `archive/legacy-control-plane-migrations/` stores the retired SQL chain for reference only
 
-平台生产发布同样走 GitOps：
+平台生产发布走 CI 直部署：
 
-- CI 构建 `web` 和共享 `runtime` 镜像后只更新 `deploy/k8s/charts/juanie/values-gitops.yaml`
-- Argo CD Application 读取 `values-prod.yaml + values-gitops.yaml` 同步 Helm chart
-- 控制面 Atlas 迁移由 chart 内的 Argo PreSync Job 调用 runtime 镜像内的 `schema-runner` 执行
-- SSH 远程 Helm 部署脚本已删除，避免平台自身发布出现第二条路径
+- CI 构建 `web` 和共享 `runtime` 镜像后上传 Helm chart 到服务器
+- CI 在服务器执行 `helm upgrade --install`，镜像 tag 直接使用当前 `main` commit SHA
+- 控制面 Atlas 迁移由 chart 内的 Helm pre-upgrade Job 调用 runtime 镜像内的 `schema-runner` 执行
+- Argo CD 保留给预览环境脚手架，不再负责 Juanie 平台自身发布
 
 Commands:
 
@@ -120,6 +120,10 @@ Notes:
 | GITLAB_CLIENT_SECRET | No | GitLab OAuth app client secret |
 | KUBECONFIG | No | Kubernetes config path |
 
+Required GitHub Actions secret:
+
+- `JUANIE_DEPLOY_SSH_KEY`: private key that can SSH to `root@juanie.art` and run `helm` / `kubectl`.
+
 ## 当前结构入口
 
 ```text
@@ -139,7 +143,6 @@ deploy/k8s/                 # Helm chart and platform bootstrap scripts
 migrations/                 # Active Atlas migration directory
 archive/legacy-control-plane-migrations/
 atlas.hcl                   # Atlas project config
-scripts/update-platform-gitops-values.ts # CI 更新平台 GitOps 镜像指针
 ```
 
 ## API Endpoints

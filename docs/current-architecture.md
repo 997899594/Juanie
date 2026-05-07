@@ -31,7 +31,7 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | 能力 | 开源组件 |
 | --- | --- |
 | GitOps / preview scaffold | Argo CD ApplicationSet |
-| 平台自身发布 | Argo CD Application + Helm values-gitops |
+| 平台自身发布 | GitHub Actions + SSH + Helm |
 | 受控放量 | Argo Rollouts |
 | 托管 PostgreSQL | CloudNativePG |
 | TLS / 证书 | cert-manager |
@@ -39,19 +39,19 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | Schema diff / control-plane migration | Atlas |
 | 后台队列 | BullMQ + Redis |
 
-## 平台自身 GitOps
+## 平台自身发布
 
-Juanie 平台自身不再通过 CI SSH 到服务器执行 Helm。当前主线是：
+Juanie 平台自身不再通过 Argo CD GitOps 发布。当前主线是：
 
 1. CI 构建 `web` 和 `runtime` 镜像。
-2. CI 更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 并提交 `[skip ci]` GitOps 指针。
-3. `deploy/k8s/infrastructure/argocd/platform-application.yaml` 由 bootstrap 同步成 Argo CD Application。
-4. Argo CD 读取 `values-prod.yaml + values-gitops.yaml` 并同步 Helm chart。
-5. `schemaSync.enabled=true` 时，控制面 Atlas 迁移由 Argo PreSync Job 调用 runtime 镜像内的 `schema-runner` 执行。
+2. CI 上传 `deploy/k8s/charts/juanie` 到服务器。
+3. CI 在服务器执行 `helm upgrade --install juanie`，镜像 tag 直接来自当前 commit SHA。
+4. `schemaSync.enabled=true` 时，控制面 Atlas 迁移由 Helm pre-upgrade Job 调用 runtime 镜像内的 `schema-runner` 执行。
+5. CI 等待 Web / Worker rollout 和 `https://juanie.art/api/health/ready`。
 
-这条链路的真源是 Git；`.github/scripts/*` 的 SSH 部署路径已经删除，避免 CI 远程命令和 GitOps 双轨并存。
+这条链路的真源是 CI run + 镜像 SHA；不再提交 `values-gitops.yaml`，也不再注册 `juanie-platform` Argo CD Application，避免平台自身发布被 Argo repo cache 或代理缓存卡住。
 Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-server / controller
-资源与 Git 拉取超时，重新 bootstrap 时必须带上这份基线，避免平台仓库首次拉取超时后自动同步被跳过。
+资源与 Git 拉取超时，这部分仅服务预览环境脚手架和后续 ApplicationSet。
 
 ## 安全与 Trace 基线
 

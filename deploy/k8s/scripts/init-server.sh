@@ -19,10 +19,6 @@ EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
 ARGOCD_REPO_SECRET_NAME="${ARGOCD_REPO_SECRET_NAME:-juanie-preview-source}"
-JUANIE_PLATFORM_GITOPS_ENABLED="${JUANIE_PLATFORM_GITOPS_ENABLED:-true}"
-JUANIE_PLATFORM_GITOPS_APPLICATION_NAME="${JUANIE_PLATFORM_GITOPS_APPLICATION_NAME:-juanie-platform}"
-JUANIE_PLATFORM_GITOPS_REPO_URL="${JUANIE_PLATFORM_GITOPS_REPO_URL:-}"
-JUANIE_PLATFORM_GITOPS_TARGET_REVISION="${JUANIE_PLATFORM_GITOPS_TARGET_REVISION:-main}"
 
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.20.2}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-9.5.2}"
@@ -116,10 +112,6 @@ ensure_preview_repo_defaults() {
 
   if [[ -z "${ARGOCD_REPO_URL}" ]]; then
     ARGOCD_REPO_URL="${JUANIE_PREVIEW_APPLICATIONSET_REPO_URL}"
-  fi
-
-  if [[ -z "${JUANIE_PLATFORM_GITOPS_REPO_URL}" ]]; then
-    JUANIE_PLATFORM_GITOPS_REPO_URL="${ARGOCD_REPO_URL}"
   fi
 }
 
@@ -422,43 +414,6 @@ EOF
   log_info "已同步 Argo CD repository secret: ${ARGOCD_NAMESPACE}/${ARGOCD_REPO_SECRET_NAME}"
 }
 
-ensure_argocd_platform_application() {
-  if [[ "${JUANIE_PLATFORM_GITOPS_ENABLED}" != "true" ]]; then
-    log_info "按配置跳过 Juanie 平台自身 Argo CD Application。"
-    return
-  fi
-
-  if [[ -z "${JUANIE_PLATFORM_GITOPS_REPO_URL}" ]]; then
-    log_warn "未提供 JUANIE_PLATFORM_GITOPS_REPO_URL，跳过平台自身 GitOps Application。"
-    return
-  fi
-
-  local app_name_escaped
-  local argocd_namespace_escaped
-  local argocd_project_escaped
-  local platform_namespace_escaped
-  local repo_url_escaped
-  local target_revision_escaped
-
-  app_name_escaped="$(printf '%s' "${JUANIE_PLATFORM_GITOPS_APPLICATION_NAME}" | sed 's/[\\/&]/\\&/g')"
-  argocd_namespace_escaped="$(printf '%s' "${ARGOCD_NAMESPACE}" | sed 's/[\\/&]/\\&/g')"
-  argocd_project_escaped="$(printf '%s' "${ARGOCD_PROJECT_NAME}" | sed 's/[\\/&]/\\&/g')"
-  platform_namespace_escaped="$(printf '%s' "${PLATFORM_NAMESPACE}" | sed 's/[\\/&]/\\&/g')"
-  repo_url_escaped="$(printf '%s' "${JUANIE_PLATFORM_GITOPS_REPO_URL}" | sed 's/[\\/&]/\\&/g')"
-  target_revision_escaped="$(printf '%s' "${JUANIE_PLATFORM_GITOPS_TARGET_REVISION}" | sed 's/[\\/&]/\\&/g')"
-
-  sed \
-    -e "s/__JUANIE_PLATFORM_GITOPS_APPLICATION_NAME__/${app_name_escaped}/g" \
-    -e "s/__JUANIE_ARGOCD_NAMESPACE__/${argocd_namespace_escaped}/g" \
-    -e "s/__JUANIE_ARGOCD_PROJECT_NAME__/${argocd_project_escaped}/g" \
-    -e "s/__JUANIE_PLATFORM_GITOPS_REPO_URL__/${repo_url_escaped}/g" \
-    -e "s/__JUANIE_PLATFORM_GITOPS_TARGET_REVISION__/${target_revision_escaped}/g" \
-    -e "s/__JUANIE_PLATFORM_NAMESPACE__/${platform_namespace_escaped}/g" \
-    "${INFRA_DIR}/argocd/platform-application.yaml" | kubectl apply -f - >/dev/null
-
-  log_info "已同步平台自身 Argo CD Application: ${ARGOCD_NAMESPACE}/${JUANIE_PLATFORM_GITOPS_APPLICATION_NAME}"
-}
-
 wait_for_certificate() {
   if [[ "${SKIP_CERT_WAIT}" == "true" ]]; then
     log_info "按配置跳过证书等待。"
@@ -613,8 +568,5 @@ if [[ "${dnspod_secret_ready}" == "true" ]]; then
 else
   log_warn "由于 dnspod-secret 未创建，已跳过 wildcard 证书等待。"
 fi
-
-log_section "同步平台自身 GitOps Application"
-ensure_argocd_platform_application
 
 show_summary

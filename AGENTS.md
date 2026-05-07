@@ -105,16 +105,16 @@ push main
     ↓
 CI quality + build web/runtime images
     ↓
-CI 更新 deploy/k8s/charts/juanie/values-gitops.yaml 并提交 [skip ci]
+CI 上传 deploy/k8s/charts/juanie 到服务器
     ↓
-Argo CD Application 同步 deploy/k8s/charts/juanie
+CI 执行 helm upgrade --install juanie
     ↓
-PreSync schema-runner command 执行控制面 Atlas 迁移
+Helm pre-upgrade schema-runner command 执行控制面 Atlas 迁移
     ↓
 Helm chart 同步 Web / Worker / Scheduler
 ```
 
-平台自身发布不再走 SSH 到服务器执行 Helm。不要恢复 `.github/scripts/deploy*.sh` 这类第二条部署路径；如需排障，优先看 Argo CD Application、PreSync Job 和 Helm chart 渲染结果。
+平台自身发布不再走 Argo CD GitOps；CI 是唯一发布入口。不要恢复 `values-gitops.yaml` / `juanie-platform` 这条第二发布路径；如需排障，优先看 GitHub Actions deploy-platform job、Helm release、schema-sync Job 和 Web / Worker rollout。
 worker、scheduler、schema-runner 共享同一个 Bun runtime 镜像，通过 command 区分入口，避免推送/拉取重复运行时镜像。
 
 ## Code Style Guidelines
@@ -256,8 +256,7 @@ await createNamespace('my-namespace')
 ### Argo CD / Argo Rollouts
 
 - 预览环境脚手架通过 Argo CD ApplicationSet 管理，入口见 `src/lib/environments/application-set.ts`
-- Juanie 平台自身通过 `deploy/k8s/infrastructure/argocd/platform-application.yaml` 注册 Argo CD Application
-- CI 只更新 `deploy/k8s/charts/juanie/values-gitops.yaml` 镜像指针，Argo CD 负责同步
+- Juanie 平台自身由 GitHub Actions 直连服务器执行 Helm 发布，不再注册 Argo CD Application
 - 生产受控放量通过 Argo Rollouts 管理，入口见 `src/lib/releases/argo-rollouts.ts`
 - 不再新增 Flux 相关实现；历史 Flux 方案只保留在 `docs/plans/` 作为归档参考
 
