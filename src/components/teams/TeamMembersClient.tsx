@@ -138,7 +138,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
               label: '待处理邀请',
               value: String(nextInvitations.length),
             },
-            prev.stats[2],
           ],
           headerDescription: `${nextMembers.length} 名成员${
             nextInvitations.length > 0 ? ` · ${nextInvitations.length} 个待处理邀请` : ''
