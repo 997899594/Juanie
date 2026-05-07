@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { domains } from '@/lib/db/schema';
+import { getGatewayRouteConfig } from '@/lib/gateway/config';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
@@ -12,8 +13,6 @@ import { buildDomainRouteName } from './defaults';
 
 const WAKE_SERVICE_NAME = 'juanie-web';
 const WAKE_SERVICE_PORT = 80;
-const SHARED_GATEWAY_NAME = 'shared-gateway';
-const SHARED_GATEWAY_SECTION = 'https-wildcard';
 
 function getControlPlaneNamespace(): string {
   return process.env.JUANIE_NAMESPACE?.trim() || 'juanie';
@@ -106,12 +105,13 @@ export async function syncEnvironmentWakeRoutes(input: {
     }
 
     await deleteCiliumHTTPRoute(routeNamespace, routeName).catch(() => undefined);
+    const gateway = getGatewayRouteConfig();
     await createCiliumHTTPRoute({
       name: routeName,
       namespace: routeNamespace,
-      gatewayName: SHARED_GATEWAY_NAME,
-      gatewayNamespace: routeNamespace,
-      sectionName: SHARED_GATEWAY_SECTION,
+      gatewayName: gateway.name,
+      gatewayNamespace: gateway.namespace,
+      sectionName: gateway.wildcardSectionName,
       hostnames: [domain.hostname],
       serviceName: WAKE_SERVICE_NAME,
       servicePort: WAKE_SERVICE_PORT,

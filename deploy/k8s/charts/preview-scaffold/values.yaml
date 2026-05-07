@@ -3,6 +3,10 @@ environmentId: ""
 environmentName: ""
 namespace: ""
 enableStableRoutes: true
+gateway:
+  name: shared-gateway
+  namespace: juanie
+  wildcardSectionName: https-wildcard
 
 services: []
 domains: []

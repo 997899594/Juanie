@@ -124,11 +124,6 @@ export default async function InboxPage({
                           {run.platformSignals.primarySummary}
                         </div>
                       )}
-                      {run.platformSignals.nextActionLabel && (
-                        <div className="text-xs text-muted-foreground">
-                          {run.platformSignals.nextActionLabel}
-                        </div>
-                      )}
                     </div>
 
                     {run.errorMessage && (

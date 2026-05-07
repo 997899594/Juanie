@@ -281,7 +281,10 @@ export function buildHomeCommandCenter<
         primaryAction: {
           label: '打开事项',
           href: firstAttention.href,
-          description: `下一步：${firstAttention.platformSignals.nextActionLabel ?? firstAttention.actionLabel ?? '进入详情处理'}`,
+          description:
+            firstAttention.platformSignals.primarySummary ??
+            firstAttention.issueLabel ??
+            '进入详情查看当前状态',
           tone: firstAttention.status === 'failed' ? 'danger' : 'neutral',
         } satisfies HomeCommandCenterAction,
         secondaryAction: input.projectCards[0]

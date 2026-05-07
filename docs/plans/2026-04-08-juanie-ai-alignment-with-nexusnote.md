@@ -496,7 +496,7 @@ Incident eval 应验证：
 
 - 解释为什么一个 release 被阻塞
 - 总结 rollout 风险
-- 给出下一步排障建议
+- 给出排障处理建议
 - 调用针对 release/environment 的安全只读工具
 
 一开始**不要**做写操作工具或 remediation action。
@@ -611,4 +611,3 @@ Incident eval 应验证：
 - 先做兼容 shim，再做硬删除。
 - 如果某个实现选择与 NexusNote 的 AI 核心模式冲突，优先站在 NexusNote 的 AI 核心模式这一边。
 - 如果某个实现选择与 Juanie 的业务控制层冲突，优先保住 Juanie 的业务控制层，然后把冲突下沉到 AI 核心边界去解决。
-

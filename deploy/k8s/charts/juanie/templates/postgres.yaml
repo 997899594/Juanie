@@ -30,8 +30,8 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: postgres
-          image: {{ .Values.postgres.image }}
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.images.postgres.repository }}:{{ .Values.images.postgres.tag }}"
+          imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
           ports:
             - containerPort: 5432
               protocol: TCP

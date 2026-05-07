@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -22,7 +21,6 @@ import {
 } from '@/components/ui/select';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
-import { formatPlatformDateTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
 const dialogPanelClassName = 'console-panel p-5 sm:p-6';
@@ -117,9 +115,6 @@ export function ReleasePromoteDialog({
       <DialogContent size="workspace" layout="workspace">
         <DialogHeader chrome>
           <DialogTitle>提升到 {selectedPlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
-          <DialogDescription>
-            沿着已配置的提升链路复用制品或重新构建，避免环境之间的代码漂移。
-          </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -204,7 +199,7 @@ export function ReleasePromoteDialog({
                     </div>
                   </div>
                 ) : (
-                  <EmptyState title="没有可用的提升链路" className="mt-4 min-h-40 rounded-[20px]" />
+                  <EmptyState title="没有可用的提升链路" className="mt-4 min-h-28 rounded-[20px]" />
                 )}
               </div>
             </div>
@@ -214,11 +209,7 @@ export function ReleasePromoteDialog({
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (
-                  <EmptyState
-                    title="正在读取最新门禁"
-                    description="弹窗会先打开，Schema 检查在后台刷新，完成后这里会自动更新。"
-                    className="min-h-40 rounded-[20px]"
-                  />
+                  <EmptyState title="预检中" className="min-h-28 rounded-[20px]" />
                 ) : planError ? (
                   <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>
                     {planError}
@@ -241,7 +232,7 @@ export function ReleasePromoteDialog({
 
                     {schemaRefreshActive || refreshingPlan ? (
                       <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
-                        Schema 检查正在后台刷新，完成后会自动同步最新门禁。
+                        Schema 检查刷新中。
                       </div>
                     ) : null}
 
@@ -267,19 +258,6 @@ export function ReleasePromoteDialog({
                         <div className="mt-2 text-sm font-medium text-foreground">
                           {promoteAI.summary}
                         </div>
-                        {promoteAI.reasons.length > 0 && (
-                          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                            {promoteAI.reasons.map((reason) => (
-                              <div key={reason}>• {reason}</div>
-                            ))}
-                          </div>
-                        )}
-                        {promoteAI.generatedAt && (
-                          <div className="mt-3 text-[11px] text-muted-foreground">
-                            {formatPlatformDateTime(promoteAI.generatedAt) ?? '—'}
-                            {promoteAI.stale ? ' · 历史' : ''}
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -292,28 +270,12 @@ export function ReleasePromoteDialog({
                     {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
                       <PlatformSignalChipList chips={promotePanel.warningChips} />
                     )}
-
-                    {promoteAI?.checks.length ? (
-                      <div className={cn(dialogSubtleClassName, 'space-y-2')}>
-                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          检查
-                        </div>
-                        {promoteAI.checks.map((check) => (
-                          <div key={check.key} className="text-sm">
-                            <div className="font-medium text-foreground">{check.label}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {check.summary}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 ) : (
                   <EmptyState
                     title="没有可用检查"
                     description="当前没有可执行的提升链路，先在环境治理里配置来源和目标环境。"
-                    className="min-h-40 rounded-[20px]"
+                    className="min-h-28 rounded-[20px]"
                   />
                 )}
               </div>

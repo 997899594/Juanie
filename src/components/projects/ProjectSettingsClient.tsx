@@ -284,20 +284,17 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         ))}
       </div>
 
-      <Tabs defaultValue="general" className="space-y-4">
+      <Tabs defaultValue="project" className="space-y-4">
         <TabsList className="h-11">
-          <TabsTrigger value="general">常规</TabsTrigger>
-          <TabsTrigger value="git">Git</TabsTrigger>
-          <TabsTrigger value="environments">环境</TabsTrigger>
-          <TabsTrigger value="databases">数据库</TabsTrigger>
-          <TabsTrigger value="governance">治理</TabsTrigger>
+          <TabsTrigger value="project">项目信息</TabsTrigger>
+          <TabsTrigger value="runtime">环境与数据库</TabsTrigger>
           <TabsTrigger value="danger">危险操作</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general">
+        <TabsContent value="project">
           <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">常规</div>
+              <div className="text-sm font-semibold">项目信息</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
@@ -320,6 +317,30 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                 />
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="gitRepository">仓库</Label>
+                  <div
+                    className={cn(
+                      settingsSubtleClassName,
+                      'break-all text-sm text-muted-foreground'
+                    )}
+                  >
+                    {project.repositoryFullName ?? '未绑定仓库'}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="productionBranch">生产分支</Label>
+                  <Input
+                    id="productionBranch"
+                    value={formData.productionBranch}
+                    onChange={(e) => setFormData({ ...formData, productionBranch: e.target.value })}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
                   <Button type="submit" disabled={saving || isDeleting}>
@@ -332,149 +353,115 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
           </div>
         </TabsContent>
 
-        <TabsContent value="git">
+        <TabsContent value="runtime">
           <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">代码仓库</div>
+              <div className="text-sm font-semibold">环境与数据库</div>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="gitRepository">仓库地址</Label>
-                <div
-                  className={cn(settingsSubtleClassName, 'break-all text-sm text-muted-foreground')}
-                >
-                  {project.repositoryFullName ?? '未绑定仓库'}
+            <div className="space-y-6 px-5 py-4">
+              <section className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  环境
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="productionBranch">生产分支</Label>
-                <Input
-                  id="productionBranch"
-                  value={formData.productionBranch}
-                  onChange={(e) => setFormData({ ...formData, productionBranch: e.target.value })}
-                  disabled={!canEdit}
-                />
-              </div>
-
-              {canEdit && (
-                <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" disabled={saving || isDeleting}>
-                    {saving ? '保存中...' : '保存修改'}
-                  </Button>
-                  {saved && <span className="text-xs text-success">已保存</span>}
-                </div>
-              )}
-            </form>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="environments">
-          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">环境策略</div>
-            </div>
-            <div className="space-y-3 px-5 py-4">
-              {project.environments.length === 0 ? (
-                <div className={cn(settingsSubtleClassName, 'py-6 text-sm text-muted-foreground')}>
-                  没有环境。
-                </div>
-              ) : (
-                project.environments.map((environment) => (
-                  <div key={environment.id} className={cn(settingsSubtleClassName, 'px-4 py-4')}>
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-semibold">{environment.name}</div>
-                          {environment.isProduction && (
-                            <span className="rounded-full bg-[rgba(15,23,42,0.05)] px-2.5 py-1 text-[11px] text-foreground">
-                              生产
-                            </span>
-                          )}
-                          {environment.isPreview && (
-                            <span className="rounded-full bg-[rgba(15,23,42,0.05)] px-2.5 py-1 text-[11px] text-foreground">
-                              预览
-                            </span>
-                          )}
+                {project.environments.length === 0 ? (
+                  <div
+                    className={cn(settingsSubtleClassName, 'py-6 text-sm text-muted-foreground')}
+                  >
+                    没有环境。
+                  </div>
+                ) : (
+                  project.environments.map((environment) => (
+                    <div key={environment.id} className={cn(settingsSubtleClassName, 'px-4 py-4')}>
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold">{environment.name}</div>
+                            {environment.isProduction ? (
+                              <Badge variant="secondary" className="rounded-full">
+                                生产
+                              </Badge>
+                            ) : null}
+                            {environment.isPreview ? (
+                              <Badge variant="secondary" className="rounded-full">
+                                预览
+                              </Badge>
+                            ) : null}
+                          </div>
+                          {!environment.actions.canConfigureStrategy ? (
+                            <div className="break-words text-xs text-muted-foreground">
+                              {environment.actions.configureStrategySummary}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="break-words text-sm text-muted-foreground">
-                          {environment.actions.configureStrategySummary}
-                        </div>
-                      </div>
 
-                      <div className="w-full md:w-56">
-                        <Label className="mb-2 block">发布策略</Label>
-                        <Select
-                          value={environment.deploymentStrategy}
-                          onValueChange={(value) =>
-                            handleEnvironmentStrategyChange(
-                              environment.id,
-                              value as 'rolling' | 'controlled' | 'canary' | 'blue_green'
-                            )
-                          }
-                          disabled={
-                            savingEnvironmentId === environment.id ||
-                            isDeleting ||
-                            !environment.actions.canConfigureStrategy
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="选择发布策略" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {deploymentStrategyOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          {databaseStrategyLabels[environment.databaseStrategy]}
+                        <div className="w-full md:w-56">
+                          <Label className="mb-2 block">发布策略</Label>
+                          <Select
+                            value={environment.deploymentStrategy}
+                            onValueChange={(value) =>
+                              handleEnvironmentStrategyChange(
+                                environment.id,
+                                value as 'rolling' | 'controlled' | 'canary' | 'blue_green'
+                              )
+                            }
+                            disabled={
+                              savingEnvironmentId === environment.id ||
+                              isDeleting ||
+                              !environment.actions.canConfigureStrategy
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择发布策略" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {deploymentStrategyOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            {databaseStrategyLabels[environment.databaseStrategy]}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </TabsContent>
+                  ))
+                )}
+              </section>
 
-        <TabsContent value="databases">
-          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">数据库</div>
-            </div>
-            <div className="space-y-4 px-5 py-4">
-              {project.databases.length === 0 ? (
-                <div className={settingsSubtleClassName}>
-                  <div className="text-sm text-muted-foreground">没有数据库</div>
+              <section className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  数据库
                 </div>
-              ) : (
-                project.databases.map((database) => {
-                  const isPostgres = database.type === 'postgresql';
-                  const isSaving = savingDatabaseId === database.id;
+                {project.databases.length === 0 ? (
+                  <div className={settingsSubtleClassName}>
+                    <div className="text-sm text-muted-foreground">没有数据库</div>
+                  </div>
+                ) : (
+                  project.databases.map((database) => {
+                    const isPostgres = database.type === 'postgresql';
+                    const isSaving = savingDatabaseId === database.id;
 
-                  return (
-                    <div key={database.id} className={settingsSubtleClassName}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="text-sm font-semibold">{database.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {[database.type, database.plan, database.provisionType]
-                              .filter(Boolean)
-                              .join(' · ')}
+                    return (
+                      <div key={database.id} className={settingsSubtleClassName}>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold">{database.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {[database.type, database.plan, database.provisionType]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </div>
                           </div>
+                          {database.capabilities.length > 0 ? (
+                            <Badge variant="secondary">{database.capabilities.length} 已启用</Badge>
+                          ) : null}
                         </div>
-                        {database.capabilities.length > 0 ? (
-                          <Badge variant="secondary">{database.capabilities.length} 已启用</Badge>
-                        ) : null}
-                      </div>
 
-                      {isPostgres ? (
-                        <div className="mt-4 space-y-3">
-                          <div className="flex flex-wrap gap-2">
+                        {isPostgres ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
                             {postgresCapabilityOptions.map((option) => {
                               const selected = database.capabilities.includes(option.value);
 
@@ -485,6 +472,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                                   variant="ghost"
                                   size="sm"
                                   disabled={!canEdit || isSaving}
+                                  title={option.description}
                                   onClick={() =>
                                     handleDatabaseCapabilitiesChange(
                                       database.id,
@@ -507,34 +495,25 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                               );
                             })}
                           </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                            {postgresCapabilityOptions.map((option) => (
-                              <span
-                                key={option.value}
-                              >{`${option.label}: ${option.description}`}</span>
-                            ))}
+                        ) : (
+                          <div className="mt-4 text-xs text-muted-foreground">
+                            仅 PostgreSQL 可配置能力。
                           </div>
-                        </div>
-                      ) : (
-                        <div className="mt-4 text-xs text-muted-foreground">
-                          当前只有 PostgreSQL 支持数据库能力。
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </TabsContent>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </section>
 
-        <TabsContent value="governance">
-          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">治理</div>
-            </div>
-            <div className="console-divider-bottom px-5 py-4">
-              <ProjectGovernancePanel governance={project.governance} />
+              <details className="rounded-[20px] bg-[rgba(15,23,42,0.025)] px-4 py-4">
+                <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                  权限详情
+                </summary>
+                <div className="mt-4">
+                  <ProjectGovernancePanel governance={project.governance} />
+                </div>
+              </details>
             </div>
           </div>
         </TabsContent>
@@ -565,7 +544,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent size="form">
+                      <AlertDialogContent size="compact">
                         <AlertDialogHeader>
                           <AlertDialogTitle>删除项目</AlertDialogTitle>
                           <AlertDialogDescription>
@@ -573,11 +552,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                             <span className="font-medium text-foreground">{project.name}</span>？
                           </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <div className="rounded-[20px] bg-[rgba(196,85,77,0.06)] px-4 py-3 text-sm text-muted-foreground">
-                          {isDeleting
-                            ? '删除任务已经提交，项目、环境和发布记录会在清理完成后一起移除。'
-                            : '项目、环境和发布记录会一起删除。'}
-                        </div>
                         <AlertDialogFooter>
                           <AlertDialogCancel className="w-full rounded-full sm:w-auto">
                             取消

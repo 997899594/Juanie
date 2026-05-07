@@ -49,10 +49,7 @@ function getEnvironmentSecondaryLine(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string | null {
   const secondary =
-    getEnvironmentGitSummary(environment) ??
-    environment.previewLifecycle?.summary ??
-    environment.platformSignals.nextActionLabel ??
-    null;
+    getEnvironmentGitSummary(environment) ?? environment.previewLifecycle?.summary ?? null;
 
   if (!secondary || secondary === getEnvironmentSummary(environment)) {
     return null;

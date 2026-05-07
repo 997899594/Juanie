@@ -23,7 +23,7 @@ export interface GenericAITaskRecord {
 }
 
 const deepAnalysisSystemAppendix =
-  '这是一个会进入任务中心的深度分析任务。输出请更完整一些，但仍然保持清楚、克制。优先使用 3 段：当前状态、关键风险、下一步。';
+  '这是一个会进入任务中心的深度分析任务。输出请更完整一些，但仍然保持清楚、克制。优先使用 3 段：当前状态、关键风险、处理建议。';
 
 async function markAITaskRunning(taskId: string): Promise<void> {
   await db

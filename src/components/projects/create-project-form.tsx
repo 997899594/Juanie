@@ -655,9 +655,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         return;
       }
 
-      toast.error(result.snapshot.platformSignals.primarySummary ?? '创建项目失败，请稍后重试', {
-        description: result.snapshot.platformSignals.nextActionLabel ?? undefined,
-      });
+      toast.error(result.snapshot.platformSignals.primarySummary ?? '创建项目失败，请稍后重试');
     } catch (error) {
       console.error('Failed to create project:', error);
       toast.error('创建请求失败，请稍后重试', {
@@ -1828,7 +1826,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </Button>
           ) : (
             <Button className="px-4" onClick={handleNext} disabled={!canProceed()}>
-              下一步
+              继续
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           )}

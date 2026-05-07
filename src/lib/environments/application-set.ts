@@ -10,6 +10,7 @@ import type { EnvironmentDeploymentStrategy } from '@/lib/db/schema';
 import { domains, environments, projects, services } from '@/lib/db/schema';
 import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { isPreviewEnvironment } from '@/lib/environments/model';
+import { getGatewayRouteConfig } from '@/lib/gateway/config';
 import { isK8sAvailable } from '@/lib/k8s';
 import { buildK8sName, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 
@@ -251,6 +252,8 @@ export function buildPreviewApplicationSetManifest(input: {
   source: PreviewApplicationSetSourceConfig;
   elements: PreviewApplicationSetElement[];
 }): ArgoApplicationSetManifest {
+  const gateway = getGatewayRouteConfig();
+
   return {
     apiVersion: 'argoproj.io/v1alpha1',
     kind: 'ApplicationSet',
@@ -299,6 +302,10 @@ environmentId: {{ .environmentId | quote }}
 environmentName: {{ .environmentName | quote }}
 namespace: {{ .namespace | quote }}
 enableStableRoutes: {{ eq .enableStableRoutes "true" }}
+gateway:
+  name: ${JSON.stringify(gateway.name)}
+  namespace: ${JSON.stringify(gateway.namespace)}
+  wildcardSectionName: ${JSON.stringify(gateway.wildcardSectionName)}
 services:
 {{- range $service := fromJson .servicesJson }}
   - name: {{ $service.name | quote }}

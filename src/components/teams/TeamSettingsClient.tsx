@@ -366,14 +366,11 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   删除团队
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent size="form">
+              <AlertDialogContent size="compact">
                 <AlertDialogHeader>
                   <AlertDialogTitle>删除 &ldquo;{team.name}&rdquo;？</AlertDialogTitle>
                   <AlertDialogDescription>关联项目会一起删除。</AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
-                  团队和关联项目会一起删除。
-                </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel className="w-full rounded-full sm:w-auto">
                     取消

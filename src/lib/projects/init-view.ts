@@ -473,7 +473,7 @@ export function buildProjectInitOverview(
           ? (runtimeStatus?.nextActionLabel ?? '处理失败步骤后重试')
           : runningStep
             ? `等待 ${PROJECT_INIT_STEP_LABELS[runningStep.step] || runningStep.step}`
-            : '等待下一步启动');
+            : '等待流程启动');
 
   const baseChips =
     platformSignals.chips.length > 0

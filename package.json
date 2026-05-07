@@ -30,6 +30,7 @@
     "db:status": "bun src/lib/db/control-plane-atlas.ts status",
     "db:validate": "bun src/lib/db/control-plane-atlas.ts validate",
     "db:studio": "bunx drizzle-kit studio --config drizzle.studio.config.ts",
+    "bootstrap:k3s": "bash deploy/k8s/scripts/install-k3s.sh",
     "bootstrap:doctor": "bun scripts/bootstrap-doctor.ts",
     "db:seed": "tsx seed.ts"
   },

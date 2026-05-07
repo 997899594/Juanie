@@ -30,8 +30,8 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: redis
-          image: redis:7-alpine
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
+          imagePullPolicy: {{ .Values.images.redis.pullPolicy }}
           ports:
             - containerPort: 6379
               protocol: TCP

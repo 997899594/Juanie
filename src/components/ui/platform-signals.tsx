@@ -41,23 +41,14 @@ interface PlatformSignalSummaryProps {
   className?: string;
 }
 
-export function PlatformSignalSummary({
-  summary,
-  nextActionLabel,
-  className,
-}: PlatformSignalSummaryProps) {
-  if (!summary && !nextActionLabel) {
+export function PlatformSignalSummary({ summary, className }: PlatformSignalSummaryProps) {
+  if (!summary) {
     return null;
   }
 
   return (
     <div className={cn('console-surface rounded-2xl px-4 py-3', className)}>
-      {summary && <div className="text-sm text-foreground">{summary}</div>}
-      {nextActionLabel && (
-        <div className={cn(summary ? 'mt-2' : null, 'text-xs text-muted-foreground')}>
-          {nextActionLabel}
-        </div>
-      )}
+      <div className="text-sm text-foreground">{summary}</div>
     </div>
   );
 }
@@ -73,22 +64,17 @@ interface PlatformSignalBlockProps {
 export function PlatformSignalBlock({
   chips,
   summary,
-  nextActionLabel,
   chipsClassName,
   summaryClassName,
 }: PlatformSignalBlockProps) {
-  if (chips.length === 0 && !summary && !nextActionLabel) {
+  if (chips.length === 0 && !summary) {
     return null;
   }
 
   return (
     <div className="space-y-2">
       <PlatformSignalChipList chips={chips} className={chipsClassName} />
-      <PlatformSignalSummary
-        summary={summary}
-        nextActionLabel={nextActionLabel}
-        className={summaryClassName}
-      />
+      <PlatformSignalSummary summary={summary} className={summaryClassName} />
     </div>
   );
 }

@@ -20,7 +20,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,7 +35,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -75,6 +73,8 @@ interface EnvVarOverview {
   effective: EffectiveEnvVar[];
   serviceOverrides: ServiceOverrideGroup[];
 }
+
+type EnvVarView = 'effective' | 'direct' | 'service';
 
 interface EnvVarManagerProps {
   projectId: string;
@@ -128,8 +128,6 @@ function getErrorMessage(errors: unknown[]): string | null {
 }
 
 const shellClassName = 'console-panel px-5 py-5';
-
-const subCardClassName = 'console-inset rounded-[16px] px-4 py-4';
 
 function EnvVarDialog({
   projectId,
@@ -202,9 +200,6 @@ function EnvVarDialog({
       <DialogContent size="form" layout="form">
         <DialogHeader chrome>
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
-          <DialogDescription>
-            变量只作用于当前环境，密文值不会回显，更新时需要重新输入。
-          </DialogDescription>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -478,7 +473,7 @@ function EnvVarRow({
                 )}
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent size="form">
+            <AlertDialogContent size="compact">
               <AlertDialogHeader>
                 <AlertDialogTitle>删除变量？</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -601,6 +596,7 @@ export function EnvVarManager({
 }: EnvVarManagerProps) {
   const [overview, setOverview] = useState<EnvVarOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<EnvVarView>('effective');
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -623,21 +619,27 @@ export function EnvVarManager({
   const directVars = overview?.direct ?? [];
   const effectiveVars = overview?.effective ?? [];
   const serviceOverrides = overview?.serviceOverrides ?? [];
-  const directSecretCount = directVars.filter((v) => v.isSecret).length;
-  const directPlainCount = directVars.length - directSecretCount;
   const serviceOverrideCount = serviceOverrides.reduce(
     (count, group) => count + group.variables.length,
     0
   );
+  const variableViews: Array<{ value: EnvVarView; label: string; count: number }> = [
+    { value: 'effective', label: '生效变量', count: effectiveVars.length },
+    { value: 'direct', label: '直配', count: directVars.length },
+    { value: 'service', label: '服务覆盖', count: serviceOverrideCount },
+  ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-sm font-medium capitalize">{environmentName}</h3>
-          {!loading && (
-            <p className="mt-1 text-sm text-muted-foreground">变量、继承链和服务覆盖都收在这里。</p>
-          )}
+          {!loading ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              生效 {effectiveVars.length} · 直配 {directVars.length} · 服务覆盖{' '}
+              {serviceOverrideCount}
+            </p>
+          ) : null}
         </div>
         <EnvVarDialog
           projectId={projectId}
@@ -664,159 +666,132 @@ export function EnvVarManager({
         <div className="text-xs text-muted-foreground">{disabledSummary}</div>
       )}
 
-      {!loading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              直配
-            </div>
-            <div className="mt-2 text-lg font-semibold text-foreground">{directVars.length}</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              {directPlainCount} 普通
-              {directSecretCount > 0 ? ` · ${directSecretCount} 密文` : ''}
-            </div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              生效
-            </div>
-            <div className="mt-2 text-lg font-semibold text-foreground">{effectiveVars.length}</div>
-            <div className="mt-1 text-sm text-muted-foreground">含继承与覆盖</div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              服务覆盖
-            </div>
-            <div className="mt-2 text-lg font-semibold text-foreground">{serviceOverrideCount}</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              {serviceOverrides.length} 个服务存在覆盖项
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {variableViews.map((view) => (
+          <Button
+            key={view.value}
+            type="button"
+            variant={activeView === view.value ? 'default' : 'ghost'}
+            size="sm"
+            className="rounded-full px-4"
+            onClick={() => setActiveView(view.value)}
+          >
+            {view.label}
+            <span className="ml-1.5 text-xs opacity-70">{view.count}</span>
+          </Button>
+        ))}
+      </div>
 
-      <Tabs defaultValue="direct" className="space-y-4">
-        <TabsList className="h-11 rounded-full bg-[rgba(243,240,233,0.72)] p-1">
-          <TabsTrigger value="direct">直配变量</TabsTrigger>
-          <TabsTrigger value="effective">实际生效</TabsTrigger>
-          <TabsTrigger value="service">服务覆盖</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="direct">
-          <div className={shellClassName}>
-            <div className="hidden items-center gap-3 px-0 pb-4 sm:flex">
-              <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                变量名
-              </span>
-              <span className="flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                变量值
-              </span>
-            </div>
-
-            {loading ? (
-              <div className="console-card overflow-hidden">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
-                  >
-                    <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-                    <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : directVars.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">还没有直接变量</p>
-                <EnvVarDialog
-                  projectId={projectId}
-                  environmentId={environmentId}
-                  disabled={!canManage}
-                  disabledSummary={disabledSummary}
-                  onSuccess={fetchOverview}
-                  trigger={
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="mt-1 rounded-full px-4"
-                      disabled={!canManage}
-                      title={!canManage ? (disabledSummary ?? undefined) : undefined}
-                    >
-                      <Plus className="h-4 w-4" />
-                      添加第一个变量
-                    </Button>
-                  }
-                />
-              </div>
-            ) : (
-              <div className={cn('console-card overflow-hidden')}>
-                {directVars.map((v) => (
-                  <EnvVarRow
-                    key={v.id}
-                    envVar={v}
-                    projectId={projectId}
-                    environmentId={environmentId}
-                    canManage={canManage}
-                    disabledSummary={disabledSummary}
-                    onUpdated={fetchOverview}
-                    onDeleted={fetchOverview}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="effective">
-          <div className={shellClassName}>
-            {loading ? (
-              <div className="console-card overflow-hidden">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
-                  >
-                    <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-                    <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : effectiveVars.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-                <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">没有生效变量</p>
-              </div>
-            ) : (
-              <div className="console-card overflow-hidden">
-                {effectiveVars.map((envVar) => (
-                  <ReadonlyEnvVarRow
-                    key={envVar.id}
-                    envVar={envVar}
-                    badges={[envVar.sourceLabel, ...(envVar.inherited ? ['继承链'] : [])]}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="service">
-          <div className="mb-3 px-1 text-sm text-muted-foreground">
-            只看服务级追加项；同名键会覆盖环境级值。
+      {activeView === 'direct' ? (
+        <div className={shellClassName}>
+          <div className="hidden items-center gap-3 px-0 pb-4 sm:flex">
+            <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              变量名
+            </span>
+            <span className="flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              变量值
+            </span>
           </div>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2].map((item) => (
-                <div key={item} className="h-24 animate-pulse rounded-[20px] bg-muted" />
+            <div className="console-card overflow-hidden">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
+                >
+                  <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                  <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
+                </div>
               ))}
             </div>
+          ) : directVars.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+              <KeyRound className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">还没有直配变量</p>
+              <EnvVarDialog
+                projectId={projectId}
+                environmentId={environmentId}
+                disabled={!canManage}
+                disabledSummary={disabledSummary}
+                onSuccess={fetchOverview}
+                trigger={
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-1 rounded-full px-4"
+                    disabled={!canManage}
+                    title={!canManage ? (disabledSummary ?? undefined) : undefined}
+                  >
+                    <Plus className="h-4 w-4" />
+                    添加变量
+                  </Button>
+                }
+              />
+            </div>
           ) : (
-            <ServiceOverridePanel groups={serviceOverrides} />
+            <div className={cn('console-card overflow-hidden')}>
+              {directVars.map((v) => (
+                <EnvVarRow
+                  key={v.id}
+                  envVar={v}
+                  projectId={projectId}
+                  environmentId={environmentId}
+                  canManage={canManage}
+                  disabledSummary={disabledSummary}
+                  onUpdated={fetchOverview}
+                  onDeleted={fetchOverview}
+                />
+              ))}
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : null}
+
+      {activeView === 'effective' ? (
+        <div className={shellClassName}>
+          {loading ? (
+            <div className="console-card overflow-hidden">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
+                >
+                  <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                  <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
+                </div>
+              ))}
+            </div>
+          ) : effectiveVars.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+              <KeyRound className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">没有生效变量</p>
+            </div>
+          ) : (
+            <div className="console-card overflow-hidden">
+              {effectiveVars.map((envVar) => (
+                <ReadonlyEnvVarRow
+                  key={envVar.id}
+                  envVar={envVar}
+                  badges={[envVar.sourceLabel, ...(envVar.inherited ? ['继承链'] : [])]}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {activeView === 'service' ? (
+        loading ? (
+          <div className="space-y-3">
+            {[1, 2].map((item) => (
+              <div key={item} className="h-24 animate-pulse rounded-[20px] bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <ServiceOverridePanel groups={serviceOverrides} />
+        )
+      ) : null}
     </div>
   );
 }

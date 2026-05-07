@@ -47,7 +47,7 @@ function buildSchemaRepairReviewBody(input: {
     `## 摘要`,
     input.plan.summary,
     ``,
-    `## 下一步`,
+    `## 处理建议`,
     input.plan.nextActionLabel ?? '请按下列步骤执行。',
     ``,
     `## Steps`,

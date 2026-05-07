@@ -161,6 +161,7 @@ atlas.hcl                   # Atlas project config
 ## Architecture Notes
 
 - [当前架构入口](./docs/current-architecture.md)
+- [K3s 宿主机初始化](./docs/k3s-host-bootstrap.md)
 - [部署架构边界](./DEPLOYMENT_ARCHITECTURE.md)
 - [生产就绪检查](./PRODUCTION_READINESS.md)
 - [当前面试/讲解入口](./interview-prep/README.md)

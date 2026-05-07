@@ -101,11 +101,6 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
           <div className="mt-2 text-sm font-medium text-foreground">
             {release.blockingReason?.label ?? '无'}
           </div>
-          {release.blockingReason?.nextActionLabel && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              {release.blockingReason.nextActionLabel}
-            </div>
-          )}
         </div>
         {release.infrastructureDiagnostics && (
           <div className={releaseSubtleClassName}>
@@ -152,14 +147,6 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
             <div className={releaseSectionTitleClassName}>处理</div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.governance}
-            </div>
-          </div>
-        )}
-        {release.narrativeSummary.nextAction && (
-          <div>
-            <div className={releaseSectionTitleClassName}>动作</div>
-            <div className="mt-2 text-sm text-foreground">
-              {release.narrativeSummary.nextAction}
             </div>
           </div>
         )}

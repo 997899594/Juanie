@@ -134,7 +134,45 @@ kubectl -n juanie rollout status deployment/juanie-worker
 如果线上没有更新，优先看 GitHub Actions 的 `deploy-platform` job。不要手工改
 `juanie-web` / `juanie-worker` Deployment；正确入口是重新跑 CI 或手动执行同一条 Helm 发布命令。
 
-### 6. DNS 解析问题
+### 6. kube-system Pod 卡在 ContainerCreating
+
+**症状：** `coredns`、`local-path-provisioner`、`metrics-server` 长时间是 `ContainerCreating`。
+
+**典型事件：**
+
+```text
+Failed to create pod sandbox: failed to get sandbox image "rancher/mirrored-pause:3.6"
+failed to resolve reference "docker.io/rancher/mirrored-pause:3.6": i/o timeout
+```
+
+**原因：** kubelet 创建任何 Pod 前都要先拉 pause 沙箱镜像。宿主机访问 Docker Hub 超时后，所有 Pod 都无法创建 sandbox。
+
+**正确处理：** 不要手工补单个镜像。重新按宿主机层脚本安装 K3s，让 containerd 从固定国内系统镜像源拉 K3s 系统镜像：
+
+```bash
+K3S_REINSTALL=true \
+K3S_NETWORK_PROFILE=flannel-nodeport \
+K3S_NODE_IP=10.0.6.122 \
+bash deploy/k8s/scripts/install-k3s.sh
+```
+
+如果这台机器要承载完整 Juanie Gateway API / HTTPRoute 能力，使用 Cilium profile 重装：
+
+```bash
+K3S_REINSTALL=true \
+K3S_NETWORK_PROFILE=cilium-gateway \
+K3S_NODE_IP=10.0.6.122 \
+bash deploy/k8s/scripts/install-k3s.sh
+```
+
+安装完成后确认：
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -A -o wide
+```
+
+### 7. DNS 解析问题
 
 **症状：** 域名无法解析或解析到错误 IP
 

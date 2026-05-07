@@ -22,6 +22,10 @@ data:
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL | default "" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION | default "main" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_PATH: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_PATH | default "deploy/k8s/charts/preview-scaffold" | quote }}
+  JUANIE_GATEWAY_NAME: {{ .Values.gateway.name | default "shared-gateway" | quote }}
+  JUANIE_GATEWAY_NAMESPACE: {{ .Values.gateway.namespace | default .Values.namespace | quote }}
+  JUANIE_GATEWAY_APEX_SECTION_NAME: {{ .Values.gateway.route.sectionName | default "https-apex" | quote }}
+  JUANIE_GATEWAY_WILDCARD_SECTION_NAME: {{ .Values.gateway.wildcardSectionName | default "https-wildcard" | quote }}
   {{- if hasKey .Values.env "AI_ENABLED" }}
   AI_ENABLED: {{ .Values.env.AI_ENABLED | quote }}
   {{- end }}

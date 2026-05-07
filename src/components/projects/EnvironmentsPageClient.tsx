@@ -24,7 +24,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -354,10 +353,9 @@ function PreviewEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="workspace" layout="workspace">
+      <DialogContent size="form" layout="form">
         <DialogHeader chrome>
           <DialogTitle>新建预览环境</DialogTitle>
-          <DialogDescription>基于分支或 PR 直接启动。</DialogDescription>
         </DialogHeader>
 
         <form
@@ -1210,7 +1208,7 @@ export function EnvironmentsPageClient({
                                   : '结束环境'}
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent size="form">
+                            <AlertDialogContent size="compact">
                               <AlertDialogHeader>
                                 <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -1220,11 +1218,6 @@ export function EnvironmentsPageClient({
                                   及关联资源会一起删除。
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <div className="rounded-2xl bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
-                                {environment.cleanupState?.state === 'expired_ready'
-                                  ? '已过期，可直接回收。'
-                                  : '会回收域名、变量、数据库和运行资源。'}
-                              </div>
                               <AlertDialogFooter>
                                 <AlertDialogCancel className="w-full rounded-full sm:w-auto">
                                   取消

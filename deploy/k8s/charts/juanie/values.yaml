@@ -8,6 +8,18 @@ images:
     repository: ghcr.io/997899594/juanie
     pullPolicy: IfNotPresent
     tag: "runtime-sha-f12feba"
+  busybox:
+    repository: busybox
+    pullPolicy: IfNotPresent
+    tag: "1.36"
+  postgres:
+    repository: pgvector/pgvector
+    pullPolicy: IfNotPresent
+    tag: "pg16"
+  redis:
+    repository: redis
+    pullPolicy: IfNotPresent
+    tag: "7-alpine"
 
 imagePullSecrets: []
 
@@ -106,10 +118,18 @@ env:
 
 # Gateway 配置
 hostname: "juanie.art"
+gateway:
+  enabled: true
+  name: shared-gateway
+  namespace: juanie
+  route:
+    sectionName: https-apex
+  redirect:
+    enabled: true
+    sectionName: http-apex
 
 # 数据库配置
 postgres:
-  image: "pgvector/pgvector:pg16"
   storage: "10Gi"
 
 redis:

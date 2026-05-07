@@ -18,6 +18,10 @@ CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
+GATEWAY_EDGE_MODE="${GATEWAY_EDGE_MODE:-loadBalancer}"
+GATEWAY_HTTP_PORT="${GATEWAY_HTTP_PORT:-}"
+GATEWAY_HTTPS_ENABLED="${GATEWAY_HTTPS_ENABLED:-}"
+GATEWAY_WILDCARD_ENABLED="${GATEWAY_WILDCARD_ENABLED:-true}"
 ARGOCD_REPO_SECRET_NAME="${ARGOCD_REPO_SECRET_NAME:-juanie-preview-source}"
 
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.20.2}"
@@ -124,6 +128,34 @@ helm_repo_add() {
 is_local_chart_ref() {
   local chart_ref="$1"
   [[ "${chart_ref}" == /* || "${chart_ref}" == ./* || "${chart_ref}" == ../* || "${chart_ref}" == *.tgz ]]
+}
+
+gateway_http_port() {
+  if [[ -n "${GATEWAY_HTTP_PORT}" ]]; then
+    printf '%s\n' "${GATEWAY_HTTP_PORT}"
+    return
+  fi
+
+  if [[ "${GATEWAY_EDGE_MODE}" == "externalEdge" ]]; then
+    printf '31080\n'
+    return
+  fi
+
+  printf '80\n'
+}
+
+gateway_https_enabled() {
+  if [[ -n "${GATEWAY_HTTPS_ENABLED}" ]]; then
+    printf '%s\n' "${GATEWAY_HTTPS_ENABLED}"
+    return
+  fi
+
+  if [[ "${GATEWAY_EDGE_MODE}" == "externalEdge" ]]; then
+    printf 'false\n'
+    return
+  fi
+
+  printf 'true\n'
 }
 
 helm_upgrade_install() {
@@ -317,6 +349,99 @@ apply_rendered_manifest() {
   fi
 
   printf '%s\n' "${rendered}" | kubectl apply -f - >/dev/null
+}
+
+apply_gateway_manifest() {
+  local http_port
+  local https_enabled
+  local wildcard_enabled
+
+  http_port="$(gateway_http_port)"
+  https_enabled="$(gateway_https_enabled)"
+  wildcard_enabled="${GATEWAY_WILDCARD_ENABLED}"
+
+  if [[ "${GATEWAY_EDGE_MODE}" != "loadBalancer" && "${GATEWAY_EDGE_MODE}" != "externalEdge" ]]; then
+    log_error "未知 GATEWAY_EDGE_MODE=${GATEWAY_EDGE_MODE}，可选值: loadBalancer, externalEdge"
+    exit 1
+  fi
+
+  {
+    cat <<EOF
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared-gateway
+  namespace: ${PLATFORM_NAMESPACE}
+EOF
+    if [[ "${https_enabled}" == "true" || -n "${GATEWAY_LOADBALANCER_IP}" ]]; then
+      echo "  annotations:"
+      if [[ "${https_enabled}" == "true" ]]; then
+        echo "    cert-manager.io/cluster-issuer: letsencrypt-prod"
+      fi
+      if [[ -n "${GATEWAY_LOADBALANCER_IP}" ]]; then
+        echo "    io.cilium/lb-ipam-ips: \"${GATEWAY_LOADBALANCER_IP}\""
+      fi
+    fi
+    cat <<EOF
+spec:
+  gatewayClassName: ${GATEWAY_CLASS_NAME}
+  listeners:
+    - name: http-apex
+      protocol: HTTP
+      port: ${http_port}
+      hostname: "${PLATFORM_DOMAIN}"
+      allowedRoutes:
+        namespaces:
+          from: All
+EOF
+    if [[ "${https_enabled}" == "true" ]]; then
+      cat <<EOF
+    - name: https-apex
+      protocol: HTTPS
+      port: 443
+      hostname: "${PLATFORM_DOMAIN}"
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: ${TLS_CERTIFICATE_NAME}
+            group: ""
+            kind: Secret
+EOF
+    fi
+    if [[ "${wildcard_enabled}" == "true" ]]; then
+      cat <<EOF
+    - name: http-wildcard
+      protocol: HTTP
+      port: ${http_port}
+      hostname: "*.${PLATFORM_DOMAIN}"
+      allowedRoutes:
+        namespaces:
+          from: All
+EOF
+      if [[ "${https_enabled}" == "true" ]]; then
+        cat <<EOF
+    - name: https-wildcard
+      protocol: HTTPS
+      port: 443
+      hostname: "*.${PLATFORM_DOMAIN}"
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: ${TLS_CERTIFICATE_NAME}
+            group: ""
+            kind: Secret
+EOF
+      fi
+    fi
+  } | kubectl apply -f - >/dev/null
+
+  log_info "已同步 Gateway shared-gateway: mode=${GATEWAY_EDGE_MODE}, httpPort=${http_port}, https=${https_enabled}"
 }
 
 ensure_dnspod_secret() {
@@ -559,13 +684,18 @@ wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=clou
 
 log_section "应用平台网关与证书资源"
 apply_rendered_manifest "${INFRA_DIR}/gateway/namespace.yaml"
-apply_rendered_manifest "${INFRA_DIR}/gateway/gateway.yaml"
-apply_rendered_manifest "${INFRA_DIR}/gateway/certificate.yaml"
+apply_gateway_manifest
 
-if [[ "${dnspod_secret_ready}" == "true" ]]; then
+if [[ "$(gateway_https_enabled)" == "true" ]]; then
+  apply_rendered_manifest "${INFRA_DIR}/gateway/certificate.yaml"
+else
+  log_info "Gateway HTTPS listener 已关闭，跳过平台 wildcard Certificate。"
+fi
+
+if [[ "$(gateway_https_enabled)" == "true" && "${dnspod_secret_ready}" == "true" ]]; then
   log_section "等待 wildcard 证书就绪"
   wait_for_certificate
-else
+elif [[ "$(gateway_https_enabled)" == "true" ]]; then
   log_warn "由于 dnspod-secret 未创建，已跳过 wildcard 证书等待。"
 fi
 

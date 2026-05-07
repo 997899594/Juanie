@@ -135,9 +135,6 @@ export function ProjectInitializingClient({
   }, [projectId, router, streamToken]);
 
   const effectiveSummary = streamError ?? overview.primarySummary;
-  const effectiveNextAction =
-    streamError && overview.status !== 'active' ? '刷新页面或稍后重试' : overview.nextActionLabel;
-
   const handleRetry = async () => {
     setRetrying(true);
     setStreamError(null);
@@ -178,7 +175,6 @@ export function ProjectInitializingClient({
       <PlatformSignalBlock
         chips={overview.platformSignals.chips}
         summary={streamError ?? overview.platformSignals.primarySummary ?? effectiveSummary}
-        nextActionLabel={overview.platformSignals.nextActionLabel ?? effectiveNextAction}
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -195,8 +191,8 @@ export function ProjectInitializingClient({
           </div>
         </div>
         <div className="ui-control px-5 py-4">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">动作</div>
-          <div className="mt-3 text-sm font-semibold">{effectiveNextAction}</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">状态</div>
+          <div className="mt-3 text-sm font-semibold">{overview.statusLabel}</div>
         </div>
       </div>
 

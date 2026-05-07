@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -116,14 +115,13 @@ export function DeploymentRolloutAction({
           {actionLabel}
         </Button>
       </DialogTrigger>
-      <DialogContent size="workspace" layout="workspace">
+      <DialogContent size="form" layout="form">
         <DialogHeader chrome>
           <DialogTitle>{actionLabel}</DialogTitle>
-          <DialogDescription>确认后继续。</DialogDescription>
         </DialogHeader>
 
         <DialogBody>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)]">
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-4">
               {disabledSummary && (
                 <div className="console-inset rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
@@ -132,21 +130,15 @@ export function DeploymentRolloutAction({
               )}
 
               <div className={dialogPanelClassName}>
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-foreground">候选切换上下文</div>
-                  <div className="text-sm text-muted-foreground">确认候选版本。</div>
-                </div>
+                <div className="text-sm font-semibold text-foreground">候选版本</div>
 
                 {plan?.deployment?.candidateImage ? (
                   <div className={cn(dialogSubtleClassName, 'mt-4')}>
-                    <div className="text-xs text-muted-foreground">候选版本镜像</div>
                     <code className="mt-2 block break-all text-xs text-foreground">
                       {plan.deployment.candidateImage}
                     </code>
                   </div>
-                ) : (
-                  <EmptyState title="暂无候选镜像" className="mt-4 min-h-40 rounded-[20px]" />
-                )}
+                ) : null}
               </div>
 
               {error ? (
@@ -156,13 +148,10 @@ export function DeploymentRolloutAction({
 
             <div className="space-y-4">
               <div className={dialogPanelClassName}>
-                <div className="mb-3 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">放量检查</div>
-                  <div className="text-sm text-muted-foreground">通过后继续。</div>
-                </div>
+                <div className="mb-3 text-sm font-semibold text-foreground">放量检查</div>
 
                 {loadingPlan ? (
-                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
+                  <EmptyState title="检查中" className="min-h-28 rounded-[20px]" />
                 ) : plan ? (
                   <div className="space-y-3">
                     <PlatformSignalBlock
@@ -179,7 +168,7 @@ export function DeploymentRolloutAction({
                     ) : null}
                   </div>
                 ) : (
-                  <EmptyState title="暂无结果" className="min-h-40 rounded-[20px]" />
+                  <EmptyState title="暂无检查结果" className="min-h-28 rounded-[20px]" />
                 )}
               </div>
             </div>

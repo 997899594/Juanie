@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { domains } from '@/lib/db/schema';
 import { buildDomainRouteName } from '@/lib/domains/defaults';
 import { deleteEnvironmentWakeRouteForHostname } from '@/lib/domains/wake-routing';
+import { getGatewayRouteConfig } from '@/lib/gateway/config';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
@@ -53,6 +54,7 @@ export async function syncEnvironmentServiceTrafficRoutes(input: {
   );
 
   for (const domain of serviceDomains) {
+    const gateway = getGatewayRouteConfig();
     const routeName = buildDomainRouteName(domain.hostname);
     await deleteEnvironmentWakeRouteForHostname(domain.hostname);
     await reconcileCiliumHTTPRoutesForHostname({
@@ -64,9 +66,9 @@ export async function syncEnvironmentServiceTrafficRoutes(input: {
     await createCiliumHTTPRoute({
       name: routeName,
       namespace: input.namespace,
-      gatewayName: 'shared-gateway',
-      gatewayNamespace: 'juanie',
-      sectionName: 'https-wildcard',
+      gatewayName: gateway.name,
+      gatewayNamespace: gateway.namespace,
+      sectionName: gateway.wildcardSectionName,
       hostnames: [domain.hostname],
       serviceName:
         input.backends[0]?.serviceName ??

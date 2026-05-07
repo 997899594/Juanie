@@ -7,6 +7,7 @@ import {
   usesPreviewApplicationSetStableRoutes,
 } from '@/lib/environments/application-set';
 import { isPreviewEnvironment } from '@/lib/environments/model';
+import { getGatewayRouteConfig } from '@/lib/gateway/config';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
@@ -125,6 +126,7 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
   }
 
   for (const domain of domainList) {
+    const gateway = getGatewayRouteConfig();
     const service =
       (domain.serviceId
         ? input.services.find((candidate) => candidate.id === domain.serviceId)
@@ -138,9 +140,9 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
     const spec = {
       name: routeName,
       namespace: input.environment.namespace,
-      gatewayName: 'shared-gateway',
-      gatewayNamespace: 'juanie',
-      sectionName: 'https-wildcard',
+      gatewayName: gateway.name,
+      gatewayNamespace: gateway.namespace,
+      sectionName: gateway.wildcardSectionName,
       hostnames: [domain.hostname],
       serviceName: buildServiceResourceName(input.project.slug, service.name),
       servicePort: service.port || DEFAULT_ROUTE_SERVICE_PORT,

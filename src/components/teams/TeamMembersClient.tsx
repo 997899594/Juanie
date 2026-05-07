@@ -1,7 +1,7 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import { Check, Copy, Link, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { Link, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { TeamGovernancePanel } from '@/components/teams/TeamGovernancePanel';
@@ -21,20 +21,13 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
-import {
-  FormDescription,
-  FormField,
-  FormLabel,
-  FormMessage,
-  FormSection,
-} from '@/components/ui/form';
+import { FormField, FormLabel, FormMessage, FormSection } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -105,13 +98,34 @@ function getErrorMessage(errors: unknown[]): string | null {
   return null;
 }
 
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('copy_failed');
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProps) {
   const [overview, setOverview] = useState(initialData.overview);
   const [isOpen, setIsOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const refreshData = async () => {
@@ -175,14 +189,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
     }
   };
 
-  const handleCopyLink = async () => {
-    if (!generatedLink) return;
-    await navigator.clipboard.writeText(generatedLink);
-    setCopied(true);
-    toast.success('邀请链接已复制');
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleRevokeInvitation = async (invitationId: string) => {
     try {
       await revokeTeamInvitation({ teamId, invitationId });
@@ -232,11 +238,15 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       role: 'member',
     },
     onSubmit: async ({ value }) => {
-      setGeneratedLink(null);
       const data = await createTeamInvitationLink({ teamId, role: value.role });
-      setGeneratedLink(data.inviteUrl);
-      toast.success('邀请链接已生成');
-      await refreshData();
+      try {
+        await copyTextToClipboard(data.inviteUrl);
+        toast.success('邀请链接已复制');
+        setIsLinkDialogOpen(false);
+        linkForm.reset();
+      } finally {
+        await refreshData();
+      }
     },
   });
 
@@ -252,7 +262,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
               onOpenChange={(open) => {
                 setIsLinkDialogOpen(open);
                 if (!open) {
-                  setGeneratedLink(null);
                   linkForm.reset();
                 }
               }}
@@ -267,12 +276,9 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请链接
                 </Button>
               </DialogTrigger>
-              <DialogContent size="form" layout="form">
+              <DialogContent size="compact" layout="form">
                 <DialogHeader chrome>
                   <DialogTitle>生成邀请链接</DialogTitle>
-                  <DialogDescription>
-                    先选成员角色，再生成可直接分享的团队邀请链接。
-                  </DialogDescription>
                 </DialogHeader>
                 <DialogBody>
                   <FormSection className="space-y-4 px-0 py-0 shadow-none">
@@ -289,33 +295,10 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                               <SelectItem value="member">成员</SelectItem>
                             </SelectContent>
                           </Select>
-                          <FormDescription>链接会继承这里选择的默认角色。</FormDescription>
                           <FormMessage />
                         </FormField>
                       )}
                     </linkForm.Field>
-
-                    {generatedLink ? (
-                      <FormField>
-                        <FormLabel htmlFor="generated-invite-link">邀请链接</FormLabel>
-                        <div className="flex gap-2">
-                          <Input
-                            id="generated-invite-link"
-                            value={generatedLink}
-                            readOnly
-                            className="h-11 text-xs"
-                          />
-                          <Button
-                            className="h-11 shrink-0 rounded-full px-4"
-                            onClick={handleCopyLink}
-                          >
-                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      </FormField>
-                    ) : (
-                      <EmptyState title="生成后显示链接" className="min-h-32 rounded-[20px]" />
-                    )}
                   </FormSection>
                 </DialogBody>
                 <DialogFooter chrome>
@@ -325,7 +308,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                     className="w-full rounded-full sm:w-auto"
                     onClick={() => setIsLinkDialogOpen(false)}
                   >
-                    关闭
+                    取消
                   </Button>
                   <linkForm.Subscribe selector={(state) => ({ isSubmitting: state.isSubmitting })}>
                     {({ isSubmitting }) => (
@@ -341,7 +324,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                         }}
                         disabled={isSubmitting}
                       >
-                        {isSubmitting ? '处理中...' : generatedLink ? '重新生成' : '生成'}
+                        {isSubmitting ? '处理中...' : '生成并复制'}
                       </Button>
                     )}
                   </linkForm.Subscribe>
@@ -369,9 +352,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                 >
                   <DialogHeader chrome>
                     <DialogTitle>邀请成员</DialogTitle>
-                    <DialogDescription>
-                      通过邮箱邀请新成员加入团队，并直接设置初始角色。
-                    </DialogDescription>
                   </DialogHeader>
                   <DialogBody>
                     <FormSection className="space-y-4 px-0 py-0 shadow-none">
@@ -422,7 +402,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                                 <SelectItem value="member">成员</SelectItem>
                               </SelectContent>
                             </Select>
-                            <FormDescription>成员可后续调整。</FormDescription>
                             <FormMessage />
                           </FormField>
                         )}
@@ -587,14 +566,11 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       )}
 
       <AlertDialog open={Boolean(deleteId)} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent size="form">
+        <AlertDialogContent size="compact">
           <AlertDialogHeader>
             <AlertDialogTitle>移除成员？</AlertDialogTitle>
             <AlertDialogDescription>将移除该成员的团队访问权限。</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="rounded-2xl bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground">
-            仅移除团队成员关系。
-          </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="w-full rounded-full sm:w-auto">取消</AlertDialogCancel>
             <AlertDialogAction

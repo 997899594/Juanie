@@ -39,13 +39,13 @@ const copilotDefinitions: Record<CopilotScopeKind, CopilotDefinition> = {
       }
 
       if (normalized.includes('数据库') || normalized.includes('迁移')) {
-        return ['哪个数据库最需要先处理？', '现在适合继续迁移吗？', '先看风险还是先看下一步？'];
+        return ['哪个数据库最需要先处理？', '现在适合继续迁移吗？', '先看风险还是处理建议？'];
       }
 
       return [
         '当前环境最该先看什么？',
         '这个环境为什么是现在这个状态？',
-        '我下一步最合理的动作是什么？',
+        '现在最合理的处理方式是什么？',
       ];
     },
   },
@@ -70,7 +70,7 @@ const copilotDefinitions: Record<CopilotScopeKind, CopilotDefinition> = {
         return ['现在适合继续推进吗？', '回滚触发条件是什么？', '我应该先确认哪几个检查项？'];
       }
 
-      return ['这次发布现在安全吗？', '最关键的阻塞点是什么？', '我下一步该做什么？'];
+      return ['这次发布现在安全吗？', '最关键的阻塞点是什么？', '现在应该怎么处理？'];
     },
   },
 };

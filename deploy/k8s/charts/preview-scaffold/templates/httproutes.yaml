@@ -13,9 +13,9 @@ metadata:
     juanie.dev/environment-name: {{ $.Values.environmentName | quote }}
 spec:
   parentRefs:
-    - name: shared-gateway
-      namespace: juanie
-      sectionName: https-wildcard
+    - name: {{ $.Values.gateway.name | default "shared-gateway" }}
+      namespace: {{ $.Values.gateway.namespace | default "juanie" }}
+      sectionName: {{ $.Values.gateway.wildcardSectionName | default "https-wildcard" }}
   hostnames:
     - {{ .hostname }}
   rules:

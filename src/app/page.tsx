@@ -82,7 +82,7 @@ export default async function HomePage() {
         }
       />
 
-      <PriorityDeck title="下一步" items={nextPriorityItems} />
+      <PriorityDeck title="重点事项" items={nextPriorityItems} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <section className={`${shellClassName} overflow-hidden`}>
@@ -189,11 +189,6 @@ export default async function HomePage() {
                         {run.platformSignals.primarySummary && (
                           <div className="mt-1 text-sm text-foreground">
                             {run.platformSignals.primarySummary}
-                          </div>
-                        )}
-                        {run.platformSignals.nextActionLabel && (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            {run.platformSignals.nextActionLabel}
                           </div>
                         )}
                       </div>

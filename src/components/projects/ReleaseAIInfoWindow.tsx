@@ -157,7 +157,7 @@ export function ReleaseAIInfoWindow(input: {
       highlights,
       provider,
       model,
-      compactSummary: hasRealSummary ? null : '暂无 AI 摘要，刷新后会在这里显示重点判断。',
+      compactSummary: hasRealSummary ? null : '暂无 AI 摘要',
     };
   }, [incidentPanel, planPanel, taskCenter]);
 

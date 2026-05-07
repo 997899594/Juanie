@@ -368,14 +368,6 @@ export function buildReleaseSignalChips(input: {
     });
   }
 
-  if (!input.platformSignals.nextActionLabel && input.intelligence.actionLabel) {
-    chips.push({
-      key: 'action-fallback',
-      label: `下一步：${input.intelligence.actionLabel}`,
-      tone: 'neutral',
-    });
-  }
-
   if ((input.failedMigrationRunsCount ?? 0) > 0) {
     chips.push({
       key: 'failed-migrations',

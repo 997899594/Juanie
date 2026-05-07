@@ -1,0 +1,11 @@
+# Customer delivery profile for hosts where an existing Nginx / SLB / F5 owns
+# public 80/443 and forwards HTTP traffic to the in-cluster Cilium Gateway.
+gateway:
+  route:
+    sectionName: http-apex
+  redirect:
+    enabled: false
+  wildcardSectionName: http-wildcard
+
+env:
+  AUTH_TRUST_HOST: "true"

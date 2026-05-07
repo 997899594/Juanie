@@ -9,7 +9,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -288,16 +287,13 @@ export function ManualReleaseDialog({
           手动发布
         </Button>
       </DialogTrigger>
-      <DialogContent size="workspace" layout="workspace">
+      <DialogContent size="form" layout="form">
         <DialogHeader chrome>
           <DialogTitle>手动发布</DialogTitle>
-          <DialogDescription>
-            复用已经构建成功的产物，直接发到目标环境，不改动源码分支。
-          </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.16fr)_minmax(380px,0.84fr)]">
+          <div className="grid gap-4 xl:grid-cols-2">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
                 <div className="console-inset rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
@@ -402,7 +398,7 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <EmptyState title="选择来源" className="min-h-40 rounded-[20px]" />
+                  <EmptyState title="先选来源发布" className="min-h-28 rounded-[20px]" />
                 )}
               </div>
 
@@ -410,7 +406,7 @@ export function ManualReleaseDialog({
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (
-                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
+                  <EmptyState title="检查中" className="min-h-28 rounded-[20px]" />
                 ) : planningPanel ? (
                   <div className="space-y-3">
                     <PlatformSignalBlock
@@ -425,7 +421,7 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <EmptyState title="选择来源后查看" className="min-h-40 rounded-[20px]" />
+                  <EmptyState title="待选择" className="min-h-28 rounded-[20px]" />
                 )}
               </div>
             </div>

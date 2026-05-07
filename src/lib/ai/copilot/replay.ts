@@ -20,7 +20,7 @@ export function buildCopilotContextMarkdown(card: CopilotContextCard): string {
   }
 
   if (card.nextStep) {
-    sections.push('', `**下一步**`, card.nextStep);
+    sections.push('', `**处理建议**`, card.nextStep);
   }
 
   if (card.highlights.length > 0) {

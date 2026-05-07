@@ -33,6 +33,23 @@ function getToneBadge(input: AIInfoTone): {
   };
 }
 
+function getAIInfoPreview(markdown: string): string {
+  const ignoredLines = new Set(['AI 汇总', '当前判断', '主要风险', '处理建议', '重点']);
+  const lines = markdown
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^#+\s*/, '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/\*\*/g, '')
+        .trim()
+    )
+    .filter(Boolean)
+    .filter((line) => !ignoredLines.has(line) && !line.endsWith('AI 汇总'));
+
+  return lines[0] ?? '暂无 AI 摘要';
+}
+
 export function AIInfoWindow(input: {
   scopeLabel: string;
   markdown: string;
@@ -47,21 +64,26 @@ export function AIInfoWindow(input: {
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const tone = getToneBadge(input.tone);
+  const preview = input.compactSummary ?? getAIInfoPreview(input.markdown);
+  const showDetails = !input.compactSummary || Boolean(input.children);
 
   return (
-    <section className="console-panel px-5 py-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            AI 总结
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant={tone.variant} className="rounded-full border-0 px-3 py-1 shadow-none">
-              {tone.label}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.58)] shadow-none">
-              {input.scopeLabel}
-            </Badge>
+    <section className="console-panel px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Badge
+            variant={tone.variant}
+            className="shrink-0 rounded-full border-0 px-3 py-1 shadow-none"
+          >
+            {tone.label}
+          </Badge>
+          <div className="min-w-0">
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              AI 总结
+            </div>
+            <div className="mt-1 truncate text-sm font-medium text-[rgba(15,23,42,0.88)]">
+              {preview}
+            </div>
           </div>
         </div>
 
@@ -74,41 +96,41 @@ export function AIInfoWindow(input: {
             disabled={input.refreshing}
           >
             <RefreshCw className={cn('h-4 w-4', input.refreshing && 'animate-spin')} />
-            {input.refreshing ? '刷新中…' : '刷新'}
+            {input.refreshing ? '刷新中' : '刷新'}
           </Button>
           <Button
             type="button"
-            className="h-9 rounded-full bg-[rgba(28,27,24,0.96)] px-4 text-[rgba(251,250,247,0.96)] shadow-[0_18px_38px_-24px_rgba(15,23,42,0.28)] hover:bg-[rgba(28,27,24,0.86)]"
+            variant="ghost"
+            className="h-9 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
             onClick={input.onContinue}
           >
             <Sparkles className="h-4 w-4" />
-            继续追问
+            追问
           </Button>
         </div>
       </div>
 
-      {input.compactSummary ? (
-        <div className="mt-4 text-sm text-[rgba(15,23,42,0.56)]">{input.compactSummary}</div>
-      ) : (
-        <div className="console-inset mt-5 rounded-[20px] px-5 py-5">
-          <div className="text-sm leading-7 text-[rgba(15,23,42,0.86)]">
-            <StreamdownMessage content={input.markdown} />
-          </div>
-        </div>
-      )}
+      {input.priorityChildren ? <div className="mt-4">{input.priorityChildren}</div> : null}
 
-      {input.priorityChildren ? <div className="mt-5">{input.priorityChildren}</div> : null}
-
-      {input.children ? (
+      {showDetails ? (
         <details
-          className="console-inset mt-5 rounded-[20px] px-4 py-4"
+          className="mt-3 rounded-[18px] bg-[rgba(15,23,42,0.025)] px-4 py-3"
           open={detailsOpen}
           onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
         >
-          <summary className="cursor-pointer list-none text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
             {input.detailsTitle ?? '展开依据'}
           </summary>
-          {detailsOpen ? <div className="mt-4 space-y-4">{input.children}</div> : null}
+          {detailsOpen ? (
+            <div className="mt-4 space-y-4">
+              {!input.compactSummary ? (
+                <div className="console-inset rounded-[18px] px-4 py-4 text-sm leading-7 text-[rgba(15,23,42,0.86)]">
+                  <StreamdownMessage content={input.markdown} />
+                </div>
+              ) : null}
+              {input.children}
+            </div>
+          ) : null}
         </details>
       ) : null}
     </section>

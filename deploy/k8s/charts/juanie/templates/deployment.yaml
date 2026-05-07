@@ -41,10 +41,12 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.36
+          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
-          image: busybox:1.36
+          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: {{ .Chart.Name }}
@@ -133,10 +135,12 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.36
+          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
-          image: busybox:1.36
+          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: worker
@@ -205,7 +209,8 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.36
+          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
       containers:
         - name: scheduler
