@@ -1,5 +1,13 @@
 import type { V1Job } from '@kubernetes/client-node';
-import { createJob, deleteJob, getJob, getPodLogs, getPods, isK8sAvailable } from '@/lib/k8s';
+import {
+  buildPlatformOperationJob,
+  deletePlatformOperationJob,
+  ensurePlatformOperationJob,
+  getPlatformOperationJobSnapshot,
+  isK8sAvailable,
+  submitPlatformOperationJob,
+  waitForPlatformOperationJob,
+} from '@/lib/k8s';
 
 export type SchemaRunnerMode = 'schema-repair' | 'inspect' | 'migration';
 export type SchemaRunnerJobStatus = 'missing' | 'running' | 'succeeded' | 'failed';
@@ -30,12 +38,33 @@ function buildSchemaRunnerCommand(mode: SchemaRunnerMode): string[] {
   return ['./schema-runner'];
 }
 
+function resolveSchemaRunnerNamespace(namespace?: string): string {
+  return namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
+}
+
 export function resolveSchemaRunnerImage(): string | null {
   return [process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY, process.env.SCHEMA_RUNNER_IMAGE_TAG].every(
     Boolean
   )
     ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
     : null;
+}
+
+function requireSchemaRunnerImage(): string {
+  const image = resolveSchemaRunnerImage();
+  if (!image) {
+    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
+  }
+
+  return image;
+}
+
+function requireSchemaRunnerJobSupport(context: string): string {
+  if (!isK8sAvailable()) {
+    throw new Error(`${context} requires Kubernetes connectivity`);
+  }
+
+  return requireSchemaRunnerImage();
 }
 
 export function canUseSchemaRunnerJobs(): boolean {
@@ -63,144 +92,55 @@ export function buildSchemaRunnerJob(input: SchemaRunnerJobInput): V1Job {
     });
   }
 
-  return {
-    apiVersion: 'batch/v1',
-    kind: 'Job',
-    metadata: {
-      name: input.jobName,
-      namespace: input.namespace,
-      labels: {
-        'app.kubernetes.io/name': 'juanie',
-        'app.kubernetes.io/component': 'schema-runner',
-        ...(input.labels ?? {}),
-      },
+  return buildPlatformOperationJob({
+    namespace: input.namespace,
+    name: input.jobName,
+    component: 'schema-runner',
+    labels: input.labels,
+    serviceAccountName: 'juanie',
+    securityContext: {
+      runAsNonRoot: true,
+      runAsUser: 1001,
+      fsGroup: 1001,
     },
-    spec: {
-      backoffLimit: 0,
-      ttlSecondsAfterFinished: 3600,
-      template: {
-        metadata: {
-          labels: {
-            'job-name': input.jobName,
-            ...(input.labels ?? {}),
-          },
-        },
-        spec: {
-          restartPolicy: 'Never',
-          serviceAccountName: 'juanie',
-          securityContext: {
-            runAsNonRoot: true,
-            runAsUser: 1001,
-            fsGroup: 1001,
-          },
-          initContainers,
-          containers: [
-            {
-              name: 'schema-runner',
-              image: input.image,
-              imagePullPolicy: 'IfNotPresent',
-              command: buildSchemaRunnerCommand(input.mode),
-              envFrom: [
-                {
-                  configMapRef: {
-                    name: 'juanie-config',
-                  },
-                },
-                {
-                  secretRef: {
-                    name: 'juanie-secret',
-                  },
-                },
-              ],
-              env: input.env?.map((item) => ({
-                name: item.name,
-                value: item.value,
-              })),
-              securityContext: {
-                allowPrivilegeEscalation: false,
-                capabilities: {
-                  drop: ['ALL'],
-                },
-              },
-              resources: {
-                requests: {
-                  cpu: '25m',
-                  memory: '96Mi',
-                },
-              },
+    initContainers,
+    containers: [
+      {
+        name: 'schema-runner',
+        image: input.image,
+        imagePullPolicy: 'IfNotPresent',
+        command: buildSchemaRunnerCommand(input.mode),
+        envFrom: [
+          {
+            configMapRef: {
+              name: 'juanie-config',
             },
-          ],
+          },
+          {
+            secretRef: {
+              name: 'juanie-secret',
+            },
+          },
+        ],
+        env: input.env?.map((item) => ({
+          name: item.name,
+          value: item.value,
+        })),
+        securityContext: {
+          allowPrivilegeEscalation: false,
+          capabilities: {
+            drop: ['ALL'],
+          },
+        },
+        resources: {
+          requests: {
+            cpu: '25m',
+            memory: '96Mi',
+          },
         },
       },
-    },
-  } satisfies V1Job;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getJobConditionMessage(job: V1Job, type: 'Complete' | 'Failed'): string | null {
-  const condition = job.status?.conditions?.find(
-    (item) => item.type === type && item.status === 'True'
-  );
-  return condition?.message ?? condition?.reason ?? null;
-}
-
-function isK8sNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const candidate = error as { code?: number; statusCode?: number };
-  return (candidate.code ?? candidate.statusCode) === 404;
-}
-
-function isK8sConflictError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const candidate = error as { code?: number; statusCode?: number };
-  return (candidate.code ?? candidate.statusCode) === 409;
-}
-
-async function readSchemaRunnerJobFailure(
-  namespace: string,
-  jobName: string,
-  fallback: string
-): Promise<string> {
-  const pods = await getPods(namespace, `job-name=${jobName}`);
-  const pod = pods[0];
-
-  if (!pod?.metadata?.name) {
-    return fallback;
-  }
-
-  const podReason =
-    pod.status?.message ??
-    pod.status?.reason ??
-    pod.status?.containerStatuses?.find((status) => status.state?.terminated)?.state?.terminated
-      ?.message ??
-    pod.status?.containerStatuses?.find((status) => status.state?.waiting)?.state?.waiting
-      ?.message ??
-    pod.status?.initContainerStatuses?.find((status) => status.state?.terminated)?.state?.terminated
-      ?.message ??
-    pod.status?.initContainerStatuses?.find((status) => status.state?.waiting)?.state?.waiting
-      ?.message;
-
-  try {
-    const logs = await getPodLogs(namespace, pod.metadata.name, 'schema-runner', 200, false);
-    const trimmedLogs = logs.trim();
-
-    if (trimmedLogs.length > 0) {
-      return `${fallback}\n${trimmedLogs}`;
-    }
-  } catch {
-    // Ignore log read failures and fall back to pod/job status below.
-  }
-
-  return podReason ? `${fallback}\n${podReason}` : fallback;
+    ],
+  }) satisfies V1Job;
 }
 
 export async function getSchemaRunnerJobStatus(input: {
@@ -210,40 +150,17 @@ export async function getSchemaRunnerJobStatus(input: {
   status: SchemaRunnerJobStatus;
   message: string | null;
 }> {
-  const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
+  const namespace = resolveSchemaRunnerNamespace(input.namespace);
+  const snapshot = await getPlatformOperationJobSnapshot({
+    namespace,
+    name: input.jobName,
+    containerName: 'schema-runner',
+  });
 
-  try {
-    const job = await getJob(namespace, input.jobName);
-
-    if (getJobConditionMessage(job, 'Complete')) {
-      return {
-        status: 'succeeded',
-        message: getJobConditionMessage(job, 'Complete'),
-      };
-    }
-
-    const failedMessage = getJobConditionMessage(job, 'Failed');
-    if (failedMessage) {
-      return {
-        status: 'failed',
-        message: await readSchemaRunnerJobFailure(namespace, input.jobName, failedMessage),
-      };
-    }
-
-    return {
-      status: 'running',
-      message: null,
-    };
-  } catch (error) {
-    if (isK8sNotFoundError(error)) {
-      return {
-        status: 'missing',
-        message: null,
-      };
-    }
-
-    throw error;
-  }
+  return {
+    status: snapshot.status,
+    message: snapshot.message,
+  };
 }
 
 export async function runSchemaRunnerJobAndWait(input: {
@@ -259,78 +176,56 @@ export async function runSchemaRunnerJobAndWait(input: {
   timeoutMs?: number;
   pollIntervalMs?: number;
 }): Promise<void> {
-  const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
-  const image = resolveSchemaRunnerImage();
-  if (!isK8sAvailable()) {
-    throw new Error('Schema runner execution requires Kubernetes connectivity');
-  }
-  if (!image) {
-    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
-  }
-
+  const namespace = resolveSchemaRunnerNamespace(input.namespace);
+  const image = requireSchemaRunnerJobSupport('Schema runner execution');
   let ownsJob = false;
 
   try {
-    const existingStatus = await getSchemaRunnerJobStatus({
+    const ensured = await ensurePlatformOperationJob({
       namespace,
-      jobName: input.jobName,
-    });
-
-    if (existingStatus.status === 'failed') {
-      await deleteJob(namespace, input.jobName).catch(() => undefined);
-    }
-
-    if (existingStatus.status === 'missing' || existingStatus.status === 'failed') {
-      try {
-        await createJob(
-          namespace,
-          buildSchemaRunnerJob({
-            namespace,
-            jobName: input.jobName,
-            image,
-            mode: input.mode,
-            env: input.env,
-            labels: input.labels,
-            waitForRedis: input.waitForRedis,
-          })
-        );
-        ownsJob = true;
-      } catch (error) {
-        if (!isK8sConflictError(error)) {
-          throw error;
-        }
-      }
-    }
-
-    const timeoutMs = input.timeoutMs ?? 240_000;
-    const pollIntervalMs = input.pollIntervalMs ?? 2_000;
-    const deadline = Date.now() + timeoutMs;
-
-    while (Date.now() < deadline) {
-      const status = await getSchemaRunnerJobStatus({
+      job: buildSchemaRunnerJob({
         namespace,
         jobName: input.jobName,
-      });
+        image,
+        mode: input.mode,
+        env: input.env,
+        labels: input.labels,
+        waitForRedis: input.waitForRedis,
+      }),
+      replaceStatuses: ['succeeded', 'failed'],
+      containerName: 'schema-runner',
+    });
+    ownsJob = ensured.created;
 
-      if (status.status === 'missing') {
-        return;
-      }
+    const timeoutMs = input.timeoutMs ?? 240_000;
+    const status = await waitForPlatformOperationJob({
+      namespace,
+      name: input.jobName,
+      containerName: 'schema-runner',
+      timeoutMs,
+      timeoutMessage: `Schema runner job ${input.jobName} 超时，超过 ${timeoutMs}ms 仍未完成`,
+      pollIntervalMs: input.pollIntervalMs,
+    });
 
-      if (status.status === 'succeeded') {
-        return;
-      }
+    if (status.status === 'missing') {
+      return;
+    }
 
-      if (status.status === 'failed') {
-        throw new Error(status.message ?? `Schema runner job ${input.jobName} 执行失败`);
-      }
+    if (status.status === 'succeeded') {
+      return;
+    }
 
-      await sleep(pollIntervalMs);
+    if (status.status === 'failed') {
+      throw new Error(status.message ?? `Schema runner job ${input.jobName} 执行失败`);
     }
 
     throw new Error(`Schema runner job ${input.jobName} 超时，超过 ${timeoutMs}ms 仍未完成`);
   } finally {
     if (ownsJob) {
-      await deleteJob(namespace, input.jobName).catch(() => undefined);
+      await deletePlatformOperationJob({
+        namespace,
+        name: input.jobName,
+      }).catch(() => undefined);
     }
   }
 }
@@ -349,57 +244,55 @@ export async function startSchemaRunnerJob(input: {
   status: SchemaRunnerJobStartStatus;
   message: string | null;
 }> {
-  const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
-  const image = resolveSchemaRunnerImage();
-  if (!isK8sAvailable()) {
-    throw new Error('Schema runner execution requires Kubernetes connectivity');
-  }
-  if (!image) {
-    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
-  }
+  const namespace = resolveSchemaRunnerNamespace(input.namespace);
+  const image = requireSchemaRunnerJobSupport('Schema runner execution');
 
-  const existingStatus = await getSchemaRunnerJobStatus({
+  const submitted = await ensurePlatformOperationJob({
     namespace,
-    jobName: input.jobName,
+    job: buildSchemaRunnerJob({
+      namespace,
+      jobName: input.jobName,
+      image,
+      mode: input.mode,
+      env: input.env,
+      labels: input.labels,
+      waitForRedis: input.waitForRedis,
+    }),
+    replaceStatuses: ['succeeded', 'failed'],
+    containerName: 'schema-runner',
   });
 
-  if (existingStatus.status === 'running') {
-    return {
-      status: 'running',
-      message: existingStatus.message,
-    };
-  }
+  return {
+    status: submitted.created ? 'queued' : 'running',
+    message: submitted.message,
+  };
+}
 
-  if (existingStatus.status === 'succeeded' || existingStatus.status === 'failed') {
-    await deleteJob(namespace, input.jobName).catch(() => undefined);
-  }
+export async function replaceSchemaRunnerJob(input: {
+  namespace?: string;
+  jobName: string;
+  mode: SchemaRunnerMode;
+  env?: Array<{
+    name: string;
+    value: string;
+  }>;
+  labels?: Record<string, string>;
+  waitForRedis?: boolean;
+}): Promise<void> {
+  const namespace = resolveSchemaRunnerNamespace(input.namespace);
+  const image = requireSchemaRunnerJobSupport('Schema runner execution');
 
-  try {
-    await createJob(
+  await submitPlatformOperationJob({
+    namespace,
+    job: buildSchemaRunnerJob({
       namespace,
-      buildSchemaRunnerJob({
-        namespace,
-        jobName: input.jobName,
-        image,
-        mode: input.mode,
-        env: input.env,
-        labels: input.labels,
-        waitForRedis: input.waitForRedis,
-      })
-    );
-
-    return {
-      status: 'queued',
-      message: null,
-    };
-  } catch (error) {
-    if (isK8sConflictError(error)) {
-      return {
-        status: 'running',
-        message: null,
-      };
-    }
-
-    throw error;
-  }
+      jobName: input.jobName,
+      image,
+      mode: input.mode,
+      env: input.env,
+      labels: input.labels,
+      waitForRedis: input.waitForRedis,
+    }),
+    replaceExisting: true,
+  });
 }

@@ -10,7 +10,7 @@ import {
 } from '@/lib/k8s/pod-diagnostics';
 import {
   buildServiceVerificationScript,
-  buildVerificationPodName,
+  buildVerificationJobName,
   SERVICE_VERIFY_IMAGE,
 } from '@/lib/k8s/service-verification';
 import { logger } from '@/lib/logger';
@@ -413,17 +413,87 @@ export async function getPodLogs(
   return output;
 }
 
-export async function createJob(namespace: string, body: k8s.V1Job): Promise<void> {
+async function createJob(namespace: string, body: k8s.V1Job): Promise<void> {
   const { batch } = getK8sClient();
   await batch.createNamespacedJob({ namespace, body });
 }
 
-export async function getJob(namespace: string, name: string): Promise<k8s.V1Job> {
+export type PlatformOperationJobStatus = 'missing' | 'running' | 'succeeded' | 'failed';
+
+export interface PlatformOperationJobSnapshot {
+  status: PlatformOperationJobStatus;
+  message: string | null;
+  logs: string | null;
+  job: k8s.V1Job | null;
+  pod: k8s.V1Pod | null;
+}
+
+export interface PlatformOperationJobInput {
+  namespace: string;
+  name: string;
+  component: string;
+  labels?: Record<string, string>;
+  podLabels?: Record<string, string>;
+  serviceAccountName?: string;
+  automountServiceAccountToken?: boolean;
+  backoffLimit?: number;
+  ttlSecondsAfterFinished?: number;
+  restartPolicy?: 'Never' | 'OnFailure';
+  securityContext?: k8s.V1PodSecurityContext;
+  initContainers?: k8s.V1Container[];
+  containers: k8s.V1Container[];
+  imagePullSecrets?: k8s.V1LocalObjectReference[];
+  volumes?: k8s.V1Volume[];
+}
+
+export function buildPlatformOperationJob(input: PlatformOperationJobInput): k8s.V1Job {
+  const labels = {
+    'app.kubernetes.io/name': 'juanie',
+    'app.kubernetes.io/managed-by': 'juanie',
+    'app.kubernetes.io/component': input.component,
+    ...(input.labels ?? {}),
+  };
+
+  return {
+    apiVersion: 'batch/v1',
+    kind: 'Job',
+    metadata: {
+      name: input.name,
+      namespace: input.namespace,
+      labels,
+    },
+    spec: {
+      backoffLimit: input.backoffLimit ?? 0,
+      ttlSecondsAfterFinished: input.ttlSecondsAfterFinished ?? 3600,
+      template: {
+        metadata: {
+          labels: {
+            ...labels,
+            'job-name': input.name,
+            ...(input.podLabels ?? {}),
+          },
+        },
+        spec: {
+          restartPolicy: input.restartPolicy ?? 'Never',
+          serviceAccountName: input.serviceAccountName,
+          automountServiceAccountToken: input.automountServiceAccountToken ?? false,
+          securityContext: input.securityContext,
+          initContainers: input.initContainers,
+          containers: input.containers,
+          imagePullSecrets: input.imagePullSecrets,
+          volumes: input.volumes,
+        },
+      },
+    },
+  };
+}
+
+async function getJob(namespace: string, name: string): Promise<k8s.V1Job> {
   const { batch } = getK8sClient();
   return batch.readNamespacedJob({ namespace, name });
 }
 
-export async function deleteJob(namespace: string, name: string): Promise<void> {
+async function deleteJob(namespace: string, name: string): Promise<void> {
   const { batch } = getK8sClient();
   try {
     await batch.deleteNamespacedJob({
@@ -439,6 +509,269 @@ export async function deleteJob(namespace: string, name: string): Promise<void> 
       throw e;
     }
   }
+}
+
+function getJobCondition(job: k8s.V1Job, type: 'Complete' | 'Failed'): k8s.V1JobCondition | null {
+  return (
+    job.status?.conditions?.find((item) => item.type === type && item.status === 'True') ?? null
+  );
+}
+
+function isK8sNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: number; statusCode?: number };
+  return (candidate.code ?? candidate.statusCode) === 404;
+}
+
+function isK8sConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: number; statusCode?: number };
+  return (candidate.code ?? candidate.statusCode) === 409;
+}
+
+async function waitForJobDeleted(input: {
+  namespace: string;
+  name: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}): Promise<void> {
+  const deadline = Date.now() + (input.timeoutMs ?? 15_000);
+  const pollIntervalMs = input.pollIntervalMs ?? 500;
+
+  while (Date.now() < deadline) {
+    try {
+      await getJob(input.namespace, input.name);
+    } catch (error) {
+      if (isK8sNotFoundError(error)) {
+        return;
+      }
+
+      throw error;
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  throw new Error(`Operation job ${input.namespace}/${input.name} is still terminating`);
+}
+
+export async function deletePlatformOperationJob(input: {
+  namespace: string;
+  name: string;
+  waitForDeletion?: boolean;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}): Promise<void> {
+  await deleteJob(input.namespace, input.name);
+
+  if (input.waitForDeletion) {
+    await waitForJobDeleted({
+      namespace: input.namespace,
+      name: input.name,
+      timeoutMs: input.timeoutMs,
+      pollIntervalMs: input.pollIntervalMs,
+    });
+  }
+}
+
+export async function getPlatformOperationJobSnapshot(input: {
+  namespace: string;
+  name: string;
+  containerName?: string;
+  tailLines?: number;
+}): Promise<PlatformOperationJobSnapshot> {
+  try {
+    const job = await getJob(input.namespace, input.name);
+    const pods = await getPods(input.namespace, `job-name=${input.name}`).catch(() => []);
+    const pod = pods[0] ?? null;
+    const completeCondition = getJobCondition(job, 'Complete');
+    const failedCondition = getJobCondition(job, 'Failed');
+    const terminal = Boolean(completeCondition || failedCondition);
+    const logs =
+      terminal && pod?.metadata?.name
+        ? (
+            await getPodLogs(
+              input.namespace,
+              pod.metadata.name,
+              input.containerName,
+              input.tailLines ?? 200,
+              false
+            ).catch(() => '')
+          ).trim() || null
+        : null;
+
+    if (completeCondition) {
+      return {
+        status: 'succeeded',
+        message: completeCondition.message ?? completeCondition.reason ?? null,
+        logs,
+        job,
+        pod,
+      };
+    }
+
+    if (failedCondition) {
+      return {
+        status: 'failed',
+        message:
+          logs ??
+          (pod ? getPodStatusMessage(pod) : null) ??
+          failedCondition.message ??
+          failedCondition.reason ??
+          'operation job failed',
+        logs,
+        job,
+        pod,
+      };
+    }
+
+    return {
+      status: 'running',
+      message: pod ? getPodStatusMessage(pod) : null,
+      logs: null,
+      job,
+      pod,
+    };
+  } catch (error) {
+    if (isK8sNotFoundError(error)) {
+      return {
+        status: 'missing',
+        message: null,
+        logs: null,
+        job: null,
+        pod: null,
+      };
+    }
+
+    throw error;
+  }
+}
+
+export async function submitPlatformOperationJob(input: {
+  namespace: string;
+  job: k8s.V1Job;
+  replaceExisting?: boolean;
+}): Promise<{ status: 'queued' | 'running'; created: boolean }> {
+  const jobName = input.job.metadata?.name;
+  if (!jobName) {
+    throw new Error('Operation job metadata.name is required');
+  }
+
+  if (input.replaceExisting) {
+    await deletePlatformOperationJob({
+      namespace: input.namespace,
+      name: jobName,
+      waitForDeletion: true,
+      timeoutMs: 30_000,
+      pollIntervalMs: 500,
+    });
+  }
+
+  try {
+    await createJob(input.namespace, input.job);
+    return { status: 'queued', created: true };
+  } catch (error) {
+    if (input.replaceExisting && isK8sConflictError(error)) {
+      await waitForJobDeleted({
+        namespace: input.namespace,
+        name: jobName,
+        timeoutMs: 30_000,
+        pollIntervalMs: 500,
+      });
+      await createJob(input.namespace, input.job);
+      return { status: 'queued', created: true };
+    }
+
+    if (isK8sConflictError(error)) {
+      return { status: 'running', created: false };
+    }
+
+    throw error;
+  }
+}
+
+export async function ensurePlatformOperationJob(input: {
+  namespace: string;
+  job: k8s.V1Job;
+  replaceStatuses?: PlatformOperationJobStatus[];
+  containerName?: string;
+}): Promise<{ status: 'queued' | 'running'; created: boolean; message: string | null }> {
+  const jobName = input.job.metadata?.name;
+  if (!jobName) {
+    throw new Error('Operation job metadata.name is required');
+  }
+
+  const snapshot = await getPlatformOperationJobSnapshot({
+    namespace: input.namespace,
+    name: jobName,
+    containerName: input.containerName,
+  });
+  const shouldReplace = input.replaceStatuses?.includes(snapshot.status) ?? false;
+
+  if (snapshot.status === 'missing' || shouldReplace) {
+    const submitted = await submitPlatformOperationJob({
+      namespace: input.namespace,
+      job: input.job,
+      replaceExisting: shouldReplace,
+    });
+    return {
+      ...submitted,
+      message: null,
+    };
+  }
+
+  return {
+    status: 'running',
+    created: false,
+    message: snapshot.message,
+  };
+}
+
+export async function waitForPlatformOperationJob(input: {
+  namespace: string;
+  name: string;
+  containerName?: string;
+  tailLines?: number;
+  timeoutMs: number;
+  timeoutMessage?: string;
+  pollIntervalMs?: number;
+}): Promise<PlatformOperationJobSnapshot> {
+  const pollIntervalMs = input.pollIntervalMs ?? 2000;
+  const deadline = Date.now() + input.timeoutMs;
+  let lastSnapshot: PlatformOperationJobSnapshot | null = null;
+
+  while (Date.now() < deadline) {
+    const snapshot = await getPlatformOperationJobSnapshot({
+      namespace: input.namespace,
+      name: input.name,
+      containerName: input.containerName,
+      tailLines: input.tailLines,
+    });
+
+    if (snapshot.status !== 'running') {
+      return snapshot;
+    }
+
+    lastSnapshot = snapshot;
+    await sleep(pollIntervalMs);
+  }
+
+  const fallbackMessage = `Operation job ${input.namespace}/${input.name} timed out`;
+  if (input.timeoutMessage) {
+    throw new Error(
+      lastSnapshot?.message
+        ? `${input.timeoutMessage}: ${lastSnapshot.message}`
+        : input.timeoutMessage
+    );
+  }
+
+  throw new Error(lastSnapshot?.message ?? fallbackMessage);
 }
 
 export async function getPodContainers(namespace: string, podName: string): Promise<string[]> {
@@ -1533,36 +1866,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForPodCompletion(input: {
-  namespace: string;
-  name: string;
-  timeoutMs: number;
-  pollMs: number;
-}): Promise<k8s.V1Pod> {
-  const { core } = getK8sClient();
-  const deadline = Date.now() + input.timeoutMs;
-  let lastObservedIssue: string | null = null;
-
-  while (Date.now() < deadline) {
-    const pod = await core.readNamespacedPod({
-      namespace: input.namespace,
-      name: input.name,
-    });
-
-    const phase = pod.status?.phase;
-    if (phase === 'Succeeded' || phase === 'Failed') {
-      return pod;
-    }
-
-    lastObservedIssue = getPodStatusMessage(pod) ?? lastObservedIssue;
-    await sleep(input.pollMs);
-  }
-
-  throw new Error(
-    lastObservedIssue ?? `Verification pod ${input.namespace}/${input.name} timed out`
-  );
-}
-
 export async function verifyServiceReachability(input: {
   namespace: string;
   serviceName: string;
@@ -1575,8 +1878,7 @@ export async function verifyServiceReachability(input: {
   const timeoutMs = input.timeoutMs ?? 30000;
   const pollMs = input.pollMs ?? 2000;
   const requestTimeoutMs = Math.min(input.requestTimeoutMs ?? 8000, timeoutMs);
-  const { core } = getK8sClient();
-  const podName = buildVerificationPodName(input.serviceName);
+  const jobName = buildVerificationJobName(input.serviceName);
   const attemptCount = Math.max(1, Math.ceil(timeoutMs / pollMs));
   const sleepSeconds = Math.max(1, Math.ceil(pollMs / 1000));
   const requestTimeoutSeconds = Math.max(1, Math.ceil(requestTimeoutMs / 1000));
@@ -1589,47 +1891,61 @@ export async function verifyServiceReachability(input: {
     requestTimeoutSeconds,
   });
 
-  await core.createNamespacedPod({
+  const job = buildPlatformOperationJob({
     namespace: input.namespace,
-    body: {
-      apiVersion: 'v1',
-      kind: 'Pod',
-      metadata: {
-        name: podName,
-        labels: {
-          'app.kubernetes.io/name': 'juanie-service-verify',
-          'juanie.io/service': input.serviceName,
+    name: jobName,
+    component: 'service-verification',
+    labels: {
+      'juanie.io/service': input.serviceName,
+    },
+    podLabels: {
+      'juanie.io/service': input.serviceName,
+    },
+    automountServiceAccountToken: false,
+    ttlSecondsAfterFinished: 600,
+    containers: [
+      {
+        name: 'curl',
+        image: SERVICE_VERIFY_IMAGE,
+        command: ['/bin/sh', '-lc', script],
+        securityContext: {
+          allowPrivilegeEscalation: false,
+          capabilities: {
+            drop: ['ALL'],
+          },
         },
       },
-      spec: {
-        restartPolicy: 'Never',
-        containers: [
-          {
-            name: 'curl',
-            image: SERVICE_VERIFY_IMAGE,
-            command: ['/bin/sh', '-lc', script],
-          },
-        ],
-      },
-    },
+    ],
+  });
+
+  await submitPlatformOperationJob({
+    namespace: input.namespace,
+    job,
+    replaceExisting: true,
   });
 
   try {
-    const pod = await waitForPodCompletion({
+    const snapshot = await waitForPlatformOperationJob({
       namespace: input.namespace,
-      name: podName,
+      name: jobName,
+      containerName: 'curl',
       timeoutMs: timeoutMs + requestTimeoutMs + pollMs,
-      pollMs,
+      timeoutMessage: `Service verify timed out for ${input.serviceName}`,
+      pollIntervalMs: pollMs,
     });
-    const logs = (await getPodLogs(input.namespace, podName, 'curl', 200).catch(() => '')).trim();
 
-    if (pod.status?.phase !== 'Succeeded') {
+    if (snapshot.status !== 'succeeded') {
       throw new Error(
-        `Service verify failed for ${input.serviceName}: ${logs || getPodStatusMessage(pod) || 'verification pod failed'}`
+        `Service verify failed for ${input.serviceName}: ${
+          snapshot.message ?? 'verification job failed'
+        }`
       );
     }
   } finally {
-    await deletePod(input.namespace, podName, { force: true }).catch(() => undefined);
+    await deletePlatformOperationJob({
+      namespace: input.namespace,
+      name: jobName,
+    }).catch(() => undefined);
   }
 }
 

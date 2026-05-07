@@ -1,20 +1,12 @@
-import type { V1Job } from '@kubernetes/client-node';
 import { resolveManagedPostgresImage } from '@/lib/databases/capabilities';
 import {
-  createJob,
+  buildPlatformOperationJob,
   createNamespace,
-  deleteJob,
-  getJob,
-  getPodLogs,
-  getPods,
+  deletePlatformOperationJob,
   isK8sAvailable,
+  submitPlatformOperationJob,
+  waitForPlatformOperationJob,
 } from '@/lib/k8s';
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 export async function clonePostgreSQLDatabase(input: {
   namespace: string | null;
@@ -48,90 +40,72 @@ export async function clonePostgreSQLDatabase(input: {
   const namespace = input.namespace;
 
   await createNamespace(namespace);
-  await deleteJob(namespace, jobName).catch(() => undefined);
 
-  const job: V1Job = {
-    apiVersion: 'batch/v1',
-    kind: 'Job',
-    metadata: {
-      name: jobName,
-      namespace,
-      labels: {
-        'app.kubernetes.io/managed-by': 'juanie',
-        'juanie.dev/database-clone-id': input.target.id,
-      },
+  const job = buildPlatformOperationJob({
+    namespace,
+    name: jobName,
+    component: 'database-clone',
+    labels: {
+      'juanie.dev/database-clone-id': input.target.id,
     },
-    spec: {
-      backoffLimit: 0,
-      ttlSecondsAfterFinished: 3600,
-      template: {
-        metadata: {
-          labels: {
-            'job-name': jobName,
-            'juanie.dev/database-clone-id': input.target.id,
+    ttlSecondsAfterFinished: 3600,
+    containers: [
+      {
+        name: 'clone',
+        image: resolveManagedPostgresImage(input.target.capabilities),
+        command: ['/bin/sh', '-lc'],
+        args: [
+          [
+            'set -euo pipefail',
+            'pg_dump --clean --if-exists --no-owner --no-privileges "$SOURCE_DATABASE_URL" | psql "$TARGET_DATABASE_URL"',
+          ].join(' && '),
+        ],
+        env: [
+          {
+            name: 'SOURCE_DATABASE_URL',
+            value: input.source.connectionString,
+          },
+          {
+            name: 'TARGET_DATABASE_URL',
+            value: input.target.connectionString,
+          },
+        ],
+        securityContext: {
+          allowPrivilegeEscalation: false,
+          capabilities: {
+            drop: ['ALL'],
           },
         },
-        spec: {
-          restartPolicy: 'Never',
-          containers: [
-            {
-              name: 'clone',
-              image: resolveManagedPostgresImage(input.target.capabilities),
-              command: ['/bin/sh', '-lc'],
-              args: [
-                [
-                  'set -euo pipefail',
-                  'pg_dump --clean --if-exists --no-owner --no-privileges "$SOURCE_DATABASE_URL" | psql "$TARGET_DATABASE_URL"',
-                ].join(' && '),
-              ],
-              env: [
-                {
-                  name: 'SOURCE_DATABASE_URL',
-                  value: input.source.connectionString,
-                },
-                {
-                  name: 'TARGET_DATABASE_URL',
-                  value: input.target.connectionString,
-                },
-              ],
-            },
-          ],
-        },
       },
-    },
-  };
+    ],
+  });
 
-  await createJob(namespace, job);
+  await submitPlatformOperationJob({
+    namespace,
+    job,
+    replaceExisting: true,
+  });
 
-  let finalLogs = '';
   try {
-    for (let attempts = 0; attempts < 180; attempts++) {
-      const currentJob = await getJob(namespace, jobName);
-      const conditions = currentJob.status?.conditions ?? [];
-      const pods = await getPods(namespace, `job-name=${jobName}`);
-      const podName = pods[0]?.metadata?.name;
+    const snapshot = await waitForPlatformOperationJob({
+      namespace,
+      name: jobName,
+      containerName: 'clone',
+      timeoutMs: 360_000,
+      timeoutMessage: '预览数据库克隆超时',
+      pollIntervalMs: 2_000,
+      tailLines: 200,
+    });
 
-      if (podName) {
-        finalLogs = await getPodLogs(namespace, podName, undefined, 200).catch(() => finalLogs);
-      }
-
-      if (
-        conditions.some((condition) => condition.type === 'Complete' && condition.status === 'True')
-      ) {
-        return finalLogs;
-      }
-
-      if (
-        conditions.some((condition) => condition.type === 'Failed' && condition.status === 'True')
-      ) {
-        throw new Error(finalLogs || '预览数据库克隆失败');
-      }
-
-      await sleep(2000);
+    if (snapshot.status === 'succeeded') {
+      return snapshot.logs ?? '';
     }
 
-    throw new Error(finalLogs || '预览数据库克隆超时');
+    throw new Error(snapshot.logs ?? snapshot.message ?? '预览数据库克隆失败');
   } finally {
-    await deleteJob(namespace, jobName).catch(() => undefined);
+    await deletePlatformOperationJob({
+      namespace,
+      name: jobName,
+    }).catch(() => undefined);
   }
 }

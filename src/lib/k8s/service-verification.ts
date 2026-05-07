@@ -21,7 +21,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
-export function buildVerificationPodName(serviceName: string): string {
+export function buildVerificationJobName(serviceName: string): string {
   const suffix = Math.random().toString(36).slice(2, 8);
   return `${serviceName}-verify-${suffix}`.replace(/[^a-z0-9-]/g, '-').slice(0, 63);
 }

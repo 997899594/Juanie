@@ -2,12 +2,10 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { V1Job } from '@kubernetes/client-node';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
-import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
@@ -25,10 +23,7 @@ import {
   requireSchemaRepairRepositorySession,
 } from '@/lib/schema-management/repair-context';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
-import {
-  buildSchemaRunnerJob,
-  resolveSchemaRunnerImage,
-} from '@/lib/schema-management/schema-runner-job';
+import { replaceSchemaRunnerJob } from '@/lib/schema-management/schema-runner-job';
 
 const execFileAsync = promisify(execFile);
 
@@ -99,18 +94,16 @@ function buildSchemaRepairJobName(atlasRunId: string): string {
   return `schema-repair-${atlasRunId.slice(0, 8)}`;
 }
 
-function buildSchemaRepairDraftJob(input: {
+async function dispatchSchemaRepairDraftJob(input: {
   namespace: string;
   jobName: string;
-  image: string;
   atlasRunId: string;
   projectId: string;
   userId: string | null;
-}) {
-  return buildSchemaRunnerJob({
+}): Promise<void> {
+  await replaceSchemaRunnerJob({
     namespace: input.namespace,
     jobName: input.jobName,
-    image: input.image,
     mode: 'schema-repair',
     labels: {
       'juanie.dev/schema-repair-run-id': input.atlasRunId,
@@ -129,7 +122,7 @@ function buildSchemaRepairDraftJob(input: {
         value: input.userId ?? '',
       },
     ],
-  }) satisfies V1Job;
+  });
 }
 
 export async function createSchemaRepairAtlasRun(input: {
@@ -156,14 +149,6 @@ export async function createSchemaRepairAtlasRun(input: {
       const requeuedAt = new Date();
       const jobName = activeRun.jobName ?? buildSchemaRepairJobName(activeRun.id);
       const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
-      const schemaRunnerImage = resolveSchemaRunnerImage();
-
-      if (!isK8sAvailable()) {
-        throw new Error('Schema runner draft execution requires Kubernetes connectivity');
-      }
-      if (!schemaRunnerImage) {
-        throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
-      }
 
       await db
         .update(schemaRepairPlans)
@@ -194,18 +179,13 @@ export async function createSchemaRepairAtlasRun(input: {
       });
 
       try {
-        await deleteJob(namespace, jobName).catch(() => undefined);
-        await createJob(
+        await dispatchSchemaRepairDraftJob({
           namespace,
-          buildSchemaRepairDraftJob({
-            namespace,
-            jobName,
-            image: schemaRunnerImage,
-            atlasRunId: activeRun.id,
-            projectId: input.projectId,
-            userId: input.userId,
-          })
-        );
+          jobName,
+          atlasRunId: activeRun.id,
+          projectId: input.projectId,
+          userId: input.userId,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const failedAt = new Date();
@@ -245,14 +225,6 @@ export async function createSchemaRepairAtlasRun(input: {
 
   const queuedAt = new Date();
   const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
-  const schemaRunnerImage = resolveSchemaRunnerImage();
-
-  if (!isK8sAvailable()) {
-    throw new Error('Schema runner draft execution requires Kubernetes connectivity');
-  }
-  if (!schemaRunnerImage) {
-    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
-  }
 
   const [run] = await db
     .insert(schemaRepairAtlasRuns)
@@ -286,18 +258,13 @@ export async function createSchemaRepairAtlasRun(input: {
     .where(eq(schemaRepairPlans.id, plan.id));
 
   try {
-    await deleteJob(namespace, jobName).catch(() => undefined);
-    await createJob(
+    await dispatchSchemaRepairDraftJob({
       namespace,
-      buildSchemaRepairDraftJob({
-        namespace,
-        jobName,
-        image: schemaRunnerImage,
-        atlasRunId: run.id,
-        projectId: input.projectId,
-        userId: input.userId,
-      })
-    );
+      jobName,
+      atlasRunId: run.id,
+      projectId: input.projectId,
+      userId: input.userId,
+    });
     await publishSchemaRepairRealtimeSnapshot({
       projectId: input.projectId,
       databaseId: plan.databaseId,

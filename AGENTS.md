@@ -253,6 +253,14 @@ const { core, apps, custom } = getK8sClient()
 await createNamespace('my-namespace')
 ```
 
+平台临时执行必须走 `src/lib/k8s.ts` 的 `PlatformOperationJob` helpers
+（`buildPlatformOperationJob` / `submitPlatformOperationJob` /
+`ensurePlatformOperationJob` / `waitForPlatformOperationJob` /
+`deletePlatformOperationJob`）。业务模块不要直接创建 Pod，也不要各自手写
+`createJob -> poll pod -> read logs -> deleteJob` 生命周期；服务探活、schema-runner、
+迁移派发、预览库克隆都应共享这条 Job runner 路径。RBAC 不开放 `pods/create`，
+默认也不开放 `pods/exec`。
+
 ### Argo CD / Argo Rollouts
 
 - 预览环境脚手架通过 Argo CD ApplicationSet 管理，入口见 `src/lib/environments/application-set.ts`

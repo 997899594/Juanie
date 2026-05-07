@@ -43,6 +43,9 @@ describe('schema runner job', () => {
       'wait-for-redis',
     ]);
     expect(job.spec?.template.spec?.containers?.[0]?.command).toEqual(['./schema-runner']);
+    expect(job.metadata?.labels?.['app.kubernetes.io/component']).toBe('schema-runner');
+    expect(job.spec?.template.spec?.serviceAccountName).toBe('juanie');
+    expect(job.spec?.template.spec?.automountServiceAccountToken).toBe(false);
   });
 
   it('builds migration jobs with the migration command', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildServiceVerificationScript,
-  buildVerificationPodName,
+  buildVerificationJobName,
   normalizeServiceVerificationPath,
   SERVICE_VERIFY_IMAGE,
 } from '@/lib/k8s/service-verification';
@@ -12,11 +12,11 @@ describe('kubernetes service verification', () => {
     expect(normalizeServiceVerificationPath('/ready')).toBe('/ready');
   });
 
-  it('生成探活 Pod 名称时替换非法字符', () => {
-    const podName = buildVerificationPodName('web_service');
+  it('生成探活 Job 名称时替换非法字符', () => {
+    const jobName = buildVerificationJobName('web_service');
 
-    expect(podName.startsWith('web-service-verify-')).toBe(true);
-    expect(podName.length <= 63).toBe(true);
+    expect(jobName.startsWith('web-service-verify-')).toBe(true);
+    expect(jobName.length <= 63).toBe(true);
   });
 
   it('生成 curl 探活脚本并保留重试参数', () => {

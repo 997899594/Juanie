@@ -1,13 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
-import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { appendMigrationRunLog, failMigrationRunWithoutThrow } from '@/lib/migrations/run-state';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
-import {
-  buildSchemaRunnerJob,
-  resolveSchemaRunnerImage,
-} from '@/lib/schema-management/schema-runner-job';
+import { replaceSchemaRunnerJob } from '@/lib/schema-management/schema-runner-job';
 
 function buildMigrationSchemaRunnerEnv(input: {
   runId: string;
@@ -43,15 +39,6 @@ export async function dispatchMigrationRunToSchemaRunner(input: {
   jobName?: string;
 }> {
   const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
-  const image = resolveSchemaRunnerImage();
-
-  if (!isK8sAvailable()) {
-    throw new Error('Migration execution requires Kubernetes connectivity');
-  }
-
-  if (!image) {
-    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
-  }
 
   const run = await db.query.migrationRuns.findFirst({
     where: eq(migrationRuns.id, input.runId),
@@ -113,23 +100,18 @@ export async function dispatchMigrationRunToSchemaRunner(input: {
   });
 
   try {
-    await deleteJob(namespace, jobName).catch(() => undefined);
-    await createJob(
+    await replaceSchemaRunnerJob({
       namespace,
-      buildSchemaRunnerJob({
-        namespace,
-        jobName,
-        image,
-        mode: 'migration',
-        labels: {
-          'juanie.dev/migration-run-id': run.id,
-        },
-        env: buildMigrationSchemaRunnerEnv({
-          runId: run.id,
-          allowApprovalBypass: input.allowApprovalBypass ?? false,
-        }),
-      })
-    );
+      jobName,
+      mode: 'migration',
+      labels: {
+        'juanie.dev/migration-run-id': run.id,
+      },
+      env: buildMigrationSchemaRunnerEnv({
+        runId: run.id,
+        allowApprovalBypass: input.allowApprovalBypass ?? false,
+      }),
+    });
 
     return {
       dispatched: true,
