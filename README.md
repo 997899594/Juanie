@@ -122,7 +122,9 @@ Notes:
 
 Required GitHub Actions secret:
 
-- `JUANIE_DEPLOY_SSH_KEY`: private key that can SSH to `root@juanie.art` and run `helm` / `kubectl`.
+- `SERVER_HOST`: deployment server host.
+- `SERVER_USER`: deployment server user.
+- `SSH_PRIVATE_KEY`: private key that can SSH to the server and run `helm` / `kubectl`.
 
 ## 当前结构入口
 

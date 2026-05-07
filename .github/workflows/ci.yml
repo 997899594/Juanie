@@ -93,9 +93,9 @@ jobs:
       - name: Upload Helm Chart
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: juanie.art
-          username: root
-          key: ${{ secrets.JUANIE_DEPLOY_SSH_KEY }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: deploy/k8s/charts/juanie
           target: /tmp/juanie-direct-deploy-${{ github.sha }}
 
@@ -109,9 +109,9 @@ jobs:
           WEB_IMAGE_TAG: ${{ env.WEB_IMAGE_TAG }}
           RUNTIME_IMAGE_TAG: ${{ env.RUNTIME_IMAGE_TAG }}
         with:
-          host: juanie.art
-          username: root
-          key: ${{ secrets.JUANIE_DEPLOY_SSH_KEY }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: DEPLOY_CHART_DIR,GITHUB_SHA,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG
           script_stop: true
           script: |
