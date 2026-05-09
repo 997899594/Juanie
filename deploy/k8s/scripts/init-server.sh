@@ -39,6 +39,31 @@ CNPG_CHART_REF="${CNPG_CHART_REF:-cnpg/cloudnative-pg}"
 EXTERNAL_SECRETS_CHART_REF="${EXTERNAL_SECRETS_CHART_REF:-external-secrets/external-secrets}"
 DNSPOD_WEBHOOK_CHART_REF="${DNSPOD_WEBHOOK_CHART_REF:-cert-manager-webhook-dnspod/cert-manager-webhook-dnspod}"
 
+BOOTSTRAP_CHART_SOURCE="${BOOTSTRAP_CHART_SOURCE:-repo}"
+BOOTSTRAP_CHART_DIR="${BOOTSTRAP_CHART_DIR:-${ROOT_DIR}/.charts}"
+BOOTSTRAP_CHART_DOWNLOAD_PROXY="${BOOTSTRAP_CHART_DOWNLOAD_PROXY:-}"
+BOOTSTRAP_CHART_FORCE_DOWNLOAD="${BOOTSTRAP_CHART_FORCE_DOWNLOAD:-false}"
+CERT_MANAGER_CHART_URL="${CERT_MANAGER_CHART_URL:-https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_CHART_VERSION}.tgz}"
+ARGOCD_CHART_URL="${ARGOCD_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-cd-${ARGOCD_CHART_VERSION}/argo-cd-${ARGOCD_CHART_VERSION}.tgz}"
+ARGO_ROLLOUTS_CHART_URL="${ARGO_ROLLOUTS_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz}"
+CNPG_CHART_URL="${CNPG_CHART_URL:-https://cloudnative-pg.io/charts/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
+EXTERNAL_SECRETS_CHART_URL="${EXTERNAL_SECRETS_CHART_URL:-https://external-secrets.io/external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz}"
+DNSPOD_WEBHOOK_CHART_URL="${DNSPOD_WEBHOOK_CHART_URL:-https://github.com/imroc/cert-manager-webhook-dnspod/releases/download/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz}"
+
+CERT_MANAGER_IMAGE_REPOSITORY="${CERT_MANAGER_IMAGE_REPOSITORY:-}"
+CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY="${CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY:-}"
+CERT_MANAGER_CAINJECTOR_IMAGE_REPOSITORY="${CERT_MANAGER_CAINJECTOR_IMAGE_REPOSITORY:-}"
+ARGOCD_IMAGE_REPOSITORY="${ARGOCD_IMAGE_REPOSITORY:-}"
+ARGOCD_REDIS_IMAGE_REPOSITORY="${ARGOCD_REDIS_IMAGE_REPOSITORY:-}"
+ARGOCD_REDIS_IMAGE_TAG="${ARGOCD_REDIS_IMAGE_TAG:-}"
+ARGO_ROLLOUTS_IMAGE_REGISTRY="${ARGO_ROLLOUTS_IMAGE_REGISTRY:-}"
+ARGO_ROLLOUTS_IMAGE_REPOSITORY="${ARGO_ROLLOUTS_IMAGE_REPOSITORY:-}"
+ARGO_ROLLOUTS_IMAGE_TAG="${ARGO_ROLLOUTS_IMAGE_TAG:-}"
+CNPG_IMAGE_REPOSITORY="${CNPG_IMAGE_REPOSITORY:-}"
+CNPG_IMAGE_TAG="${CNPG_IMAGE_TAG:-}"
+EXTERNAL_SECRETS_IMAGE_REPOSITORY="${EXTERNAL_SECRETS_IMAGE_REPOSITORY:-}"
+EXTERNAL_SECRETS_IMAGE_TAG="${EXTERNAL_SECRETS_IMAGE_TAG:-}"
+
 JUANIE_PREVIEW_APPLICATIONSET_REPO_URL="${JUANIE_PREVIEW_APPLICATIONSET_REPO_URL:-}"
 ARGOCD_REPO_URL="${ARGOCD_REPO_URL:-${JUANIE_PREVIEW_APPLICATIONSET_REPO_URL}}"
 ARGOCD_REPO_USERNAME="${ARGOCD_REPO_USERNAME:-}"
@@ -124,6 +149,64 @@ helm_repo_add() {
   local name="$1"
   local url="$2"
   helm repo add "${name}" "${url}" >/dev/null 2>&1 || helm repo add "${name}" "${url}" --force-update >/dev/null
+}
+
+chart_download_url() {
+  local url="$1"
+  if [[ -n "${BOOTSTRAP_CHART_DOWNLOAD_PROXY}" && "${url}" == https://github.com/* ]]; then
+    printf '%s%s\n' "${BOOTSTRAP_CHART_DOWNLOAD_PROXY}" "${url}"
+    return
+  fi
+
+  printf '%s\n' "${url}"
+}
+
+download_chart() {
+  local file_name="$1"
+  local url="$2"
+  local target="${BOOTSTRAP_CHART_DIR}/${file_name}"
+  local resolved_url
+
+  mkdir -p "${BOOTSTRAP_CHART_DIR}"
+
+  if [[ -s "${target}" && "${BOOTSTRAP_CHART_FORCE_DOWNLOAD}" != "true" ]]; then
+    log_info "复用本地 chart: ${target}"
+    printf '%s\n' "${target}"
+    return
+  fi
+
+  resolved_url="$(chart_download_url "${url}")"
+  log_info "下载 chart: ${resolved_url}"
+  curl -fL --retry 5 --connect-timeout 20 --max-time 300 -o "${target}" "${resolved_url}"
+  tar -tzf "${target}" >/dev/null
+  printf '%s\n' "${target}"
+}
+
+resolve_chart_refs() {
+  case "${BOOTSTRAP_CHART_SOURCE}" in
+    repo)
+      return
+      ;;
+    download)
+      require_command curl
+      CERT_MANAGER_CHART_REF="$(download_chart "cert-manager-${CERT_MANAGER_CHART_VERSION}.tgz" "${CERT_MANAGER_CHART_URL}")"
+      ARGOCD_CHART_REF="$(download_chart "argo-cd-${ARGOCD_CHART_VERSION}.tgz" "${ARGOCD_CHART_URL}")"
+      ARGO_ROLLOUTS_CHART_REF="$(download_chart "argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz" "${ARGO_ROLLOUTS_CHART_URL}")"
+      CNPG_CHART_REF="$(download_chart "cloudnative-pg-${CNPG_CHART_VERSION}.tgz" "${CNPG_CHART_URL}")"
+
+      if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
+        EXTERNAL_SECRETS_CHART_REF="$(download_chart "external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz" "${EXTERNAL_SECRETS_CHART_URL}")"
+      fi
+
+      if [[ "$(gateway_https_enabled)" == "true" ]]; then
+        DNSPOD_WEBHOOK_CHART_REF="$(download_chart "cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz" "${DNSPOD_WEBHOOK_CHART_URL}")"
+      fi
+      ;;
+    *)
+      log_error "未知 BOOTSTRAP_CHART_SOURCE=${BOOTSTRAP_CHART_SOURCE}，可选值: repo, download"
+      exit 1
+      ;;
+  esac
 }
 
 is_local_chart_ref() {
@@ -590,6 +673,8 @@ if ! kubectl get gatewayclass "${GATEWAY_CLASS_NAME}" >/dev/null 2>&1; then
   log_warn "未找到 GatewayClass ${GATEWAY_CLASS_NAME}，后续 Gateway 会创建但无法接流量，请确认集群已安装对应网关实现。"
 fi
 
+resolve_chart_refs
+
 log_section "添加 Helm 仓库"
 helm_repo_update_required='false'
 
@@ -626,12 +711,23 @@ fi
 
 log_section "安装 cert-manager"
 ensure_namespace "${CERT_MANAGER_NAMESPACE}"
+cert_manager_args=()
+if [[ -n "${CERT_MANAGER_IMAGE_REPOSITORY}" ]]; then
+  cert_manager_args+=(--set "image.repository=${CERT_MANAGER_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY}" ]]; then
+  cert_manager_args+=(--set "webhook.image.repository=${CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${CERT_MANAGER_CAINJECTOR_IMAGE_REPOSITORY}" ]]; then
+  cert_manager_args+=(--set "cainjector.image.repository=${CERT_MANAGER_CAINJECTOR_IMAGE_REPOSITORY}")
+fi
 helm_upgrade_install \
   cert-manager \
   "${CERT_MANAGER_CHART_REF}" \
   "${CERT_MANAGER_NAMESPACE}" \
   "${INFRA_DIR}/cert-manager/values.yaml" \
-  "${CERT_MANAGER_CHART_VERSION}"
+  "${CERT_MANAGER_CHART_VERSION}" \
+  "${cert_manager_args[@]}"
 wait_for_labeled_deployments "${CERT_MANAGER_NAMESPACE}" app.kubernetes.io/instance=cert-manager
 
 dnspod_secret_ready='false'
@@ -658,45 +754,91 @@ fi
 
 if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
   log_section "安装 External Secrets Operator"
+  external_secrets_args=()
+  if [[ -n "${EXTERNAL_SECRETS_IMAGE_REPOSITORY}" ]]; then
+    external_secrets_args+=(
+      --set "image.repository=${EXTERNAL_SECRETS_IMAGE_REPOSITORY}"
+      --set "webhook.image.repository=${EXTERNAL_SECRETS_IMAGE_REPOSITORY}"
+      --set "certController.image.repository=${EXTERNAL_SECRETS_IMAGE_REPOSITORY}"
+    )
+  fi
+  if [[ -n "${EXTERNAL_SECRETS_IMAGE_TAG}" ]]; then
+    external_secrets_args+=(
+      --set "image.tag=${EXTERNAL_SECRETS_IMAGE_TAG}"
+      --set "webhook.image.tag=${EXTERNAL_SECRETS_IMAGE_TAG}"
+      --set "certController.image.tag=${EXTERNAL_SECRETS_IMAGE_TAG}"
+    )
+  fi
   helm_upgrade_install \
     external-secrets \
     "${EXTERNAL_SECRETS_CHART_REF}" \
     "${EXTERNAL_SECRETS_NAMESPACE}" \
     "${INFRA_DIR}/external-secrets/values.yaml" \
-    "${EXTERNAL_SECRETS_CHART_VERSION}"
+    "${EXTERNAL_SECRETS_CHART_VERSION}" \
+    "${external_secrets_args[@]}"
   wait_for_labeled_deployments "${EXTERNAL_SECRETS_NAMESPACE}" app.kubernetes.io/instance=external-secrets
 else
   log_info "External Secrets Operator 已关闭，跳过安装。"
 fi
 
 log_section "安装 Argo CD"
+argocd_args=()
+if [[ -n "${ARGOCD_IMAGE_REPOSITORY}" ]]; then
+  argocd_args+=(--set "global.image.repository=${ARGOCD_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${ARGOCD_REDIS_IMAGE_REPOSITORY}" ]]; then
+  argocd_args+=(--set "redis.image.repository=${ARGOCD_REDIS_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${ARGOCD_REDIS_IMAGE_TAG}" ]]; then
+  argocd_args+=(--set "redis.image.tag=${ARGOCD_REDIS_IMAGE_TAG}")
+fi
 helm_upgrade_install \
   argocd \
   "${ARGOCD_CHART_REF}" \
   "${ARGOCD_NAMESPACE}" \
   "${INFRA_DIR}/argocd/values.yaml" \
-  "${ARGOCD_CHART_VERSION}"
+  "${ARGOCD_CHART_VERSION}" \
+  "${argocd_args[@]}"
 wait_for_labeled_statefulsets "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
 wait_for_labeled_deployments "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
 ensure_argocd_project
 ensure_argocd_repo_secret
 
 log_section "安装 Argo Rollouts"
+argo_rollouts_args=()
+if [[ -n "${ARGO_ROLLOUTS_IMAGE_REGISTRY}" ]]; then
+  argo_rollouts_args+=(--set "controller.image.registry=${ARGO_ROLLOUTS_IMAGE_REGISTRY}")
+fi
+if [[ -n "${ARGO_ROLLOUTS_IMAGE_REPOSITORY}" ]]; then
+  argo_rollouts_args+=(--set "controller.image.repository=${ARGO_ROLLOUTS_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${ARGO_ROLLOUTS_IMAGE_TAG}" ]]; then
+  argo_rollouts_args+=(--set "controller.image.tag=${ARGO_ROLLOUTS_IMAGE_TAG}")
+fi
 helm_upgrade_install \
   argo-rollouts \
   "${ARGO_ROLLOUTS_CHART_REF}" \
   "${ARGO_ROLLOUTS_NAMESPACE}" \
   "${INFRA_DIR}/argo-rollouts/values.yaml" \
-  "${ARGO_ROLLOUTS_CHART_VERSION}"
+  "${ARGO_ROLLOUTS_CHART_VERSION}" \
+  "${argo_rollouts_args[@]}"
 wait_for_labeled_deployments "${ARGO_ROLLOUTS_NAMESPACE}" app.kubernetes.io/instance=argo-rollouts
 
 log_section "安装 CloudNativePG"
+cnpg_args=()
+if [[ -n "${CNPG_IMAGE_REPOSITORY}" ]]; then
+  cnpg_args+=(--set "image.repository=${CNPG_IMAGE_REPOSITORY}")
+fi
+if [[ -n "${CNPG_IMAGE_TAG}" ]]; then
+  cnpg_args+=(--set "image.tag=${CNPG_IMAGE_TAG}")
+fi
 helm_upgrade_install \
   cloudnative-pg \
   "${CNPG_CHART_REF}" \
   "${CNPG_NAMESPACE}" \
   "${INFRA_DIR}/cloudnative-pg/values.yaml" \
-  "${CNPG_CHART_VERSION}"
+  "${CNPG_CHART_VERSION}" \
+  "${cnpg_args[@]}"
 wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=cloudnative-pg
 
 log_section "应用平台网关与证书资源"
