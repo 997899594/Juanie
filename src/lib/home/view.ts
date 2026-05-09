@@ -1,3 +1,4 @@
+import type { TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
 import {
   buildPreviewLifecycleSummary,
@@ -164,7 +165,7 @@ export function buildHomeStats(input: {
 export function decorateHomeProjects<TProject extends HomeProjectLike>(
   projects: TProject[],
   input: {
-    rolesByTeamId?: Map<string, 'owner' | 'admin' | 'member'>;
+    rolesByTeamId?: Map<string, TeamRole>;
   } = {}
 ): Array<TProject & HomeProjectDecorations> {
   return projects.map((project) => {

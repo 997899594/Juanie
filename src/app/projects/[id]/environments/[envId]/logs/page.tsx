@@ -21,6 +21,10 @@ export default async function ProjectEnvironmentLogsPage({
     redirect('/projects');
   }
 
+  if (pageData.role === 'delivery') {
+    redirect(`/projects/${id}/environments/${envId}/delivery`);
+  }
+
   const environment = await getProjectEnvironmentOrNull(id, envId);
   if (!environment) {
     notFound();

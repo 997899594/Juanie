@@ -7,9 +7,11 @@ import { SectionNav } from '@/components/ui/section-nav';
 export function EnvironmentSectionNav({
   projectId,
   environmentId,
+  audience = 'full',
 }: {
   projectId: string;
   environmentId?: string | null;
+  audience?: 'full' | 'delivery';
 }) {
   const pathname = usePathname();
 
@@ -22,22 +24,24 @@ export function EnvironmentSectionNav({
       className="lg:hidden"
       size="sm"
       tone="inverted"
-      items={environmentNav.map((item) => {
-        const href = environmentId
-          ? buildEnvironmentNavHref(projectId, environmentId, item.href)
-          : `${baseHref}${item.href}`;
-        const isActive =
-          item.href === ''
-            ? pathname === baseHref
-            : pathname === href || pathname.startsWith(`${href}/`);
+      items={environmentNav
+        .filter((item) => (audience === 'delivery' ? item.href === '/delivery' : true))
+        .map((item) => {
+          const href = environmentId
+            ? buildEnvironmentNavHref(projectId, environmentId, item.href)
+            : `${baseHref}${item.href}`;
+          const isActive =
+            item.href === ''
+              ? pathname === baseHref
+              : pathname === href || pathname.startsWith(`${href}/`);
 
-        return {
-          href,
-          icon: item.icon,
-          isActive,
-          label: item.title,
-        };
-      })}
+          return {
+            href,
+            icon: item.icon,
+            isActive,
+            label: item.title,
+          };
+        })}
     />
   );
 }

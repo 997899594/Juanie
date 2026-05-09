@@ -52,6 +52,7 @@ export interface TeamGovernanceMatrixRow {
   owner: boolean;
   admin: boolean;
   member: boolean;
+  delivery: boolean;
 }
 
 export interface TeamGovernancePlatformMatrixRow {
@@ -60,6 +61,7 @@ export interface TeamGovernancePlatformMatrixRow {
   owner: boolean;
   admin: boolean;
   member: boolean;
+  delivery: boolean;
 }
 
 export interface TeamMemberActionSnapshot {
@@ -74,6 +76,7 @@ function formatRoleLabel(role: TeamRole): string {
     owner: 'Owner',
     admin: 'Admin',
     member: 'Member',
+    delivery: 'Delivery',
   };
 
   return labels[role];
@@ -190,6 +193,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: true,
+      delivery: true,
     },
     {
       key: 'invite_by_email',
@@ -197,6 +201,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
     {
       key: 'invite_by_link',
@@ -204,6 +209,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'revoke_invitation',
@@ -211,6 +217,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'change_member_role',
@@ -218,6 +225,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
     {
       key: 'remove_member',
@@ -225,6 +233,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'update_team',
@@ -232,6 +241,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
     {
       key: 'delete_team',
@@ -239,6 +249,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
   ];
 
@@ -249,6 +260,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'delete_project',
@@ -256,6 +268,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
     {
       key: 'production_release',
@@ -263,6 +276,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'production_rollback',
@@ -270,6 +284,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'preview_create',
@@ -277,6 +292,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: true,
+      delivery: false,
     },
     {
       key: 'preview_delete',
@@ -284,6 +300,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'manual_migration',
@@ -291,6 +308,7 @@ export function buildTeamGovernanceSnapshot(role: TeamRole): TeamGovernanceSnaps
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
   ];
 

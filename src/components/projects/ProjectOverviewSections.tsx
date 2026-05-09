@@ -1,6 +1,7 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 
 function getEnvironmentSummary(
@@ -81,7 +82,12 @@ export function ProjectEnvironmentIndex({
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">环境</div>
-          <div className="text-xs text-muted-foreground">从这里进入具体环境处理后续事项</div>
+          <Button asChild size="sm" className="h-8 rounded-full px-3">
+            <Link href={`/projects/${projectId}/environments?new=preview`}>
+              <Plus className="h-3.5 w-3.5" />
+              新建预览
+            </Link>
+          </Button>
         </div>
       </div>
 

@@ -202,7 +202,7 @@ export type AITaskKind = (typeof aiTaskKinds)[number];
 export const aiTaskStatuses = ['queued', 'running', 'succeeded', 'failed'] as const;
 export type AITaskStatus = (typeof aiTaskStatuses)[number];
 
-export const teamRoles = ['owner', 'admin', 'member'] as const;
+export const teamRoles = ['owner', 'admin', 'member', 'delivery'] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
 export const integrationCapabilities = ['read_repo', 'write_repo', 'write_workflow'] as const;
@@ -1246,6 +1246,37 @@ export const releaseArtifacts = pgTable(
   })
 );
 
+export const artifactDownloadEvents = pgTable(
+  'artifactDownloadEvent',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    releaseId: uuid('releaseId')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'cascade' }),
+    artifactId: uuid('artifactId')
+      .notNull()
+      .references(() => releaseArtifacts.id, { onDelete: 'cascade' }),
+    userId: uuid('userId').references(() => users.id, { onDelete: 'set null' }),
+    ipAddress: varchar('ipAddress', { length: 50 }),
+    userAgent: text('userAgent'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('artifactDownloadEvent_teamId_idx').on(table.teamId),
+    projectIdIdx: index('artifactDownloadEvent_projectId_idx').on(table.projectId),
+    releaseIdIdx: index('artifactDownloadEvent_releaseId_idx').on(table.releaseId),
+    artifactIdIdx: index('artifactDownloadEvent_artifactId_idx').on(table.artifactId),
+    userIdIdx: index('artifactDownloadEvent_userId_idx').on(table.userId),
+    createdAtIdx: index('artifactDownloadEvent_createdAt_idx').on(table.createdAt),
+  })
+);
+
 // ============================================
 // Deployment Tables
 // ============================================
@@ -1602,6 +1633,7 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
   aiTasks: many(aiTasks),
+  artifactDownloadEvents: many(artifactDownloadEvents),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
@@ -1659,6 +1691,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
   aiTasks: many(aiTasks),
+  artifactDownloadEvents: many(artifactDownloadEvents),
 }));
 
 export const projectInitStepsRelations = relations(projectInitSteps, ({ one }) => ({
@@ -1955,9 +1988,10 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
   aiTasks: many(aiTasks),
+  artifactDownloadEvents: many(artifactDownloadEvents),
 }));
 
-export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one }) => ({
+export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one, many }) => ({
   release: one(releases, {
     fields: [releaseArtifacts.releaseId],
     references: [releases.id],
@@ -1965,6 +1999,30 @@ export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one }) =
   service: one(services, {
     fields: [releaseArtifacts.serviceId],
     references: [services.id],
+  }),
+  downloadEvents: many(artifactDownloadEvents),
+}));
+
+export const artifactDownloadEventsRelations = relations(artifactDownloadEvents, ({ one }) => ({
+  team: one(teams, {
+    fields: [artifactDownloadEvents.teamId],
+    references: [teams.id],
+  }),
+  project: one(projects, {
+    fields: [artifactDownloadEvents.projectId],
+    references: [projects.id],
+  }),
+  release: one(releases, {
+    fields: [artifactDownloadEvents.releaseId],
+    references: [releases.id],
+  }),
+  artifact: one(releaseArtifacts, {
+    fields: [artifactDownloadEvents.artifactId],
+    references: [releaseArtifacts.id],
+  }),
+  user: one(users, {
+    fields: [artifactDownloadEvents.userId],
+    references: [users.id],
   }),
 }));
 

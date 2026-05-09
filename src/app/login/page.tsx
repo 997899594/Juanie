@@ -47,6 +47,19 @@ export default async function LoginPage() {
                 </form>
               ) : (
                 <>
+                  {process.env.FEISHU_CLIENT_ID && process.env.FEISHU_CLIENT_SECRET ? (
+                    <form
+                      action={async () => {
+                        'use server';
+                        await signIn('feishu', { redirectTo: '/' });
+                      }}
+                    >
+                      <Button type="submit" className="h-11 w-full rounded-xl">
+                        使用飞书登录
+                      </Button>
+                    </form>
+                  ) : null}
+
                   <form
                     action={async () => {
                       'use server';

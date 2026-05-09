@@ -80,7 +80,7 @@ export function UserMenu({ variant = 'compact' }: { variant?: 'compact' | 'sideb
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="cursor-pointer text-sm text-destructive focus:text-destructive"
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => signOut({ redirectTo: '/login' })}
         >
           <LogOut className="mr-2 h-3.5 w-3.5" />
           退出登录

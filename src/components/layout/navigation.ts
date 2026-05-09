@@ -7,7 +7,6 @@ import {
   type LucideIcon,
   Rocket,
   Settings,
-  Users,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -20,11 +19,6 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 export const mainNav: NavItem[] = [
   {
-    title: '指挥台',
-    href: '/',
-    icon: Home,
-  },
-  {
     title: '项目',
     href: '/projects',
     icon: FolderKanban,
@@ -35,31 +29,19 @@ export const mainNav: NavItem[] = [
     icon: Bell,
   },
   {
-    title: '团队',
-    href: '/teams',
-    icon: Users,
-  },
-  {
     title: '设置',
     href: '/settings',
     icon: Settings,
   },
 ];
 
-export const mobileMainNav = [mainNav[0], mainNav[1], mainNav[2], mainNav[4]].filter(
-  Boolean
-) as NavItem[];
+export const mobileMainNav = mainNav;
 
 export const projectNav: NavItem[] = [
   {
     title: '总览',
     href: '',
     icon: Home,
-  },
-  {
-    title: '环境',
-    href: '/environments',
-    icon: Globe,
   },
   {
     title: '设置',
@@ -70,34 +52,19 @@ export const projectNav: NavItem[] = [
 
 export const environmentNav: NavItem[] = [
   {
-    title: '概览',
-    href: '',
-    icon: Home,
-  },
-  {
     title: '发布',
     href: '/delivery',
     icon: Rocket,
   },
   {
-    title: '数据',
-    href: '/schema',
+    title: '配置',
+    href: '/variables',
     icon: Database,
   },
   {
-    title: '变量',
-    href: '/variables',
-    icon: Settings,
-  },
-  {
-    title: '日志',
+    title: '观察',
     href: '/logs',
     icon: Globe,
-  },
-  {
-    title: '诊断',
-    href: '/diagnostics',
-    icon: Rocket,
   },
 ] as const;
 

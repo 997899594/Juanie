@@ -1,3 +1,4 @@
+import type { TeamRole } from '@/lib/db/schema';
 import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
@@ -18,7 +19,7 @@ export interface ProjectListItemLike {
   createdAt?: Date | string | null;
   teamName: string;
   repositoryFullName?: string | null;
-  role: 'owner' | 'admin' | 'member';
+  role: TeamRole;
   environments: ProjectListEnvironmentLike[];
 }
 

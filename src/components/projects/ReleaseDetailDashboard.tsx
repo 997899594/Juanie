@@ -10,7 +10,6 @@ import {
   ReleaseTopSummarySection,
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
-import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -21,7 +20,6 @@ interface ReleaseDetailDashboardProps {
   releaseId: string;
   role: TeamRole;
   pageData: NonNullable<Awaited<ReturnType<typeof getReleaseDetailPageData>>>;
-  initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }
 
 export function ReleaseDetailDashboard({
@@ -29,7 +27,6 @@ export function ReleaseDetailDashboard({
   releaseId,
   role,
   pageData,
-  initialTaskCenter,
 }: ReleaseDetailDashboardProps) {
   const { release, previousReleaseLink, sourceReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
@@ -46,7 +43,6 @@ export function ReleaseDetailDashboard({
       title={releaseTitle}
       description={release.sourceRef}
       eyebrow="发布"
-      meta="看这次发生了什么。"
       beforeHeader={
         <ReleaseDetailLiveSync
           projectId={projectId}
@@ -91,7 +87,6 @@ export function ReleaseDetailDashboard({
         releaseId={releaseId}
         role={role}
         release={release}
-        initialTaskCenter={initialTaskCenter}
       />
     </EnvironmentPageFrame>
   );

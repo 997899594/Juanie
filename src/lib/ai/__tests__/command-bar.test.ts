@@ -30,7 +30,7 @@ describe('ai command bar', () => {
 
     expect(config.endpoint).toBe('/api/projects/p1/environments/e1/copilot');
     expect(config.taskEndpoint).toBe('/api/projects/p1/environments/e1/tasks');
-    expect(config.suggestions).toContain('当前环境最该先看什么？');
+    expect(config.suggestions).toContain('环境状态');
   });
 
   it('builds release command config', () => {
@@ -38,7 +38,7 @@ describe('ai command bar', () => {
 
     expect(config.endpoint).toBe('/api/projects/p1/releases/r1/copilot');
     expect(config.taskEndpoint).toBe('/api/projects/p1/releases/r1/tasks');
-    expect(config.suggestions).toContain('这次发布现在安全吗？');
+    expect(config.suggestions).toContain('发布状态');
   });
 
   it('builds resolver config when no object context exists', () => {
@@ -49,8 +49,7 @@ describe('ai command bar', () => {
     expect(config.endpoint).toBe(null);
     expect(config.routes).toEqual([
       { label: '项目', href: '/projects' },
-      { label: '待办', href: '/inbox' },
-      { label: '团队', href: '/teams' },
+      { label: '待处理', href: '/inbox' },
       { label: '设置', href: '/settings' },
     ]);
   });

@@ -1,6 +1,6 @@
 'use client';
 
-import { Folder, Inbox, Loader2, MoveRight, Send, Settings, Sparkles, Users } from 'lucide-react';
+import { Folder, Inbox, Loader2, MoveRight, Send, Settings, Sparkles } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
@@ -23,8 +23,7 @@ const openEventName = 'juanie:open-global-ai-panel';
 
 const routeIcons = {
   项目: Folder,
-  待办: Inbox,
-  团队: Users,
+  待处理: Inbox,
   设置: Settings,
 } as const;
 
@@ -422,11 +421,10 @@ export function GlobalAIPanel() {
         {
           id: buildMessageId(),
           role: 'assistant',
-          content: `已加入任务\n\n${(data as TaskReplyPayload).summary}`,
+          content: (data as TaskReplyPayload).summary,
           createdAt: new Date().toISOString(),
         },
       ]);
-      window.dispatchEvent(new Event('juanie:refresh-ai-task-center'));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : defaultTaskError);
     } finally {

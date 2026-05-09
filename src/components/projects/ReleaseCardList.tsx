@@ -2,7 +2,6 @@
 
 import { ArrowRight, Clock, GitBranch, GitCommit, Rocket } from 'lucide-react';
 import Link from 'next/link';
-import { ReleaseAIRefreshActions } from '@/components/projects/ReleaseAIRefreshActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -173,12 +172,6 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
-                      <ReleaseAIRefreshActions
-                        projectId={projectId}
-                        releaseId={release.id}
-                        compact
-                        showMessage={false}
-                      />
                     </div>
                   </div>
                 </div>

@@ -36,10 +36,6 @@ export default async function ProjectEnvironmentDetailPage({
       projectId={id}
       initialData={initialData}
       initialEnvId={envId}
-      initialAiSummary={null}
-      initialMigrationReview={null}
-      initialEnvvarRisk={null}
-      initialTaskCenter={null}
       focusMode
     />
   );

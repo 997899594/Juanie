@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getProjectAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
-import { environments } from '@/lib/db/schema';
+import { environments, type TeamRole } from '@/lib/db/schema';
 import { buildObservabilityGovernanceSnapshot } from '@/lib/observability/governance-view';
 
 export interface ObservabilityEnvironmentOption {
@@ -15,6 +15,7 @@ export interface ObservabilityPageData {
     id: string;
     name: string;
   };
+  role: TeamRole;
   environments: ObservabilityEnvironmentOption[];
   governance: ReturnType<typeof buildObservabilityGovernanceSnapshot>;
 }
@@ -39,6 +40,7 @@ export async function getProjectObservabilityPageData(projectId: string, userId:
       id: access.project.id,
       name: access.project.name,
     },
+    role: access.member.role,
     environments: projectEnvironments,
     governance: buildObservabilityGovernanceSnapshot(access.member.role),
   } satisfies ObservabilityPageData;

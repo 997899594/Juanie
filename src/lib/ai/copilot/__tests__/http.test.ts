@@ -12,7 +12,7 @@ describe('copilot http helpers', () => {
         generatedAt: '2026-04-24T12:00:00.000Z',
         provider: '302.ai',
         model: 'gpt-5',
-        suggestions: ['当前环境最该先看什么？'],
+        suggestions: ['环境状态'],
         skillId: 'environment-skill',
         promptKey: 'environment-copilot',
         promptVersion: 'v1',

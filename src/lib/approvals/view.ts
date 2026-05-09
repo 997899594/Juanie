@@ -112,9 +112,7 @@ export function buildApprovalsFilterHref(state: string): string {
 }
 
 export function normalizeApprovalFilterState(state?: string): AttentionFilterState {
-  return state === 'approval' || state === 'external' || state === 'failed' || state === 'canceled'
-    ? state
-    : 'all';
+  return state === 'approval' || state === 'failed' ? state : 'all';
 }
 
 export function buildApprovalStats(input: {
@@ -125,11 +123,9 @@ export function buildApprovalStats(input: {
   canceled: number;
 }): ApprovalStat[] {
   return [
-    { label: '全部事项', value: input.total },
-    { label: '待审批', value: input.approval },
-    { label: '待外部完成', value: input.external },
-    { label: '失败待修复', value: input.failed },
-    { label: '已取消', value: input.canceled },
+    { label: '全部', value: input.total },
+    { label: '需要我处理', value: input.approval },
+    { label: '失败', value: input.failed },
   ];
 }
 

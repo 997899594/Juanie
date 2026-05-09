@@ -5,7 +5,6 @@ import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { EnvironmentAIInfoWindow } from '@/components/projects/EnvironmentAIInfoWindow';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import {
   AlertDialog,
@@ -46,11 +45,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
-import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
-import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
-import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
-import type { EnvironmentTaskCenterSnapshot } from '@/lib/ai/tasks/environment-task-center';
 import {
   setEnvironmentRuntimeState as controlEnvironmentRuntime,
   createPreviewEnvironment,
@@ -60,10 +54,8 @@ import {
   type EnvironmentRuntimeState,
   fetchProjectEnvironments,
   type PromotionFlowInput,
-  updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import {
-  buildEnvironmentDatabaseSummary,
   buildEnvironmentHeaderMeta,
   buildEnvironmentListSummary,
   buildEnvironmentSourceSummary,
@@ -129,11 +121,6 @@ interface DeliveryControlState {
   environments: DeliveryControlEnvironmentOption[];
   routingRules: DeliveryControlRuleRecord[];
   promotionFlows: DeliveryControlFlowRecord[];
-}
-
-interface EnvironmentVariableOverview {
-  direct: Array<{ id: string }>;
-  effective: Array<{ id: string; inherited: boolean }>;
 }
 
 interface EnvironmentRecord {
@@ -285,13 +272,6 @@ interface EnvironmentRecord {
     deleteSummary?: string;
   };
 }
-
-const deploymentStrategyOptions = [
-  { value: 'rolling', label: '滚动发布' },
-  { value: 'controlled', label: '受控放量' },
-  { value: 'canary', label: '金丝雀' },
-  { value: 'blue_green', label: '蓝绿切换' },
-] as const;
 
 interface PreviewDialogProps {
   open: boolean;
@@ -571,34 +551,17 @@ function EnvironmentListCard({
 }
 
 function EnvironmentOverviewPanel({
-  projectId,
   environment,
-  savingStrategy,
-  onStrategyChange,
-  initialAiSummary,
-  initialMigrationReview,
-  initialEnvvarRisk,
-  initialTaskCenter,
   runtimeAction,
 }: {
-  projectId: string;
   environment: EnvironmentRecord;
-  savingStrategy: boolean;
-  onStrategyChange: (
-    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
-  ) => void;
-  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
-  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
-  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
-  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   runtimeAction?: ReactNode;
 }) {
-  const [variableSummary, setVariableSummary] = useState('变量状态加载中');
-  const hasStrategyControl = environment.actions.canConfigureStrategy;
   const sourceSummary = buildEnvironmentSourceSummary(environment);
   const versionSummary = buildEnvironmentVersionSummary(environment);
-  const schemaSummary = buildEnvironmentDatabaseSummary(environment);
-  const mainFlowItems = [
+  const statusSummary =
+    environment.runtimeState?.summary ?? environment.platformSignals.primarySummary;
+  const summaryItems = [
     {
       key: 'source',
       label: '来源',
@@ -612,67 +575,15 @@ function EnvironmentOverviewPanel({
       summary: versionSummary.summary,
     },
     {
-      key: 'schema',
-      label: 'Schema Safety',
-      value: schemaSummary,
-      summary: variableSummary,
-    },
-    {
-      key: 'runtime',
-      label: '运行',
+      key: 'status',
+      label: '状态',
       value: buildRuntimeStateLabel(environment.runtimeState),
-      summary: environment.runtimeState?.summary ?? '运行态暂不可用',
+      summary: statusSummary ?? '运行态暂不可用',
     },
   ];
-  const strategyHelper = hasStrategyControl
-    ? environment.actions.configureStrategySummary
-    : environment.actions.configureStrategySummary !== environment.strategyLabel
-      ? environment.actions.configureStrategySummary
-      : null;
   const shellClassName = 'console-panel px-5 py-5';
   const titleClassName =
     'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
-  const valueClassName =
-    'mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-foreground';
-  const summaryClassName = 'mt-2 text-sm leading-6 text-muted-foreground';
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch(`/api/projects/${projectId}/env-vars/overview?environmentId=${environment.id}`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('加载变量状态失败');
-        }
-
-        return (await response.json()) as EnvironmentVariableOverview;
-      })
-      .then((overview) => {
-        if (cancelled) {
-          return;
-        }
-
-        const effectiveCount = overview.effective.length;
-        const inheritedCount = overview.effective.filter((item) => item.inherited).length;
-        setVariableSummary(
-          [
-            effectiveCount === 0 ? '没有变量' : `${effectiveCount} 个生效变量`,
-            inheritedCount > 0 ? `${inheritedCount} 个继承` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setVariableSummary('变量状态暂不可用');
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [environment.id, projectId]);
 
   return (
     <div className="space-y-4">
@@ -699,33 +610,9 @@ function EnvironmentOverviewPanel({
         </section>
       ) : null}
 
-      <section className={shellClassName}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className={titleClassName}>运行态</div>
-            <div className={valueClassName}>{buildRuntimeStateLabel(environment.runtimeState)}</div>
-            <div className={summaryClassName}>
-              {environment.runtimeState?.summary ?? '运行态暂不可用'}
-            </div>
-            {environment.runtimeState?.autoSleep ? (
-              <div className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {environment.runtimeState.autoSleep.summary}
-              </div>
-            ) : null}
-            {environment.runtimeState?.state === 'sleeping' && environment.primaryDomainUrl ? (
-              <div className="mt-2 text-sm text-muted-foreground">
-                访问地址会自动唤醒应用，数据库和环境变量不会被重建。
-              </div>
-            ) : null}
-          </div>
-          {runtimeAction ? <div className="shrink-0">{runtimeAction}</div> : null}
-        </div>
-      </section>
-
       <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
-        <div className={titleClassName}>主链路</div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
-          {mainFlowItems.map((item, index) => (
+        <div className="grid gap-3 md:grid-cols-3">
+          {summaryItems.map((item) => (
             <div key={item.key} className="console-inset relative min-w-0 px-4 py-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {item.label}
@@ -736,62 +623,11 @@ function EnvironmentOverviewPanel({
               <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
                 {item.summary || '等待数据'}
               </div>
-              {index < mainFlowItems.length - 1 ? (
-                <ArrowRight className="-right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/60 md:absolute md:block" />
+              {item.key === 'status' && runtimeAction ? (
+                <div className="mt-3">{runtimeAction}</div>
               ) : null}
             </div>
           ))}
-        </div>
-      </section>
-
-      <EnvironmentAIInfoWindow
-        projectId={projectId}
-        environmentId={environment.id}
-        initialAiSummary={initialAiSummary}
-        initialMigrationReview={initialMigrationReview}
-        initialEnvvarRisk={initialEnvvarRisk}
-        initialTaskCenter={initialTaskCenter}
-      />
-
-      <section>
-        <div
-          className={cn(
-            shellClassName,
-            'bg-[linear-gradient(180deg,rgba(244,241,234,0.92),rgba(255,255,255,0.94))]'
-          )}
-        >
-          <div className={titleClassName}>发布方式</div>
-          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {environment.strategyLabel ?? '未设置'}
-          </div>
-          {hasStrategyControl ? (
-            <div className="mt-4">
-              <Select
-                value={environment.deploymentStrategy ?? 'rolling'}
-                onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
-                  onStrategyChange(value)
-                }
-                disabled={savingStrategy}
-              >
-                <SelectTrigger className="h-12 rounded-[18px] bg-white/88">
-                  <SelectValue placeholder="选择发布策略" />
-                </SelectTrigger>
-                <SelectContent>
-                  {deploymentStrategyOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-          {savingStrategy ? (
-            <div className="mt-3 text-xs text-muted-foreground">保存中...</div>
-          ) : null}
-          {strategyHelper || environment.strategyLabel ? (
-            <div className={summaryClassName}>{strategyHelper ?? environment.strategyLabel}</div>
-          ) : null}
         </div>
       </section>
     </div>
@@ -799,41 +635,13 @@ function EnvironmentOverviewPanel({
 }
 
 function EnvironmentExpandedContent({
-  projectId,
   environment,
-  savingStrategy,
-  onStrategyChange,
-  initialAiSummary,
-  initialMigrationReview,
-  initialEnvvarRisk,
-  initialTaskCenter,
   runtimeAction,
 }: {
-  projectId: string;
   environment: EnvironmentRecord;
-  savingStrategy: boolean;
-  onStrategyChange: (
-    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
-  ) => void;
-  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
-  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
-  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
-  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   runtimeAction?: ReactNode;
 }) {
-  return (
-    <EnvironmentOverviewPanel
-      projectId={projectId}
-      environment={environment}
-      savingStrategy={savingStrategy}
-      onStrategyChange={onStrategyChange}
-      initialAiSummary={initialAiSummary}
-      initialMigrationReview={initialMigrationReview}
-      initialEnvvarRisk={initialEnvvarRisk}
-      initialTaskCenter={initialTaskCenter}
-      runtimeAction={runtimeAction}
-    />
-  );
+  return <EnvironmentOverviewPanel environment={environment} runtimeAction={runtimeAction} />;
 }
 
 interface EnvironmentsPageClientProps {
@@ -841,10 +649,6 @@ interface EnvironmentsPageClientProps {
   initialEnvId?: string | null;
   focusMode?: boolean;
   initialCreateOpen?: boolean;
-  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
-  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
-  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
-  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
   initialData: {
     governance: {
       roleLabel: string;
@@ -888,10 +692,6 @@ export function EnvironmentsPageClient({
   initialEnvId,
   focusMode = false,
   initialCreateOpen = false,
-  initialAiSummary,
-  initialMigrationReview,
-  initialEnvvarRisk,
-  initialTaskCenter,
   initialData,
 }: EnvironmentsPageClientProps) {
   const [environments, setEnvironments] = useState(initialData.environments);
@@ -899,7 +699,6 @@ export function EnvironmentsPageClient({
   const [dialogOpen, setDialogOpen] = useState(initialCreateOpen);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
   const [runtimeActionId, setRuntimeActionId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1007,27 +806,6 @@ export function EnvironmentsPageClient({
     }
   };
 
-  const handleStrategyChange = async (
-    environmentId: string,
-    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
-  ) => {
-    setSavingStrategyId(environmentId);
-
-    try {
-      await updateEnvironmentStrategy({
-        projectId,
-        environmentId,
-        deploymentStrategy,
-      });
-      await fetchEnvironments();
-      toast.success('发布策略已更新');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '更新发布策略失败');
-    } finally {
-      setSavingStrategyId(null);
-    }
-  };
-
   const handleRuntimeControl = async (environment: EnvironmentRecord, action: 'sleep' | 'wake') => {
     setRuntimeActionId(environment.id);
 
@@ -1125,14 +903,7 @@ export function EnvironmentsPageClient({
         <div className="space-y-6">
           {focusMode && focusedEnvironment ? (
             <EnvironmentExpandedContent
-              projectId={projectId}
               environment={focusedEnvironment}
-              savingStrategy={savingStrategyId === focusedEnvironment.id}
-              onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
-              initialAiSummary={initialAiSummary}
-              initialMigrationReview={initialMigrationReview}
-              initialEnvvarRisk={initialEnvvarRisk}
-              initialTaskCenter={initialTaskCenter}
               runtimeAction={renderRuntimeAction(focusedEnvironment)}
             />
           ) : (

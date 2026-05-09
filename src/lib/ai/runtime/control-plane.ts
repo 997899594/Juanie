@@ -46,7 +46,7 @@ function getAttachmentLabel(surface: string): string {
     case 'action-center':
       return '动作中心';
     case 'task-center':
-      return '任务中心';
+      return '后台任务';
     case 'copilot-panel':
       return 'Copilot 面板';
     default:

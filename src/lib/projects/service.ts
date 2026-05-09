@@ -9,6 +9,7 @@ import {
   migrationRuns,
   releases,
   services,
+  type TeamRole,
   teamMembers,
   teams,
   users,
@@ -41,7 +42,7 @@ import {
 
 interface ProjectCollaborationMemberInput {
   id: string;
-  role: 'owner' | 'admin' | 'member';
+  role: TeamRole;
   user: {
     id: string;
     name: string | null;

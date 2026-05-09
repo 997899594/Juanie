@@ -17,5 +17,9 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
     redirect('/projects');
   }
 
+  if (pageData.project.yourRole === 'delivery') {
+    redirect(`/projects/${id}`);
+  }
+
   return <ProjectSettingsClient projectId={id} initialData={pageData} />;
 }

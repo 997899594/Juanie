@@ -5,14 +5,30 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
+import { FeishuProvider } from '@/lib/auth/feishu-provider';
 import { getDb } from '@/lib/db';
 import { type GitProviderType, users } from '@/lib/db/schema';
 import { resolveGitLabProviderType, resolveGitLabServerUrlFromEnv } from '@/lib/git/gitlab-server';
-import { revokeActiveGrants, upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
+import { upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
 
 const isDev = process.env.NODE_ENV === 'development';
 const hasGitHubOAuth = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
 const hasGitLabOAuth = Boolean(process.env.GITLAB_CLIENT_ID && process.env.GITLAB_CLIENT_SECRET);
+const hasFeishuOAuth = Boolean(process.env.FEISHU_CLIENT_ID && process.env.FEISHU_CLIENT_SECRET);
+
+function isAllowedFeishuEmail(email?: string | null): boolean {
+  const allowedDomains = (process.env.FEISHU_ALLOWED_EMAIL_DOMAINS ?? '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (allowedDomains.length === 0) {
+    return true;
+  }
+
+  const domain = email?.split('@')[1]?.toLowerCase();
+  return Boolean(domain && allowedDomains.includes(domain));
+}
 
 export const onOAuthGrantPersist = async ({
   userId,
@@ -43,7 +59,7 @@ export const onOAuthGrantPersist = async ({
 };
 
 export const onAuthSignOut = async (userId: string) => {
-  return revokeActiveGrants(userId);
+  return { ok: true as const, userId };
 };
 
 function buildAuthConfig(): NextAuthConfig {
@@ -98,16 +114,36 @@ function buildAuthConfig(): NextAuthConfig {
             }),
           ]
         : []),
+      ...(hasFeishuOAuth
+        ? [
+            FeishuProvider({
+              clientId: process.env.FEISHU_CLIENT_ID!,
+              clientSecret: process.env.FEISHU_CLIENT_SECRET!,
+            }),
+          ]
+        : []),
     ],
     callbacks: {
+      async signIn({ user, account }) {
+        if (account?.provider !== 'feishu') {
+          return true;
+        }
+
+        return isAllowedFeishuEmail(user.email);
+      },
       async jwt({ token, user, account }) {
         if (user) {
           token.id = user.id;
         }
 
         if (account) {
-          token.accessToken = account.access_token;
-          token.provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
+          if (account.provider === 'github' || account.provider === 'gitlab') {
+            token.accessToken = account.access_token;
+            token.provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
+          } else {
+            delete token.accessToken;
+            token.provider = account.provider;
+          }
         }
 
         if (

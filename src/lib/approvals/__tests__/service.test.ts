@@ -42,7 +42,7 @@ describe('approvals service', () => {
 
     expect(result.stats[0]?.value).toBe(2);
     expect(result.stats[1]?.value).toBe(1);
-    expect(result.stats[4]?.value).toBe(1);
+    expect(result.stats[2]?.value).toBe(1);
     expect(result.attentionRuns.length).toBe(1);
     expect(result.attentionRuns[0]?.issueLabel).toBe('审批阻塞');
   });
@@ -79,7 +79,7 @@ describe('approvals service', () => {
     });
 
     expect(result.stats[0]?.value).toBe(1);
-    expect(result.stats[3]?.value).toBe(1);
+    expect(result.stats[2]?.value).toBe(1);
     expect(result.attentionRuns.map((run) => run.id)).toEqual(['run-2']);
   });
 });

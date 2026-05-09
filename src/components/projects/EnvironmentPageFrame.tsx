@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageShell, type PageShellSize } from '@/components/ui/page-shell';
+import { useProjectContext } from '@/lib/project-context';
 
 interface EnvironmentPageFrameProps {
   projectId: string;
@@ -34,6 +35,10 @@ export function EnvironmentPageFrame({
   size = 'section',
   showEnvironmentNav = true,
 }: EnvironmentPageFrameProps) {
+  const project = useProjectContext();
+  const environmentNavAudience =
+    project?.teamRole === 'delivery' ? ('delivery' as const) : ('full' as const);
+
   return (
     <PageShell size={size} className={className}>
       {beforeHeader}
@@ -45,7 +50,11 @@ export function EnvironmentPageFrame({
         actions={actions}
       />
       {showEnvironmentNav ? (
-        <EnvironmentSectionNav projectId={projectId} environmentId={environmentId} />
+        <EnvironmentSectionNav
+          projectId={projectId}
+          environmentId={environmentId}
+          audience={environmentNavAudience}
+        />
       ) : null}
       {children}
     </PageShell>

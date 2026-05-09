@@ -12,6 +12,7 @@ import { syncEnvVarsToK8s, syncServiceEnvVarsToK8s } from '@/lib/env-sync';
 import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
 import { isK8sAvailable, rolloutRestartDeployments } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
+import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
 
 const envVarLogger = logger.child({ component: 'env-var-control' });
 
@@ -255,7 +256,10 @@ export async function listEnvironmentVariablesForProject(input: {
   environmentId?: string | null;
   serviceId?: string | null;
 }) {
-  await getProjectAccessOrThrow(input.projectId, input.userId);
+  const { member } = await getProjectAccessOrThrow(input.projectId, input.userId);
+  if (!canReadProjectRuntime(member.role)) {
+    throw new EnvVarControlError(403, 'Forbidden');
+  }
 
   const scope = await resolveWritableScope({
     projectId: input.projectId,

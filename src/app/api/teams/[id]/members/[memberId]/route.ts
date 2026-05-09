@@ -21,7 +21,7 @@ export async function PATCH(
 
     const { role } = await request.json();
 
-    if (!role || !['admin', 'member'].includes(role)) {
+    if (!role || !['admin', 'member', 'delivery'].includes(role)) {
       return NextResponse.json({ error: '角色无效' }, { status: 400 });
     }
 

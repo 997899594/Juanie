@@ -16,25 +16,28 @@ function GovernanceMatrix(props: {
     owner: boolean;
     admin: boolean;
     member: boolean;
+    delivery: boolean;
   }>;
 }) {
   return (
     <div className="console-grid-table">
-      <div className="console-grid-table-head grid grid-cols-[minmax(0,1fr)_72px_72px_72px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <div className="console-grid-table-head grid grid-cols-[minmax(0,1fr)_72px_72px_72px_82px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         <div>{props.title}</div>
         <div className="text-center">Owner</div>
         <div className="text-center">Admin</div>
         <div className="text-center">Member</div>
+        <div className="text-center">Delivery</div>
       </div>
       {props.rows.map((row) => (
         <div
           key={row.key}
-          className="console-grid-table-row grid grid-cols-[minmax(0,1fr)_72px_72px_72px] px-4 py-3 text-sm"
+          className="console-grid-table-row grid grid-cols-[minmax(0,1fr)_72px_72px_72px_82px] px-4 py-3 text-sm"
         >
           <div>{row.label}</div>
           <div className="text-center">{row.owner ? '✓' : '—'}</div>
           <div className="text-center">{row.admin ? '✓' : '—'}</div>
           <div className="text-center">{row.member ? '✓' : '—'}</div>
+          <div className="text-center">{row.delivery ? '✓' : '—'}</div>
         </div>
       ))}
     </div>

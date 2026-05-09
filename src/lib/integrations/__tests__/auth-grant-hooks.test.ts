@@ -9,12 +9,13 @@ mock.module('@/lib/integrations/service/grant-service', () => ({
 }));
 
 describe('auth integration hooks', () => {
-  it('calls revoke flow on sign out', async () => {
+  it('keeps git grants active on sign out', async () => {
     const { onAuthSignOut } = await import('@/lib/auth');
     const result = await onAuthSignOut('user-1');
 
-    expect(revokeActiveGrantsMock).toHaveBeenCalledWith('user-1');
     expect(result.ok).toBe(true);
+    const revokeCalls = revokeActiveGrantsMock.mock?.calls ?? [];
+    expect(revokeCalls.length).toBe(0);
   });
 
   it('persists provider server metadata for oauth grants', async () => {

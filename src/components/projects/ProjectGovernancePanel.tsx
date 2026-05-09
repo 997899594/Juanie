@@ -38,21 +38,23 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
 
       <DetailsSection title="角色矩阵" className={detailsClassName}>
         <div className="console-card overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px_82px] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             <div>项目能力</div>
             <div className="text-center">Owner</div>
             <div className="text-center">Admin</div>
             <div className="text-center">Member</div>
+            <div className="text-center">Delivery</div>
           </div>
           {governance.matrix.map((row) => (
             <div
               key={row.key}
-              className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px] border-t border-black/5 px-4 py-3 text-sm"
+              className="grid grid-cols-[minmax(0,1fr)_72px_72px_72px_82px] border-t border-black/5 px-4 py-3 text-sm"
             >
               <div>{row.label}</div>
               <div className="text-center">{row.owner ? '✓' : '—'}</div>
               <div className="text-center">{row.admin ? '✓' : '—'}</div>
               <div className="text-center">{row.member ? '✓' : '—'}</div>
+              <div className="text-center">{row.delivery ? '✓' : '—'}</div>
             </div>
           ))}
         </div>

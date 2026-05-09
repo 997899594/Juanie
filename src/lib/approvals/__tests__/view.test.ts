@@ -10,7 +10,7 @@ import {
 describe('approvals view', () => {
   it('normalizes filter state and builds hrefs', () => {
     expect(normalizeApprovalFilterState('approval')).toBe('approval');
-    expect(normalizeApprovalFilterState('external')).toBe('external');
+    expect(normalizeApprovalFilterState('external')).toBe('all');
     expect(normalizeApprovalFilterState('weird')).toBe('all');
     expect(buildApprovalsFilterHref('all')).toBe('/inbox');
     expect(buildApprovalsFilterHref('failed')).toBe('/inbox?state=failed');
@@ -27,11 +27,9 @@ describe('approvals view', () => {
         canceled: 1,
       })
     ).toEqual([
-      { label: '全部事项', value: 3 },
-      { label: '待审批', value: 1 },
-      { label: '待外部完成', value: 1 },
-      { label: '失败待修复', value: 1 },
-      { label: '已取消', value: 1 },
+      { label: '全部', value: 3 },
+      { label: '需要我处理', value: 1 },
+      { label: '失败', value: 1 },
     ]);
   });
 

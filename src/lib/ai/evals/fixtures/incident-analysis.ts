@@ -77,7 +77,7 @@ export const incidentAnalysisEvalFixture: JuanieEvalFixture<
       manual: [
         {
           label: '审批迁移',
-          summary: '先在任务中心完成迁移审批，再重新检查 release 状态。',
+          summary: '先完成迁移审批，再重新检查 release 状态。',
         },
       ],
     },

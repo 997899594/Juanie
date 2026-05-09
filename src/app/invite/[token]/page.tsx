@@ -50,6 +50,18 @@ export default async function InvitePage({ params }: Props) {
               </div>
 
               <div className="mt-8 space-y-3">
+                {process.env.FEISHU_CLIENT_ID && process.env.FEISHU_CLIENT_SECRET ? (
+                  <form
+                    action={async () => {
+                      'use server';
+                      await signIn('feishu', { redirectTo: callbackUrl });
+                    }}
+                  >
+                    <Button type="submit" className="h-11 w-full rounded-xl">
+                      使用飞书继续
+                    </Button>
+                  </form>
+                ) : null}
                 <form
                   action={async () => {
                     'use server';
@@ -108,6 +120,24 @@ export default async function InvitePage({ params }: Props) {
   });
 
   if (!existingMember) {
+    if (
+      invitation.email &&
+      session.user.email?.trim().toLowerCase() !== invitation.email.trim().toLowerCase()
+    ) {
+      return (
+        <div className="min-h-screen bg-background px-6 py-6">
+          <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-3xl items-center justify-center">
+            <div className="ui-floating w-full max-w-md px-8 py-10 text-center">
+              <h1 className="text-xl font-semibold">邮箱不匹配</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                这个邀请发给 {invitation.email}，请用对应账号登录后再加入团队。
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     await db.insert(teamMembers).values({
       teamId: invitation.teamId,
       userId: session.user.id,

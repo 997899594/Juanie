@@ -27,6 +27,7 @@ export interface ProjectGovernanceMatrixRow {
   owner: boolean;
   admin: boolean;
   member: boolean;
+  delivery: boolean;
 }
 
 export interface ProjectGovernanceSignal {
@@ -48,6 +49,7 @@ function formatRoleLabel(role: TeamRole): string {
     owner: 'Owner',
     admin: 'Admin',
     member: 'Member',
+    delivery: 'Delivery',
   };
 
   return labels[role];
@@ -137,6 +139,7 @@ export function buildProjectGovernanceSnapshot(input: {
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'delete_project',
@@ -144,6 +147,7 @@ export function buildProjectGovernanceSnapshot(input: {
       owner: true,
       admin: false,
       member: false,
+      delivery: false,
     },
     {
       key: 'manage_production',
@@ -151,6 +155,7 @@ export function buildProjectGovernanceSnapshot(input: {
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
     {
       key: 'manage_preview',
@@ -158,6 +163,7 @@ export function buildProjectGovernanceSnapshot(input: {
       owner: true,
       admin: true,
       member: true,
+      delivery: false,
     },
     {
       key: 'manual_migration',
@@ -165,6 +171,7 @@ export function buildProjectGovernanceSnapshot(input: {
       owner: true,
       admin: true,
       member: false,
+      delivery: false,
     },
   ];
 
@@ -189,7 +196,9 @@ export function buildProjectGovernanceSnapshot(input: {
         ? '你拥有当前项目的完整治理权限'
         : input.role === 'admin'
           ? '你可以管理发布、生产环境和手动迁移，但不能删除项目'
-          : '你可以参与常规环境发布，但生产和手动迁移受保护',
+          : input.role === 'delivery'
+            ? '你可以查看发布和下载客户交付物，运行与配置入口受保护'
+            : '你可以参与常规环境发布，但生产和手动迁移受保护',
     capabilities,
     matrix,
     signals: dedupeSignals(policySignals),

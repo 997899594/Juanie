@@ -110,6 +110,7 @@ function formatRoleLabel(role: TeamRole): string {
     owner: 'Owner',
     admin: 'Admin',
     member: 'Member',
+    delivery: 'Delivery',
   };
 
   return labels[role];

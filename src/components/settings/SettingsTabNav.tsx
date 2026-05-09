@@ -6,6 +6,7 @@ import { SectionNav } from '@/components/ui/section-nav';
 const tabs = [
   { label: '个人资料', href: '/settings' },
   { label: '集成', href: '/settings/integrations' },
+  { label: '团队', href: '/teams' },
 ];
 
 export function SettingsTabNav() {
@@ -15,7 +16,7 @@ export function SettingsTabNav() {
     <SectionNav
       items={tabs.map((tab) => ({
         ...tab,
-        isActive: pathname === tab.href,
+        isActive: pathname === tab.href || pathname.startsWith(`${tab.href}/`),
       }))}
     />
   );

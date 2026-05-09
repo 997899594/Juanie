@@ -115,6 +115,11 @@ env:
   AI_MODEL: "gpt-5.2"
   AI_MODEL_PRO: "gpt-5.2-pro"
   AI_MODEL_TOOL: "gpt-5.2"
+  FEISHU_ALLOWED_EMAIL_DOMAINS: ""
+  ARTIFACT_STORAGE_ENDPOINT: ""
+  ARTIFACT_STORAGE_REGION: "auto"
+  ARTIFACT_STORAGE_FORCE_PATH_STYLE: "false"
+  ARTIFACT_DOWNLOAD_TTL_SECONDS: "300"
 
 # Gateway 配置
 hostname: "juanie.art"
@@ -144,7 +149,11 @@ secret:
   githubClientSecret: ""
   gitlabClientId: ""
   gitlabClientSecret: ""
+  feishuClientId: ""
+  feishuClientSecret: ""
   ai302ApiKey: ""
+  artifactStorageAccessKeyId: ""
+  artifactStorageSecretAccessKey: ""
   atlasDevUrl: ""
   atlasDevUrlPostgresql: ""
   atlasDevUrlMysql: ""

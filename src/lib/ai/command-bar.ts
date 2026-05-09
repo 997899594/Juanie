@@ -36,8 +36,7 @@ export interface CommandBarConfig {
 
 const resolverRoutes: CommandBarRoute[] = [
   { label: '项目', href: '/projects' },
-  { label: '待办', href: '/inbox' },
-  { label: '团队', href: '/teams' },
+  { label: '待处理', href: '/inbox' },
   { label: '设置', href: '/settings' },
 ];
 

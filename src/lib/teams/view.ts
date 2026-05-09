@@ -53,6 +53,7 @@ function formatRoleLabel(role: TeamRole): string {
     owner: '拥有者',
     admin: '管理员',
     member: '成员',
+    delivery: '交付人员',
   };
 
   return labels[role];
@@ -335,7 +336,12 @@ export function buildTeamMembersView(input: {
     invitations: input.invitations.map((invitation) => ({
       id: invitation.id,
       role: invitation.role,
-      roleLabel: invitation.role === 'admin' ? '管理员' : '成员',
+      roleLabel:
+        invitation.role === 'admin'
+          ? '管理员'
+          : invitation.role === 'delivery'
+            ? '交付人员'
+            : '成员',
       expiresLabel: formatDateLabel(invitation.expires),
       createdAtLabel: formatDateLabel(invitation.createdAt),
     })),

@@ -51,7 +51,7 @@ export default async function InboxPage({
     <PageShell size="wide">
       <PageHeader title="待处理" />
 
-      <div className="grid gap-2 md:grid-cols-5">
+      <div className="grid gap-2 md:grid-cols-3">
         {stats.map((stat) => (
           <div key={stat.label} className={`${shellClassName} px-4 py-3`}>
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -68,19 +68,13 @@ export default async function InboxPage({
             筛选
           </div>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('all')}>全部事项</Link>
+            <Link href={buildApprovalsFilterHref('all')}>全部</Link>
           </Button>
           <Button asChild variant={filterState === 'approval' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('approval')}>待审批</Link>
-          </Button>
-          <Button asChild variant={filterState === 'external' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('external')}>待外部完成</Link>
+            <Link href={buildApprovalsFilterHref('approval')}>需要我处理</Link>
           </Button>
           <Button asChild variant={filterState === 'failed' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('failed')}>失败待修复</Link>
-          </Button>
-          <Button asChild variant={filterState === 'canceled' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('canceled')}>已取消</Link>
+            <Link href={buildApprovalsFilterHref('failed')}>失败</Link>
           </Button>
         </div>
       </div>

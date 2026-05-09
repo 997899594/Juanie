@@ -35,18 +35,14 @@ const copilotDefinitions: Record<CopilotScopeKind, CopilotDefinition> = {
       const normalized = latestQuestion?.toLowerCase() ?? '';
 
       if (normalized.includes('变量') || normalized.includes('env')) {
-        return ['哪些变量最值得先检查？', '继承链里哪里最容易出错？', '现在改变量会影响什么？'];
+        return ['变量状态', '继承关系', '变更影响'];
       }
 
       if (normalized.includes('数据库') || normalized.includes('迁移')) {
-        return ['哪个数据库最需要先处理？', '现在适合继续迁移吗？', '先看风险还是处理建议？'];
+        return ['数据库状态', '迁移风险', '处理动作'];
       }
 
-      return [
-        '当前环境最该先看什么？',
-        '这个环境为什么是现在这个状态？',
-        '现在最合理的处理方式是什么？',
-      ];
+      return ['环境状态', '风险点', '可执行动作'];
     },
   },
   release: {
@@ -59,18 +55,14 @@ const copilotDefinitions: Record<CopilotScopeKind, CopilotDefinition> = {
       const normalized = latestQuestion?.toLowerCase() ?? '';
 
       if (normalized.includes('失败') || normalized.includes('故障')) {
-        return [
-          '最像根因的信号是什么？',
-          '先处理迁移还是先处理部署？',
-          '有没有可以立刻执行的动作？',
-        ];
+        return ['失败信号', '阻塞点', '处理动作'];
       }
 
       if (normalized.includes('回滚') || normalized.includes('发布')) {
-        return ['现在适合继续推进吗？', '回滚触发条件是什么？', '我应该先确认哪几个检查项？'];
+        return ['发布状态', '回滚条件', '检查项'];
       }
 
-      return ['这次发布现在安全吗？', '最关键的阻塞点是什么？', '现在应该怎么处理？'];
+      return ['发布状态', '阻塞点', '处理动作'];
     },
   },
 };

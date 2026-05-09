@@ -1,17 +1,18 @@
+import type { TeamRole } from '@/lib/db/schema';
 import { buildTeamGovernanceSnapshot } from '@/lib/teams/governance-view';
 
 export interface TeamListItemLike {
   id: string;
   name: string;
   slug: string;
-  role: 'owner' | 'admin' | 'member';
+  role: TeamRole;
 }
 
 export interface TeamListCard {
   id: string;
   name: string;
   slug: string;
-  role: 'owner' | 'admin' | 'member';
+  role: TeamRole;
   roleLabel: string;
   initials: string;
 }

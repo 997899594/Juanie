@@ -1,4 +1,4 @@
-import { ExternalLink, GitBranch, Plus, Settings2, Users } from 'lucide-react';
+import { ExternalLink, GitBranch, Settings2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { ProjectEnvironmentIndex } from '@/components/projects/ProjectOverviewSections';
 import { Button } from '@/components/ui/button';
@@ -26,29 +26,12 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
         description={overview.description ?? undefined}
         meta={overview.headerDescription}
         actions={
-          <>
-            {productionEnvironment ? (
-              <Button asChild variant="ghost">
-                <Link
-                  href={`/projects/${projectId}/environments/${productionEnvironment.id}/delivery`}
-                >
-                  正式环境
-                </Link>
-              </Button>
-            ) : null}
-            <Button asChild variant="ghost">
-              <Link href={`/projects/${projectId}/settings`}>
-                <Settings2 className="h-4 w-4" />
-                项目设置
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href={`/projects/${projectId}/environments?new=preview`}>
-                <Plus className="h-4 w-4" />
-                启动预览环境
-              </Link>
-            </Button>
-          </>
+          <Button asChild variant="ghost">
+            <Link href={`/projects/${projectId}/settings`}>
+              <Settings2 className="h-4 w-4" />
+              项目设置
+            </Link>
+          </Button>
         }
       />
 
@@ -92,25 +75,18 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
             正式入口
           </div>
           <div className="mt-3 space-y-3">
-            <div className="text-sm text-foreground">
-              {productionHost ?? '生产环境还没有访问地址'}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {productionEnvironment?.primaryDomainUrl ? (
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                  <a href={productionEnvironment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                    打开正式环境
-                  </a>
-                </Button>
-              ) : null}
-              {productionEnvironment ? (
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                  <Link href={`/projects/${projectId}/environments/${productionEnvironment.id}`}>
-                    进入正式环境
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
+            {productionEnvironment?.primaryDomainUrl ? (
+              <a
+                href={productionEnvironment.primaryDomainUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block truncate text-sm text-foreground transition-colors hover:text-foreground/70"
+              >
+                {productionHost}
+              </a>
+            ) : (
+              <div className="text-sm text-muted-foreground">生产环境还没有访问地址</div>
+            )}
           </div>
         </div>
       </section>

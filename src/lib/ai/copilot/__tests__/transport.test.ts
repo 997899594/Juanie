@@ -9,7 +9,7 @@ describe('copilot transport', () => {
         generatedAt: '2026-04-24T12:00:00.000Z',
         provider: '302.ai',
         model: 'gemini-2.5-flash',
-        suggestions: ['当前环境最该先看什么？'],
+        suggestions: ['环境状态'],
         skillId: 'environment-skill',
         promptKey: 'environment-copilot',
         promptVersion: 'v1',

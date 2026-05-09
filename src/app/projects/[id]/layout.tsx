@@ -31,7 +31,7 @@ export default async function ProjectLayout({
   if (!member) notFound();
 
   return (
-    <ProjectProvider projectId={project.id} projectName={project.name}>
+    <ProjectProvider projectId={project.id} projectName={project.name} teamRole={member.role}>
       {children}
     </ProjectProvider>
   );

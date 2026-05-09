@@ -52,7 +52,6 @@ export default async function EnvironmentDeliveryDetailPage({
       releaseId={releaseId}
       role={member.role}
       pageData={pageData}
-      initialTaskCenter={null}
     />
   );
 }

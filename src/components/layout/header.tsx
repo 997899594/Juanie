@@ -47,20 +47,26 @@ export function Header() {
     if (!projectId) {
       return [];
     }
-    return projectNav.map((item) => ({
-      ...item,
-      href: buildProjectNavHref(projectId, item.href),
-    }));
-  }, [projectId]);
+    return projectNav
+      .filter((item) => project?.teamRole !== 'delivery' || item.href !== '/settings')
+      .map((item) => ({
+        ...item,
+        href: buildProjectNavHref(projectId, item.href),
+      }));
+  }, [project?.teamRole, projectId]);
   const mobileEnvironmentTabs = useMemo(() => {
     if (!projectId || !environmentId) {
       return [];
     }
-    return environmentNav.map((item) => ({
-      ...item,
-      href: buildEnvironmentNavHref(projectId, environmentId, item.href),
-    }));
-  }, [environmentId, projectId]);
+    return environmentNav
+      .filter((item) =>
+        project?.teamRole === 'delivery' ? item.href === '' || item.href === '/delivery' : true
+      )
+      .map((item) => ({
+        ...item,
+        href: buildEnvironmentNavHref(projectId, environmentId, item.href),
+      }));
+  }, [environmentId, project?.teamRole, projectId]);
   const isMobileTabActive = (href: string) => {
     if (!projectId || !environmentId) {
       return false;

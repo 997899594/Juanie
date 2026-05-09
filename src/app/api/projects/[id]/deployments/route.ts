@@ -17,6 +17,7 @@ import {
   services,
 } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
 import { getProjectSourceRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
@@ -28,7 +29,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const session = await requireSession();
-    await getProjectAccessOrThrow(id, session.user.id);
+    const { member } = await getProjectAccessOrThrow(id, session.user.id);
+
+    if (!canReadProjectRuntime(member.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const url = new URL(request.url);
     const envFilter = url.searchParams.get('env');

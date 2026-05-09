@@ -73,7 +73,8 @@ function mapInvitation(invitation: InvitationApiResponse): TeamInvitationCard {
   return {
     id: invitation.id,
     role: invitation.role,
-    roleLabel: invitation.role === 'admin' ? '管理员' : '成员',
+    roleLabel:
+      invitation.role === 'admin' ? '管理员' : invitation.role === 'delivery' ? '交付人员' : '成员',
     expiresLabel: formatPlatformDateTimeShort(invitation.expires) ?? '—',
     createdAtLabel: formatPlatformDateTimeShort(invitation.createdAt) ?? '—',
   };
@@ -293,6 +294,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                             <SelectContent>
                               <SelectItem value="admin">管理员</SelectItem>
                               <SelectItem value="member">成员</SelectItem>
+                              <SelectItem value="delivery">交付人员</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -400,6 +402,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                               <SelectContent>
                                 <SelectItem value="admin">管理员</SelectItem>
                                 <SelectItem value="member">成员</SelectItem>
+                                <SelectItem value="delivery">交付人员</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -508,6 +511,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                     </SelectItem>
                     <SelectItem value="admin">管理员</SelectItem>
                     <SelectItem value="member">成员</SelectItem>
+                    <SelectItem value="delivery">交付人员</SelectItem>
                   </SelectContent>
                 </Select>
 

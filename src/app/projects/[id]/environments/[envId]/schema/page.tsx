@@ -21,6 +21,10 @@ export default async function EnvironmentSchemaPage({
     redirect('/projects');
   }
 
+  if (access.member.role === 'delivery') {
+    redirect(`/projects/${id}/environments/${envId}/delivery`);
+  }
+
   const environment = await getProjectEnvironmentOrNull(id, envId);
   if (!environment) {
     notFound();

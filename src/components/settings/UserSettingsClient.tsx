@@ -74,7 +74,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
   });
 
   const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/login' });
+    await signOut({ redirectTo: '/login' });
   };
 
   const getInitials = (name: string | null, email: string) => {

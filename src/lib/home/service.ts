@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { projects, teamMembers } from '@/lib/db/schema';
+import { projects, type TeamRole, teamMembers } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import {
   buildHomeCommandCenter,
@@ -23,7 +23,7 @@ function isHomeAttentionStatus(status: string): status is HomeAttentionStatus {
 }
 
 export function buildHomePageData<
-  TTeamMember extends { teamId: string; role: 'owner' | 'admin' | 'member' },
+  TTeamMember extends { teamId: string; role: TeamRole },
   TProject extends {
     id: string;
     name: string;

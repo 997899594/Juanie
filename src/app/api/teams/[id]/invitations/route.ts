@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { role = 'member' } = await request.json();
 
-    const validRoles = ['admin', 'member'];
+    const validRoles = ['admin', 'member', 'delivery'];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: '角色无效' }, { status: 400 });
     }

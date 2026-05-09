@@ -7,7 +7,7 @@ describe('copilot registry', () => {
 
     expect(definition.skillId).toBe('environment-skill');
     expect(definition.promptKey).toBe('environment-copilot');
-    expect(definition.getSuggestions()).toContain('当前环境最该先看什么？');
+    expect(definition.getSuggestions()).toContain('环境状态');
   });
 
   it('registers release copilot on top of the release skill', () => {
@@ -15,6 +15,6 @@ describe('copilot registry', () => {
 
     expect(definition.skillId).toBe('release-skill');
     expect(definition.promptKey).toBe('release-copilot');
-    expect(definition.getSuggestions('这次发布失败了')).toContain('最像根因的信号是什么？');
+    expect(definition.getSuggestions('这次发布失败了')).toContain('失败信号');
   });
 });
