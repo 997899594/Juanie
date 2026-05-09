@@ -605,7 +605,7 @@ if ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
   helm_repo_update_required='true'
 fi
 
-if ! is_local_chart_ref "${DNSPOD_WEBHOOK_CHART_REF}"; then
+if [[ "$(gateway_https_enabled)" == "true" ]] && ! is_local_chart_ref "${DNSPOD_WEBHOOK_CHART_REF}"; then
   helm_repo_add cert-manager-webhook-dnspod https://imroc.github.io/cert-manager-webhook-dnspod
   helm_repo_update_required='true'
 fi
@@ -626,22 +626,27 @@ helm_upgrade_install \
   "${CERT_MANAGER_CHART_VERSION}"
 wait_for_labeled_deployments "${CERT_MANAGER_NAMESPACE}" app.kubernetes.io/instance=cert-manager
 
-log_section "安装 cert-manager-webhook-dnspod"
-adopt_dnspod_webhook_release
-helm_upgrade_install \
-  cert-manager-webhook-dnspod \
-  "${DNSPOD_WEBHOOK_CHART_REF}" \
-  "${CERT_MANAGER_NAMESPACE}" \
-  "" \
-  "${DNSPOD_WEBHOOK_CHART_VERSION}"
-wait_for_deployment "${CERT_MANAGER_NAMESPACE}" cert-manager-webhook-dnspod
-
-log_section "同步 DNSPod Secret 与 ClusterIssuer"
 dnspod_secret_ready='false'
-if ensure_dnspod_secret; then
-  dnspod_secret_ready='true'
+
+if [[ "$(gateway_https_enabled)" == "true" ]]; then
+  log_section "安装 cert-manager-webhook-dnspod"
+  adopt_dnspod_webhook_release
+  helm_upgrade_install \
+    cert-manager-webhook-dnspod \
+    "${DNSPOD_WEBHOOK_CHART_REF}" \
+    "${CERT_MANAGER_NAMESPACE}" \
+    "" \
+    "${DNSPOD_WEBHOOK_CHART_VERSION}"
+  wait_for_deployment "${CERT_MANAGER_NAMESPACE}" cert-manager-webhook-dnspod
+
+  log_section "同步 DNSPod Secret 与 ClusterIssuer"
+  if ensure_dnspod_secret; then
+    dnspod_secret_ready='true'
+  fi
+  apply_rendered_manifest "${INFRA_DIR}/cert-manager/cluster-issuer.yaml"
+else
+  log_info "Gateway HTTPS listener 已关闭，跳过 DNSPod webhook 与 ClusterIssuer。"
 fi
-apply_rendered_manifest "${INFRA_DIR}/cert-manager/cluster-issuer.yaml"
 
 log_section "安装 External Secrets Operator"
 helm_upgrade_install \
