@@ -46,7 +46,7 @@ BOOTSTRAP_CHART_FORCE_DOWNLOAD="${BOOTSTRAP_CHART_FORCE_DOWNLOAD:-false}"
 CERT_MANAGER_CHART_URL="${CERT_MANAGER_CHART_URL:-https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_CHART_VERSION}.tgz}"
 ARGOCD_CHART_URL="${ARGOCD_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-cd-${ARGOCD_CHART_VERSION}/argo-cd-${ARGOCD_CHART_VERSION}.tgz}"
 ARGO_ROLLOUTS_CHART_URL="${ARGO_ROLLOUTS_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz}"
-CNPG_CHART_URL="${CNPG_CHART_URL:-https://cloudnative-pg.io/charts/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
+CNPG_CHART_URL="${CNPG_CHART_URL:-https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v${CNPG_CHART_VERSION}/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
 EXTERNAL_SECRETS_CHART_URL="${EXTERNAL_SECRETS_CHART_URL:-https://external-secrets.io/external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz}"
 DNSPOD_WEBHOOK_CHART_URL="${DNSPOD_WEBHOOK_CHART_URL:-https://github.com/imroc/cert-manager-webhook-dnspod/releases/download/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz}"
 
@@ -170,15 +170,22 @@ download_chart() {
   mkdir -p "${BOOTSTRAP_CHART_DIR}"
 
   if [[ -s "${target}" && "${BOOTSTRAP_CHART_FORCE_DOWNLOAD}" != "true" ]]; then
-    log_info "复用本地 chart: ${target}"
+    log_info "复用本地 chart: ${target}" >&2
     printf '%s\n' "${target}"
     return
   fi
 
   resolved_url="$(chart_download_url "${url}")"
-  log_info "下载 chart: ${resolved_url}"
-  curl -fL --retry 5 --connect-timeout 20 --max-time 300 -o "${target}" "${resolved_url}"
-  tar -tzf "${target}" >/dev/null
+  log_info "下载 chart: ${resolved_url}" >&2
+  if ! curl -fL --retry 5 --connect-timeout 20 --max-time 300 -o "${target}" "${resolved_url}"; then
+    rm -f "${target}"
+    return 1
+  fi
+  if ! tar -tzf "${target}" >/dev/null; then
+    rm -f "${target}"
+    log_error "下载的 chart 包不可读: ${target}"
+    return 1
+  fi
   printf '%s\n' "${target}"
 }
 
