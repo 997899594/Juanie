@@ -16,6 +16,7 @@ ARGOCD_PROJECT_NAME="${ARGOCD_PROJECT_NAME:-juanie}"
 ARGO_ROLLOUTS_NAMESPACE="${ARGO_ROLLOUTS_NAMESPACE:-argo-rollouts}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
+EXTERNAL_SECRETS_ENABLED="${EXTERNAL_SECRETS_ENABLED:-true}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
 GATEWAY_EDGE_MODE="${GATEWAY_EDGE_MODE:-loadBalancer}"
@@ -554,12 +555,19 @@ wait_for_certificate() {
 
 show_summary() {
   log_section "Bootstrap 完成"
-  kubectl get ns "${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGOCD_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}" "${CNPG_NAMESPACE}" "${EXTERNAL_SECRETS_NAMESPACE}" >/dev/null
+  summary_namespaces=("${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGOCD_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}" "${CNPG_NAMESPACE}")
+  if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
+    summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
+  fi
+
+  kubectl get ns "${summary_namespaces[@]}" >/dev/null
   kubectl get pods -n "${CERT_MANAGER_NAMESPACE}"
   kubectl get pods -n "${ARGOCD_NAMESPACE}"
   kubectl get pods -n "${ARGO_ROLLOUTS_NAMESPACE}"
   kubectl get pods -n "${CNPG_NAMESPACE}"
-  kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
+  if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
+    kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
+  fi
   kubectl get gateway -n "${PLATFORM_NAMESPACE}" || true
   kubectl get certificate -n "${PLATFORM_NAMESPACE}" || true
 }
@@ -600,7 +608,7 @@ if ! is_local_chart_ref "${CNPG_CHART_REF}"; then
   helm_repo_update_required='true'
 fi
 
-if ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
+if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]] && ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
   helm_repo_add external-secrets https://charts.external-secrets.io
   helm_repo_update_required='true'
 fi
@@ -648,14 +656,18 @@ else
   log_info "Gateway HTTPS listener 已关闭，跳过 DNSPod webhook 与 ClusterIssuer。"
 fi
 
-log_section "安装 External Secrets Operator"
-helm_upgrade_install \
-  external-secrets \
-  "${EXTERNAL_SECRETS_CHART_REF}" \
-  "${EXTERNAL_SECRETS_NAMESPACE}" \
-  "${INFRA_DIR}/external-secrets/values.yaml" \
-  "${EXTERNAL_SECRETS_CHART_VERSION}"
-wait_for_labeled_deployments "${EXTERNAL_SECRETS_NAMESPACE}" app.kubernetes.io/instance=external-secrets
+if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
+  log_section "安装 External Secrets Operator"
+  helm_upgrade_install \
+    external-secrets \
+    "${EXTERNAL_SECRETS_CHART_REF}" \
+    "${EXTERNAL_SECRETS_NAMESPACE}" \
+    "${INFRA_DIR}/external-secrets/values.yaml" \
+    "${EXTERNAL_SECRETS_CHART_VERSION}"
+  wait_for_labeled_deployments "${EXTERNAL_SECRETS_NAMESPACE}" app.kubernetes.io/instance=external-secrets
+else
+  log_info "External Secrets Operator 已关闭，跳过安装。"
+fi
 
 log_section "安装 Argo CD"
 helm_upgrade_install \
