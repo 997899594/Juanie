@@ -13,6 +13,7 @@ LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@juanie.art}"
 CERT_MANAGER_NAMESPACE="${CERT_MANAGER_NAMESPACE:-cert-manager}"
 ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
 ARGOCD_PROJECT_NAME="${ARGOCD_PROJECT_NAME:-juanie}"
+ARGOCD_ENABLED="${ARGOCD_ENABLED:-false}"
 ARGO_ROLLOUTS_NAMESPACE="${ARGO_ROLLOUTS_NAMESPACE:-argo-rollouts}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
@@ -197,7 +198,9 @@ resolve_chart_refs() {
     download)
       require_command curl
       CERT_MANAGER_CHART_REF="$(download_chart "cert-manager-${CERT_MANAGER_CHART_VERSION}.tgz" "${CERT_MANAGER_CHART_URL}")"
-      ARGOCD_CHART_REF="$(download_chart "argo-cd-${ARGOCD_CHART_VERSION}.tgz" "${ARGOCD_CHART_URL}")"
+      if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
+        ARGOCD_CHART_REF="$(download_chart "argo-cd-${ARGOCD_CHART_VERSION}.tgz" "${ARGOCD_CHART_URL}")"
+      fi
       ARGO_ROLLOUTS_CHART_REF="$(download_chart "argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz" "${ARGO_ROLLOUTS_CHART_URL}")"
       CNPG_CHART_REF="$(download_chart "cloudnative-pg-${CNPG_CHART_VERSION}.tgz" "${CNPG_CHART_URL}")"
 
@@ -645,14 +648,19 @@ wait_for_certificate() {
 
 show_summary() {
   log_section "Bootstrap 完成"
-  summary_namespaces=("${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGOCD_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}" "${CNPG_NAMESPACE}")
+  summary_namespaces=("${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}" "${CNPG_NAMESPACE}")
+  if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
+    summary_namespaces+=("${ARGOCD_NAMESPACE}")
+  fi
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
   fi
 
   kubectl get ns "${summary_namespaces[@]}" >/dev/null
   kubectl get pods -n "${CERT_MANAGER_NAMESPACE}"
-  kubectl get pods -n "${ARGOCD_NAMESPACE}"
+  if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
+    kubectl get pods -n "${ARGOCD_NAMESPACE}"
+  fi
   kubectl get pods -n "${ARGO_ROLLOUTS_NAMESPACE}"
   kubectl get pods -n "${CNPG_NAMESPACE}"
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
@@ -690,7 +698,7 @@ if ! is_local_chart_ref "${CERT_MANAGER_CHART_REF}"; then
   helm_repo_update_required='true'
 fi
 
-if ! is_local_chart_ref "${ARGOCD_CHART_REF}" || ! is_local_chart_ref "${ARGO_ROLLOUTS_CHART_REF}"; then
+if { [[ "${ARGOCD_ENABLED}" == "true" ]] && ! is_local_chart_ref "${ARGOCD_CHART_REF}"; } || ! is_local_chart_ref "${ARGO_ROLLOUTS_CHART_REF}"; then
   helm_repo_add argo https://argoproj.github.io/argo-helm
   helm_repo_update_required='true'
 fi
@@ -788,28 +796,32 @@ else
   log_info "External Secrets Operator 已关闭，跳过安装。"
 fi
 
-log_section "安装 Argo CD"
-argocd_args=()
-if [[ -n "${ARGOCD_IMAGE_REPOSITORY}" ]]; then
-  argocd_args+=(--set "global.image.repository=${ARGOCD_IMAGE_REPOSITORY}")
+if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
+  log_section "安装 Argo CD"
+  argocd_args=()
+  if [[ -n "${ARGOCD_IMAGE_REPOSITORY}" ]]; then
+    argocd_args+=(--set "global.image.repository=${ARGOCD_IMAGE_REPOSITORY}")
+  fi
+  if [[ -n "${ARGOCD_REDIS_IMAGE_REPOSITORY}" ]]; then
+    argocd_args+=(--set "redis.image.repository=${ARGOCD_REDIS_IMAGE_REPOSITORY}")
+  fi
+  if [[ -n "${ARGOCD_REDIS_IMAGE_TAG}" ]]; then
+    argocd_args+=(--set "redis.image.tag=${ARGOCD_REDIS_IMAGE_TAG}")
+  fi
+  helm_upgrade_install \
+    argocd \
+    "${ARGOCD_CHART_REF}" \
+    "${ARGOCD_NAMESPACE}" \
+    "${INFRA_DIR}/argocd/values.yaml" \
+    "${ARGOCD_CHART_VERSION}" \
+    "${argocd_args[@]}"
+  wait_for_labeled_statefulsets "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
+  wait_for_labeled_deployments "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
+  ensure_argocd_project
+  ensure_argocd_repo_secret
+else
+  log_info "Argo CD 已关闭，子应用发布由 Juanie worker 直接写入 K8s/Argo Rollouts。"
 fi
-if [[ -n "${ARGOCD_REDIS_IMAGE_REPOSITORY}" ]]; then
-  argocd_args+=(--set "redis.image.repository=${ARGOCD_REDIS_IMAGE_REPOSITORY}")
-fi
-if [[ -n "${ARGOCD_REDIS_IMAGE_TAG}" ]]; then
-  argocd_args+=(--set "redis.image.tag=${ARGOCD_REDIS_IMAGE_TAG}")
-fi
-helm_upgrade_install \
-  argocd \
-  "${ARGOCD_CHART_REF}" \
-  "${ARGOCD_NAMESPACE}" \
-  "${INFRA_DIR}/argocd/values.yaml" \
-  "${ARGOCD_CHART_VERSION}" \
-  "${argocd_args[@]}"
-wait_for_labeled_statefulsets "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
-wait_for_labeled_deployments "${ARGOCD_NAMESPACE}" app.kubernetes.io/instance=argocd
-ensure_argocd_project
-ensure_argocd_repo_secret
 
 log_section "安装 Argo Rollouts"
 argo_rollouts_args=()

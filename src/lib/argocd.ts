@@ -27,6 +27,9 @@ interface ArgoRolloutResourceLike {
         scaleDownDelaySeconds?: number;
         previewReplicaCount?: number;
       };
+      canary?: {
+        steps?: Array<Record<string, unknown>>;
+      };
     };
     template?: {
       spec?: {
@@ -55,8 +58,9 @@ export interface ArgoRolloutSpec {
   port: number;
   replicas: number;
   stableServiceName: string;
-  previewServiceName: string;
-  strategy: 'controlled' | 'blue_green';
+  previewServiceName?: string;
+  strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+  autoPromotionEnabled: boolean;
   envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
   healthcheckPath?: string;
@@ -249,6 +253,30 @@ async function deleteArgocdResource(ref: ArgocdResourceRef): Promise<void> {
 }
 
 function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
+  const strategy =
+    spec.strategy === 'canary'
+      ? {
+          canary: {
+            maxSurge: '25%',
+            maxUnavailable: 0,
+            steps: [
+              { setWeight: 25 },
+              { pause: { duration: '30s' } },
+              { setWeight: 50 },
+              { pause: { duration: '30s' } },
+            ],
+          },
+        }
+      : {
+          blueGreen: {
+            activeService: spec.stableServiceName,
+            previewService: spec.previewServiceName,
+            autoPromotionEnabled: spec.autoPromotionEnabled,
+            scaleDownDelaySeconds: spec.strategy === 'blue_green' ? 30 : 120,
+            previewReplicaCount: spec.replicas,
+          },
+        };
+
   return {
     apiVersion: 'argoproj.io/v1alpha1',
     kind: 'Rollout',
@@ -304,15 +332,7 @@ function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
           ],
         },
       },
-      strategy: {
-        blueGreen: {
-          activeService: spec.stableServiceName,
-          previewService: spec.previewServiceName,
-          autoPromotionEnabled: false,
-          scaleDownDelaySeconds: spec.strategy === 'blue_green' ? 30 : 120,
-          previewReplicaCount: spec.replicas,
-        },
-      },
+      strategy,
     },
   };
 }
@@ -429,10 +449,14 @@ export async function resumeArgoRollout(namespace: string, name: string): Promis
         paused: false,
         strategy: {
           ...current.spec?.strategy,
-          blueGreen: {
-            ...current.spec?.strategy?.blueGreen,
-            autoPromotionEnabled: true,
-          },
+          ...(current.spec?.strategy?.blueGreen
+            ? {
+                blueGreen: {
+                  ...current.spec.strategy.blueGreen,
+                  autoPromotionEnabled: true,
+                },
+              }
+            : {}),
         },
       },
     }

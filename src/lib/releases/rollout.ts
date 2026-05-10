@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
-import { getEnvironmentDeploymentRuntime, usesArgoRolloutsRuntime } from '@/lib/environments/model';
+import { getEnvironmentDeploymentRuntime } from '@/lib/environments/model';
 import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
 import {
   appendDeploymentRealtimeLogs,
@@ -10,7 +10,8 @@ import {
 import {
   finalizeArgoRollout,
   getArgoRolloutSnapshot,
-  supportsArgoRolloutsDeploymentStrategy,
+  requiresManualArgoRolloutPromotion,
+  shouldUseArgoRolloutsForService,
 } from '@/lib/releases/argo-rollouts';
 import {
   completeReleaseAfterRolloutIfReady,
@@ -35,6 +36,21 @@ function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
     case 'blue_green':
       return '蓝绿切换';
   }
+}
+
+function shouldUseManualArgoRolloutForService(input: {
+  strategy?: 'rolling' | ProgressiveDeploymentStrategy | null;
+  service: {
+    type: string;
+    isPublic?: boolean | null;
+  };
+}): boolean {
+  return (
+    shouldUseArgoRolloutsForService({
+      strategy: input.strategy,
+      service: input.service,
+    }) && requiresManualArgoRolloutPromotion(input.strategy)
+  );
 }
 
 async function appendDeploymentLog(deploymentId: string, message: string) {
@@ -171,9 +187,10 @@ export async function buildDeploymentRolloutPlan(input: {
   const stableName = buildStableDeploymentName(project.slug, service.name);
   const candidateName = buildCandidateDeploymentName(stableName);
   const deploymentRuntime = getEnvironmentDeploymentRuntime(environment);
-  const argoRuntimeEnabled =
-    usesArgoRolloutsRuntime({ deploymentRuntime }) &&
-    supportsArgoRolloutsDeploymentStrategy(environment.deploymentStrategy);
+  const argoRuntimeEnabled = shouldUseManualArgoRolloutForService({
+    strategy: environment.deploymentStrategy,
+    service,
+  });
 
   const [legacyStableDeploymentExists, candidateSnapshot, argoSnapshot] = await Promise.all([
     deploymentExists(environment.namespace, stableName),
@@ -195,7 +212,7 @@ export async function buildDeploymentRolloutPlan(input: {
       id: deployment.id,
       serviceId: service.id,
       serviceName: service.name,
-      runtime: deploymentRuntime,
+      runtime: argoRuntimeEnabled ? 'argo_rollouts' : deploymentRuntime,
       stableName,
       candidateName,
       candidateImage,
@@ -300,10 +317,10 @@ export async function finalizeDeploymentRollout(input: {
     throw new Error('当前环境缺少命名空间，无法推进放量');
   }
 
-  const deploymentRuntime = getEnvironmentDeploymentRuntime(environment);
-  const argoRuntimeEnabled =
-    usesArgoRolloutsRuntime({ deploymentRuntime }) &&
-    supportsArgoRolloutsDeploymentStrategy(environment.deploymentStrategy);
+  const argoRuntimeEnabled = shouldUseManualArgoRolloutForService({
+    strategy: environment.deploymentStrategy,
+    service,
+  });
 
   const candidateSnapshot = !argoRuntimeEnabled
     ? await getDeploymentSnapshot(namespace, candidateName)

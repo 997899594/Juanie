@@ -190,6 +190,161 @@ nslookup juanie.art
 - 清除本地 DNS 缓存
 - 检查 DNS 服务商配置
 
+### 8. Helm 卡在 pending-install 或提示 another operation is in progress
+
+**症状：** `helm upgrade --install` 被镜像拉取或网络超时卡住，中断后再次运行提示：
+
+```text
+UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress
+```
+
+**原因：** Helm release 还停在 `pending-install` / `pending-upgrade` 状态。常见触发点是 operator Pod 一直 `ContainerCreating`，例如 CloudNativePG、External Secrets 或 DNSPod webhook 正在拉 `ghcr.io` / Docker Hub 镜像。
+
+**检查：**
+
+```bash
+helm list -A -a
+helm -n cnpg-system history cloudnative-pg
+kubectl -n cnpg-system get pods -o wide
+kubectl -n cnpg-system describe pod
+kubectl get events -n cnpg-system --sort-by=.lastTimestamp | tail -80
+```
+
+**处理：**
+
+1. 先确认没有另一个 Helm 进程仍在运行。
+2. 如果只是镜像拉取卡住，先换 values 里的 image repository 或预拉镜像。
+3. 如果 release 一直是 `pending-install`，可以卸载这个未完成 release 后重试：
+
+```bash
+helm -n cnpg-system uninstall cloudnative-pg || true
+
+helm upgrade --install cloudnative-pg /root/juanie/.charts/cloudnative-pg-0.28.0.tgz \
+  --namespace cnpg-system \
+  --create-namespace \
+  -f /root/juanie/deploy/k8s/infrastructure/cloudnative-pg/values.yaml \
+  --set image.repository=ghcr.io/cloudnative-pg/cloudnative-pg \
+  --set image.tag=1.29.0 \
+  --wait \
+  --timeout 15m
+```
+
+不要盲目删 namespace；CloudNativePG、Argo CD、cert-manager 这类基础设施 namespace 里可能已经有可用对象。
+
+### 9. externalEdge Gateway 显示 AddressNotAssigned
+
+**症状：**
+
+```text
+Gateway waiting for address
+Reason: AddressNotAssigned
+PROGRAMMED=False
+```
+
+**原因：** `externalEdge` 是宿主机 Nginx / SLB 先接公网 `80/443`，再转发到 Cilium Envoy 的 `31080`。这个模式没有 LoadBalancer IP 可分配，所以 Gateway 顶层 `Programmed=False` 不等于不可用。
+
+**正确验收：**
+
+```bash
+ss -tulpen | grep ':31080'
+kubectl describe httproute juanie-route -n juanie
+curl -i -H 'Host: juanie.draftingee.com' http://127.0.0.1:31080/api/health/ready
+```
+
+满足以下条件即可继续配置宿主机 Nginx：
+
+- `cilium-envoy` 正在监听 `0.0.0.0:31080`
+- HTTPRoute parent 条件里 `Accepted=True`
+- HTTPRoute parent 条件里 `ResolvedRefs=True`
+- Host header curl 返回 `200 OK`
+
+### 10. Helm 安装 Juanie 时 namespace 不能被导入
+
+**症状：**
+
+```text
+Namespace "juanie" exists and cannot be imported into the current release:
+invalid ownership metadata
+```
+
+**原因：** bootstrap 已经提前创建了 `juanie` namespace，但 Helm chart 也会渲染 Namespace。Helm 要求已有对象带上 release ownership metadata。
+
+**处理：**
+
+```bash
+kubectl label namespace juanie app.kubernetes.io/managed-by=Helm --overwrite
+kubectl annotate namespace juanie \
+  meta.helm.sh/release-name=juanie \
+  meta.helm.sh/release-namespace=juanie \
+  --overwrite
+```
+
+然后重新执行 `helm upgrade --install juanie ...`。
+
+### 11. Juanie chart 镜像 tag 不存在或 Docker Hub 拉取超时
+
+**症状：**
+
+```text
+ghcr.io/997899594/juanie:web-sha-xxxx: not found
+failed to do request: Head "https://registry-1.docker.io/..."
+```
+
+**原因：** 平台镜像 tag 来自完整 commit SHA，格式是 `web-${SHA}` 和 `runtime-${SHA}`。`values.yaml` 里的默认 tag 只能作为 chart 结构占位，客户部署必须显式覆盖为当前已构建的 tag。内置 `busybox`、`redis`、`pgvector` 也需要按客户网络覆盖镜像源。
+
+**处理：**
+
+```bash
+cd /root/juanie
+APP_SHA="$(git rev-parse HEAD)"
+
+cp deploy/k8s/charts/juanie/values-external-edge-cn.example.yaml /root/juanie/customer-values.yaml
+sed -i "s/REPLACE_WITH_COMMIT_SHA/${APP_SHA}/g" /root/juanie/customer-values.yaml
+
+for img in \
+  "ghcr.1ms.run/997899594/juanie:web-${APP_SHA}" \
+  "ghcr.1ms.run/997899594/juanie:runtime-${APP_SHA}" \
+  "docker.1ms.run/library/busybox:1.36" \
+  "docker.m.daocloud.io/library/redis:7-alpine" \
+  "docker.1ms.run/pgvector/pgvector:pg16"
+do
+  echo "== ${img}"
+  timeout 180s crictl pull "${img}"
+done
+```
+
+如果某个 mirror 不可用，先换 `customer-values.yaml`，再 Helm 发布。不要在 Deployment 上手工 patch 镜像；下次 Helm 发布会覆盖。
+
+### 12. chart 默认使用已有 Secret 但集群里没有
+
+**症状：** Juanie Pod 启动失败，事件里出现 secret 找不到，或者环境变量为空。
+
+**原因：** chart 默认 `secret.existingSecret=juanie-secret`，生产环境应由已有 Secret 或 External Secrets Operator 提供敏感配置。手动 Helm 交付时需要先创建这个 Secret，或在 values 里关闭 `secret.existingSecret` 并提供内置 Secret 字段。
+
+**处理：**
+
+```bash
+kubectl -n juanie create secret generic juanie-secret \
+  --from-literal=DATABASE_PASSWORD='REPLACE_ME' \
+  --from-literal=NEXTAUTH_SECRET='REPLACE_ME' \
+  --from-literal=NEXTAUTH_URL='https://juanie.draftingee.com' \
+  --from-literal=GITHUB_CLIENT_ID='' \
+  --from-literal=GITHUB_CLIENT_SECRET='' \
+  --from-literal=GITLAB_CLIENT_ID='' \
+  --from-literal=GITLAB_CLIENT_SECRET='' \
+  --from-literal=FEISHU_CLIENT_ID='' \
+  --from-literal=FEISHU_CLIENT_SECRET='' \
+  --from-literal=AI_302_API_KEY='' \
+  --from-literal=ARTIFACT_STORAGE_ACCESS_KEY_ID='' \
+  --from-literal=ARTIFACT_STORAGE_SECRET_ACCESS_KEY='' \
+  --from-literal=ATLAS_DEV_URL='' \
+  --from-literal=ATLAS_DEV_URL_POSTGRESQL='' \
+  --from-literal=ATLAS_DEV_URL_MYSQL='' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+真实密钥不要提交到 Git；客户环境用密钥系统或现场 Secret 注入。
+
 ## 快速修复脚本
 
 ```bash

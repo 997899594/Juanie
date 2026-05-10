@@ -48,10 +48,16 @@ rules:
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes", "gateways"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
-  # Argo CD / Argo Rollouts resources managed by the control plane
+  # Argo Rollouts resources managed by the control plane
   - apiGroups: ["argoproj.io"]
-    resources: ["applicationsets", "rollouts"]
+    resources: ["rollouts"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
+  {{- if eq (toString .Values.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED) "true" }}
+  # Optional Argo CD ApplicationSet resources for preview GitOps mode.
+  - apiGroups: ["argoproj.io"]
+    resources: ["applicationsets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  {{- end }}
   {{- with .Values.rbac.extraRules }}
   {{- toYaml . | nindent 2 }}
   {{- end }}

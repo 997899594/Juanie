@@ -1,4 +1,6 @@
 # 默认配置（开发环境）
+# images.web.tag / images.runtime.tag 是 chart 渲染占位值；生产或客户部署必须
+# 覆盖为 CI 已构建的完整 commit SHA tag，例如 web-${SHA} / runtime-${SHA}。
 images:
   web:
     repository: ghcr.io/997899594/juanie
@@ -106,7 +108,7 @@ env:
   JUANIE_ARGOCD_NAMESPACE: "argocd"
   JUANIE_ARGOCD_PROJECT: "juanie"
   JUANIE_ARGOCD_DESTINATION_SERVER: "https://kubernetes.default.svc"
-  JUANIE_PREVIEW_APPLICATIONSET_ENABLED: "true"
+  JUANIE_PREVIEW_APPLICATIONSET_ENABLED: "false"
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: ""
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: "main"
   JUANIE_PREVIEW_APPLICATIONSET_PATH: "deploy/k8s/charts/preview-scaffold"

@@ -19,8 +19,8 @@ import type {
 } from '@/lib/releases/workloads';
 
 export type ArgoRolloutsDeploymentStrategy = Extract<
-  ProgressiveDeploymentStrategy,
-  'controlled' | 'blue_green'
+  ProgressiveDeploymentStrategy | 'rolling',
+  'rolling' | 'controlled' | 'canary' | 'blue_green'
 >;
 
 export interface ArgoRolloutSnapshot {
@@ -31,16 +31,41 @@ export interface ArgoRolloutSnapshot {
 export function supportsArgoRolloutsDeploymentStrategy(
   strategy?: ProgressiveDeploymentStrategy | 'rolling' | null
 ): strategy is ArgoRolloutsDeploymentStrategy {
+  return (
+    strategy === 'rolling' ||
+    strategy === 'controlled' ||
+    strategy === 'canary' ||
+    strategy === 'blue_green'
+  );
+}
+
+export function requiresManualArgoRolloutPromotion(
+  strategy?: ArgoRolloutsDeploymentStrategy | null
+): boolean {
   return strategy === 'controlled' || strategy === 'blue_green';
+}
+
+export function shouldUseArgoRolloutsForService(input: {
+  strategy?: ProgressiveDeploymentStrategy | 'rolling' | null;
+  service: Pick<ReleaseWorkloadServiceLike, 'type' | 'isPublic'>;
+  hasBlockingVerification?: boolean;
+}): input is typeof input & { strategy: ArgoRolloutsDeploymentStrategy } {
+  return (
+    supportsArgoRolloutsDeploymentStrategy(input.strategy) &&
+    input.service.type === 'web' &&
+    input.service.isPublic !== false &&
+    input.hasBlockingVerification !== false
+  );
 }
 
 function buildArgoRolloutSpec(input: {
   namespace: string;
   rolloutName: string;
   stableServiceName: string;
-  previewServiceName: string;
+  previewServiceName?: string;
   imageName: string;
   strategy: ArgoRolloutsDeploymentStrategy;
+  autoPromotionEnabled: boolean;
   service: ReleaseWorkloadServiceLike;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
@@ -54,6 +79,7 @@ function buildArgoRolloutSpec(input: {
     stableServiceName: input.stableServiceName,
     previewServiceName: input.previewServiceName,
     strategy: input.strategy,
+    autoPromotionEnabled: input.autoPromotionEnabled,
     envFrom: input.envFrom,
     imagePullSecrets: input.imagePullSecrets,
     healthcheckPath: input.service.healthcheckPath ?? undefined,
@@ -98,30 +124,40 @@ export async function deployArgoRolloutWorkload(input: {
   onLog?: (message: string) => Promise<void>;
   onWarn?: (message: string) => Promise<void>;
 }): Promise<{ awaitingRollout: boolean }> {
+  const requiresManualPromotion = requiresManualArgoRolloutPromotion(input.strategy);
+  const usesPreviewService = input.strategy !== 'canary';
   const [existingRollout, legacyStableDeploymentExists] = await Promise.all([
     getArgoRollout(input.namespace, input.rolloutName),
     deploymentExists(input.namespace, input.rolloutName),
   ]);
+  const awaitingRollout =
+    requiresManualPromotion && (Boolean(existingRollout) || legacyStableDeploymentExists);
+  const verificationServiceName =
+    awaitingRollout && usesPreviewService ? input.previewServiceName : input.stableServiceName;
+  const verificationServiceLabel = awaitingRollout && usesPreviewService ? 'preview' : 'active';
 
   await upsertService(input.namespace, input.stableServiceName, {
     port: input.service.port ?? 3000,
     targetPort: input.service.port ?? 3000,
     selector: { app: input.rolloutName },
   });
-  await upsertService(input.namespace, input.previewServiceName, {
-    port: input.service.port ?? 3000,
-    targetPort: input.service.port ?? 3000,
-    selector: { app: input.rolloutName },
-  });
+  if (usesPreviewService) {
+    await upsertService(input.namespace, input.previewServiceName, {
+      port: input.service.port ?? 3000,
+      targetPort: input.service.port ?? 3000,
+      selector: { app: input.rolloutName },
+    });
+  }
 
   await upsertArgoRollout(
     buildArgoRolloutSpec({
       namespace: input.namespace,
       rolloutName: input.rolloutName,
       stableServiceName: input.stableServiceName,
-      previewServiceName: input.previewServiceName,
+      previewServiceName: usesPreviewService ? input.previewServiceName : undefined,
       imageName: input.imageName,
       strategy: input.strategy,
+      autoPromotionEnabled: !awaitingRollout,
       service: input.service,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets,
@@ -143,14 +179,14 @@ export async function deployArgoRolloutWorkload(input: {
   if (input.verificationPlan.blockingPaths.length > 0) {
     await verifyServiceReachability({
       namespace: input.namespace,
-      serviceName: input.previewServiceName,
+      serviceName: verificationServiceName,
       port: input.service.port ?? 3000,
       paths: input.verificationPlan.blockingPaths,
       timeoutMs: 60_000,
       pollMs: 3_000,
     });
     await input.onLog?.(
-      `Verified preview service ${input.previewServiceName} on ${input.verificationPlan.blockingPaths.join(', ')}`
+      `Verified ${verificationServiceLabel} service ${verificationServiceName} on ${input.verificationPlan.blockingPaths.join(', ')}`
     );
   }
 
@@ -158,24 +194,33 @@ export async function deployArgoRolloutWorkload(input: {
     try {
       await verifyServiceReachability({
         namespace: input.namespace,
-        serviceName: input.previewServiceName,
+        serviceName: verificationServiceName,
         port: input.service.port ?? 3000,
         paths: input.verificationPlan.observedPaths,
         timeoutMs: 30_000,
         pollMs: 3_000,
       });
       await input.onLog?.(
-        `Observed preview entry checks ${input.previewServiceName} on ${input.verificationPlan.observedPaths.join(', ')}`
+        `Observed ${verificationServiceLabel} entry checks ${verificationServiceName} on ${input.verificationPlan.observedPaths.join(', ')}`
       );
     } catch (error) {
       await input.onWarn?.(
-        `Observed preview entry checks failed for ${input.previewServiceName}: ${error instanceof Error ? error.message : String(error)}`
+        `Observed ${verificationServiceLabel} entry checks failed for ${verificationServiceName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
 
+  if (!awaitingRollout) {
+    await Promise.all([
+      deleteDeployment(input.namespace, input.rolloutName).catch(() => undefined),
+      deleteDeployment(input.namespace, input.previewServiceName).catch(() => undefined),
+    ]);
+  }
+
   return {
-    awaitingRollout: Boolean(existingRollout) || legacyStableDeploymentExists,
+    awaitingRollout,
   };
 }
 

@@ -199,6 +199,7 @@ async function finalizePreviewEnvironment(input: {
   environment: typeof environments.$inferSelect;
 }) {
   const domainsManagedByPreviewApplicationSet =
+    isPreviewApplicationSetEnvironment(input.environment) &&
     usesPreviewApplicationSetStableRoutes(input.environment) &&
     isK8sAvailable() &&
     Boolean(input.environment.namespace);
@@ -224,7 +225,10 @@ async function finalizePreviewEnvironment(input: {
     environmentId: input.environment.id,
   });
 
-  if (!domainsManagedByPreviewApplicationSet) {
+  if (
+    isPreviewApplicationSetEnvironment(input.environment) &&
+    !domainsManagedByPreviewApplicationSet
+  ) {
     await syncProjectPreviewApplicationSet({
       projectId: input.projectId,
     });

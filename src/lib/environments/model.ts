@@ -88,7 +88,12 @@ export function isPromoteOnlyEnvironment(environment: EnvironmentDeliveryModeLik
 export function inferEnvironmentDeploymentRuntime(
   strategy?: EnvironmentDeploymentStrategy | null
 ): EnvironmentDeploymentRuntime {
-  if (strategy === 'controlled' || strategy === 'blue_green') {
+  if (
+    strategy === 'rolling' ||
+    strategy === 'controlled' ||
+    strategy === 'canary' ||
+    strategy === 'blue_green'
+  ) {
     return 'argo_rollouts';
   }
 

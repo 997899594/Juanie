@@ -137,6 +137,7 @@ bash deploy/k8s/scripts/init-server.sh
 ```bash
 PLATFORM_DOMAIN=juanie.draftingee.com \
 GATEWAY_EDGE_MODE=externalEdge \
+GATEWAY_HTTPS_ENABLED=false \
 GATEWAY_CLASS_NAME=cilium \
 GATEWAY_LOADBALANCER_IP='' \
 bash deploy/k8s/scripts/init-server.sh
@@ -147,8 +148,27 @@ bash deploy/k8s/scripts/init-server.sh
 - `shared-gateway` 的 `http-apex` listener 监听 `31080`。
 - `shared-gateway` 的 `http-wildcard` listener 监听 `31080`。
 - 不生成 Gateway HTTPS listener。
+- 不安装 DNSPod webhook / ClusterIssuer。
 - 不生成平台 wildcard Certificate。
 - 不写 Cilium LB IP annotation。
+
+国内客户机如果无法稳定访问 Helm repo 或 GitHub release，可以让 bootstrap 先下载 chart 包再安装，并关闭本机暂时不需要的 External Secrets Operator：
+
+```bash
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+PLATFORM_DOMAIN=juanie.draftingee.com \
+GATEWAY_EDGE_MODE=externalEdge \
+GATEWAY_HTTPS_ENABLED=false \
+EXTERNAL_SECRETS_ENABLED=false \
+GATEWAY_CLASS_NAME=cilium \
+GATEWAY_LOADBALANCER_IP='' \
+BOOTSTRAP_CHART_SOURCE=download \
+BOOTSTRAP_CHART_DOWNLOAD_PROXY='https://gh-proxy.com/' \
+bash deploy/k8s/scripts/init-server.sh
+```
+
+`BOOTSTRAP_CHART_SOURCE=download` 只改变 chart 获取方式，不改变 Helm release 的最终状态。`BOOTSTRAP_CHART_DOWNLOAD_PROXY` 是网络兜底；客户有私有制品库时，优先改成私有 chart 地址或提前缓存到 `.charts/`，不要把公共代理当长期依赖。
 
 Juanie 控制面 chart 使用同一交付 profile：
 
@@ -165,23 +185,45 @@ helm upgrade --install juanie deploy/k8s/charts/juanie \
 国内或离线客户机还应显式覆盖运行时镜像源，避免内置 Postgres / Redis / initContainer 继续访问 Docker Hub。不要把未经验证的公共 mirror 写进 values；应使用客户可访问的私有镜像仓库或已验证的企业镜像缓存：
 
 ```bash
+APP_SHA="$(git rev-parse HEAD)"
+
+cp deploy/k8s/charts/juanie/values-external-edge-cn.example.yaml /root/juanie/customer-values.yaml
+sed -i "s/REPLACE_WITH_COMMIT_SHA/${APP_SHA}/g" /root/juanie/customer-values.yaml
+
 helm upgrade --install juanie deploy/k8s/charts/juanie \
   -n juanie \
   --create-namespace \
-  -f deploy/k8s/charts/juanie/values.yaml \
   -f deploy/k8s/charts/juanie/values-external-edge.yaml \
-  --set hostname=juanie.draftingee.com \
-  --set env.JUANIE_BASE_DOMAIN=juanie.draftingee.com \
-  --set images.web.repository=registry.example.com/juanie \
-  --set images.web.tag=web-sha-xxxx \
-  --set images.runtime.repository=registry.example.com/juanie \
-  --set images.runtime.tag=runtime-sha-xxxx \
-  --set images.busybox.repository=registry.example.com/library/busybox \
-  --set images.busybox.tag=1.36 \
-  --set images.redis.repository=registry.example.com/library/redis \
-  --set images.redis.tag=7-alpine \
-  --set images.postgres.repository=registry.example.com/pgvector/pgvector \
-  --set images.postgres.tag=pg16
+  -f /root/juanie/customer-values.yaml \
+  --wait \
+  --timeout 20m
 ```
 
+发布前先预拉镜像，确认当前客户网络确实能访问这些仓库：
+
+```bash
+APP_SHA="$(git rev-parse HEAD)"
+
+for img in \
+  "ghcr.1ms.run/997899594/juanie:web-${APP_SHA}" \
+  "ghcr.1ms.run/997899594/juanie:runtime-${APP_SHA}" \
+  "docker.1ms.run/library/busybox:1.36" \
+  "docker.m.daocloud.io/library/redis:7-alpine" \
+  "docker.1ms.run/pgvector/pgvector:pg16"
+do
+  echo "== ${img}"
+  timeout 180s crictl pull "${img}"
+done
+```
+
+如果某个公共 mirror 返回 `403`、`not found` 或拉 layer 失败，不要继续等 Helm。换成客户私有镜像仓库或另一个已验证缓存，然后同步更新 `customer-values.yaml`。
+
 公网入口仍由客户 Nginx / SLB 负责 TLS 终止，然后转发到 `127.0.0.1:31080`。
+
+`externalEdge` 模式下 `kubectl get gateway` 可能长期显示 `PROGRAMMED=False` / `AddressNotAssigned`，这是因为没有 LoadBalancer 地址可分配。只要宿主机上 `cilium-envoy` 已监听 `31080`，且 HTTPRoute `Accepted=True`、`ResolvedRefs=True`，就以 Host header 健康检查为准：
+
+```bash
+ss -tulpen | grep ':31080'
+kubectl describe httproute juanie-route -n juanie
+curl -i -H 'Host: juanie.draftingee.com' http://127.0.0.1:31080/api/health/ready
+```

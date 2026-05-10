@@ -11,12 +11,12 @@ import {
 } from '@/lib/environments/application-set';
 
 describe('preview ApplicationSet helpers', () => {
-  it('treats every preview environment as an ApplicationSet-managed environment', () => {
+  it('treats preview environments as ApplicationSet-managed only when explicitly enabled', () => {
     const previousRepo = process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL;
     const previousEnabled = process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED;
 
     process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL = 'https://example.com/juanie.git';
-    delete process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED;
+    process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED = 'true';
     resetPreviewApplicationSetSourceConfigCache();
 
     expect(
@@ -66,7 +66,7 @@ describe('preview ApplicationSet helpers', () => {
     resetPreviewApplicationSetSourceConfigCache();
 
     expect(() => requirePreviewApplicationSetSourceConfig()).toThrow(
-      '预览环境已统一改为 Argo CD ApplicationSet 驱动'
+      '预览环境 ApplicationSet 未启用或缺少 GitOps 源配置'
     );
 
     if (previousRepo === undefined) {
@@ -161,11 +161,13 @@ describe('preview ApplicationSet helpers', () => {
 
   it('prefers explicit env overrides for the preview ApplicationSet source config', () => {
     const previousRepo = process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL;
+    const previousEnabled = process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED;
     const previousRevision = process.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION;
     const previousPath = process.env.JUANIE_PREVIEW_APPLICATIONSET_PATH;
     const previousNamespace = process.env.JUANIE_ARGOCD_NAMESPACE;
     const previousProject = process.env.JUANIE_ARGOCD_PROJECT;
 
+    process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED = 'true';
     process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL = 'https://example.com/control-plane.git';
     process.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION = 'main';
     process.env.JUANIE_PREVIEW_APPLICATIONSET_PATH = 'deploy/k8s/charts/preview-scaffold';
@@ -186,6 +188,12 @@ describe('preview ApplicationSet helpers', () => {
       delete process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL;
     } else {
       process.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL = previousRepo;
+    }
+
+    if (previousEnabled === undefined) {
+      delete process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED;
+    } else {
+      process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED = previousEnabled;
     }
 
     if (previousRevision === undefined) {

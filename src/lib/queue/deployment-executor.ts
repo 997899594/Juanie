@@ -10,11 +10,7 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
-import {
-  getEnvironmentDeploymentRuntime,
-  getEnvironmentKind,
-  usesArgoRolloutsRuntime,
-} from '@/lib/environments/model';
+import { getEnvironmentKind } from '@/lib/environments/model';
 import { markEnvironmentRuntimeActivity } from '@/lib/environments/runtime-control';
 import { reconcileEnvironmentState } from '@/lib/environments/service';
 import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
@@ -25,7 +21,7 @@ import {
 } from '@/lib/realtime/deployments';
 import {
   deployArgoRolloutWorkload,
-  supportsArgoRolloutsDeploymentStrategy,
+  shouldUseArgoRolloutsForService,
 } from '@/lib/releases/argo-rollouts';
 import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
 import {
@@ -160,7 +156,6 @@ export async function executeDeploymentWorkload(
     namespace: runtimeState.namespace,
   };
   const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
-  const deploymentRuntime = getEnvironmentDeploymentRuntime(targetEnvironment);
 
   await syncEnvVarsToK8s(project.id, targetEnvironment.id);
 
@@ -215,13 +210,11 @@ export async function executeDeploymentWorkload(
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
     const canShiftTraffic = service.type === 'web' && service.isPublic !== false;
     const shouldVerifyCandidateFirst = verificationPlan.blockingPaths.length > 0;
-    const shouldUseArgoRollouts =
-      usesArgoRolloutsRuntime({
-        deploymentRuntime,
-      }) &&
-      supportsArgoRolloutsDeploymentStrategy(deploymentStrategy) &&
-      canShiftTraffic &&
-      shouldVerifyCandidateFirst;
+    const shouldUseArgoRollouts = shouldUseArgoRolloutsForService({
+      strategy: deploymentStrategy,
+      service,
+      hasBlockingVerification: shouldVerifyCandidateFirst,
+    });
 
     if (shouldUseArgoRollouts) {
       const rollout = await deployArgoRolloutWorkload({

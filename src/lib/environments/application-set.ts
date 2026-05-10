@@ -114,7 +114,7 @@ export function getPreviewApplicationSetSourceConfig(): PreviewApplicationSetSou
     return cachedPreviewApplicationSetSourceConfig;
   }
 
-  if (process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED === 'false') {
+  if (process.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED !== 'true') {
     cachedPreviewApplicationSetSourceConfig = null;
     return cachedPreviewApplicationSetSourceConfig;
   }
@@ -150,7 +150,7 @@ export function requirePreviewApplicationSetSourceConfig(): PreviewApplicationSe
 
   if (!config) {
     throw new Error(
-      '预览环境已统一改为 Argo CD ApplicationSet 驱动，但当前缺少预览环境 GitOps 源配置，请设置 JUANIE_PREVIEW_APPLICATIONSET_REPO_URL / TARGET_REVISION / PATH'
+      '预览环境 ApplicationSet 未启用或缺少 GitOps 源配置；如需启用 Argo CD 预览环境，请设置 JUANIE_PREVIEW_APPLICATIONSET_ENABLED=true 和 JUANIE_PREVIEW_APPLICATIONSET_REPO_URL / TARGET_REVISION / PATH'
     );
   }
 
@@ -165,7 +165,7 @@ export function isPreviewApplicationSetEnvironment(environment: {
   kind?: 'production' | 'persistent' | 'preview' | null;
   isPreview?: boolean | null;
 }): boolean {
-  return isPreviewEnvironment(environment);
+  return isPreviewEnvironment(environment) && getPreviewApplicationSetSourceConfig() !== null;
 }
 
 export function usesPreviewApplicationSetStableRoutes(environment: {

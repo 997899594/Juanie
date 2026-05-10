@@ -1,0 +1,43 @@
+# Example customer overrides for external-edge deployments in mainland China.
+#
+# This file is intentionally not loaded by default. Public mirrors can be
+# unstable or provider-specific; copy this file to a customer-owned values file,
+# replace the domain and image tags, then verify every image with crictl before
+# running Helm.
+
+hostname: juanie.draftingee.com
+
+env:
+  JUANIE_BASE_DOMAIN: juanie.draftingee.com
+  AUTH_TRUST_HOST: "true"
+
+secret:
+  # Create this Secret on the target cluster, or switch to externalSecret.enabled=true.
+  existingSecret: juanie-secret
+
+externalSecret:
+  enabled: false
+
+images:
+  web:
+    # Mirrors ghcr.io/997899594/juanie. Replace with a private registry when available.
+    repository: ghcr.1ms.run/997899594/juanie
+    tag: "web-REPLACE_WITH_COMMIT_SHA"
+    pullPolicy: IfNotPresent
+  runtime:
+    # Mirrors ghcr.io/997899594/juanie. worker, scheduler and schema-runner share this image.
+    repository: ghcr.1ms.run/997899594/juanie
+    tag: "runtime-REPLACE_WITH_COMMIT_SHA"
+    pullPolicy: IfNotPresent
+  busybox:
+    repository: docker.1ms.run/library/busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  redis:
+    repository: docker.m.daocloud.io/library/redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: docker.1ms.run/pgvector/pgvector
+    tag: "pg16"
+    pullPolicy: IfNotPresent

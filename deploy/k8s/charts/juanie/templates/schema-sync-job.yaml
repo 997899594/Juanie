@@ -10,8 +10,6 @@ metadata:
   annotations:
     helm.sh/hook: pre-install,pre-upgrade
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   backoffLimit: {{ .Values.schemaSync.backoffLimit }}
   ttlSecondsAfterFinished: {{ .Values.schemaSync.ttlSecondsAfterFinished }}
