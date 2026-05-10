@@ -10,6 +10,13 @@ hostname: juanie.draftingee.com
 env:
   JUANIE_BASE_DOMAIN: juanie.draftingee.com
   AUTH_TRUST_HOST: "true"
+  # If the cluster cannot reach github.com directly, configure an HTTP proxy.
+  # GitHub OAuth callback requires server-side access to
+  # https://github.com/login/oauth/access_token.
+  NODE_USE_ENV_PROXY: "1"
+  HTTPS_PROXY: "http://REPLACE_WITH_PROXY_HOST:REPLACE_WITH_PROXY_PORT"
+  HTTP_PROXY: "http://REPLACE_WITH_PROXY_HOST:REPLACE_WITH_PROXY_PORT"
+  NO_PROXY: "localhost,127.0.0.1,.svc,.cluster.local,postgres,redis,kubernetes.default.svc"
 
 secret:
   # Create this Secret on the target cluster, or switch to externalSecret.enabled=true.

@@ -187,6 +187,7 @@ function buildAuthConfig(): NextAuthConfig {
     },
     pages: {
       signIn: '/login',
+      error: '/login/error',
     },
   };
 }

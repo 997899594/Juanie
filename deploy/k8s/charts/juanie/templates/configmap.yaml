@@ -14,6 +14,21 @@ data:
   DATABASE_USER: {{ .Values.env.DATABASE_USER | default "postgres" | quote }}
   DATABASE_SSL_MODE: {{ .Values.env.DATABASE_SSL_MODE | default "disable" | quote }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
+  {{- if or .Values.env.HTTP_PROXY .Values.env.HTTPS_PROXY .Values.env.ALL_PROXY }}
+  NODE_USE_ENV_PROXY: {{ .Values.env.NODE_USE_ENV_PROXY | default "1" | quote }}
+  {{- end }}
+  {{- with .Values.env.HTTP_PROXY }}
+  HTTP_PROXY: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.env.HTTPS_PROXY }}
+  HTTPS_PROXY: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.env.ALL_PROXY }}
+  ALL_PROXY: {{ . | quote }}
+  {{- end }}
+  {{- if or .Values.env.NO_PROXY .Values.env.HTTP_PROXY .Values.env.HTTPS_PROXY .Values.env.ALL_PROXY }}
+  NO_PROXY: {{ .Values.env.NO_PROXY | default "localhost,127.0.0.1,.svc,.cluster.local,postgres,redis,kubernetes.default.svc" | quote }}
+  {{- end }}
   JUANIE_BASE_DOMAIN: {{ .Values.env.JUANIE_BASE_DOMAIN | default "juanie.art" | quote }}
   JUANIE_ARGOCD_NAMESPACE: {{ .Values.env.JUANIE_ARGOCD_NAMESPACE | default "argocd" | quote }}
   JUANIE_ARGOCD_PROJECT: {{ .Values.env.JUANIE_ARGOCD_PROJECT | default "juanie" | quote }}

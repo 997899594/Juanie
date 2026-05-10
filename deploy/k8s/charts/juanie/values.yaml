@@ -104,6 +104,14 @@ env:
   DATABASE_USER: "postgres"
   DATABASE_SSL_MODE: "disable"
   AUTH_TRUST_HOST: "true"
+  # Optional outbound proxy for GitHub OAuth, Git provider APIs, AI providers,
+  # and artifact storage in restricted networks. Node 24 fetch only honors these
+  # variables when NODE_USE_ENV_PROXY is enabled.
+  NODE_USE_ENV_PROXY: ""
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  ALL_PROXY: ""
+  NO_PROXY: ""
   JUANIE_BASE_DOMAIN: "juanie.art"
   JUANIE_ARGOCD_NAMESPACE: "argocd"
   JUANIE_ARGOCD_PROJECT: "juanie"

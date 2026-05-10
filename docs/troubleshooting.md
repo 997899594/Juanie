@@ -82,7 +82,55 @@ kubectl patch configmap juanie-config -n juanie --type='json' -p='[{"op": "add",
 kubectl rollout restart deployment/juanie-web -n juanie
 ```
 
-### 4. 应用健康检查失败 (503)
+### 4. GitHub 登录后跳到 `/api/auth/error?error=Configuration`
+
+**症状：** 浏览器能跳转到 GitHub 授权页，授权完成后回到 Juanie，但显示
+`/api/auth/error?error=Configuration`。
+
+**高概率原因：** Juanie 服务端在 OAuth callback 阶段需要访问
+`https://github.com/login/oauth/access_token` 换取 token。用户浏览器能访问 GitHub
+不代表 Kubernetes Pod 也能访问该地址。受限网络下常见日志如下：
+
+```text
+[auth][error] CallbackRouteError
+[auth][cause]: TypeError: fetch failed
+[auth][details]: { "name": "ConnectTimeoutError", "provider": "github" }
+```
+
+**检查步骤：**
+
+```bash
+kubectl -n juanie logs deploy/juanie-web --tail=200 | grep -Ei 'auth|github|callback|timeout|configuration'
+
+kubectl -n juanie exec deploy/juanie-web -- sh -lc '
+  env | grep -E "^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|NODE_USE_ENV_PROXY)=" || true
+  timeout 12s node -e "const t=Date.now(); fetch(\"https://github.com/login/oauth/access_token\", { method: \"POST\", headers: { accept: \"application/json\" } }).then(r => console.log(r.status, Date.now() - t)).catch(e => console.error(e.name, e.cause?.constructor?.name || e.message, Date.now() - t))"
+'
+```
+
+**解决方案：** 给 Helm values 配置可用的 HTTP/HTTPS 出网代理。Node 24 的 `fetch`
+只有在 `NODE_USE_ENV_PROXY=1` 时才会读取代理环境变量。
+
+```yaml
+env:
+  NODE_USE_ENV_PROXY: "1"
+  HTTPS_PROXY: "http://proxy.example:7890"
+  HTTP_PROXY: "http://proxy.example:7890"
+  NO_PROXY: "localhost,127.0.0.1,.svc,.cluster.local,postgres,redis,kubernetes.default.svc"
+```
+
+然后重新发布：
+
+```bash
+helm upgrade --install juanie deploy/k8s/charts/juanie \
+  -n juanie \
+  -f deploy/k8s/charts/juanie/values-prod.yaml \
+  -f /path/to/customer-values.yaml \
+  --wait \
+  --timeout 20m
+```
+
+### 5. 应用健康检查失败 (503)
 
 **症状：** Pod 重启，健康检查返回 503
 
@@ -103,7 +151,7 @@ kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg16 -n j
 - 数据库密码不匹配
 - AUTH_TRUST_HOST 未设置
 
-### 5. Argo CD 同步失败
+### 6. Argo CD 同步失败
 
 **症状：** Application 或 ApplicationSet 处于失败状态
 
@@ -134,7 +182,7 @@ kubectl -n juanie rollout status deployment/juanie-worker
 如果线上没有更新，优先看 GitHub Actions 的 `deploy-platform` job。不要手工改
 `juanie-web` / `juanie-worker` Deployment；正确入口是重新跑 CI 或手动执行同一条 Helm 发布命令。
 
-### 6. kube-system Pod 卡在 ContainerCreating
+### 7. kube-system Pod 卡在 ContainerCreating
 
 **症状：** `coredns`、`local-path-provisioner`、`metrics-server` 长时间是 `ContainerCreating`。
 
@@ -172,7 +220,7 @@ kubectl get nodes -o wide
 kubectl get pods -A -o wide
 ```
 
-### 7. DNS 解析问题
+### 8. DNS 解析问题
 
 **症状：** 域名无法解析或解析到错误 IP
 
@@ -190,7 +238,7 @@ nslookup juanie.art
 - 清除本地 DNS 缓存
 - 检查 DNS 服务商配置
 
-### 8. Helm 卡在 pending-install 或提示 another operation is in progress
+### 9. Helm 卡在 pending-install 或提示 another operation is in progress
 
 **症状：** `helm upgrade --install` 被镜像拉取或网络超时卡住，中断后再次运行提示：
 
@@ -231,7 +279,7 @@ helm upgrade --install cloudnative-pg /root/juanie/.charts/cloudnative-pg-0.28.0
 
 不要盲目删 namespace；CloudNativePG、Argo CD、cert-manager 这类基础设施 namespace 里可能已经有可用对象。
 
-### 9. externalEdge Gateway 显示 AddressNotAssigned
+### 10. externalEdge Gateway 显示 AddressNotAssigned
 
 **症状：**
 
@@ -258,7 +306,7 @@ curl -i -H 'Host: juanie.draftingee.com' http://127.0.0.1:31080/api/health/ready
 - HTTPRoute parent 条件里 `ResolvedRefs=True`
 - Host header curl 返回 `200 OK`
 
-### 10. Helm 安装 Juanie 时 namespace 不能被导入
+### 11. Helm 安装 Juanie 时 namespace 不能被导入
 
 **症状：**
 
@@ -281,7 +329,7 @@ kubectl annotate namespace juanie \
 
 然后重新执行 `helm upgrade --install juanie ...`。
 
-### 11. Juanie chart 镜像 tag 不存在或 Docker Hub 拉取超时
+### 12. Juanie chart 镜像 tag 不存在或 Docker Hub 拉取超时
 
 **症状：**
 
@@ -315,7 +363,7 @@ done
 
 如果某个 mirror 不可用，先换 `customer-values.yaml`，再 Helm 发布。不要在 Deployment 上手工 patch 镜像；下次 Helm 发布会覆盖。
 
-### 12. chart 默认使用已有 Secret 但集群里没有
+### 13. chart 默认使用已有 Secret 但集群里没有
 
 **症状：** Juanie Pod 启动失败，事件里出现 secret 找不到，或者环境变量为空。
 
