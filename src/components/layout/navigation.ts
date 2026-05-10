@@ -52,17 +52,17 @@ export const projectNav: NavItem[] = [
 
 export const environmentNav: NavItem[] = [
   {
-    title: '发布',
+    title: '发布历史',
     href: '/delivery',
     icon: Rocket,
   },
   {
-    title: '配置',
+    title: '环境变量',
     href: '/variables',
     icon: Database,
   },
   {
-    title: '观察',
+    title: '日志',
     href: '/logs',
     icon: Globe,
   },
