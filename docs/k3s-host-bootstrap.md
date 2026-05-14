@@ -227,3 +227,6 @@ ss -tulpen | grep ':31080'
 kubectl describe httproute juanie-route -n juanie
 curl -i -H 'Host: juanie.draftingee.com' http://127.0.0.1:31080/api/health/ready
 ```
+
+如果客户不给 DNS 解析但允许先在内网机器试用，可使用 Juanie 自有域名指向客户内网 IP
+的 POC 模式。见 [客户内网 POC 部署文档](./customer-intranet-poc-deployment.md)。
