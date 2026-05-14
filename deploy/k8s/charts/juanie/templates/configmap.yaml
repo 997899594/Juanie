@@ -14,6 +14,9 @@ data:
   DATABASE_USER: {{ .Values.env.DATABASE_USER | default "postgres" | quote }}
   DATABASE_SSL_MODE: {{ .Values.env.DATABASE_SSL_MODE | default "disable" | quote }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
+  {{- with .Values.env.NODE_EXTRA_CA_CERTS }}
+  NODE_EXTRA_CA_CERTS: {{ . | quote }}
+  {{- end }}
   {{- if or .Values.env.HTTP_PROXY .Values.env.HTTPS_PROXY .Values.env.ALL_PROXY }}
   NODE_USE_ENV_PROXY: {{ .Values.env.NODE_USE_ENV_PROXY | default "1" | quote }}
   {{- end }}
@@ -37,6 +40,9 @@ data:
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL | default "" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION | default "main" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_PATH: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_PATH | default "deploy/k8s/charts/preview-scaffold" | quote }}
+  {{- with .Values.env.GITLAB_URL }}
+  GITLAB_URL: {{ . | quote }}
+  {{- end }}
   JUANIE_GATEWAY_NAME: {{ .Values.gateway.name | default "shared-gateway" | quote }}
   JUANIE_GATEWAY_NAMESPACE: {{ .Values.gateway.namespace | default .Values.namespace | quote }}
   JUANIE_GATEWAY_APEX_SECTION_NAME: {{ .Values.gateway.route.sectionName | default "https-apex" | quote }}

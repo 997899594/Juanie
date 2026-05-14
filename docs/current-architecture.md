@@ -58,7 +58,7 @@ Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-ser
 | 能力 | 当前设计 |
 | --- | --- |
 | Secret | Helm 支持 `existingSecret`、内置 Secret 和 ExternalSecret；生产优先使用已有 Secret 或 External Secrets Operator |
-| TLS | chart 不再默认注入 `NODE_TLS_REJECT_UNAUTHORIZED=0`，只有显式打开 `worker/scheduler.insecureSkipTlsVerify` 才会渲染 |
+| TLS | chart 默认通过 `NODE_EXTRA_CA_CERTS` 信任 ServiceAccount CA；不默认注入 `NODE_TLS_REJECT_UNAUTHORIZED=0`，只有显式打开 `worker/scheduler.insecureSkipTlsVerify` 才会渲染 |
 | RBAC | 高风险能力集中在 `rbac.*` 开关，`pods/exec` 默认关闭 |
 | 平台临时执行 | 服务探活、schema-runner、迁移派发、预览库克隆统一走 `PlatformOperationJob`；平台账号只需要 `batch/jobs` 创建/删除和 `pods/log` 读取，不开放 `pods/create` |
 | Trace | release id 派生稳定 W3C trace id，release/deployment/migration 队列 job 透传同一个 `traceId` 和 `traceparent` |

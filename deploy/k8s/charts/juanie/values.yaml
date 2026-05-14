@@ -104,6 +104,9 @@ env:
   DATABASE_USER: "postgres"
   DATABASE_SSL_MODE: "disable"
   AUTH_TRUST_HOST: "true"
+  # Trust the Kubernetes ServiceAccount CA so Node-based platform workers can
+  # verify the in-cluster Kubernetes API certificate without disabling TLS.
+  NODE_EXTRA_CA_CERTS: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
   # Optional outbound proxy for GitHub OAuth, Git provider APIs, AI providers,
   # and artifact storage in restricted networks. Node 24 fetch only honors these
   # variables when NODE_USE_ENV_PROXY is enabled.
@@ -120,6 +123,7 @@ env:
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: ""
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: "main"
   JUANIE_PREVIEW_APPLICATIONSET_PATH: "deploy/k8s/charts/preview-scaffold"
+  GITLAB_URL: ""
   AI_302_BASE_URL: "https://api.302.ai/v1"
   AI_DEFAULT_PLAN: "free"
   AI_MODEL: "gpt-5.2"

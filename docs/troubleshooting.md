@@ -393,6 +393,54 @@ kubectl -n juanie create secret generic juanie-secret \
 
 真实密钥不要提交到 Git；客户环境用密钥系统或现场 Secret 注入。
 
+### 14. 发布卡在 `migration_pre_failed` 且报自签证书
+
+**症状：** 子应用 CI 成功触发 Juanie release，但 release 很快变成
+`migration_pre_failed`，CI 或 release 日志显示：
+
+```text
+self signed certificate in certificate chain
+```
+
+同时 worker 日志可能反复出现：
+
+```text
+Failed to remediate environment namespace
+Environment route reconciliation skipped environment
+```
+
+**原因：** Juanie worker / scheduler / web 需要调用集群内 Kubernetes API。Node
+运行时默认不一定信任 ServiceAccount 挂载的集群 CA，导致
+`@kubernetes/client-node` 校验证书失败。
+
+**正确处理：** 不要用 `NODE_TLS_REJECT_UNAUTHORIZED=0` 关闭 TLS 校验。chart 默认应注入
+ServiceAccount CA：
+
+```yaml
+env:
+  NODE_EXTRA_CA_CERTS: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+```
+
+**临时线上修复：**
+
+```bash
+kubectl -n juanie set env deployment/juanie-worker \
+  NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+kubectl -n juanie set env deployment/juanie-web \
+  NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+kubectl -n juanie rollout status deployment/juanie-worker --timeout=5m
+kubectl -n juanie rollout status deployment/juanie-web --timeout=5m
+```
+
+如果 `scheduler` 单独运行，也同步设置：
+
+```bash
+kubectl -n juanie set env deployment/juanie-scheduler \
+  NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+```
+
 ## 快速修复脚本
 
 ```bash
