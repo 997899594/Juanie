@@ -69,21 +69,18 @@ jobs:
 
           raise 'juanie.yaml must define at least one service' if services.empty?
 
-          release_services = services.map do |service|
+          service_names = services.map do |service|
             name = service['name'].to_s.strip
             raise 'service.name is required' if name.empty?
-
-            {
-              name: name,
-              image: ENV.fetch('IMAGE_TAG'),
-            }
+            name
           end
 
           build_descriptors = services.map do |service|
             build = service['build'] || {}
+            name = service['name'].to_s.strip
 
             {
-              'name' => service['name'].to_s.strip,
+              'name' => name,
               'strategy' => (build['strategy'] || 'auto').to_s.strip,
               'context' => (build['context'] || '.').to_s.strip,
               'dockerfile' => build['dockerfile']&.to_s&.strip,
@@ -94,15 +91,32 @@ jobs:
 
           canonical = build_descriptors.first
           conflicting = build_descriptors.find do |descriptor|
-            %w[strategy context dockerfile target definition].any? do |key|
+            %w[strategy context dockerfile definition].any? do |key|
               descriptor[key] != canonical[key]
             end
           end
 
           if conflicting
             raise(
-              "single-repo Juanie CI requires all services to share one build config; conflicting service=#{conflicting['name']}"
+              "single-repo Juanie CI requires all services to share one build definition; conflicting service=#{conflicting['name']}"
             )
+          end
+
+          target_names = build_descriptors.map { |descriptor| descriptor['target'].to_s }.reject(&:empty?)
+          multi_target_build = target_names.uniq.length > 1
+          image_for = lambda do |service_name|
+            base = ENV.fetch('IMAGE_TAG')
+            next base unless multi_target_build
+
+            safe_name = service_name.downcase.gsub(/[^a-z0-9_.-]+/, '-').gsub(/\A-+|-+\z/, '')
+            "#{base}-#{safe_name}"
+          end
+
+          release_services = service_names.map do |name|
+            {
+              name: name,
+              image: image_for.call(name),
+            }
           end
 
           definition = canonical['definition']
@@ -132,9 +146,12 @@ jobs:
             case strategy
             when 'bake'
               raise 'build.definition is required when build.strategy=bake' if definition.nil? || definition.empty?
-              canonical['target'].to_s.empty? ? 'bake_default' : 'bake_target'
+              target_names.empty? ? 'bake_default' : 'bake_target'
             when 'dockerfile'
               raise 'build.dockerfile is required when build.strategy=dockerfile' if dockerfile.nil? || dockerfile.empty?
+              if multi_target_build
+                raise 'single-repo Juanie CI only supports per-service build.target with build.strategy=bake'
+              end
               'dockerfile'
             when 'buildpacks'
               'buildpacks'
@@ -147,8 +164,22 @@ jobs:
             file.puts("build_kind=#{build_kind}")
             file.puts("build_context=#{canonical['context']}")
             file.puts("build_dockerfile=#{dockerfile || ''}")
-            file.puts("build_target=#{canonical['target'] || ''}")
+            file.puts("build_target=#{target_names.uniq.join(',')}")
             file.puts("build_definition=#{definition || ''}")
+            file.puts("published_images_json=#{JSON.generate(release_services.map { |service| service[:image] }.uniq)}")
+            if build_kind == 'bake_target'
+              file.puts('bake_set<<BAKE_SET')
+              build_descriptors.each do |descriptor|
+                target = descriptor['target'].to_s
+                next if target.empty?
+
+                file.puts("#{target}.tags=#{image_for.call(descriptor['name'])}")
+                file.puts("#{target}.args.GIT_SHA=#{ENV.fetch('JUANIE_SOURCE_SHA')}")
+                file.puts("#{target}.cache-from=type=gha")
+                file.puts("#{target}.cache-to=type=gha,mode=max")
+              end
+              file.puts('BAKE_SET')
+            end
           end
           RUBY
 
@@ -170,11 +201,7 @@ jobs:
           files: ${{ steps.plan.outputs.build_definition }}
           targets: ${{ steps.plan.outputs.build_target }}
           push: true
-          set: |
-            ${{ steps.plan.outputs.build_target }}.tags=${{ env.IMAGE_TAG }}
-            ${{ steps.plan.outputs.build_target }}.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}
-            ${{ steps.plan.outputs.build_target }}.cache-from=type=gha
-            ${{ steps.plan.outputs.build_target }}.cache-to=type=gha,mode=max
+          set: ${{ steps.plan.outputs.bake_set }}
 
       - name: Build and Push (Bake Default)
         if: ${{ steps.plan.outputs.build_kind == 'bake_default' }}
@@ -221,13 +248,23 @@ jobs:
 
           deadline=$(( $(date +%s) + 180 ))
 
+          images='${{ steps.plan.outputs.published_images_json }}'
+
           while [ "$(date +%s)" -lt "$deadline" ]; do
-            if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
-              echo "Published image is available: ${IMAGE_TAG}"
+            missing=0
+            while IFS= read -r image; do
+              if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+                echo "Published image is available: $image"
+              else
+                echo "Waiting for image manifest to become visible: $image"
+                missing=1
+              fi
+            done < <(jq -r '.[]' <<<"$images")
+
+            if [ "$missing" -eq 0 ]; then
               exit 0
             fi
 
-            echo "Waiting for image manifest to become visible: ${IMAGE_TAG}"
             sleep 5
           done
 
