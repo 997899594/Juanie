@@ -47,11 +47,9 @@ interface LogsPageClientProps {
 
 export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPageClientProps) {
   const [pods, setPods] = useState<Pod[]>([]);
-  const [envId, setEnvId] = useState(
-    initialData.environments.some((environment) => environment.id === initialEnvId)
-      ? (initialEnvId ?? '')
-      : (initialData.environments[0]?.id ?? '')
-  );
+  const envId = initialData.environments.some((environment) => environment.id === initialEnvId)
+    ? (initialEnvId ?? '')
+    : (initialData.environments[0]?.id ?? '');
   const [podName, setPodName] = useState('');
   const [tail, setTail] = useState('100');
   const [follow, setFollow] = useState(true);
@@ -182,30 +180,17 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       title="日志"
       description={
         selectedEnvironment
-          ? `${selectedEnvironment.name} · 按 Pod 查看运行日志`
-          : '按环境和 Pod 查看运行日志'
+          ? `${selectedEnvironment.name} · 选择 Pod 后查看实时输出`
+          : '选择 Pod 后查看实时输出'
       }
     >
       <div className={shellClassName}>
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <ScrollText className="h-4 w-4 text-muted-foreground" />
-          日志范围
+          日志来源
         </div>
         <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="grid gap-3 md:grid-cols-3">
-            <Select value={envId} onValueChange={setEnvId}>
-              <SelectTrigger className="h-11 rounded-[16px] text-sm">
-                <SelectValue placeholder="环境" />
-              </SelectTrigger>
-              <SelectContent>
-                {initialData.environments.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
             <Select value={podName} onValueChange={setPodName} disabled={pods.length === 0}>
               <SelectTrigger className="h-11 rounded-[16px] font-mono text-sm">
                 <SelectValue placeholder={pods.length === 0 ? '没有 Pod' : '选择 Pod'} />
@@ -252,39 +237,23 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              环境
-            </div>
-            <div className="mt-2 text-sm font-medium text-foreground">
-              {selectedEnvironment?.name ?? '未选择'}
-            </div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Pod</div>
-            <div className="mt-2 truncate font-mono text-sm text-foreground">
-              {selectedPod?.metadata.name ?? '等待选择'}
-            </div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              状态
-            </div>
-            <div className="mt-2">
-              <StatusIndicator
-                status={statusColor[status]}
-                pulse={status === 'streaming'}
-                label={statusLabel[status]}
-              />
-            </div>
-          </div>
-          <div className={subCardClassName}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              最新输出
-            </div>
-            <div className="mt-2 text-sm text-foreground">{lastLineLabel ?? '等待输出'}</div>
-          </div>
+        <div className={cn(subCardClassName, 'mt-4 flex flex-wrap items-center gap-3 text-xs')}>
+          <span className="text-muted-foreground">当前环境</span>
+          <span className="font-medium text-foreground">
+            {selectedEnvironment?.name ?? '未选择'}
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <StatusIndicator
+            status={statusColor[status]}
+            pulse={status === 'streaming'}
+            label={statusLabel[status]}
+          />
+          {lastLineLabel ? (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">最后输出 {lastLineLabel}</span>
+            </>
+          ) : null}
         </div>
       </div>
 

@@ -1,6 +1,11 @@
 import { ExternalLink, GitBranch, Settings2, Users } from 'lucide-react';
 import Link from 'next/link';
-import { ProjectEnvironmentIndex } from '@/components/projects/ProjectOverviewSections';
+import {
+  ProjectEnvironmentIndex,
+  ProjectOverviewStats,
+  ProjectRecentReleaseSnapshot,
+  ProjectRuntimeSnapshot,
+} from '@/components/projects/ProjectOverviewSections';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
@@ -14,10 +19,21 @@ interface ProjectOverviewDashboardProps {
 const overviewShellClassName = 'console-panel px-5 py-5';
 
 export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
-  const { project, environmentCards, overview, collaboration } = pageData;
+  const {
+    project,
+    environmentCards,
+    overview,
+    collaboration,
+    stats,
+    serviceCards,
+    databaseCards,
+    domainCards,
+    recentReleaseCards,
+  } = pageData;
   const productionEnvironment = environmentCards.find((environment) => environment.isProduction);
   const productionHost =
     productionEnvironment?.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
+  const latestProductionRelease = productionEnvironment?.latestReleaseCard ?? null;
 
   return (
     <PageShell size="content" spacing="tight">
@@ -35,9 +51,13 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
         }
       />
 
+      <ProjectOverviewStats stats={stats} />
+
       <section className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
         <div className={overviewShellClassName}>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">项目</div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            项目现状
+          </div>
           <div className="mt-3 space-y-3">
             <div className="text-sm text-foreground">{collaboration.teamName ?? '团队项目'}</div>
             {overview.statusSummary ? (
@@ -67,6 +87,11 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
               </span>
               <span>创建于 {overview.createdDateLabel}</span>
             </div>
+            {overview.nextActionLabel ? (
+              <div className="console-inset px-4 py-3 text-sm text-foreground">
+                下一步：{overview.nextActionLabel}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -87,11 +112,30 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
             ) : (
               <div className="text-sm text-muted-foreground">生产环境还没有访问地址</div>
             )}
+            {latestProductionRelease ? (
+              <div className="console-inset px-4 py-3 text-xs text-muted-foreground">
+                最近生产发布
+                <div className="mt-1 truncate text-sm font-medium text-foreground">
+                  {latestProductionRelease.title}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
 
-      <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+        <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
+        <div className="space-y-3">
+          <ProjectRecentReleaseSnapshot projectId={projectId} releases={recentReleaseCards} />
+          <ProjectRuntimeSnapshot
+            projectId={projectId}
+            services={serviceCards}
+            databases={databaseCards}
+            domains={domainCards}
+          />
+        </div>
+      </section>
     </PageShell>
   );
 }
