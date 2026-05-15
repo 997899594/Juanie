@@ -1730,13 +1730,44 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
     },
   };
 
-  await custom.createNamespacedCustomObject({
-    group: 'gateway.networking.k8s.io',
-    version: 'v1',
-    namespace: spec.namespace,
-    plural: 'httproutes',
-    body: route,
-  });
+  try {
+    await custom.createNamespacedCustomObject({
+      group: 'gateway.networking.k8s.io',
+      version: 'v1',
+      namespace: spec.namespace,
+      plural: 'httproutes',
+      body: route,
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 409) {
+      throw e;
+    }
+
+    const current = (await custom.getNamespacedCustomObject({
+      group: 'gateway.networking.k8s.io',
+      version: 'v1',
+      namespace: spec.namespace,
+      plural: 'httproutes',
+      name: spec.name,
+    })) as { metadata?: Record<string, unknown> };
+
+    await custom.replaceNamespacedCustomObject({
+      group: 'gateway.networking.k8s.io',
+      version: 'v1',
+      namespace: spec.namespace,
+      plural: 'httproutes',
+      name: spec.name,
+      body: {
+        ...route,
+        metadata: {
+          ...(current.metadata ?? {}),
+          name: spec.name,
+          namespace: spec.namespace,
+        },
+      },
+    });
+  }
 }
 
 export async function deploymentExists(namespace: string, name: string): Promise<boolean> {
