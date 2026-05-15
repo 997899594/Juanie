@@ -433,6 +433,10 @@ export function ReleaseExecutionSections({
   const releaseActions = buildReleaseEnvironmentActionSnapshot(role, release.environment);
   const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
   const deliveryArtifacts = getDeliveryReleaseArtifacts(release.artifacts);
+  const rolloutDeploymentItems = release.deploymentItems.filter(
+    (deployment) =>
+      deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
+  );
   const isDeliveryRole = role === 'delivery';
 
   return (
@@ -441,18 +445,14 @@ export function ReleaseExecutionSections({
         {!isDeliveryRole &&
           release.environment?.deploymentStrategy &&
           release.environment.deploymentStrategy !== 'rolling' &&
-          release.deploymentItems.some(
-            (deployment) =>
-              deployment.status === 'awaiting_rollout' ||
-              deployment.status === 'verification_failed'
-          ) && (
+          rolloutDeploymentItems.length > 0 && (
             <section className={releaseShellClassName}>
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
                 <Rocket className="h-4 w-4" />
                 放量推进
               </div>
               <div className="space-y-3">
-                {release.deploymentItems.map((deployment) => (
+                {rolloutDeploymentItems.map((deployment) => (
                   <div key={`rollout-${deployment.id}`} className={releaseSubtleClassName}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
