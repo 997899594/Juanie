@@ -190,6 +190,7 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeC
 
   const configServices = new Map(parsed.services.map((service) => [service.name, service]));
   const byId = new Map(currentServices.map((service) => [service.id, service]));
+  const currentServiceNames = new Set(currentServices.map((service) => service.name));
 
   for (const serviceRecord of currentServices) {
     const serviceConfig = configServices.get(serviceRecord.name);
@@ -236,7 +237,52 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeC
     byId.set(serviceRecord.id, updated);
   }
 
-  return currentServices.map((service) => byId.get(service.id) ?? service);
+  for (const serviceConfig of parsed.services) {
+    if (currentServiceNames.has(serviceConfig.name)) {
+      continue;
+    }
+
+    const scaling = serviceConfig.scaling ?? null;
+    const resources = serviceConfig.resources ?? null;
+    const [created] = await db
+      .insert(services)
+      .values({
+        projectId: input.projectId,
+        name: serviceConfig.name,
+        type: serviceConfig.type,
+        buildCommand: serviceConfig.build?.command,
+        dockerfile: serviceConfig.build?.dockerfile,
+        dockerContext: serviceConfig.build?.context,
+        startCommand: serviceConfig.run.command,
+        port: serviceConfig.run.port ?? null,
+        cronSchedule: serviceConfig.type === 'cron' ? (serviceConfig.schedule ?? null) : null,
+        replicas: scaling?.min ?? 1,
+        healthcheckPath: serviceConfig.healthcheck?.path ?? null,
+        healthcheckInterval: serviceConfig.healthcheck?.interval ?? 30,
+        cpuRequest: resources?.cpuRequest ?? '100m',
+        cpuLimit: resources?.cpuLimit ?? '500m',
+        memoryRequest: resources?.memoryRequest ?? '256Mi',
+        memoryLimit: resources?.memoryLimit ?? '512Mi',
+        autoscaling:
+          scaling && ((scaling.max ?? 0) > (scaling.min ?? 0) || Boolean(scaling.cpu))
+            ? {
+                min: scaling.min ?? 1,
+                max: scaling.max ?? scaling.min ?? 1,
+                cpu: scaling.cpu ?? 80,
+              }
+            : null,
+        isPublic: serviceConfig.isPublic ?? serviceConfig.type === 'web',
+        status: 'pending',
+      })
+      .returning();
+
+    if (created) {
+      byId.set(created.id, created);
+      currentServiceNames.add(created.name);
+    }
+  }
+
+  return Array.from(byId.values());
 }
 
 export async function syncProjectDatabaseRuntimeContractsFromRepo(input: RuntimeContractSyncInput) {

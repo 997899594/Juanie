@@ -30,6 +30,7 @@ import {
 } from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
+import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 import { getDeployableReleaseArtifacts } from './artifacts';
 
@@ -110,13 +111,14 @@ async function resolveReleaseServices(
   inputs: ReleaseServiceInput[]
 ) {
   const artifacts = [];
+  const resolvedServiceIds = new Set<string>();
 
   for (const input of inputs) {
     let service =
       (input.id ? projectServices.find((candidate) => candidate.id === input.id) : undefined) ??
       (input.name ? projectServices.find((candidate) => candidate.name === input.name) : undefined);
 
-    if (!service && projectServices.length === 1) {
+    if (!service && !input.id && !input.name && projectServices.length === 1) {
       service = projectServices[0];
     }
 
@@ -125,6 +127,11 @@ async function resolveReleaseServices(
         `Unable to resolve service for release artifact ${input.name ?? input.id ?? input.image}`
       );
     }
+
+    if (resolvedServiceIds.has(service.id)) {
+      throw new Error(`Release payload contains duplicate artifact for service ${service.name}`);
+    }
+    resolvedServiceIds.add(service.id);
 
     artifacts.push({
       service,
@@ -427,15 +434,27 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
   const requestedArtifacts = Array.isArray(input.artifacts) ? input.artifacts : [];
 
   try {
-    return await persistRelease(project, environment, requestedServices, requestedArtifacts, {
-      sourceRepository: input.repository,
+    const syncedServices = await syncProjectServiceRuntimeContractsFromRepo({
+      projectId: project.id,
       sourceRef: input.ref,
       sourceCommitSha: input.sha ?? null,
-      configCommitSha: input.sha ?? null,
-      triggeredBy: input.triggeredBy,
-      triggeredByUserId: input.triggeredByUserId ?? null,
-      summary: input.summary ?? null,
     });
+
+    return await persistRelease(
+      { ...project, services: syncedServices },
+      environment,
+      requestedServices,
+      requestedArtifacts,
+      {
+        sourceRepository: input.repository,
+        sourceRef: input.ref,
+        sourceCommitSha: input.sha ?? null,
+        configCommitSha: input.sha ?? null,
+        triggeredBy: input.triggeredBy,
+        triggeredByUserId: input.triggeredByUserId ?? null,
+        summary: input.summary ?? null,
+      }
+    );
   } catch (error) {
     if (environment.previewBuildStatus === 'building') {
       await setEnvironmentSourceBuildState({
