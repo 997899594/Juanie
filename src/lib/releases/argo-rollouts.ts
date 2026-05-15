@@ -67,6 +67,7 @@ function buildArgoRolloutSpec(input: {
   strategy: ArgoRolloutsDeploymentStrategy;
   autoPromotionEnabled: boolean;
   service: ReleaseWorkloadServiceLike;
+  env?: Record<string, string>;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
 }): ArgoRolloutSpec {
@@ -80,6 +81,7 @@ function buildArgoRolloutSpec(input: {
     previewServiceName: input.previewServiceName,
     strategy: input.strategy,
     autoPromotionEnabled: input.autoPromotionEnabled,
+    env: input.env,
     envFrom: input.envFrom,
     imagePullSecrets: input.imagePullSecrets,
     healthcheckPath: input.service.healthcheckPath ?? undefined,
@@ -118,6 +120,7 @@ export async function deployArgoRolloutWorkload(input: {
   imageName: string;
   strategy: ArgoRolloutsDeploymentStrategy;
   service: ReleaseWorkloadServiceLike;
+  env?: Record<string, string>;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
   verificationPlan: ServiceVerificationPlan;
@@ -159,6 +162,7 @@ export async function deployArgoRolloutWorkload(input: {
       strategy: input.strategy,
       autoPromotionEnabled: !awaitingRollout,
       service: input.service,
+      env: input.env,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets,
     })

@@ -10,6 +10,10 @@ import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s, syncServiceEnvVarsToK8s } from '@/lib/env-sync';
 import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
+import {
+  getPlatformManagedRuntimeEnvKeyMessage,
+  isPlatformManagedRuntimeEnvKey,
+} from '@/lib/env-vars/system';
 import { isK8sAvailable, rolloutRestartDeployments } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
@@ -160,6 +164,12 @@ async function assertNoDuplicateVariable(input: {
 
   if (existing) {
     throw new EnvVarControlError(409, `Variable "${input.key}" already exists in this scope`);
+  }
+}
+
+function assertUserWritableRuntimeEnvKey(key: string): void {
+  if (isPlatformManagedRuntimeEnvKey(key)) {
+    throw new EnvVarControlError(400, getPlatformManagedRuntimeEnvKeyMessage(key));
   }
 }
 
@@ -324,6 +334,7 @@ export async function createEnvironmentVariableForProject(input: {
     environmentId: scope.environmentId,
     serviceId: scope.serviceId,
   });
+  assertUserWritableRuntimeEnvKey(input.key);
 
   const insertData = input.isSecret
     ? await encryptOrThrow({
@@ -404,6 +415,8 @@ export async function updateEnvironmentVariableForProject(input: {
   }
 
   const nextKey = input.key ?? envVar.key;
+  assertUserWritableRuntimeEnvKey(nextKey);
+
   if (nextKey !== envVar.key) {
     await assertNoDuplicateVariable({
       projectId: input.projectId,

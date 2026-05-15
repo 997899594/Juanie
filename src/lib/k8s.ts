@@ -1789,6 +1789,7 @@ export async function deploymentExists(namespace: string, name: string): Promise
 export interface DeploymentSnapshot {
   image: string | null;
   replicas: number;
+  env?: Record<string, string>;
   envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
   port: number;
@@ -2009,6 +2010,12 @@ export async function getDeploymentSnapshot(
     return {
       image: container.image ?? null,
       replicas: current.spec?.replicas ?? 1,
+      env: container.env
+        ?.filter((item) => item.name && item.value !== undefined)
+        .reduce<Record<string, string>>((env, item) => {
+          env[item.name!] = item.value!;
+          return env;
+        }, {}),
       envFrom:
         container.envFrom?.map((item) => ({
           ...(item.secretRef?.name ? { secretRef: { name: item.secretRef.name } } : {}),

@@ -5,6 +5,7 @@ import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
+import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
@@ -215,6 +216,9 @@ export function ReleaseDiffSection({
       tool: run.specification.tool,
       preview: run.specification.filePreview!,
     }));
+  const hasArtifactChanges = release.diff.changedArtifacts.length > 0;
+  const hasMigrationConfigChanges = release.diff.changedMigrations.length > 0;
+  const hasRuntimeMigrationChanges = runtimeMigrationDiffItems.length > 0;
 
   return (
     <section className={releaseShellClassName}>
@@ -287,15 +291,15 @@ export function ReleaseDiffSection({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              制品变化
+              镜像变化
             </div>
-            {release.diff.changedArtifacts.length > 0 && (
+            {hasArtifactChanges && (
               <Badge variant="secondary">{release.diff.changedArtifacts.length} 项</Badge>
             )}
           </div>
-          {release.diff.changedArtifacts.length === 0 ? (
+          {!hasArtifactChanges ? (
             <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-6 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-              没有制品变化。
+              部署镜像与上一版一致。
             </div>
           ) : (
             release.diff.changedArtifacts.map((item) => (
@@ -326,42 +330,47 @@ export function ReleaseDiffSection({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              迁移变化
+              数据库变更
             </div>
-            {release.diff.changedMigrations.length > 0 && (
-              <Badge variant="secondary">{release.diff.changedMigrations.length} 项</Badge>
-            )}
           </div>
-          {release.diff.changedMigrations.length === 0 ? (
-            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-6 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-              没有迁移变化。
-            </div>
-          ) : (
-            release.diff.changedMigrations.map((item) => (
-              <div
-                key={item.key}
-                className="rounded-2xl bg-[rgba(255,255,255,0.88)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_6px_18px_rgba(55,53,47,0.028)]"
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <div className="text-sm font-medium">{item.label}</div>
-                  <Badge variant="secondary">{item.change === 'added' ? '新增' : '移除'}</Badge>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {item.tool} · {getMigrationPhaseLabel(item.phase)}
-                </div>
-              </div>
-            ))
-          )}
 
-          <div className="pt-2">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              真实环境差异
+          {!hasMigrationConfigChanges && !hasRuntimeMigrationChanges ? (
+            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-6 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+              没有数据库变更。
             </div>
-            {runtimeMigrationDiffItems.length === 0 ? (
-              <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-4 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-                没有环境差异。
+          ) : null}
+
+          {hasMigrationConfigChanges ? (
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                迁移配置变化
               </div>
-            ) : (
+              {release.diff.changedMigrations.map((item) => (
+                <div
+                  key={item.key}
+                  className="rounded-2xl bg-[rgba(255,255,255,0.88)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_6px_18px_rgba(55,53,47,0.028)]"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium">{item.label}</div>
+                    <Badge variant="secondary">{item.change === 'added' ? '新增' : '移除'}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {item.tool} · {getMigrationPhaseLabel(item.phase)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hasRuntimeMigrationChanges ? (
+            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+              迁移配置未变化，但目标数据库仍有待执行变更。
+            </div>
+          ) : null}
+
+          {hasRuntimeMigrationChanges ? (
+            <div className="pt-2">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                待执行数据库变更
+              </div>
               <div className="space-y-2">
                 {runtimeMigrationDiffItems.map((item) => (
                   <div
@@ -402,8 +411,8 @@ export function ReleaseDiffSection({
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
@@ -472,7 +481,7 @@ export function ReleaseExecutionSections({
           <section className={releaseShellClassName}>
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
               <Package2 className="h-4 w-4" />
-              部署镜像
+              本次部署镜像
             </div>
             {deployableArtifacts.length === 0 ? (
               <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
@@ -640,6 +649,14 @@ export function ReleaseExecutionSections({
                         <Badge variant="secondary">{run.serviceName}</Badge>
                         <Badge variant="secondary">{run.database.name}</Badge>
                       </div>
+                      <ReleaseMigrationActions
+                        projectId={projectId}
+                        runId={run.id}
+                        status={run.status}
+                        approvalToken={run.approvalToken}
+                        disabled={!releaseActions.canManage}
+                        disabledSummary={releaseActions.summary}
+                      />
                     </div>
                     <MigrationSpecDetails
                       specification={run.specification}

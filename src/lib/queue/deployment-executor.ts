@@ -10,6 +10,7 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
+import { buildPlatformRuntimeEnv } from '@/lib/env-vars/system';
 import { getEnvironmentKind } from '@/lib/environments/model';
 import { markEnvironmentRuntimeActivity } from '@/lib/environments/runtime-control';
 import { reconcileEnvironmentState } from '@/lib/environments/service';
@@ -156,6 +157,7 @@ export async function executeDeploymentWorkload(
     namespace: runtimeState.namespace,
   };
   const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
+  const platformRuntimeEnv = buildPlatformRuntimeEnv(targetEnvironment.name);
 
   await syncEnvVarsToK8s(project.id, targetEnvironment.id);
 
@@ -225,6 +227,7 @@ export async function executeDeploymentWorkload(
         imageName,
         strategy: deploymentStrategy,
         service,
+        env: platformRuntimeEnv,
         envFrom,
         verificationPlan,
         onLog: (message) => logDeployment(deploymentId, message),
@@ -259,6 +262,7 @@ export async function executeDeploymentWorkload(
           image: imageName,
           port: service.port ?? 3000,
           replicas: service.replicas ?? 1,
+          env: platformRuntimeEnv,
           envFrom,
           cpuRequest: service.cpuRequest ?? undefined,
           cpuLimit: service.cpuLimit ?? undefined,
@@ -277,6 +281,7 @@ export async function executeDeploymentWorkload(
       candidateName,
       imageName,
       service,
+      env: platformRuntimeEnv,
       envFrom,
       verificationPlan,
       onLog: (message) => logDeployment(deploymentId, message),

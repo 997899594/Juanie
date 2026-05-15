@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -219,6 +220,9 @@ function EnvVarDialog({
                   onChange: ({ value }) => {
                     if (!value.trim()) {
                       return '变量名不能为空';
+                    }
+                    if (isPlatformManagedRuntimeEnvKey(value)) {
+                      return '这是平台托管变量，部署时会自动注入';
                     }
                     return undefined;
                   },

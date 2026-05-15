@@ -6,6 +6,7 @@ import type {
   PlatformDatabaseType,
 } from '@/lib/databases/platform-support';
 import { getDefaultDatabaseProvisionType } from '@/lib/databases/platform-support';
+import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import {
   applyRuntimeProfileToServices,
   buildTemplateServices,
@@ -207,6 +208,10 @@ export function getInitialVariableError(
 
   if (!variable.value) {
     return '变量值不能为空';
+  }
+
+  if (isPlatformManagedRuntimeEnvKey(key)) {
+    return '这是平台托管变量，部署时会自动注入';
   }
 
   const duplicates = variables.filter(

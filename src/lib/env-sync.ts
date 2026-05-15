@@ -16,6 +16,7 @@ import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
+import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import { isK8sAvailable, upsertConfigMap, upsertSecret } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
@@ -109,6 +110,9 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
 
   for (const v of vars) {
     if (!v.key) continue;
+    if (isPlatformManagedRuntimeEnvKey(v.key)) {
+      continue;
+    }
 
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {
@@ -207,6 +211,9 @@ export async function syncServiceEnvVarsToK8s(
 
   for (const v of vars) {
     if (!v.key) continue;
+    if (isPlatformManagedRuntimeEnvKey(v.key)) {
+      continue;
+    }
 
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {

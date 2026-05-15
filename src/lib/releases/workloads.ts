@@ -32,6 +32,8 @@ export interface WorkloadEnvFromRef {
   configMapRef?: { name: string };
 }
 
+export type WorkloadEnv = Record<string, string>;
+
 export interface ServiceVerificationPlan {
   blockingPaths: string[];
   observedPaths: string[];
@@ -239,6 +241,7 @@ export async function upsertServiceWorkload(input: {
   resourceName: string;
   imageName: string;
   service: ReleaseWorkloadServiceLike;
+  env?: WorkloadEnv;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
   creationLabel?: string;
@@ -250,6 +253,7 @@ export async function upsertServiceWorkload(input: {
     await updateDeployment(input.namespace, input.resourceName, {
       image: input.imageName,
       port: input.service.port ?? 3000,
+      env: input.env,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
@@ -268,6 +272,7 @@ export async function upsertServiceWorkload(input: {
       image: input.imageName,
       port: input.service.port ?? 3000,
       replicas: input.service.replicas ?? 1,
+      env: input.env,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
@@ -334,6 +339,7 @@ export async function deployCandidateWorkload(input: {
   candidateName: string;
   imageName: string;
   service: ReleaseWorkloadServiceLike;
+  env?: WorkloadEnv;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
   verificationPlan: ServiceVerificationPlan;
@@ -346,6 +352,7 @@ export async function deployCandidateWorkload(input: {
     resourceName: input.candidateName,
     imageName: input.imageName,
     service: input.service,
+    env: input.env,
     envFrom: input.envFrom,
     imagePullSecrets: input.imagePullSecrets,
     creationLabel: 'candidate deployment',
@@ -380,6 +387,7 @@ export async function promoteCandidateSnapshotToStable(input: {
     await updateDeployment(input.namespace, input.stableName, {
       image: input.snapshot.image ?? undefined,
       port: input.snapshot.port,
+      env: input.snapshot.env,
       envFrom: input.snapshot.envFrom,
       replicas: input.snapshot.replicas,
       imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
@@ -396,6 +404,7 @@ export async function promoteCandidateSnapshotToStable(input: {
       image: input.snapshot.image,
       port: input.snapshot.port,
       replicas: input.snapshot.replicas,
+      env: input.snapshot.env,
       envFrom: input.snapshot.envFrom,
       imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,

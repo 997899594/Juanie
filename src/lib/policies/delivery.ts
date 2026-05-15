@@ -305,7 +305,7 @@ export function evaluateMigrationPolicy(input: {
   if (isProduction && input.specification.compatibility === 'breaking') {
     warnings.push('生产环境的破坏性迁移必须人工审批。');
   } else if (input.specification.approvalPolicy === 'manual_in_production' && isProduction) {
-    warnings.push('生产环境会先暂停，等待人工审批后再执行。');
+    warnings.push('发布流程会等待审批，通过后才执行生产迁移。');
   }
 
   if (requiresApproval) {

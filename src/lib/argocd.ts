@@ -61,6 +61,7 @@ export interface ArgoRolloutSpec {
   previewServiceName?: string;
   strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
   autoPromotionEnabled: boolean;
+  env?: Record<string, string>;
   envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
   healthcheckPath?: string;
@@ -305,6 +306,9 @@ function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
               name: 'app',
               image: spec.image,
               ports: [{ name: 'http', containerPort: spec.port, protocol: 'TCP' }],
+              env: spec.env
+                ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+                : undefined,
               envFrom: spec.envFrom,
               readinessProbe: {
                 httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },

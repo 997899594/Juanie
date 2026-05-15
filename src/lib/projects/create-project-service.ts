@@ -26,6 +26,10 @@ import {
   buildManagedEnvironmentHostname,
   type HostnameAllocatorExecutor,
 } from '@/lib/domains/managed';
+import {
+  getPlatformManagedRuntimeEnvKeyMessage,
+  isPlatformManagedRuntimeEnvKey,
+} from '@/lib/env-vars/system';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
@@ -186,6 +190,14 @@ function normalizeInitialVariables(
         'project_create_failed',
         400,
         `环境变量 ${variable.key} 的值不能为空`
+      );
+    }
+
+    if (isPlatformManagedRuntimeEnvKey(variable.key)) {
+      throw new CreateProjectError(
+        'project_create_failed',
+        400,
+        getPlatformManagedRuntimeEnvKeyMessage(variable.key)
       );
     }
 

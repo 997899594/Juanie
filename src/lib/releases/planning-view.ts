@@ -80,6 +80,95 @@ export interface ReleasePlanningPanel {
   canSubmit: boolean;
 }
 
+function getChipSemanticKey(chip: ReleasePlanningPanelChip): string {
+  if (
+    chip.key === 'issue:approval_blocked' ||
+    chip.label === '审批阻塞' ||
+    chip.label === '需要审批'
+  ) {
+    return 'approval-gate';
+  }
+
+  if (chip.label === '生产环境保护') {
+    return 'production-protection';
+  }
+
+  return chip.key;
+}
+
+function getChipPresentation(chip: ReleasePlanningPanelChip): ReleasePlanningPanelChip {
+  if (chip.key === 'issue:approval_blocked' || chip.label === '审批阻塞') {
+    return {
+      ...chip,
+      key: 'approval-gate',
+      label: '等待审批',
+    };
+  }
+
+  if (chip.label === '需要审批') {
+    return {
+      ...chip,
+      key: 'approval-gate',
+    };
+  }
+
+  return chip;
+}
+
+function mergePlanningChips(chips: ReleasePlanningPanelChip[]): ReleasePlanningPanelChip[] {
+  const merged = new Map<string, ReleasePlanningPanelChip>();
+
+  for (const rawChip of chips) {
+    const chip = getChipPresentation(rawChip);
+    const key = getChipSemanticKey(chip);
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, { ...chip, key });
+      continue;
+    }
+
+    if (existing.label === '需要审批' && chip.label === '等待审批') {
+      merged.set(key, { ...chip, key });
+      continue;
+    }
+
+    if (existing.tone !== 'danger' && chip.tone === 'danger') {
+      merged.set(key, { ...existing, tone: 'danger' });
+    }
+  }
+
+  return Array.from(merged.values());
+}
+
+function getPlanningIssueSummary(plan: ReleasePlanningViewLike): string | null {
+  if (plan.issue?.code === 'approval_blocked') {
+    const migrationCount = plan.migration.preDeployCount || plan.migration.automaticCount;
+    const migrationLabel = plan.migration.preDeployCount > 0 ? '生产前置迁移' : '生产迁移';
+    return migrationCount > 0
+      ? `这次发布包含 ${migrationCount} 个${migrationLabel}，需要在发布详情审批后才会执行。`
+      : '这次发布需要在发布详情完成审批后才会继续。';
+  }
+
+  return plan.platformSignals.primarySummary;
+}
+
+function getPlanningWarningChips(plan: ReleasePlanningViewLike): ReleasePlanningPanelChip[] {
+  const hiddenWarnings = new Set<string>();
+
+  if (plan.issue?.code === 'approval_blocked') {
+    hiddenWarnings.add('发布流程会等待审批，通过后才执行生产迁移。');
+  }
+
+  return Array.from(new Set(plan.migration.warnings))
+    .filter((warning) => !hiddenWarnings.has(warning))
+    .map((warning) => ({
+      key: warning,
+      label: warning,
+      tone: 'neutral',
+    }));
+}
+
 export function buildReleasePlanningPanel(input: {
   plan: ReleasePlanningViewLike;
   sourceCommitSha?: string | null;
@@ -140,13 +229,9 @@ export function buildReleasePlanningPanel(input: {
   }
 
   return {
-    chips,
-    warningChips: input.plan.migration.warnings.map((warning) => ({
-      key: warning,
-      label: warning,
-      tone: 'neutral',
-    })),
-    issueSummary: input.plan.platformSignals.primarySummary,
+    chips: mergePlanningChips(chips),
+    warningChips: getPlanningWarningChips(input.plan),
+    issueSummary: getPlanningIssueSummary(input.plan),
     nextActionLabel: input.plan.platformSignals.nextActionLabel,
     blockingReason: input.plan.blockingReason,
     sourceImageUrl: input.sourceImageUrl ?? null,

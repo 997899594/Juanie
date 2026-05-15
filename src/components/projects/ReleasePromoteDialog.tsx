@@ -103,12 +103,14 @@ export function ReleasePromoteDialog({
   const promotePanel = selectedPlan
     ? buildReleasePlanningPanel({
         plan: selectedPlan.plan,
-        sourceCommitSha: selectedPlan.sourceRelease?.sourceCommitSha,
       })
     : null;
   const schemaRefresh = selectedPlan?.plan.schema.refresh ?? null;
   const schemaRefreshActive =
     (schemaRefresh?.queuedCount ?? 0) + (schemaRefresh?.runningCount ?? 0) > 0;
+  const schemaRefreshChipVisible = promotePanel?.chips.some(
+    (chip) => chip.key === 'schema:refreshing'
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,11 +165,6 @@ export function ReleasePromoteDialog({
                       {getPromotionStrategyLabel(selectedPlan.strategy) ? (
                         <Badge variant="secondary" className="rounded-full px-2.5 py-0.5">
                           {getPromotionStrategyLabel(selectedPlan.strategy)}
-                        </Badge>
-                      ) : null}
-                      {selectedPlan.requiresApproval ? (
-                        <Badge variant="secondary" className="rounded-full px-2.5 py-0.5">
-                          需要审批
                         </Badge>
                       ) : null}
                     </div>
@@ -230,7 +227,7 @@ export function ReleasePromoteDialog({
                       </div>
                     ) : null}
 
-                    {schemaRefreshActive || refreshingPlan ? (
+                    {(schemaRefreshActive || refreshingPlan) && !schemaRefreshChipVisible ? (
                       <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
                         Schema 检查刷新中。
                       </div>

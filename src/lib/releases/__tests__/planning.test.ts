@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { summarizeReleasePlan } from '@/lib/releases/planning';
+import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { previewDatabaseGuardMessage } from '@/lib/releases/preview-database-guard';
 
 describe('release planning', () => {
@@ -81,6 +82,39 @@ describe('release planning', () => {
     expect(plan.migration.manualPlatformCount).toBe(1);
     expect(plan.migration.externalCount).toBe(1);
     expect(plan.migration.requiresExternalCompletion).toBe(true);
+  });
+
+  it('presents approval-gated production plans without duplicate approval chips', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: true, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [
+        {
+          environment: { isProduction: true, isPreview: false },
+          specification: {
+            executionMode: 'automatic',
+            phase: 'preDeploy',
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'manual_in_production',
+          },
+        },
+      ],
+    });
+
+    const panel = buildReleasePlanningPanel({ plan });
+    const approvalChips = panel.chips.filter((chip) => chip.key === 'approval-gate');
+    const productionProtectionChips = panel.chips.filter(
+      (chip) => chip.key === 'production-protection'
+    );
+
+    expect(approvalChips).toEqual([{ key: 'approval-gate', label: '等待审批', tone: 'danger' }]);
+    expect(productionProtectionChips.length).toBe(1);
+    expect(panel.issueSummary).toBe(
+      '这次发布包含 1 个生产前置迁移，需要在发布详情审批后才会执行。'
+    );
+    expect(panel.warningChips.map((chip) => chip.label)).not.toContain(
+      '发布流程会等待审批，通过后才执行生产迁移。'
+    );
   });
 
   it('blocks release creation when schema gate is not aligned', () => {
