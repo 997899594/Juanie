@@ -1413,49 +1413,60 @@ export async function upsertService(
   }
 ): Promise<void> {
   const { core } = getK8sClient();
+  const maxAttempts = 3;
 
-  try {
-    const current = await core.readNamespacedService({ namespace, name });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const current = await core.readNamespacedService({ namespace, name });
 
-    await core.replaceNamespacedService({
-      namespace,
-      name,
-      body: {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: {
-          ...current.metadata,
-          name,
-          namespace,
+      await core.replaceNamespacedService({
+        namespace,
+        name,
+        body: {
+          apiVersion: 'v1',
+          kind: 'Service',
+          metadata: {
+            ...current.metadata,
+            name,
+            namespace,
+          },
+          spec: {
+            ...current.spec,
+            type: spec.type || current.spec?.type || 'ClusterIP',
+            selector: spec.selector || current.spec?.selector || { app: name },
+            ports: [
+              {
+                name: 'http',
+                port: spec.port,
+                targetPort: spec.targetPort,
+                protocol: 'TCP',
+              },
+            ],
+          },
         },
-        spec: {
-          ...current.spec,
-          type: spec.type || current.spec?.type || 'ClusterIP',
-          selector: spec.selector || current.spec?.selector || { app: name },
-          ports: [
-            {
-              name: 'http',
-              port: spec.port,
-              targetPort: spec.targetPort,
-              protocol: 'TCP',
-            },
-          ],
-        },
-      },
-    });
-  } catch (e: unknown) {
-    const error = e as { code?: number; statusCode?: number };
-    if ((error.code ?? error.statusCode) === 404) {
-      await createService(namespace, name, {
-        port: spec.port,
-        targetPort: typeof spec.targetPort === 'number' ? spec.targetPort : spec.port,
-        type: spec.type,
-        selector: spec.selector,
       });
       return;
-    }
+    } catch (e: unknown) {
+      const error = e as { code?: number; statusCode?: number };
+      const statusCode = error.code ?? error.statusCode;
 
-    throw e;
+      if (statusCode === 404) {
+        await createService(namespace, name, {
+          port: spec.port,
+          targetPort: typeof spec.targetPort === 'number' ? spec.targetPort : spec.port,
+          type: spec.type,
+          selector: spec.selector,
+        });
+        return;
+      }
+
+      if (statusCode === 409 && attempt < maxAttempts) {
+        await sleep(150 * attempt);
+        continue;
+      }
+
+      throw e;
+    }
   }
 }
 
