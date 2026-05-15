@@ -1027,6 +1027,23 @@ const LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR = [
   'juanie.dev/last-applied-spec',
 ] as const;
 
+function buildHttpProbes(input: { healthcheckPath?: string; port: number }) {
+  return {
+    readinessProbe: {
+      httpGet: { path: input.healthcheckPath || '/api/health/ready', port: input.port },
+      initialDelaySeconds: 15,
+      periodSeconds: 10,
+      failureThreshold: 6, // 15 + 6*10 = 75s before giving up
+    },
+    livenessProbe: {
+      httpGet: { path: input.healthcheckPath || '/api/health/live', port: input.port },
+      initialDelaySeconds: 30,
+      periodSeconds: 20,
+      failureThreshold: 3,
+    },
+  };
+}
+
 export async function createDeployment(
   namespace: string,
   name: string,
@@ -1040,6 +1057,7 @@ export async function createDeployment(
     command?: string[];
     args?: string[];
     healthcheckPath?: string;
+    enableHttpProbes?: boolean;
     cpuRequest?: string;
     cpuLimit?: string;
     memoryRequest?: string;
@@ -1075,18 +1093,9 @@ export async function createDeployment(
                 envFrom: spec.envFrom,
                 command: spec.command,
                 args: spec.args,
-                readinessProbe: {
-                  httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },
-                  initialDelaySeconds: 15,
-                  periodSeconds: 10,
-                  failureThreshold: 6, // 15 + 6*10 = 75s before giving up
-                },
-                livenessProbe: {
-                  httpGet: { path: spec.healthcheckPath || '/api/health/live', port: spec.port },
-                  initialDelaySeconds: 30,
-                  periodSeconds: 20,
-                  failureThreshold: 3,
-                },
+                ...(spec.enableHttpProbes === false
+                  ? {}
+                  : buildHttpProbes({ healthcheckPath: spec.healthcheckPath, port: spec.port })),
                 resources: {
                   requests: {
                     cpu: spec.cpuRequest || '100m',
@@ -1117,6 +1126,7 @@ export async function updateDeployment(
     envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
     imagePullSecrets?: string[];
     healthcheckPath?: string;
+    enableHttpProbes?: boolean;
     cpuRequest?: string;
     cpuLimit?: string;
     memoryRequest?: string;
@@ -1133,51 +1143,42 @@ export async function updateDeployment(
   }
 
   const containers = current.spec?.template?.spec?.containers || [];
-  const updatedContainers = containers.map((container) => ({
-    ...container,
-    image: spec.image ?? container.image,
-    ports:
-      spec.port !== undefined
-        ? [{ containerPort: spec.port, name: 'http', protocol: 'TCP' }]
-        : container.ports,
-    env: spec.env
-      ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
-      : container.env,
-    // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
-    ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
-    ...(spec.healthcheckPath
-      ? {
-          readinessProbe: {
-            httpGet: {
-              path: spec.healthcheckPath,
-              port: spec.port ?? container.ports?.[0]?.containerPort ?? 3000,
-            },
-            initialDelaySeconds: 15,
-            periodSeconds: 10,
-            failureThreshold: 6,
-          },
-          livenessProbe: {
-            httpGet: {
-              path: spec.healthcheckPath,
-              port: spec.port ?? container.ports?.[0]?.containerPort ?? 3000,
-            },
-            initialDelaySeconds: 30,
-            periodSeconds: 20,
-            failureThreshold: 3,
-          },
-        }
-      : {}),
-    resources: {
-      requests: {
-        cpu: spec.cpuRequest ?? container.resources?.requests?.cpu ?? '100m',
-        memory: spec.memoryRequest ?? container.resources?.requests?.memory ?? '256Mi',
+  const updatedContainers = containers.map((container) => {
+    const port = spec.port ?? container.ports?.[0]?.containerPort ?? 3000;
+    const updatedContainer = {
+      ...container,
+      image: spec.image ?? container.image,
+      ports:
+        spec.port !== undefined
+          ? [{ containerPort: spec.port, name: 'http', protocol: 'TCP' }]
+          : container.ports,
+      env: spec.env
+        ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+        : container.env,
+      // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
+      ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
+      ...(spec.enableHttpProbes === false
+        ? {}
+        : buildHttpProbes({ healthcheckPath: spec.healthcheckPath, port })),
+      resources: {
+        requests: {
+          cpu: spec.cpuRequest ?? container.resources?.requests?.cpu ?? '100m',
+          memory: spec.memoryRequest ?? container.resources?.requests?.memory ?? '256Mi',
+        },
+        limits: {
+          cpu: spec.cpuLimit ?? container.resources?.limits?.cpu ?? '500m',
+          memory: spec.memoryLimit ?? container.resources?.limits?.memory ?? '512Mi',
+        },
       },
-      limits: {
-        cpu: spec.cpuLimit ?? container.resources?.limits?.cpu ?? '500m',
-        memory: spec.memoryLimit ?? container.resources?.limits?.memory ?? '512Mi',
-      },
-    },
-  }));
+    };
+
+    if (spec.enableHttpProbes === false) {
+      delete updatedContainer.readinessProbe;
+      delete updatedContainer.livenessProbe;
+    }
+
+    return updatedContainer;
+  });
 
   // Always bump restartedAt so the pod rolls even when the image tag is unchanged.
   // This ensures pods pick up the latest ConfigMap/Secret values from envFrom.

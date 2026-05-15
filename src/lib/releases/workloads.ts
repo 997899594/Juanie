@@ -244,6 +244,8 @@ export async function upsertServiceWorkload(input: {
   creationLabel?: string;
   onLog?: (message: string) => Promise<void>;
 }) {
+  const enableHttpProbes = input.service.type === 'web';
+
   try {
     await updateDeployment(input.namespace, input.resourceName, {
       image: input.imageName,
@@ -251,6 +253,7 @@ export async function upsertServiceWorkload(input: {
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
+      enableHttpProbes,
       cpuRequest: input.service.cpuRequest ?? undefined,
       cpuLimit: input.service.cpuLimit ?? undefined,
       memoryRequest: input.service.memoryRequest ?? undefined,
@@ -268,6 +271,7 @@ export async function upsertServiceWorkload(input: {
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
+      enableHttpProbes,
       cpuRequest: input.service.cpuRequest ?? undefined,
       cpuLimit: input.service.cpuLimit ?? undefined,
       memoryRequest: input.service.memoryRequest ?? undefined,
@@ -370,6 +374,7 @@ export async function promoteCandidateSnapshotToStable(input: {
   onLog?: (message: string) => Promise<void>;
 }) {
   await ensureServiceResource(input.namespace, input.stableName, input.snapshot.port);
+  const enableHttpProbes = input.service.type === 'web';
 
   if (input.stableExists) {
     await updateDeployment(input.namespace, input.stableName, {
@@ -379,6 +384,7 @@ export async function promoteCandidateSnapshotToStable(input: {
       replicas: input.snapshot.replicas,
       imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
+      enableHttpProbes,
       cpuRequest: input.snapshot.cpuRequest,
       cpuLimit: input.snapshot.cpuLimit,
       memoryRequest: input.snapshot.memoryRequest,
@@ -393,6 +399,7 @@ export async function promoteCandidateSnapshotToStable(input: {
       envFrom: input.snapshot.envFrom,
       imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
       healthcheckPath: input.service.healthcheckPath ?? undefined,
+      enableHttpProbes,
       cpuRequest: input.snapshot.cpuRequest,
       cpuLimit: input.snapshot.cpuLimit,
       memoryRequest: input.snapshot.memoryRequest,
