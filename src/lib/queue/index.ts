@@ -1,4 +1,4 @@
-import { type ConnectionOptions, Queue } from 'bullmq';
+import { type ConnectionOptions, type Job, Queue } from 'bullmq';
 import type { AITaskKind } from '@/lib/ai/tasks/catalog';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { createTraceId } from '@/lib/trace/context';
@@ -105,6 +105,21 @@ export type AITaskJobData = {
   kind: AITaskKind;
 };
 
+export function shouldRecycleExistingMigrationJobState(state: string): boolean {
+  return state === 'completed' || state === 'failed';
+}
+
+async function recycleFinishedJob(job: Job | undefined | null): Promise<void> {
+  if (!job) {
+    return;
+  }
+
+  const state = await job.getState();
+  if (shouldRecycleExistingMigrationJobState(state)) {
+    await job.remove();
+  }
+}
+
 export async function addProjectInitJob(
   projectId: string,
   mode: 'import' | 'create',
@@ -176,7 +191,11 @@ export async function addMigrationJob(
   runId: string,
   options?: { allowApprovalBypass?: boolean; traceId?: string | null }
 ) {
-  return getMigrationQueue().add(
+  const queue = getMigrationQueue();
+  const jobId = `migration-${runId}`;
+  await recycleFinishedJob(await queue.getJob(jobId));
+
+  return queue.add(
     'migrate',
     {
       runId,
@@ -185,7 +204,8 @@ export async function addMigrationJob(
     },
     {
       attempts: 1,
-      jobId: `migration-${runId}`,
+      jobId,
+      removeOnComplete: true,
     }
   );
 }

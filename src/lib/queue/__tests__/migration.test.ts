@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { shouldRecycleExistingMigrationJobState } from '@/lib/queue';
 import {
   getUnexpectedMigrationJobFailureCode,
   shouldReconcileUnexpectedMigrationJobFailure,
@@ -11,6 +12,14 @@ import {
 import { shouldReconcileUnexpectedReleaseJobFailure } from '@/lib/queue/release';
 
 describe('migration queue failure reconciliation', () => {
+  it('recycles finished BullMQ migration jobs so approved runs can be queued again', () => {
+    expect(shouldRecycleExistingMigrationJobState('completed')).toBe(true);
+    expect(shouldRecycleExistingMigrationJobState('failed')).toBe(true);
+    expect(shouldRecycleExistingMigrationJobState('waiting')).toBe(false);
+    expect(shouldRecycleExistingMigrationJobState('active')).toBe(false);
+    expect(shouldRecycleExistingMigrationJobState('delayed')).toBe(false);
+  });
+
   it('only reconciles unexpected queue failures for active runs', () => {
     expect(shouldReconcileUnexpectedMigrationJobFailure('queued')).toBe(true);
     expect(shouldReconcileUnexpectedMigrationJobFailure('planning')).toBe(true);
