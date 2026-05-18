@@ -208,7 +208,7 @@ export function ProjectRuntimeSnapshot({
         />
         <SnapshotGroup
           icon={<Database className="h-4 w-4" />}
-          title="数据"
+          title="数据库"
           empty="还没有数据库"
           items={visibleDatabases.map((database) => ({
             key: database.id,

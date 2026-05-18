@@ -230,6 +230,24 @@ function didDrizzlePushApplyChanges(output: string): boolean {
   return !noChangeMarkers.some((marker) => normalized.includes(marker));
 }
 
+export function getDrizzlePushOutputFailure(output: string): string | null {
+  const normalized = output.toLowerCase();
+
+  if (normalized.includes('interactive prompts require a tty terminal')) {
+    return 'Drizzle schema push 需要交互确认，schema-runner 不能在非交互环境继续执行';
+  }
+
+  if (normalized.includes('all changes were aborted')) {
+    return 'Drizzle schema push 已被中止';
+  }
+
+  if (normalized.includes('this action will cause data loss')) {
+    return 'Drizzle schema push 发现潜在数据丢失变更，必须人工确认';
+  }
+
+  return null;
+}
+
 function buildSchemaExportEnv(connectionString?: string | null): NodeJS.ProcessEnv {
   const normalizedConnectionString = connectionString?.trim();
 
@@ -311,6 +329,11 @@ export async function pushDrizzleDesiredSchemaArtifact(input: {
     emitCommandOutputLines(stderr, 'warn', input.onOutputLine);
 
     const output = buildCombinedCommandOutput(stdout, stderr);
+    const outputFailure = getDrizzlePushOutputFailure(output);
+    if (outputFailure) {
+      throw new Error(`${outputFailure}\n${output}`);
+    }
+
     return {
       applied: didDrizzlePushApplyChanges(output),
       output,

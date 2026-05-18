@@ -1,0 +1,3 @@
+# Bytebase is optional. Juanie bootstrap passes the external PostgreSQL URL and
+# image version through --set so this file only carries stable, non-secret
+# defaults.

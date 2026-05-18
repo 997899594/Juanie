@@ -18,6 +18,13 @@ ARGO_ROLLOUTS_NAMESPACE="${ARGO_ROLLOUTS_NAMESPACE:-argo-rollouts}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
 EXTERNAL_SECRETS_ENABLED="${EXTERNAL_SECRETS_ENABLED:-true}"
+BYTEBASE_ENABLED="${BYTEBASE_ENABLED:-false}"
+BYTEBASE_NAMESPACE="${BYTEBASE_NAMESPACE:-bytebase}"
+BYTEBASE_HOSTNAME="${BYTEBASE_HOSTNAME:-bytebase.${PLATFORM_DOMAIN}}"
+BYTEBASE_PUBLIC_URL="${BYTEBASE_PUBLIC_URL:-}"
+BYTEBASE_EXTERNAL_PG_URL="${BYTEBASE_EXTERNAL_PG_URL:-}"
+BYTEBASE_SERVICE_NAME="${BYTEBASE_SERVICE_NAME:-bytebase-entrypoint}"
+BYTEBASE_SERVICE_PORT="${BYTEBASE_SERVICE_PORT:-80}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
 GATEWAY_EDGE_MODE="${GATEWAY_EDGE_MODE:-loadBalancer}"
@@ -32,6 +39,8 @@ ARGO_ROLLOUTS_CHART_VERSION="${ARGO_ROLLOUTS_CHART_VERSION:-2.40.9}"
 CNPG_CHART_VERSION="${CNPG_CHART_VERSION:-0.28.0}"
 EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.3.0}"
 DNSPOD_WEBHOOK_CHART_VERSION="${DNSPOD_WEBHOOK_CHART_VERSION:-1.5.2}"
+BYTEBASE_CHART_VERSION="${BYTEBASE_CHART_VERSION:-1.1.2}"
+BYTEBASE_IMAGE_VERSION="${BYTEBASE_IMAGE_VERSION:-3.17.1}"
 
 CERT_MANAGER_CHART_REF="${CERT_MANAGER_CHART_REF:-jetstack/cert-manager}"
 ARGOCD_CHART_REF="${ARGOCD_CHART_REF:-argo/argo-cd}"
@@ -39,6 +48,7 @@ ARGO_ROLLOUTS_CHART_REF="${ARGO_ROLLOUTS_CHART_REF:-argo/argo-rollouts}"
 CNPG_CHART_REF="${CNPG_CHART_REF:-cnpg/cloudnative-pg}"
 EXTERNAL_SECRETS_CHART_REF="${EXTERNAL_SECRETS_CHART_REF:-external-secrets/external-secrets}"
 DNSPOD_WEBHOOK_CHART_REF="${DNSPOD_WEBHOOK_CHART_REF:-cert-manager-webhook-dnspod/cert-manager-webhook-dnspod}"
+BYTEBASE_CHART_REF="${BYTEBASE_CHART_REF:-bytebase/bytebase}"
 
 BOOTSTRAP_CHART_SOURCE="${BOOTSTRAP_CHART_SOURCE:-repo}"
 BOOTSTRAP_CHART_DIR="${BOOTSTRAP_CHART_DIR:-${ROOT_DIR}/.charts}"
@@ -50,6 +60,7 @@ ARGO_ROLLOUTS_CHART_URL="${ARGO_ROLLOUTS_CHART_URL:-https://github.com/argoproj/
 CNPG_CHART_URL="${CNPG_CHART_URL:-https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v${CNPG_CHART_VERSION}/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
 EXTERNAL_SECRETS_CHART_URL="${EXTERNAL_SECRETS_CHART_URL:-https://external-secrets.io/external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz}"
 DNSPOD_WEBHOOK_CHART_URL="${DNSPOD_WEBHOOK_CHART_URL:-https://github.com/imroc/cert-manager-webhook-dnspod/releases/download/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz}"
+BYTEBASE_CHART_URL="${BYTEBASE_CHART_URL:-https://bytebase.github.io/bytebase/bytebase-${BYTEBASE_CHART_VERSION}.tgz}"
 
 CERT_MANAGER_IMAGE_REPOSITORY="${CERT_MANAGER_IMAGE_REPOSITORY:-}"
 CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY="${CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY:-}"
@@ -206,6 +217,10 @@ resolve_chart_refs() {
 
       if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
         EXTERNAL_SECRETS_CHART_REF="$(download_chart "external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz" "${EXTERNAL_SECRETS_CHART_URL}")"
+      fi
+
+      if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
+        BYTEBASE_CHART_REF="$(download_chart "bytebase-${BYTEBASE_CHART_VERSION}.tgz" "${BYTEBASE_CHART_URL}")"
       fi
 
       if [[ "$(gateway_https_enabled)" == "true" ]]; then
@@ -538,6 +553,59 @@ EOF
   log_info "已同步 Gateway shared-gateway: mode=${GATEWAY_EDGE_MODE}, httpPort=${http_port}, https=${https_enabled}"
 }
 
+bytebase_public_url() {
+  if [[ -n "${BYTEBASE_PUBLIC_URL}" ]]; then
+    printf '%s\n' "${BYTEBASE_PUBLIC_URL%/}"
+    return
+  fi
+
+  if [[ "$(gateway_https_enabled)" == "true" ]]; then
+    printf 'https://%s\n' "${BYTEBASE_HOSTNAME}"
+    return
+  fi
+
+  printf 'http://%s\n' "${BYTEBASE_HOSTNAME}"
+}
+
+apply_bytebase_route() {
+  local section_name
+
+  if [[ "${BYTEBASE_ENABLED}" != "true" ]]; then
+    return
+  fi
+
+  if [[ "$(gateway_https_enabled)" == "true" ]]; then
+    section_name='https-wildcard'
+  else
+    section_name='http-wildcard'
+  fi
+
+  ensure_namespace "${BYTEBASE_NAMESPACE}"
+
+  cat <<EOF | kubectl apply -f - >/dev/null
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: bytebase
+  namespace: ${BYTEBASE_NAMESPACE}
+  labels:
+    app.kubernetes.io/managed-by: juanie-bootstrap
+spec:
+  parentRefs:
+    - name: shared-gateway
+      namespace: ${PLATFORM_NAMESPACE}
+      sectionName: ${section_name}
+  hostnames:
+    - "${BYTEBASE_HOSTNAME}"
+  rules:
+    - backendRefs:
+        - name: ${BYTEBASE_SERVICE_NAME}
+          port: ${BYTEBASE_SERVICE_PORT}
+EOF
+
+  log_info "已同步 Bytebase HTTPRoute: $(bytebase_public_url)"
+}
+
 ensure_dnspod_secret() {
   if kubectl get secret dnspod-secret -n "${CERT_MANAGER_NAMESPACE}" >/dev/null 2>&1; then
     log_info "检测到现有 dnspod-secret，复用 ${CERT_MANAGER_NAMESPACE}/dnspod-secret"
@@ -655,6 +723,9 @@ show_summary() {
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
   fi
+  if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
+    summary_namespaces+=("${BYTEBASE_NAMESPACE}")
+  fi
 
   kubectl get ns "${summary_namespaces[@]}" >/dev/null
   kubectl get pods -n "${CERT_MANAGER_NAMESPACE}"
@@ -665,6 +736,11 @@ show_summary() {
   kubectl get pods -n "${CNPG_NAMESPACE}"
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
+  fi
+  if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
+    kubectl get pods -n "${BYTEBASE_NAMESPACE}"
+    log_info "Bytebase URL: $(bytebase_public_url)"
+    log_info "Juanie Helm env should set BYTEBASE_ENABLED=true and BYTEBASE_URL=$(bytebase_public_url)"
   fi
   kubectl get gateway -n "${PLATFORM_NAMESPACE}" || true
   kubectl get certificate -n "${PLATFORM_NAMESPACE}" || true
@@ -710,6 +786,11 @@ fi
 
 if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]] && ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
   helm_repo_add external-secrets https://charts.external-secrets.io
+  helm_repo_update_required='true'
+fi
+
+if [[ "${BYTEBASE_ENABLED}" == "true" ]] && ! is_local_chart_ref "${BYTEBASE_CHART_REF}"; then
+  helm_repo_add bytebase https://bytebase.github.io/bytebase
   helm_repo_update_required='true'
 fi
 
@@ -860,9 +941,34 @@ helm_upgrade_install \
   "${cnpg_args[@]}"
 wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=cloudnative-pg
 
+if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
+  log_section "安装 Bytebase"
+  if [[ -z "${BYTEBASE_EXTERNAL_PG_URL}" ]]; then
+    log_error "BYTEBASE_ENABLED=true 时必须提供 BYTEBASE_EXTERNAL_PG_URL。建议为 Bytebase 使用独立 PostgreSQL 数据库和最小权限账号。"
+    exit 1
+  fi
+
+  ensure_namespace "${BYTEBASE_NAMESPACE}"
+  helm_upgrade_install \
+    bytebase \
+    "${BYTEBASE_CHART_REF}" \
+    "${BYTEBASE_NAMESPACE}" \
+    "${INFRA_DIR}/bytebase/values.yaml" \
+    "${BYTEBASE_CHART_VERSION}" \
+    --set-string "bytebase.option.externalPg.url=${BYTEBASE_EXTERNAL_PG_URL}" \
+    --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
+
+  if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then
+    wait_for_labeled_statefulsets "${BYTEBASE_NAMESPACE}" app.kubernetes.io/instance=bytebase
+  fi
+else
+  log_info "Bytebase 数据库控制台已关闭，跳过安装。"
+fi
+
 log_section "应用平台网关与证书资源"
 apply_rendered_manifest "${INFRA_DIR}/gateway/namespace.yaml"
 apply_gateway_manifest
+apply_bytebase_route
 
 if [[ "$(gateway_https_enabled)" == "true" ]]; then
   apply_rendered_manifest "${INFRA_DIR}/gateway/certificate.yaml"

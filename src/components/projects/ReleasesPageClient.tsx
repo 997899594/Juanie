@@ -97,6 +97,18 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     initialStateKey: initialLatestReleaseState,
     onRelease: () => router.refresh(),
   });
+  const environments = initialData.environments;
+  const governance = initialData.governance;
+  const filter = initialData.selectedEnv;
+  const riskFilter = initialData.selectedRisk;
+  const defaultRiskFilter = initialData.defaultRiskFilter;
+  const selectedEnvironment =
+    filter !== 'all'
+      ? (environments.find((environment) => environment.id === filter) ?? null)
+      : null;
+  const activePromotionPlans = selectedEnvironment
+    ? promotionPlans.filter((plan) => plan.sourceEnvironment?.id === selectedEnvironment.id)
+    : promotionPlans;
 
   useEffect(() => {
     setPromotionPlans(initialData.promotionPlans);
@@ -106,24 +118,26 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   }, [initialData.promotionPlans]);
 
   useEffect(() => {
-    const hasSelectedFlow = promotionPlans.some((plan) => plan.flowId === selectedPromotionFlowId);
+    const hasSelectedFlow = activePromotionPlans.some(
+      (plan) => plan.flowId === selectedPromotionFlowId
+    );
 
     if (hasSelectedFlow) {
       return;
     }
 
     setSelectedPromotionFlowId(
-      promotionPlans.find((plan) =>
+      activePromotionPlans.find((plan) =>
         plan.targetEnvironment
           ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
           : false
       )?.flowId ??
-        promotionPlans[0]?.flowId ??
+        activePromotionPlans[0]?.flowId ??
         null
     );
   }, [
+    activePromotionPlans,
     initialData.governance.promotion.manageableTargetIds,
-    promotionPlans,
     selectedPromotionFlowId,
   ]);
 
@@ -167,11 +181,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     }
   };
 
-  const environments = initialData.environments;
-  const governance = initialData.governance;
-  const filter = initialData.selectedEnv;
-  const riskFilter = initialData.selectedRisk;
-  const defaultRiskFilter = initialData.defaultRiskFilter;
   const updateFilters = (next: {
     env?: string;
     risk?: 'all' | 'attention' | 'approval' | 'failed';
@@ -189,10 +198,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
-  const selectedEnvironment =
-    filter !== 'all'
-      ? (environments.find((environment) => environment.id === filter) ?? null)
-      : null;
   const filtered = initialData.filteredReleaseItems;
   const incomingPromotionPlans = selectedEnvironment
     ? promotionPlans.filter((plan) => plan.targetEnvironment?.id === selectedEnvironment.id)
@@ -215,10 +220,10 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
 
     return true;
   });
-  const hasPromotionTarget = initialData.hasPromotionTarget;
+  const hasPromotionTarget = activePromotionPlans.length > 0;
   const selectedPromotionPlan =
-    promotionPlans.find((plan) => plan.flowId === selectedPromotionFlowId) ??
-    promotionPlans[0] ??
+    activePromotionPlans.find((plan) => plan.flowId === selectedPromotionFlowId) ??
+    activePromotionPlans[0] ??
     null;
   const selectedPromotionPlanKey = getPromotionPlanKey(
     selectedPromotionPlan?.flowId ?? selectedPromotionFlowId
@@ -244,11 +249,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     !selectedPromotionPlan.plan.blockingReason;
   const promoteButtonTitle =
     !selectedPromotionPlan || !selectedPromotionPlan.targetEnvironment
-      ? governance.promotion.summary
+      ? '当前环境没有下游提升链路'
       : !canManageSelectedTarget
         ? governance.promotion.summary
         : (selectedPromotionPlan.plan.blockingReason ??
-          `将 ${selectedPromotionPlan.sourceEnvironment?.name ?? '来源环境'} 提升到 ${selectedPromotionPlan.targetEnvironment.name}`);
+          `将当前环境提升到 ${selectedPromotionPlan.targetEnvironment.name}`);
   const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
     ...release,
     sourceRef: release.sourceRef ?? '',
@@ -398,7 +403,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               title={promoteButtonTitle}
             >
               <ArrowUpCircle className="h-3.5 w-3.5" />
-              {promoting ? '创建中...' : '提升发布'}
+              {promoting ? '创建中...' : '提升到下游'}
             </Button>
           )}
           {selectedEnvironment ? (
@@ -416,7 +421,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <ReleasePromoteDialog
         open={promoteDialogOpen}
         onOpenChange={setPromoteDialogOpen}
-        promotionPlans={promotionPlans}
+        promotionPlans={activePromotionPlans}
         selectedFlowId={selectedPromotionFlowId}
         onSelectedFlowIdChange={setSelectedPromotionFlowId}
         canPromote={canPromote}
@@ -454,11 +459,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             ) : null}
           </div>
 
-          <div className={shellClassName}>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              进入方式
-            </div>
-            {incomingPromotionPlans.length > 0 ? (
+          {incomingPromotionPlans.length > 0 ? (
+            <div className={shellClassName}>
+              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                来自
+              </div>
               <div className="mt-3 space-y-2.5">
                 {incomingPromotionPlans.slice(0, 3).map((plan) => (
                   <div
@@ -467,25 +472,18 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                     }
                     className="console-inset px-3 py-2.5 text-sm text-foreground"
                   >
-                    {`${plan.sourceEnvironment?.name ?? '来源环境'} -> ${plan.targetEnvironment?.name ?? '当前环境'}`}
+                    {plan.sourceEnvironment?.name ?? '来源环境'}
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
-                直接发布
-              </div>
-            )}
-            {incomingPromotionPlans.some((plan) => plan.requiresApproval) ? (
-              <div className="mt-3 text-xs text-muted-foreground">含审批</div>
-            ) : null}
-          </div>
-
-          <div className={shellClassName}>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              后续去向
             </div>
-            {outgoingPromotionPlans.length > 0 ? (
+          ) : null}
+
+          {outgoingPromotionPlans.length > 0 ? (
+            <div className={shellClassName}>
+              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                可提升到
+              </div>
               <div className="mt-3 space-y-2.5">
                 {outgoingPromotionPlans.slice(0, 3).map((plan) => (
                   <div
@@ -494,19 +492,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                     }
                     className="console-inset px-3 py-2.5 text-sm text-foreground"
                   >
-                    {`${plan.sourceEnvironment?.name ?? '当前环境'} -> ${plan.targetEnvironment?.name ?? '目标环境'}`}
+                    {plan.targetEnvironment?.name ?? '目标环境'}
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
-                无后续链路
-              </div>
-            )}
-            {outgoingPromotionPlans.some((plan) => plan.requiresApproval) ? (
-              <div className="mt-3 text-xs text-muted-foreground">含审批</div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

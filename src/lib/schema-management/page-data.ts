@@ -1,4 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
+import {
+  buildBytebaseDatabaseConsoleLink,
+  buildDatabaseConsoleOverview,
+  getBytebaseConsoleConfig,
+} from '@/lib/database-console/bytebase';
 import { db } from '@/lib/db';
 import { environments, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
@@ -16,6 +21,7 @@ export async function getProjectSchemaCenterData(input: {
   selectedEnvId?: string | null;
 }) {
   const projectId = input.project.id;
+  const databaseConsoleConfig = getBytebaseConsoleConfig();
 
   const [environmentList, latestRepairPlansResult, latestAtlasRuns] = await Promise.all([
     db.query.environments.findMany({
@@ -28,6 +34,11 @@ export async function getProjectSchemaCenterData(input: {
             name: true,
             type: true,
             status: true,
+            host: true,
+            port: true,
+            databaseName: true,
+            namespace: true,
+            serviceName: true,
             sourceDatabaseId: true,
           },
           with: {
@@ -108,6 +119,12 @@ export async function getProjectSchemaCenterData(input: {
                   : null,
             }
           : null,
+        console: buildBytebaseDatabaseConsoleLink({
+          config: databaseConsoleConfig,
+          project: input.project,
+          environment,
+          database,
+        }),
       };
     }),
   }));
@@ -129,6 +146,7 @@ export async function getProjectSchemaCenterData(input: {
   return {
     projectName: input.project.name,
     roleLabel: input.role,
+    databaseConsole: buildDatabaseConsoleOverview(databaseConsoleConfig),
     environments: visibleEnvironments,
     selectedEnvId: selectedEnvironment?.id ?? null,
     summary: {

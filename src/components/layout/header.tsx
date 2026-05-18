@@ -339,7 +339,7 @@ function generateBreadcrumbs(
     resources: '资源浏览',
     members: '成员',
     new: '新建',
-    schema: '数据',
+    schema: '数据库',
     runtime: '环境',
   };
 

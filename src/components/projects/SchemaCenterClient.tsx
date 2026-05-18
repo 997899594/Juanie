@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, ExternalLink, Loader2 } from 'lucide-react';
+import { Database, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -66,6 +66,26 @@ interface SchemaCenterDatabaseRecord {
     startedAt: string | Date | null;
     finishedAt: string | Date | null;
   } | null;
+  console: {
+    enabled: true;
+    provider: 'bytebase';
+    label: string;
+    workspaceUrl: string;
+    sqlEditorUrl: string;
+    databaseUrl: string;
+    accessModeLabel: string;
+    summary: string;
+    changeManagementSummary: string;
+    context: {
+      engine: string;
+      target: string;
+      namespace: string | null;
+      serviceName: string | null;
+      host: string | null;
+      port: number | null;
+      databaseName: string | null;
+    };
+  } | null;
 }
 
 interface SchemaCenterEnvironmentRecord {
@@ -89,6 +109,16 @@ interface SchemaCenterData {
     databaseCount: number;
     blockingCount: number;
     pendingCount: number;
+  };
+  databaseConsole: {
+    enabled: boolean;
+    provider: 'bytebase';
+    label: string;
+    workspaceUrl: string | null;
+    sqlEditorUrl: string | null;
+    accessModeLabel: string;
+    summary: string;
+    changeManagementSummary: string;
   };
 }
 
@@ -235,13 +265,14 @@ export function SchemaCenterClient({
     (initialEnvId
       ? data.environments.find((environment) => environment.id === initialEnvId)
       : null) ?? null;
+  const databaseConsole = data.databaseConsole.enabled ? data.databaseConsole : null;
 
   return (
     <EnvironmentPageFrame
       projectId={projectId}
       environmentId={focusedEnvironment?.id}
       showEnvironmentNav={Boolean(focusedEnvironment)}
-      title={`${focusedEnvironment?.name ?? '环境'} · 数据`}
+      title={`${focusedEnvironment?.name ?? '环境'} · 数据库`}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {focusedEnvironment ? (
@@ -254,6 +285,43 @@ export function SchemaCenterClient({
         </div>
       }
     >
+      {databaseConsole ? (
+        <section className="console-panel mb-4 overflow-hidden px-5 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{databaseConsole.label}</Badge>
+                <Badge variant="secondary" className="border-success/30 text-success">
+                  {databaseConsole.accessModeLabel}
+                </Badge>
+              </div>
+              <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
+                数据库工作台
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {databaseConsole.summary}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {databaseConsole.sqlEditorUrl ? (
+                <Button asChild className="h-10 rounded-full px-4">
+                  <a href={databaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
+                    打开控制台
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <div className="console-inset mt-4 flex items-start gap-3 px-4 py-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div className="text-sm leading-6 text-muted-foreground">
+              {databaseConsole.changeManagementSummary}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <div className={shellClassName}>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className={subCardClassName}>
@@ -489,6 +557,15 @@ export function SchemaCenterClient({
                           <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
                             <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
                               打开修复 PR
+                              <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        ) : null}
+
+                        {database.console ? (
+                          <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
+                            <a href={database.console.databaseUrl} target="_blank" rel="noreferrer">
+                              控制台
                               <ExternalLink className="ml-1 h-3.5 w-3.5" />
                             </a>
                           </Button>

@@ -1,4 +1,8 @@
 import { desc, eq } from 'drizzle-orm';
+import {
+  buildBytebaseDatabaseConsoleLink,
+  getBytebaseConsoleConfig,
+} from '@/lib/database-console/bytebase';
 import { db } from '@/lib/db';
 import {
   auditLogs,
@@ -51,6 +55,11 @@ export async function getProjectEnvironmentListData(input: {
   role: TeamRole;
 }) {
   const projectId = input.project.id;
+  const databaseConsoleConfig = getBytebaseConsoleConfig();
+  const databaseConsoleProject = {
+    id: input.project.id,
+    name: input.project.slug,
+  };
 
   const [
     environmentList,
@@ -92,6 +101,11 @@ export async function getProjectEnvironmentListData(input: {
             type: true,
             status: true,
             environmentId: true,
+            host: true,
+            port: true,
+            databaseName: true,
+            namespace: true,
+            serviceName: true,
             sourceDatabaseId: true,
           },
           with: {
@@ -227,6 +241,17 @@ export async function getProjectEnvironmentListData(input: {
                 : null,
           }
         : null,
+      console: buildBytebaseDatabaseConsoleLink({
+        config: databaseConsoleConfig,
+        project: databaseConsoleProject,
+        environment: {
+          id: database.environmentId ?? '',
+          name: database.environmentId
+            ? (environmentNameById.get(database.environmentId) ?? '环境')
+            : '环境',
+        },
+        database,
+      }),
     };
   };
   type DecoratedDatabaseRecord = ReturnType<typeof decorateDatabaseRecord>;

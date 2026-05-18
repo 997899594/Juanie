@@ -1,7 +1,17 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  Database,
+  ExternalLink,
+  GitBranch,
+  Globe,
+  Package2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -56,6 +66,7 @@ import {
   type PromotionFlowInput,
 } from '@/lib/environments/client-actions';
 import {
+  buildEnvironmentDatabaseSummary,
   buildEnvironmentHeaderMeta,
   buildEnvironmentListSummary,
   buildEnvironmentSourceSummary,
@@ -188,6 +199,26 @@ interface EnvironmentRecord {
       errorMessage: string | null;
       startedAt: string | Date | null;
       finishedAt: string | Date | null;
+    } | null;
+    console: {
+      enabled: true;
+      provider: 'bytebase';
+      label: string;
+      workspaceUrl: string;
+      sqlEditorUrl: string;
+      databaseUrl: string;
+      accessModeLabel: string;
+      summary: string;
+      changeManagementSummary: string;
+      context: {
+        engine: string;
+        target: string;
+        namespace: string | null;
+        serviceName: string | null;
+        host: string | null;
+        port: number | null;
+        databaseName: string | null;
+      };
     } | null;
   }>;
   databaseBindingSummary: {
@@ -551,16 +582,23 @@ function EnvironmentListCard({
 }
 
 function EnvironmentOverviewPanel({
+  projectId,
   environment,
+  incomingFlows,
+  outgoingFlows,
   runtimeAction,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
+  incomingFlows: DeliveryControlFlowRecord[];
+  outgoingFlows: DeliveryControlFlowRecord[];
   runtimeAction?: ReactNode;
 }) {
   const sourceSummary = buildEnvironmentSourceSummary(environment);
   const versionSummary = buildEnvironmentVersionSummary(environment);
   const statusSummary =
     environment.runtimeState?.summary ?? environment.platformSignals.primarySummary;
+  const databaseSummary = buildEnvironmentDatabaseSummary(environment);
   const summaryItems = [
     {
       key: 'source',
@@ -580,18 +618,44 @@ function EnvironmentOverviewPanel({
       value: buildRuntimeStateLabel(environment.runtimeState),
       summary: statusSummary ?? '运行态暂不可用',
     },
+    {
+      key: 'database',
+      label: '数据库',
+      value: databaseSummary,
+      summary:
+        environment.databases.find((database) => database.schemaState?.summary)?.schemaState
+          ?.summary ?? '数据库状态已纳入环境视图',
+    },
   ];
   const shellClassName = 'console-panel px-5 py-5';
   const titleClassName =
     'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
+  const deliveryHref = `/projects/${projectId}/environments/${environment.id}/delivery`;
+  const schemaHref = `/projects/${projectId}/environments/${environment.id}/schema`;
+  const consoleDatabases = environment.databases.filter((database) => Boolean(database.console));
+  const primaryDatabaseConsole = consoleDatabases[0]?.console ?? null;
+  const flowRows = [
+    ...incomingFlows.map((flow) => ({
+      key: `incoming-${flow.id}`,
+      label: '来自',
+      value: flow.sourceEnvironmentName ?? '来源环境',
+    })),
+    ...outgoingFlows.map((flow) => ({
+      key: `outgoing-${flow.id}`,
+      label: '可提升到',
+      value: flow.targetEnvironmentName ?? '目标环境',
+    })),
+  ];
 
   return (
     <div className="space-y-4">
-      {environment.primaryDomainUrl ? (
-        <section className={cn(shellClassName, 'px-6 py-6 sm:px-7')}>
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className={titleClassName}>访问地址</div>
+      <section className={cn(shellClassName, 'px-6 py-6 sm:px-7')}>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className={titleClassName}>
+              {environment.primaryDomainUrl ? '访问地址' : '环境状态'}
+            </div>
+            {environment.primaryDomainUrl ? (
               <a
                 href={environment.primaryDomainUrl}
                 target="_blank"
@@ -600,18 +664,36 @@ function EnvironmentOverviewPanel({
               >
                 {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
               </a>
+            ) : (
+              <div className="mt-3 text-[2.35rem] font-semibold leading-none tracking-[-0.045em] text-foreground sm:text-[2.8rem]">
+                {buildRuntimeStateLabel(environment.runtimeState)}
+              </div>
+            )}
+            <div className="mt-3 text-sm text-muted-foreground">
+              {statusSummary ?? buildEnvironmentHeaderMeta(environment) ?? '等待运行态数据'}
             </div>
-            <Button asChild variant="ghost" className="h-11 shrink-0 rounded-full px-5 text-sm">
-              <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                打开地址
-              </a>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {runtimeAction}
+            {environment.primaryDomainUrl ? (
+              <Button asChild variant="ghost" className="h-11 rounded-full px-5 text-sm">
+                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                  打开地址
+                </a>
+              </Button>
+            ) : null}
+            <Button asChild className="h-11 rounded-full px-5 text-sm">
+              <Link href={deliveryHref}>
+                {outgoingFlows.length > 0 ? '发布与提升' : '查看发布'}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </Button>
           </div>
-        </section>
-      ) : null}
+        </div>
+      </section>
 
       <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           {summaryItems.map((item) => (
             <div key={item.key} className="console-inset relative min-w-0 px-4 py-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -623,25 +705,137 @@ function EnvironmentOverviewPanel({
               <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
                 {item.summary || '等待数据'}
               </div>
-              {item.key === 'status' && runtimeAction ? (
-                <div className="mt-3">{runtimeAction}</div>
-              ) : null}
             </div>
           ))}
         </div>
       </section>
+
+      {primaryDatabaseConsole ? (
+        <section className={cn(shellClassName, 'px-5 py-5')}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{primaryDatabaseConsole.label}</Badge>
+                <Badge variant="secondary" className="border-success/30 text-success">
+                  {primaryDatabaseConsole.accessModeLabel}
+                </Badge>
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
+                <Database className="h-4 w-4" />
+                数据库工作台
+              </div>
+              <div className="mt-2 text-sm leading-6 text-muted-foreground">
+                {consoleDatabases.length} 个数据库已接入控制台；结构变更仍走发布、提升或修复流程。
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button asChild variant="ghost" className="h-10 rounded-full px-4 text-sm">
+                <Link href={schemaHref}>数据库</Link>
+              </Button>
+              <Button asChild className="h-10 rounded-full px-4 text-sm">
+                <a href={primaryDatabaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
+                  打开控制台
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
+        <section className={shellClassName}>
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <GitBranch className="h-4 w-4" />
+            交付路径
+          </div>
+          {flowRows.length > 0 ? (
+            <div className="space-y-2">
+              {flowRows.map((flow) => (
+                <div key={flow.key} className="console-inset px-4 py-3">
+                  <div className={titleClassName}>{flow.label}</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{flow.value}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="console-inset px-4 py-5 text-sm text-muted-foreground">
+              当前环境没有配置提升链路。
+            </div>
+          )}
+        </section>
+
+        <section className={shellClassName}>
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Activity className="h-4 w-4" />
+            最近活动
+          </div>
+          {environment.recentActivity.length > 0 ? (
+            <div className="space-y-2">
+              {environment.recentActivity.slice(0, 3).map((activity) => (
+                <Link
+                  key={activity.key}
+                  href={activity.href ?? deliveryHref}
+                  className="console-inset block px-4 py-3 transition hover:bg-foreground/[0.035]"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {activity.kind === 'release' ? (
+                        <Package2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : activity.kind === 'migration' ? (
+                        <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : (
+                        <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {activity.title}
+                      </span>
+                    </div>
+                    {activity.createdAtLabel ? (
+                      <span className="text-xs text-muted-foreground">
+                        {activity.createdAtLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                    {activity.summary}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="console-inset px-4 py-5 text-sm text-muted-foreground">
+              暂无发布、部署或迁移活动。
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
 
 function EnvironmentExpandedContent({
+  projectId,
   environment,
+  incomingFlows,
+  outgoingFlows,
   runtimeAction,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
+  incomingFlows: DeliveryControlFlowRecord[];
+  outgoingFlows: DeliveryControlFlowRecord[];
   runtimeAction?: ReactNode;
 }) {
-  return <EnvironmentOverviewPanel environment={environment} runtimeAction={runtimeAction} />;
+  return (
+    <EnvironmentOverviewPanel
+      projectId={projectId}
+      environment={environment}
+      incomingFlows={incomingFlows}
+      outgoingFlows={outgoingFlows}
+      runtimeAction={runtimeAction}
+    />
+  );
 }
 
 interface EnvironmentsPageClientProps {
@@ -747,6 +941,16 @@ export function EnvironmentsPageClient({
   const focusedEnvironmentMeta = focusedEnvironment
     ? buildEnvironmentHeaderMeta(focusedEnvironment)
     : undefined;
+  const focusedIncomingFlows = focusedEnvironment
+    ? initialData.deliveryControl.promotionFlows.filter(
+        (flow) => flow.isActive && flow.targetEnvironmentId === focusedEnvironment.id
+      )
+    : [];
+  const focusedOutgoingFlows = focusedEnvironment
+    ? initialData.deliveryControl.promotionFlows.filter(
+        (flow) => flow.isActive && flow.sourceEnvironmentId === focusedEnvironment.id
+      )
+    : [];
 
   const handleCreatePreview = async (input: {
     branch: string;
@@ -855,6 +1059,15 @@ export function EnvironmentsPageClient({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
+              <Button asChild className="h-10 rounded-full px-5">
+                <Link
+                  href={`/projects/${projectId}/environments/${focusedEnvironment.id}/delivery`}
+                >
+                  {focusedOutgoingFlows.length > 0 ? '发布与提升' : '查看发布'}
+                </Link>
+              </Button>
+            ) : null}
+            {focusMode && focusedEnvironment ? (
               <Button asChild variant="ghost" className="h-10 rounded-full px-5">
                 <Link href={`/projects/${projectId}/environments`}>返回环境列表</Link>
               </Button>
@@ -903,7 +1116,10 @@ export function EnvironmentsPageClient({
         <div className="space-y-6">
           {focusMode && focusedEnvironment ? (
             <EnvironmentExpandedContent
+              projectId={projectId}
               environment={focusedEnvironment}
+              incomingFlows={focusedIncomingFlows}
+              outgoingFlows={focusedOutgoingFlows}
               runtimeAction={renderRuntimeAction(focusedEnvironment)}
             />
           ) : (

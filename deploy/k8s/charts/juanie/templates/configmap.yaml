@@ -60,6 +60,13 @@ data:
   ARTIFACT_STORAGE_REGION: {{ .Values.env.ARTIFACT_STORAGE_REGION | default "auto" | quote }}
   ARTIFACT_STORAGE_FORCE_PATH_STYLE: {{ .Values.env.ARTIFACT_STORAGE_FORCE_PATH_STYLE | default "false" | quote }}
   ARTIFACT_DOWNLOAD_TTL_SECONDS: {{ .Values.env.ARTIFACT_DOWNLOAD_TTL_SECONDS | default "300" | quote }}
+  BYTEBASE_ENABLED: {{ .Values.env.BYTEBASE_ENABLED | default "false" | quote }}
+  BYTEBASE_URL: {{ .Values.env.BYTEBASE_URL | default "" | quote }}
+  BYTEBASE_SQL_EDITOR_PATH: {{ .Values.env.BYTEBASE_SQL_EDITOR_PATH | default "/sql-editor" | quote }}
+  BYTEBASE_ACCESS_MODE_LABEL: {{ .Values.env.BYTEBASE_ACCESS_MODE_LABEL | default "只读优先" | quote }}
+  BYTEBASE_SUMMARY: {{ .Values.env.BYTEBASE_SUMMARY | default "用于查询、排障和浏览结构；发布迁移仍走 Juanie + Atlas 主链" | quote }}
+  BYTEBASE_CHANGE_MANAGEMENT_SUMMARY: {{ .Values.env.BYTEBASE_CHANGE_MANAGEMENT_SUMMARY | default "DDL/DML 不在控制台直接放行，结构变更回到发布、提升或修复流程" | quote }}
+  BYTEBASE_DATABASE_URL_TEMPLATE: {{ .Values.env.BYTEBASE_DATABASE_URL_TEMPLATE | default "" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.runtime.repository | quote }}
   SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.runtime.tag | quote }}

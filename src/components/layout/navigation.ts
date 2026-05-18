@@ -57,7 +57,7 @@ export const environmentNav: NavItem[] = [
     icon: Rocket,
   },
   {
-    title: '数据',
+    title: '数据库',
     href: '/schema',
     icon: Database,
   },
