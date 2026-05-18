@@ -3,7 +3,7 @@
 Juanie 的生产运行分两层初始化：
 
 1. `deploy/k8s/scripts/install-k3s.sh` 负责宿主机层：安装 K3s、固定节点 IP、禁用内置入口、配置国内系统镜像源和 pause 镜像。
-2. `deploy/k8s/scripts/init-server.sh` 负责集群基础设施层：安装 cert-manager、Argo CD、Argo Rollouts、CloudNativePG、External Secrets 和 Gateway 资源。
+2. `deploy/k8s/scripts/init-server.sh` 负责集群基础设施层：安装 cert-manager、Argo Rollouts、Gateway 资源，以及显式启用的可选组件（Argo CD、CloudNativePG、External Secrets、Bytebase）。
 
 不要把两层混在一个脚本里。K3s 安装会修改 systemd、containerd 和 `/etc/rancher/k3s`；平台 bootstrap 只应该操作一个已经健康的 Kubernetes 集群。
 
@@ -152,7 +152,7 @@ bash deploy/k8s/scripts/init-server.sh
 - 不生成平台 wildcard Certificate。
 - 不写 Cilium LB IP annotation。
 
-国内客户机如果无法稳定访问 Helm repo 或 GitHub release，可以让 bootstrap 先下载 chart 包再安装，并关闭本机暂时不需要的 External Secrets Operator：
+国内客户机如果无法稳定访问 Helm repo 或 GitHub release，可以让 bootstrap 先下载 chart 包再安装；External Secrets Operator 默认不安装，只有接入外部密钥系统时再显式开启：
 
 ```bash
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -160,7 +160,6 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 PLATFORM_DOMAIN=juanie.draftingee.com \
 GATEWAY_EDGE_MODE=externalEdge \
 GATEWAY_HTTPS_ENABLED=false \
-EXTERNAL_SECRETS_ENABLED=false \
 GATEWAY_CLASS_NAME=cilium \
 GATEWAY_LOADBALANCER_IP='' \
 BOOTSTRAP_CHART_SOURCE=download \

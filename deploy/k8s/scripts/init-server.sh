@@ -15,25 +15,32 @@ ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
 ARGOCD_PROJECT_NAME="${ARGOCD_PROJECT_NAME:-juanie}"
 ARGOCD_ENABLED="${ARGOCD_ENABLED:-false}"
 ARGO_ROLLOUTS_NAMESPACE="${ARGO_ROLLOUTS_NAMESPACE:-argo-rollouts}"
+CNPG_ENABLED="${CNPG_ENABLED:-false}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
-EXTERNAL_SECRETS_ENABLED="${EXTERNAL_SECRETS_ENABLED:-true}"
+EXTERNAL_SECRETS_ENABLED="${EXTERNAL_SECRETS_ENABLED:-false}"
 BYTEBASE_ENABLED="${BYTEBASE_ENABLED:-false}"
 BYTEBASE_NAMESPACE="${BYTEBASE_NAMESPACE:-bytebase}"
 BYTEBASE_HOSTNAME="${BYTEBASE_HOSTNAME:-bytebase.${PLATFORM_DOMAIN}}"
 BYTEBASE_PUBLIC_URL="${BYTEBASE_PUBLIC_URL:-}"
 BYTEBASE_SERVICE_NAME="${BYTEBASE_SERVICE_NAME:-bytebase-entrypoint}"
 BYTEBASE_SERVICE_PORT="${BYTEBASE_SERVICE_PORT:-80}"
+BYTEBASE_REPLICAS="${BYTEBASE_REPLICAS:-0}"
 BYTEBASE_METADATA_DATABASE_URL="${BYTEBASE_METADATA_DATABASE_URL:-}"
-BYTEBASE_METADATA_CLUSTER_NAME="${BYTEBASE_METADATA_CLUSTER_NAME:-bytebase-metadata}"
 BYTEBASE_METADATA_DATABASE_NAME="${BYTEBASE_METADATA_DATABASE_NAME:-bytebase}"
 BYTEBASE_METADATA_DATABASE_USER="${BYTEBASE_METADATA_DATABASE_USER:-bytebase}"
-BYTEBASE_METADATA_STORAGE="${BYTEBASE_METADATA_STORAGE:-5Gi}"
 BYTEBASE_METADATA_CREDENTIALS_SECRET="${BYTEBASE_METADATA_CREDENTIALS_SECRET:-bytebase-metadata-app}"
 BYTEBASE_METADATA_URL_SECRET="${BYTEBASE_METADATA_URL_SECRET:-bytebase-metadata-pg-url}"
 BYTEBASE_METADATA_URL_SECRET_KEY="${BYTEBASE_METADATA_URL_SECRET_KEY:-url}"
-BYTEBASE_METADATA_POSTGRES_IMAGE="${BYTEBASE_METADATA_POSTGRES_IMAGE:-ghcr.io/cloudnative-pg/postgresql:16}"
 BYTEBASE_METADATA_WAIT_TIMEOUT="${BYTEBASE_METADATA_WAIT_TIMEOUT:-10m}"
+BYTEBASE_METADATA_BOOTSTRAP_IMAGE="${BYTEBASE_METADATA_BOOTSTRAP_IMAGE:-pgvector/pgvector:pg16}"
+BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME="${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME:-bytebase-metadata-bootstrap}"
+PLATFORM_DATABASE_SERVICE="${PLATFORM_DATABASE_SERVICE:-postgres}"
+PLATFORM_DATABASE_HOST="${PLATFORM_DATABASE_HOST:-${PLATFORM_DATABASE_SERVICE}.${PLATFORM_NAMESPACE}.svc.cluster.local}"
+PLATFORM_DATABASE_PORT="${PLATFORM_DATABASE_PORT:-5432}"
+PLATFORM_DATABASE_USER="${PLATFORM_DATABASE_USER:-postgres}"
+PLATFORM_DATABASE_PASSWORD_SECRET="${PLATFORM_DATABASE_PASSWORD_SECRET:-juanie-secret}"
+PLATFORM_DATABASE_PASSWORD_SECRET_KEY="${PLATFORM_DATABASE_PASSWORD_SECRET_KEY:-DATABASE_PASSWORD}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
 GATEWAY_EDGE_MODE="${GATEWAY_EDGE_MODE:-loadBalancer}"
@@ -227,7 +234,9 @@ resolve_chart_refs() {
         ARGOCD_CHART_REF="$(download_chart "argo-cd-${ARGOCD_CHART_VERSION}.tgz" "${ARGOCD_CHART_URL}")"
       fi
       ARGO_ROLLOUTS_CHART_REF="$(download_chart "argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz" "${ARGO_ROLLOUTS_CHART_URL}")"
-      CNPG_CHART_REF="$(download_chart "cloudnative-pg-${CNPG_CHART_VERSION}.tgz" "${CNPG_CHART_URL}")"
+      if [[ "${CNPG_ENABLED}" == "true" ]]; then
+        CNPG_CHART_REF="$(download_chart "cloudnative-pg-${CNPG_CHART_VERSION}.tgz" "${CNPG_CHART_URL}")"
+      fi
 
       if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
         EXTERNAL_SECRETS_CHART_REF="$(download_chart "external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz" "${EXTERNAL_SECRETS_CHART_URL}")"
@@ -306,6 +315,42 @@ helm_upgrade_install() {
     --timeout 15m \
     "${helm_args[@]}" \
     "${extra_args[@]}"
+}
+
+helm_upgrade_install_no_wait() {
+  local release_name="$1"
+  local chart_ref="$2"
+  local namespace="$3"
+  local values_file="$4"
+  local version="$5"
+  shift 5
+  local extra_args=("$@")
+  local helm_args=()
+
+  if [[ -n "${values_file}" ]]; then
+    helm_args+=(-f "${values_file}")
+  fi
+
+  if [[ -n "${version}" ]] && ! is_local_chart_ref "${chart_ref}"; then
+    helm_args+=(--version "${version}")
+  fi
+
+  helm upgrade --install "${release_name}" "${chart_ref}" \
+    --namespace "${namespace}" \
+    --create-namespace \
+    --timeout 15m \
+    "${helm_args[@]}" \
+    "${extra_args[@]}"
+}
+
+helm_major_version() {
+  helm version --short 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'
+}
+
+helm_supports_executable_post_renderer() {
+  local major
+  major="$(helm_major_version)"
+  [[ -n "${major}" && "${major}" -lt 4 ]]
 }
 
 wait_for_deployment() {
@@ -646,6 +691,16 @@ ensure_bytebase_resource_budget() {
   local total_mib
   local available_mib
 
+  if ! [[ "${BYTEBASE_REPLICAS}" =~ ^[0-9]+$ ]]; then
+    log_error "BYTEBASE_REPLICAS 必须是非负整数，当前为 ${BYTEBASE_REPLICAS}"
+    exit 1
+  fi
+
+  if (( BYTEBASE_REPLICAS == 0 )); then
+    log_info "Bytebase 以按需模式安装，replicas=0，跳过运行态资源基线检查。"
+    return
+  fi
+
   if [[ "${BYTEBASE_RESOURCE_CHECK_ENABLED}" != "true" ]]; then
     log_warn "Bytebase 资源基线检查已关闭。"
     return
@@ -700,9 +755,36 @@ ensure_bytebase_metadata_url_secret() {
   log_info "已同步 Bytebase metadata DB URL Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_URL_SECRET}"
 }
 
-ensure_bytebase_metadata_database() {
+ensure_bytebase_metadata_bootstrap_secret() {
+  local password="$1"
+  local secret_name="${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}-credentials"
+
+  kubectl create secret generic "${secret_name}" \
+    -n "${PLATFORM_NAMESPACE}" \
+    --from-literal=username="${BYTEBASE_METADATA_DATABASE_USER}" \
+    --from-literal=password="${password}" \
+    --dry-run=client \
+    -o yaml | kubectl apply -f - >/dev/null
+
+  printf '%s\n' "${secret_name}"
+}
+
+wait_for_job() {
+  local namespace="$1"
+  local job_name="$2"
+  local timeout="$3"
+
+  if ! kubectl wait --for=condition=Complete "job/${job_name}" -n "${namespace}" --timeout="${timeout}"; then
+    log_warn "Job ${namespace}/${job_name} 未完成，输出最近日志。"
+    kubectl logs "job/${job_name}" -n "${namespace}" --tail=120 || true
+    return 1
+  fi
+}
+
+ensure_bytebase_control_plane_metadata_database() {
   local password
   local database_url
+  local bootstrap_secret
 
   if [[ "${BYTEBASE_ENABLED}" != "true" ]]; then
     return
@@ -717,44 +799,114 @@ ensure_bytebase_metadata_database() {
   fi
 
   ensure_bytebase_metadata_credentials_secret
+  password="$(get_secret_value "${BYTEBASE_NAMESPACE}" "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" password)"
+  bootstrap_secret="$(ensure_bytebase_metadata_bootstrap_secret "${password}")"
+
+  kubectl delete job "${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}" \
+    -n "${PLATFORM_NAMESPACE}" \
+    --ignore-not-found=true \
+    --wait=true >/dev/null
 
   cat <<EOF | kubectl apply -f - >/dev/null
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: ${BYTEBASE_METADATA_CLUSTER_NAME}
-  namespace: ${BYTEBASE_NAMESPACE}
+  name: ${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}
+  namespace: ${PLATFORM_NAMESPACE}
   labels:
     app.kubernetes.io/managed-by: juanie-bootstrap
     app.kubernetes.io/component: bytebase-metadata
 spec:
-  instances: 1
-  imageName: ${BYTEBASE_METADATA_POSTGRES_IMAGE}
-  bootstrap:
-    initdb:
-      database: ${BYTEBASE_METADATA_DATABASE_NAME}
-      owner: ${BYTEBASE_METADATA_DATABASE_USER}
-      secret:
-        name: ${BYTEBASE_METADATA_CREDENTIALS_SECRET}
-  storage:
-    size: ${BYTEBASE_METADATA_STORAGE}
-  managed:
-    services:
-      disabledDefaultServices:
-        - ro
-        - r
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bytebase-metadata
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: psql
+          image: ${BYTEBASE_METADATA_BOOTSTRAP_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              value: "${PLATFORM_DATABASE_HOST}"
+            - name: PGPORT
+              value: "${PLATFORM_DATABASE_PORT}"
+            - name: PGUSER
+              value: "${PLATFORM_DATABASE_USER}"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${PLATFORM_DATABASE_PASSWORD_SECRET}
+                  key: ${PLATFORM_DATABASE_PASSWORD_SECRET_KEY}
+            - name: BYTEBASE_DB
+              value: "${BYTEBASE_METADATA_DATABASE_NAME}"
+            - name: BYTEBASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ${bootstrap_secret}
+                  key: username
+            - name: BYTEBASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${bootstrap_secret}
+                  key: password
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              psql -v ON_ERROR_STOP=1 \
+                -v dbname="\${BYTEBASE_DB}" \
+                -v dbuser="\${BYTEBASE_USER}" \
+                -v dbpass="\${BYTEBASE_PASSWORD}" <<'SQL'
+              SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'dbuser', :'dbpass')
+              WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'dbuser')\gexec
+
+              SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'dbuser', :'dbpass')\gexec
+
+              SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'dbuser')
+              WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'dbname')\gexec
+
+              ALTER DATABASE :"dbname" OWNER TO :"dbuser";
+              \connect :dbname
+              GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"dbuser";
+              GRANT ALL ON SCHEMA public TO :"dbuser";
+              ALTER SCHEMA public OWNER TO :"dbuser";
+              SQL
 EOF
 
-  kubectl wait \
-    --for=condition=Ready \
-    "clusters.postgresql.cnpg.io/${BYTEBASE_METADATA_CLUSTER_NAME}" \
-    -n "${BYTEBASE_NAMESPACE}" \
-    --timeout="${BYTEBASE_METADATA_WAIT_TIMEOUT}"
+  if ! wait_for_job "${PLATFORM_NAMESPACE}" "${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}" "${BYTEBASE_METADATA_WAIT_TIMEOUT}"; then
+    kubectl delete secret "${bootstrap_secret}" -n "${PLATFORM_NAMESPACE}" --ignore-not-found=true >/dev/null
+    return 1
+  fi
+  kubectl delete secret "${bootstrap_secret}" -n "${PLATFORM_NAMESPACE}" --ignore-not-found=true >/dev/null
 
-  password="$(get_secret_value "${BYTEBASE_NAMESPACE}" "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" password)"
-  database_url="postgresql://${BYTEBASE_METADATA_DATABASE_USER}:${password}@${BYTEBASE_METADATA_CLUSTER_NAME}-rw.${BYTEBASE_NAMESPACE}.svc.cluster.local:5432/${BYTEBASE_METADATA_DATABASE_NAME}?sslmode=disable"
+  database_url="postgresql://${BYTEBASE_METADATA_DATABASE_USER}:${password}@${PLATFORM_DATABASE_HOST}:${PLATFORM_DATABASE_PORT}/${BYTEBASE_METADATA_DATABASE_NAME}?sslmode=disable"
   ensure_bytebase_metadata_url_secret "${database_url}"
-  log_info "已准备 Bytebase CloudNativePG metadata DB: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CLUSTER_NAME}"
+  log_info "已准备 Bytebase control-plane metadata DB: ${PLATFORM_DATABASE_HOST}/${BYTEBASE_METADATA_DATABASE_NAME}"
+}
+
+create_bytebase_post_renderer() {
+  local path
+  path="${TMPDIR:-/tmp}/juanie-bytebase-post-renderer-$$"
+
+  cat >"${path}" <<EOF
+#!/usr/bin/env bash
+awk '
+  \$0 == "kind: StatefulSet" { in_statefulset=1; print; next }
+  \$0 == "---" { in_statefulset=0; print; next }
+  in_statefulset && \$0 ~ /^  replicas: [0-9]+$/ {
+    print "  replicas: ${BYTEBASE_REPLICAS}"
+    next
+  }
+  { print }
+'
+EOF
+  chmod +x "${path}"
+  printf '%s\n' "${path}"
 }
 
 ensure_dnspod_secret() {
@@ -867,9 +1019,12 @@ wait_for_certificate() {
 
 show_summary() {
   log_section "Bootstrap 完成"
-  summary_namespaces=("${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}" "${CNPG_NAMESPACE}")
+  summary_namespaces=("${PLATFORM_NAMESPACE}" "${CERT_MANAGER_NAMESPACE}" "${ARGO_ROLLOUTS_NAMESPACE}")
   if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${ARGOCD_NAMESPACE}")
+  fi
+  if [[ "${CNPG_ENABLED}" == "true" ]]; then
+    summary_namespaces+=("${CNPG_NAMESPACE}")
   fi
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
@@ -884,14 +1039,17 @@ show_summary() {
     kubectl get pods -n "${ARGOCD_NAMESPACE}"
   fi
   kubectl get pods -n "${ARGO_ROLLOUTS_NAMESPACE}"
-  kubectl get pods -n "${CNPG_NAMESPACE}"
+  if [[ "${CNPG_ENABLED}" == "true" ]]; then
+    kubectl get pods -n "${CNPG_NAMESPACE}"
+  fi
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
   fi
   if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
     kubectl get pods -n "${BYTEBASE_NAMESPACE}"
     log_info "Bytebase URL: $(bytebase_public_url)"
-    log_info "Juanie Helm env should set BYTEBASE_ENABLED=true and BYTEBASE_URL=$(bytebase_public_url)"
+    log_info "Bytebase replicas: ${BYTEBASE_REPLICAS}。按需启动: deploy/k8s/scripts/bytebase-on-demand.sh start"
+    log_info "需要在 Juanie UI 暴露入口时，再设置 BYTEBASE_ENABLED=true 和 BYTEBASE_URL=$(bytebase_public_url)"
   fi
   kubectl get gateway -n "${PLATFORM_NAMESPACE}" || true
   kubectl get certificate -n "${PLATFORM_NAMESPACE}" || true
@@ -930,7 +1088,7 @@ if { [[ "${ARGOCD_ENABLED}" == "true" ]] && ! is_local_chart_ref "${ARGOCD_CHART
   helm_repo_update_required='true'
 fi
 
-if ! is_local_chart_ref "${CNPG_CHART_REF}"; then
+if [[ "${CNPG_ENABLED}" == "true" ]] && ! is_local_chart_ref "${CNPG_CHART_REF}"; then
   helm_repo_add cnpg https://cloudnative-pg.github.io/charts
   helm_repo_update_required='true'
 fi
@@ -1075,43 +1233,71 @@ helm_upgrade_install \
   "${argo_rollouts_args[@]}"
 wait_for_labeled_deployments "${ARGO_ROLLOUTS_NAMESPACE}" app.kubernetes.io/instance=argo-rollouts
 
-log_section "安装 CloudNativePG"
-cnpg_args=()
-if [[ -n "${CNPG_IMAGE_REPOSITORY}" ]]; then
-  cnpg_args+=(--set "image.repository=${CNPG_IMAGE_REPOSITORY}")
+if [[ "${CNPG_ENABLED}" == "true" ]]; then
+  log_section "安装 CloudNativePG"
+  cnpg_args=()
+  if [[ -n "${CNPG_IMAGE_REPOSITORY}" ]]; then
+    cnpg_args+=(--set "image.repository=${CNPG_IMAGE_REPOSITORY}")
+  fi
+  if [[ -n "${CNPG_IMAGE_TAG}" ]]; then
+    cnpg_args+=(--set "image.tag=${CNPG_IMAGE_TAG}")
+  fi
+  helm_upgrade_install \
+    cloudnative-pg \
+    "${CNPG_CHART_REF}" \
+    "${CNPG_NAMESPACE}" \
+    "${INFRA_DIR}/cloudnative-pg/values.yaml" \
+    "${CNPG_CHART_VERSION}" \
+    "${cnpg_args[@]}"
+  wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=cloudnative-pg
+else
+  log_info "CloudNativePG 已关闭，跳过安装。"
 fi
-if [[ -n "${CNPG_IMAGE_TAG}" ]]; then
-  cnpg_args+=(--set "image.tag=${CNPG_IMAGE_TAG}")
-fi
-helm_upgrade_install \
-  cloudnative-pg \
-  "${CNPG_CHART_REF}" \
-  "${CNPG_NAMESPACE}" \
-  "${INFRA_DIR}/cloudnative-pg/values.yaml" \
-  "${CNPG_CHART_VERSION}" \
-  "${cnpg_args[@]}"
-wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=cloudnative-pg
 
 if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
   log_section "安装 Bytebase"
   ensure_bytebase_resource_budget
-  ensure_bytebase_metadata_database
-  helm_upgrade_install \
-    bytebase \
-    "${BYTEBASE_CHART_REF}" \
-    "${BYTEBASE_NAMESPACE}" \
-    "${INFRA_DIR}/bytebase/values.yaml" \
-    "${BYTEBASE_CHART_VERSION}" \
-    --set-string "bytebase.option.external-url=$(bytebase_public_url)" \
-    --set-string "bytebase.option.externalPg.existingPgURLSecret=${BYTEBASE_METADATA_URL_SECRET}" \
-    --set-string "bytebase.option.externalPg.existingPgURLSecretKey=${BYTEBASE_METADATA_URL_SECRET_KEY}" \
-    --set-string "global.azure.images.bytebase.registry=${BYTEBASE_IMAGE_REGISTRY}" \
-    --set-string "global.azure.images.bytebase.image=${BYTEBASE_IMAGE_REPOSITORY}" \
-    --set-string "global.azure.images.bytebase.tag=${BYTEBASE_IMAGE_VERSION}" \
-    --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
+  ensure_bytebase_control_plane_metadata_database
 
-  if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then
-    wait_for_labeled_statefulsets "${BYTEBASE_NAMESPACE}" app.kubernetes.io/instance=bytebase
+  bytebase_args=(
+    --set-string "bytebase.option.external-url=$(bytebase_public_url)"
+    --set-string "bytebase.option.externalPg.existingPgURLSecret=${BYTEBASE_METADATA_URL_SECRET}"
+    --set-string "bytebase.option.externalPg.existingPgURLSecretKey=${BYTEBASE_METADATA_URL_SECRET_KEY}"
+    --set-string "global.azure.images.bytebase.registry=${BYTEBASE_IMAGE_REGISTRY}"
+    --set-string "global.azure.images.bytebase.image=${BYTEBASE_IMAGE_REPOSITORY}"
+    --set-string "global.azure.images.bytebase.tag=${BYTEBASE_IMAGE_VERSION}"
+    --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
+  )
+
+  if helm_supports_executable_post_renderer; then
+    bytebase_post_renderer="$(create_bytebase_post_renderer)"
+    helm_upgrade_install \
+      bytebase \
+      "${BYTEBASE_CHART_REF}" \
+      "${BYTEBASE_NAMESPACE}" \
+      "${INFRA_DIR}/bytebase/values.yaml" \
+      "${BYTEBASE_CHART_VERSION}" \
+      "${bytebase_args[@]}" \
+      --post-renderer "${bytebase_post_renderer}"
+    rm -f "${bytebase_post_renderer}"
+  else
+    log_warn "当前 Helm 不支持可执行文件式 post-renderer，改用 no-wait 安装后立即 scale。"
+    helm_upgrade_install_no_wait \
+      bytebase \
+      "${BYTEBASE_CHART_REF}" \
+      "${BYTEBASE_NAMESPACE}" \
+      "${INFRA_DIR}/bytebase/values.yaml" \
+      "${BYTEBASE_CHART_VERSION}" \
+      "${bytebase_args[@]}"
+    kubectl scale statefulset bytebase -n "${BYTEBASE_NAMESPACE}" --replicas="${BYTEBASE_REPLICAS}"
+  fi
+
+  if (( BYTEBASE_REPLICAS > 0 )); then
+    if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then
+      wait_for_labeled_statefulsets "${BYTEBASE_NAMESPACE}" app.kubernetes.io/instance=bytebase
+    fi
+  else
+    log_info "Bytebase 已安装为按需模式，StatefulSet replicas=0。"
   fi
 else
   log_info "Bytebase 数据库控制台已关闭，跳过安装。"

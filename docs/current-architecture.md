@@ -31,14 +31,14 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 
 | 能力 | 开源组件 |
 | --- | --- |
-| GitOps / preview scaffold | Argo CD ApplicationSet |
+| GitOps / preview scaffold | Argo CD ApplicationSet（可选，默认关闭） |
 | 平台自身发布 | GitHub Actions + SSH + Helm |
 | 受控放量 | Argo Rollouts |
-| 托管 PostgreSQL | CloudNativePG |
+| 托管 PostgreSQL | CloudNativePG（可选，默认不安装） |
 | TLS / 证书 | cert-manager |
-| 外部密钥能力 | External Secrets Operator |
+| 外部密钥能力 | External Secrets Operator（可选，默认不安装） |
 | Schema diff / control-plane migration | Atlas |
-| 数据库可视化工作台 | Bytebase Community（可选，只读优先，不接管发布治理） |
+| 数据库可视化工作台 | Bytebase Community（可选，按需启动，只读优先，不接管发布治理） |
 | 后台队列 | BullMQ + Redis |
 
 ## 平台自身发布
@@ -52,8 +52,7 @@ Juanie 平台自身不再通过 Argo CD GitOps 发布。当前主线是：
 5. CI 等待 Web / Worker rollout 和 `https://juanie.art/api/health/ready`。
 
 这条链路的真源是 CI run + 镜像 SHA；不再提交 `values-gitops.yaml`，也不再注册 `juanie-platform` Argo CD Application，避免平台自身发布被 Argo repo cache 或代理缓存卡住。
-Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-server / controller
-资源与 Git 拉取超时，这部分仅服务预览环境脚手架和后续 ApplicationSet。
+Argo CD 自身默认不安装；只有明确启用 ApplicationSet 预览脚手架时才安装对应控制器。
 
 ## 安全与 Trace 基线
 
@@ -64,7 +63,7 @@ Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-ser
 | RBAC | 高风险能力集中在 `rbac.*` 开关，`pods/exec` 默认关闭 |
 | 平台临时执行 | 服务探活、schema-runner、迁移派发、预览库克隆统一走 `PlatformOperationJob`；平台账号只需要 `batch/jobs` 创建/删除和 `pods/log` 读取，不开放 `pods/create` |
 | 数据库控制台 | Bytebase 默认只作为查询与排障入口；生产 DDL/DML 不从控制台直接放行，仍回到 Juanie 发布、提升或 Schema Repair 流程 |
-| Bytebase 元数据库 | bootstrap 默认用 CloudNativePG 自动创建独立 metadata DB；子应用数据库只作为 Bytebase workbench target，不作为 Bytebase 自身存储 |
+| Bytebase 元数据库 | bootstrap 默认在 Juanie 控制面 PostgreSQL 中创建独立 `bytebase` database/user；子应用数据库只作为 Bytebase workbench target，不作为 Bytebase 自身存储 |
 | Trace | release id 派生稳定 W3C trace id，release/deployment/migration 队列 job 透传同一个 `traceId` 和 `traceparent` |
 
 ## 后续重构边界
@@ -87,4 +86,4 @@ Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-ser
 4. preview 可提升到 staging。
 5. staging 可提升到 production，并在 production release detail 完成放量。
 6. 删除项目进入 deleting 状态，后台完成后通过 SSE 从列表消失。
-7. 平台自身发布只更新 GitOps 指针，由 Argo CD 完成同步，PreSync Job 先跑控制面迁移。
+7. 平台自身发布由 CI 直接执行 Helm upgrade，Helm pre-upgrade Job 先跑控制面迁移。

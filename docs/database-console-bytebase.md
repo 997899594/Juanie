@@ -44,23 +44,42 @@ Bytebase internal route shape and lets operators adjust the link after Bytebase 
 
 ## Bootstrap
 
-Bytebase is disabled by default. To install it with platform bootstrap:
+Bytebase is disabled by default. On small single-node installs, use Plan B: install Bytebase as an
+on-demand workbench, keep the StatefulSet at `replicas=0`, and store Bytebase metadata in the
+existing Juanie control-plane PostgreSQL database with a dedicated `bytebase` database/user.
 
 ```bash
 BYTEBASE_ENABLED=true \
+BYTEBASE_REPLICAS=0 \
 BYTEBASE_HOSTNAME=bytebase.juanie.art \
 bash deploy/k8s/scripts/init-server.sh
 ```
 
-Bootstrap refuses to install Bytebase on small nodes by default. The default guard requires at
-least `6144MiB` total memory and `1536MiB` currently available memory because Bytebase plus its
-metadata database are long-running platform services, not a lightweight page plugin. Override
-`BYTEBASE_MIN_NODE_MEMORY_MIB`, `BYTEBASE_MIN_AVAILABLE_MEMORY_MIB`, or set
-`BYTEBASE_RESOURCE_CHECK_ENABLED=false` only after intentionally accepting the capacity risk.
+Bootstrap renders the official Bytebase chart through a Helm post-renderer because the chart
+currently hard-codes the StatefulSet replica count. This keeps Helm as the install owner while
+making `replicas=0` the default desired state.
 
-By default bootstrap creates a dedicated CloudNativePG cluster named `bytebase-metadata` in the
-Bytebase namespace. This database stores Bytebase users, projects, instance mappings, SQL history,
-and settings. It is not a child application database.
+Because Plan B reuses the Juanie control-plane PostgreSQL instance, run the Bytebase bootstrap after
+the Juanie chart has created the `postgres` StatefulSet and `juanie-secret`. A fresh cluster should
+first run infrastructure bootstrap with Bytebase disabled, deploy Juanie, then run the Bytebase
+bootstrap command above.
+
+To start or stop the workbench:
+
+```bash
+deploy/k8s/scripts/bytebase-on-demand.sh start
+deploy/k8s/scripts/bytebase-on-demand.sh stop
+deploy/k8s/scripts/bytebase-on-demand.sh status
+```
+
+`start` performs a memory guard by default. Override `BYTEBASE_START_MIN_AVAILABLE_MEMORY_MIB` or
+set `BYTEBASE_START_RESOURCE_CHECK_ENABLED=false` only after intentionally accepting the capacity
+risk.
+
+The metadata database stores Bytebase users, projects, instance mappings, SQL history, and
+settings. It is not a child application database. Bootstrap creates it in the existing Juanie
+control-plane PostgreSQL instance by default, using `PLATFORM_DATABASE_*` and
+`PLATFORM_DATABASE_PASSWORD_SECRET*` to find the admin connection.
 
 Advanced deployments may override the metadata database:
 
@@ -70,11 +89,11 @@ BYTEBASE_METADATA_DATABASE_URL='postgresql://bytebase:***@postgres.example:5432/
 bash deploy/k8s/scripts/init-server.sh
 ```
 
-Do not reuse the Juanie control-plane database schema or any child application database as the
-Bytebase metadata database. Child application database URLs are target instances for the workbench;
-they are not where Bytebase stores its own state.
+Do not store Bytebase metadata in any child application database. Child application database URLs
+are target instances for the workbench; they are not where Bytebase stores its own state.
 
-After bootstrap, deploy Juanie with:
+After bootstrap, expose the Juanie UI entry only when operators are ready to start Bytebase on
+demand:
 
 ```yaml
 env:
