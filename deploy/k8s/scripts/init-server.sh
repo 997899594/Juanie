@@ -22,9 +22,18 @@ BYTEBASE_ENABLED="${BYTEBASE_ENABLED:-false}"
 BYTEBASE_NAMESPACE="${BYTEBASE_NAMESPACE:-bytebase}"
 BYTEBASE_HOSTNAME="${BYTEBASE_HOSTNAME:-bytebase.${PLATFORM_DOMAIN}}"
 BYTEBASE_PUBLIC_URL="${BYTEBASE_PUBLIC_URL:-}"
-BYTEBASE_EXTERNAL_PG_URL="${BYTEBASE_EXTERNAL_PG_URL:-}"
 BYTEBASE_SERVICE_NAME="${BYTEBASE_SERVICE_NAME:-bytebase-entrypoint}"
 BYTEBASE_SERVICE_PORT="${BYTEBASE_SERVICE_PORT:-80}"
+BYTEBASE_METADATA_DATABASE_URL="${BYTEBASE_METADATA_DATABASE_URL:-}"
+BYTEBASE_METADATA_CLUSTER_NAME="${BYTEBASE_METADATA_CLUSTER_NAME:-bytebase-metadata}"
+BYTEBASE_METADATA_DATABASE_NAME="${BYTEBASE_METADATA_DATABASE_NAME:-bytebase}"
+BYTEBASE_METADATA_DATABASE_USER="${BYTEBASE_METADATA_DATABASE_USER:-bytebase}"
+BYTEBASE_METADATA_STORAGE="${BYTEBASE_METADATA_STORAGE:-5Gi}"
+BYTEBASE_METADATA_CREDENTIALS_SECRET="${BYTEBASE_METADATA_CREDENTIALS_SECRET:-bytebase-metadata-app}"
+BYTEBASE_METADATA_URL_SECRET="${BYTEBASE_METADATA_URL_SECRET:-bytebase-metadata-pg-url}"
+BYTEBASE_METADATA_URL_SECRET_KEY="${BYTEBASE_METADATA_URL_SECRET_KEY:-url}"
+BYTEBASE_METADATA_POSTGRES_IMAGE="${BYTEBASE_METADATA_POSTGRES_IMAGE:-postgres:16-alpine}"
+BYTEBASE_METADATA_WAIT_TIMEOUT="${BYTEBASE_METADATA_WAIT_TIMEOUT:-10m}"
 GATEWAY_CLASS_NAME="${GATEWAY_CLASS_NAME:-cilium}"
 GATEWAY_LOADBALANCER_IP="${GATEWAY_LOADBALANCER_IP:-10.2.0.15}"
 GATEWAY_EDGE_MODE="${GATEWAY_EDGE_MODE:-loadBalancer}"
@@ -606,6 +615,113 @@ EOF
   log_info "已同步 Bytebase HTTPRoute: $(bytebase_public_url)"
 }
 
+decode_base64() {
+  if base64 --help 2>&1 | grep -q -- '--decode'; then
+    base64 --decode
+    return
+  fi
+
+  base64 -D
+}
+
+get_secret_value() {
+  local namespace="$1"
+  local secret_name="$2"
+  local key="$3"
+
+  kubectl get secret "${secret_name}" -n "${namespace}" -o "jsonpath={.data.${key}}" | decode_base64
+}
+
+ensure_bytebase_metadata_credentials_secret() {
+  if kubectl get secret "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" -n "${BYTEBASE_NAMESPACE}" >/dev/null 2>&1; then
+    log_info "复用 Bytebase metadata DB 凭证 Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CREDENTIALS_SECRET}"
+    return
+  fi
+
+  require_command openssl
+
+  local password
+  password="$(openssl rand -hex 32)"
+
+  kubectl create secret generic "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" \
+    -n "${BYTEBASE_NAMESPACE}" \
+    --from-literal=username="${BYTEBASE_METADATA_DATABASE_USER}" \
+    --from-literal=password="${password}" \
+    --dry-run=client \
+    -o yaml | kubectl apply -f - >/dev/null
+
+  log_info "已创建 Bytebase metadata DB 凭证 Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CREDENTIALS_SECRET}"
+}
+
+ensure_bytebase_metadata_url_secret() {
+  local database_url="$1"
+
+  kubectl create secret generic "${BYTEBASE_METADATA_URL_SECRET}" \
+    -n "${BYTEBASE_NAMESPACE}" \
+    --from-literal="${BYTEBASE_METADATA_URL_SECRET_KEY}=${database_url}" \
+    --dry-run=client \
+    -o yaml | kubectl apply -f - >/dev/null
+
+  log_info "已同步 Bytebase metadata DB URL Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_URL_SECRET}"
+}
+
+ensure_bytebase_metadata_database() {
+  local password
+  local database_url
+
+  if [[ "${BYTEBASE_ENABLED}" != "true" ]]; then
+    return
+  fi
+
+  ensure_namespace "${BYTEBASE_NAMESPACE}"
+
+  if [[ -n "${BYTEBASE_METADATA_DATABASE_URL}" ]]; then
+    ensure_bytebase_metadata_url_secret "${BYTEBASE_METADATA_DATABASE_URL}"
+    log_info "Bytebase 使用外部 metadata DB 覆盖配置。"
+    return
+  fi
+
+  ensure_bytebase_metadata_credentials_secret
+
+  cat <<EOF | kubectl apply -f - >/dev/null
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ${BYTEBASE_METADATA_CLUSTER_NAME}
+  namespace: ${BYTEBASE_NAMESPACE}
+  labels:
+    app.kubernetes.io/managed-by: juanie-bootstrap
+    app.kubernetes.io/component: bytebase-metadata
+spec:
+  instances: 1
+  imageName: ${BYTEBASE_METADATA_POSTGRES_IMAGE}
+  bootstrap:
+    initdb:
+      database: ${BYTEBASE_METADATA_DATABASE_NAME}
+      owner: ${BYTEBASE_METADATA_DATABASE_USER}
+      secret:
+        name: ${BYTEBASE_METADATA_CREDENTIALS_SECRET}
+  storage:
+    size: ${BYTEBASE_METADATA_STORAGE}
+  managed:
+    services:
+      disabledDefaultServices:
+        - ro
+        - r
+EOF
+
+  kubectl wait \
+    --for=condition=Ready \
+    "clusters.postgresql.cnpg.io/${BYTEBASE_METADATA_CLUSTER_NAME}" \
+    -n "${BYTEBASE_NAMESPACE}" \
+    --timeout="${BYTEBASE_METADATA_WAIT_TIMEOUT}"
+
+  password="$(get_secret_value "${BYTEBASE_NAMESPACE}" "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" password)"
+  database_url="postgresql://${BYTEBASE_METADATA_DATABASE_USER}:${password}@${BYTEBASE_METADATA_CLUSTER_NAME}-rw.${BYTEBASE_NAMESPACE}.svc.cluster.local:5432/${BYTEBASE_METADATA_DATABASE_NAME}?sslmode=disable"
+  ensure_bytebase_metadata_url_secret "${database_url}"
+  log_info "已准备 Bytebase CloudNativePG metadata DB: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CLUSTER_NAME}"
+}
+
 ensure_dnspod_secret() {
   if kubectl get secret dnspod-secret -n "${CERT_MANAGER_NAMESPACE}" >/dev/null 2>&1; then
     log_info "检测到现有 dnspod-secret，复用 ${CERT_MANAGER_NAMESPACE}/dnspod-secret"
@@ -943,19 +1059,16 @@ wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=clou
 
 if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
   log_section "安装 Bytebase"
-  if [[ -z "${BYTEBASE_EXTERNAL_PG_URL}" ]]; then
-    log_error "BYTEBASE_ENABLED=true 时必须提供 BYTEBASE_EXTERNAL_PG_URL。建议为 Bytebase 使用独立 PostgreSQL 数据库和最小权限账号。"
-    exit 1
-  fi
-
-  ensure_namespace "${BYTEBASE_NAMESPACE}"
+  ensure_bytebase_metadata_database
   helm_upgrade_install \
     bytebase \
     "${BYTEBASE_CHART_REF}" \
     "${BYTEBASE_NAMESPACE}" \
     "${INFRA_DIR}/bytebase/values.yaml" \
     "${BYTEBASE_CHART_VERSION}" \
-    --set-string "bytebase.option.externalPg.url=${BYTEBASE_EXTERNAL_PG_URL}" \
+    --set-string "bytebase.option.external-url=$(bytebase_public_url)" \
+    --set-string "bytebase.option.externalPg.existingPgURLSecret=${BYTEBASE_METADATA_URL_SECRET}" \
+    --set-string "bytebase.option.externalPg.existingPgURLSecretKey=${BYTEBASE_METADATA_URL_SECRET_KEY}" \
     --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
 
   if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then

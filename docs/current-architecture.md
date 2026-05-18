@@ -64,6 +64,7 @@ Argo CD 自身由 `deploy/k8s/infrastructure/argocd/values.yaml` 定义 repo-ser
 | RBAC | 高风险能力集中在 `rbac.*` 开关，`pods/exec` 默认关闭 |
 | 平台临时执行 | 服务探活、schema-runner、迁移派发、预览库克隆统一走 `PlatformOperationJob`；平台账号只需要 `batch/jobs` 创建/删除和 `pods/log` 读取，不开放 `pods/create` |
 | 数据库控制台 | Bytebase 默认只作为查询与排障入口；生产 DDL/DML 不从控制台直接放行，仍回到 Juanie 发布、提升或 Schema Repair 流程 |
+| Bytebase 元数据库 | bootstrap 默认用 CloudNativePG 自动创建独立 metadata DB；子应用数据库只作为 Bytebase workbench target，不作为 Bytebase 自身存储 |
 | Trace | release id 派生稳定 W3C trace id，release/deployment/migration 队列 job 透传同一个 `traceId` 和 `traceparent` |
 
 ## 后续重构边界

@@ -48,13 +48,25 @@ Bytebase is disabled by default. To install it with platform bootstrap:
 
 ```bash
 BYTEBASE_ENABLED=true \
-BYTEBASE_EXTERNAL_PG_URL='postgresql://bytebase:***@postgres.example:5432/bytebase?sslmode=require' \
 BYTEBASE_HOSTNAME=bytebase.juanie.art \
 bash deploy/k8s/scripts/init-server.sh
 ```
 
-`BYTEBASE_EXTERNAL_PG_URL` should point to a dedicated PostgreSQL database and least-privilege user.
-Do not reuse the Juanie control-plane database schema.
+By default bootstrap creates a dedicated CloudNativePG cluster named `bytebase-metadata` in the
+Bytebase namespace. This database stores Bytebase users, projects, instance mappings, SQL history,
+and settings. It is not a child application database.
+
+Advanced deployments may override the metadata database:
+
+```bash
+BYTEBASE_ENABLED=true \
+BYTEBASE_METADATA_DATABASE_URL='postgresql://bytebase:***@postgres.example:5432/bytebase?sslmode=require' \
+bash deploy/k8s/scripts/init-server.sh
+```
+
+Do not reuse the Juanie control-plane database schema or any child application database as the
+Bytebase metadata database. Child application database URLs are target instances for the workbench;
+they are not where Bytebase stores its own state.
 
 After bootstrap, deploy Juanie with:
 
@@ -63,6 +75,21 @@ env:
   BYTEBASE_ENABLED: "true"
   BYTEBASE_URL: "https://bytebase.juanie.art"
 ```
+
+## Child Application Databases
+
+Juanie already knows managed and external child application database connection metadata through
+the environment/database model. Those databases should be registered into Bytebase as managed
+instances with least-privilege credentials. This is intentionally separate from the metadata
+database above:
+
+- Bytebase metadata database: one platform-owned database used by Bytebase itself.
+- Child application databases: many project/environment databases opened from Juanie as workbench
+  targets.
+
+Production access should stay read-first. Schema changes and data-changing operations still return
+to Juanie release, promotion, or Schema Repair unless an operator explicitly enables a stronger
+Bytebase governance mode.
 
 ## Free-Edition Guardrail
 
