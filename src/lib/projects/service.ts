@@ -267,7 +267,16 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
       },
     }),
     db.query.services.findMany({ where: eq(services.projectId, projectId) }),
-    db.query.databases.findMany({ where: eq(databases.projectId, projectId) }),
+    db.query.databases.findMany({
+      where: eq(databases.projectId, projectId),
+      with: {
+        environment: {
+          columns: {
+            name: true,
+          },
+        },
+      },
+    }),
     db.query.domains.findMany({ where: eq(domains.projectId, projectId) }),
     db.query.releases.findMany({
       where: eq(releases.projectId, projectId),

@@ -37,6 +37,9 @@ export interface ProjectDatabaseLike {
   status?: string | null;
   scope?: string | null;
   environmentId?: string | null;
+  environment?: {
+    name?: string | null;
+  } | null;
   serviceId?: string | null;
 }
 
@@ -146,6 +149,7 @@ export interface ProjectReleaseLike {
 }
 
 export interface ProjectDatabaseCardDecorations {
+  environmentName: string | null;
   serviceName: string | null;
   latestMigration: {
     id: string;
@@ -344,6 +348,7 @@ export function decorateProjectDatabaseCards<
 
     return {
       ...database,
+      environmentName: database.environment?.name ?? null,
       serviceName: database.serviceId ? (serviceNameById.get(database.serviceId) ?? null) : null,
       latestMigration: latestMigration
         ? {

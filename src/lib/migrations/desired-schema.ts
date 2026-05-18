@@ -170,7 +170,6 @@ function resolveBunCommand(args: string[]): { command: string; args: string[] } 
 async function resolveBunCommands(repoDir: string): Promise<{
   install: { command: string; args: string[] };
   execDrizzleKit: (configPath: string) => { command: string; args: string[] };
-  pushDrizzleKit: (configPath: string) => { command: string; args: string[] };
 }> {
   return {
     install: resolveBunCommand(
@@ -178,74 +177,7 @@ async function resolveBunCommands(repoDir: string): Promise<{
     ),
     execDrizzleKit: (configPath) =>
       resolveBunCommand(['x', 'drizzle-kit', 'export', '--config', configPath]),
-    pushDrizzleKit: (configPath) =>
-      resolveBunCommand([
-        'x',
-        'drizzle-kit',
-        'push',
-        '--config',
-        configPath,
-        '--force',
-        '--verbose',
-      ]),
   };
-}
-
-function emitCommandOutputLines(
-  output: string,
-  level: 'info' | 'warn',
-  onOutputLine?: (line: string, level: 'info' | 'warn') => void
-): void {
-  if (!onOutputLine) {
-    return;
-  }
-
-  for (const line of output.replace(/\r\n/g, '\n').split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) {
-      onOutputLine(trimmed, level);
-    }
-  }
-}
-
-function buildCombinedCommandOutput(stdout: string, stderr: string): string {
-  return [stdout.trim(), stderr.trim()].filter((part) => part.length > 0).join('\n');
-}
-
-function didDrizzlePushApplyChanges(output: string): boolean {
-  const normalized = output.toLowerCase();
-
-  if (normalized.length === 0) {
-    return true;
-  }
-
-  const noChangeMarkers = [
-    'no schema changes',
-    'nothing to migrate',
-    'already in sync',
-    'schema is up to date',
-    'database is up to date',
-  ];
-
-  return !noChangeMarkers.some((marker) => normalized.includes(marker));
-}
-
-export function getDrizzlePushOutputFailure(output: string): string | null {
-  const normalized = output.toLowerCase();
-
-  if (normalized.includes('interactive prompts require a tty terminal')) {
-    return 'Drizzle schema push 需要交互确认，schema-runner 不能在非交互环境继续执行';
-  }
-
-  if (normalized.includes('all changes were aborted')) {
-    return 'Drizzle schema push 已被中止';
-  }
-
-  if (normalized.includes('this action will cause data loss')) {
-    return 'Drizzle schema push 发现潜在数据丢失变更，必须人工确认';
-  }
-
-  return null;
 }
 
 function buildSchemaExportEnv(connectionString?: string | null): NodeJS.ProcessEnv {
@@ -301,65 +233,6 @@ async function exportDrizzleDesiredSchema(input: {
     schemaFileUrl: pathToFileURL(schemaFilePath).toString(),
     sourceConfigPath,
   };
-}
-
-export async function pushDrizzleDesiredSchemaArtifact(input: {
-  artifact: DesiredSchemaArtifact;
-  databaseUrl: string;
-  onOutputLine?: (line: string, level: 'info' | 'warn') => void;
-}): Promise<{ applied: boolean; output: string }> {
-  if (input.artifact.source !== 'drizzle') {
-    throw new Error(`当前仅支持使用 Drizzle 执行 desired schema，收到 ${input.artifact.source}`);
-  }
-
-  if (!input.artifact.sourceConfigPath) {
-    throw new Error('Drizzle desired schema 缺少可执行的配置文件路径');
-  }
-
-  const commands = await resolveBunCommands(input.artifact.workspaceDir);
-  const env = buildSchemaExportEnv(input.databaseUrl);
-  const pushCommand = commands.pushDrizzleKit(input.artifact.sourceConfigPath);
-
-  try {
-    const { stdout, stderr } = await runCommand(pushCommand.command, pushCommand.args, {
-      cwd: input.artifact.workspaceDir,
-      env,
-    });
-    emitCommandOutputLines(stdout, 'info', input.onOutputLine);
-    emitCommandOutputLines(stderr, 'warn', input.onOutputLine);
-
-    const output = buildCombinedCommandOutput(stdout, stderr);
-    const outputFailure = getDrizzlePushOutputFailure(output);
-    if (outputFailure) {
-      throw new Error(`${outputFailure}\n${output}`);
-    }
-
-    return {
-      applied: didDrizzlePushApplyChanges(output),
-      output,
-    };
-  } catch (error) {
-    const stdout =
-      typeof error === 'object' &&
-      error !== null &&
-      'stdout' in error &&
-      typeof error.stdout === 'string'
-        ? error.stdout
-        : '';
-    const stderr =
-      typeof error === 'object' &&
-      error !== null &&
-      'stderr' in error &&
-      typeof error.stderr === 'string'
-        ? error.stderr
-        : '';
-
-    emitCommandOutputLines(stdout, 'info', input.onOutputLine);
-    emitCommandOutputLines(stderr, 'warn', input.onOutputLine);
-
-    const output = buildCombinedCommandOutput(stdout, stderr);
-    throw new Error(output || (error instanceof Error ? error.message : String(error)));
-  }
 }
 
 export async function exportDesiredSchemaFromRepository(

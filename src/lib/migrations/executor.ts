@@ -11,16 +11,15 @@ import {
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
+  applyDesiredSchemaToDatabase,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
   isAtlasDatabaseTarget,
+  planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
-import {
-  exportDesiredSchemaForSpec,
-  pushDrizzleDesiredSchemaArtifact,
-} from '@/lib/migrations/desired-schema';
+import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
@@ -388,34 +387,36 @@ export async function executeDrizzleMigrationsForSpec(
       'info'
     );
 
-    const databaseUrl = resolveAtlasDatabaseUrl(spec.database);
-    if (!databaseUrl) {
-      throw new Error('数据库缺少可用的连接信息，无法执行 Drizzle schema push');
-    }
-
-    const result = await pushDrizzleDesiredSchemaArtifact({
-      artifact,
-      databaseUrl,
-      onOutputLine: (line, level) => {
-        void log(line, level);
-      },
+    const plan = await planApplyDesiredSchema({
+      database: spec.database,
+      desiredSchemaUrl: artifact.schemaFileUrl,
     });
 
-    if (!result.applied) {
+    if (!plan.hasChanges) {
       await log(`✅ ${spec.database.name}: 数据库已与 desired schema 对齐`, 'info');
       return 0;
     }
+
+    await log(`🔄 ${spec.database.name}: Atlas 将应用 desired schema 差异`, 'info');
+
+    await applyDesiredSchemaToDatabase({
+      database: spec.database,
+      desiredSchemaUrl: artifact.schemaFileUrl,
+      onOutputLine: (line, stream) => {
+        void log(line, stream === 'stderr' ? 'warn' : 'info');
+      },
+    });
 
     await markDesiredSchemaExecution({
       spec,
       revision: artifact.revision,
       schemaSql: artifact.schemaSql,
       output:
-        result.output ||
-        `Applied desired schema from ${artifact.sourceConfigPath ?? 'auto-discovery'}`,
+        plan.planSql ||
+        `Applied desired schema through Atlas from ${artifact.sourceConfigPath ?? 'auto-discovery'}`,
     });
 
-    await log(`✅ ${spec.database.name}: desired schema 已应用`, 'info');
+    await log(`✅ ${spec.database.name}: Atlas desired schema 已应用`, 'info');
     return 1;
   } finally {
     await artifact.cleanup();

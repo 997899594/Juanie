@@ -16,6 +16,7 @@ describe('project database view', () => {
         {
           id: 'db-1',
           environmentId: 'env-1',
+          environment: { name: 'production' },
           serviceId: 'svc-1',
         },
       ],
@@ -61,6 +62,7 @@ describe('project database view', () => {
     );
 
     expect(result[0]?.serviceName).toBe('web');
+    expect(result[0]?.environmentName).toBe('production');
     expect(result[0]?.latestRelease?.id).toBe('rel-2');
     expect(result[0]?.latestRelease?.title).toBe('service release');
     expect(result[0]?.latestImageUrl).toBe('ghcr.io/demo/web:2');

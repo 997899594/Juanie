@@ -167,6 +167,69 @@ export function ProjectOverviewStats({ stats }: { stats: ProjectOverviewPageData
   );
 }
 
+function buildDatabaseSnapshotItems(databases: ProjectOverviewPageData['databaseCards']) {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      environmentNames: Set<string>;
+      serviceNames: Set<string>;
+      migrationStatuses: Set<string>;
+      releaseTitles: Set<string>;
+    }
+  >();
+
+  for (const database of databases) {
+    const label = database.name ?? database.type ?? '数据库';
+    const key = [label, database.type ?? 'database', database.serviceName ?? 'project'].join(':');
+    const group = groups.get(key) ?? {
+      key,
+      label,
+      environmentNames: new Set<string>(),
+      serviceNames: new Set<string>(),
+      migrationStatuses: new Set<string>(),
+      releaseTitles: new Set<string>(),
+    };
+
+    if (database.environmentName) {
+      group.environmentNames.add(database.environmentName);
+    }
+    if (database.serviceName) {
+      group.serviceNames.add(database.serviceName);
+    }
+    if (database.latestMigration?.status) {
+      group.migrationStatuses.add(database.latestMigration.status);
+    }
+    if (database.latestRelease?.title) {
+      group.releaseTitles.add(database.latestRelease.title);
+    }
+
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const environmentNames = Array.from(group.environmentNames);
+    const migrationStatuses = Array.from(group.migrationStatuses);
+    const releaseTitles = Array.from(group.releaseTitles);
+
+    return {
+      key: group.key,
+      label: group.label,
+      meta: [
+        environmentNames.length > 0
+          ? `${environmentNames.join(' / ')} · ${environmentNames.length} 个环境`
+          : null,
+        group.serviceNames.size > 0 ? `服务 ${Array.from(group.serviceNames).join(' / ')}` : null,
+        migrationStatuses.length > 0 ? `迁移 ${migrationStatuses.join(' / ')}` : null,
+        releaseTitles.length === 1 ? releaseTitles[0] : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    };
+  });
+}
+
 export function ProjectRuntimeSnapshot({
   projectId,
   services,
@@ -179,7 +242,7 @@ export function ProjectRuntimeSnapshot({
   domains: ProjectOverviewPageData['domainCards'];
 }) {
   const visibleServices = services.slice(0, 3);
-  const visibleDatabases = databases.slice(0, 3);
+  const visibleDatabases = buildDatabaseSnapshotItems(databases).slice(0, 3);
   const visibleDomains = domains.slice(0, 3);
 
   return (
@@ -210,17 +273,7 @@ export function ProjectRuntimeSnapshot({
           icon={<Database className="h-4 w-4" />}
           title="数据库"
           empty="还没有数据库"
-          items={visibleDatabases.map((database) => ({
-            key: database.id,
-            label: database.name ?? database.type ?? '数据库',
-            meta: [
-              database.serviceName ? `服务 ${database.serviceName}` : null,
-              database.latestMigration ? `迁移 ${database.latestMigration.status}` : null,
-              database.latestRelease?.title ?? null,
-            ]
-              .filter(Boolean)
-              .join(' · '),
-          }))}
+          items={visibleDatabases}
         />
         <SnapshotGroup
           icon={<Globe2 className="h-4 w-4" />}

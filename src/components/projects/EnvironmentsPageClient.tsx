@@ -634,6 +634,9 @@ function EnvironmentOverviewPanel({
   const schemaHref = `/projects/${projectId}/environments/${environment.id}/schema`;
   const consoleDatabases = environment.databases.filter((database) => Boolean(database.console));
   const primaryDatabaseConsole = consoleDatabases[0]?.console ?? null;
+  const primaryDomainHost = environment.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
+  const primaryStatusSummary =
+    statusSummary ?? buildEnvironmentHeaderMeta(environment) ?? '等待运行态数据';
   const flowRows = [
     ...incomingFlows.map((flow) => ({
       key: `incoming-${flow.id}`,
@@ -649,45 +652,96 @@ function EnvironmentOverviewPanel({
 
   return (
     <div className="space-y-4">
-      <section className={cn(shellClassName, 'px-6 py-6 sm:px-7')}>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className={titleClassName}>
-              {environment.primaryDomainUrl ? '访问地址' : '环境状态'}
+      <section className="relative overflow-hidden rounded-[34px] border border-[rgba(43,40,34,0.08)] bg-[radial-gradient(circle_at_12%_15%,rgba(255,255,255,0.98),rgba(249,247,241,0.86)_46%,rgba(229,224,211,0.54)_100%)] p-4 shadow-[0_28px_70px_rgba(43,40,34,0.08),0_1px_0_rgba(255,255,255,0.92)_inset] sm:p-5">
+        <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(43,40,34,0.12),rgba(43,40,34,0)_66%)]" />
+        <div className="pointer-events-none absolute bottom-0 left-10 h-px w-2/3 bg-gradient-to-r from-transparent via-foreground/15 to-transparent" />
+
+        <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-stretch">
+          <div className="min-w-0 rounded-[28px] border border-white/70 bg-white/70 px-5 py-5 shadow-[0_18px_44px_rgba(43,40,34,0.06),0_1px_0_rgba(255,255,255,0.92)_inset] backdrop-blur sm:px-7 sm:py-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-foreground text-background shadow-[0_12px_28px_rgba(43,40,34,0.18)]">
+                <Globe className="h-4 w-4" />
+              </span>
+              <span className={titleClassName}>
+                {environment.primaryDomainUrl ? '访问地址' : '环境状态'}
+              </span>
+              {environment.primaryDomainUrl ? (
+                <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+                  HTTPS
+                </Badge>
+              ) : null}
             </div>
+
             {environment.primaryDomainUrl ? (
               <a
                 href={environment.primaryDomainUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 block truncate text-[2.35rem] font-semibold leading-none tracking-[-0.045em] text-foreground transition-colors hover:text-foreground/78 sm:text-[2.8rem]"
+                className="group mt-5 flex min-w-0 items-center gap-3"
               >
-                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+                <span className="truncate text-[2.15rem] font-semibold leading-none tracking-[-0.055em] text-foreground transition-colors group-hover:text-foreground/78 sm:text-[3.2rem]">
+                  {primaryDomainHost}
+                </span>
+                <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-background/70 text-foreground shadow-sm transition-transform group-hover:-translate-y-0.5 sm:inline-flex">
+                  <ExternalLink className="h-4 w-4" />
+                </span>
               </a>
             ) : (
-              <div className="mt-3 text-[2.35rem] font-semibold leading-none tracking-[-0.045em] text-foreground sm:text-[2.8rem]">
+              <div className="mt-5 text-[2.15rem] font-semibold leading-none tracking-[-0.055em] text-foreground sm:text-[3.2rem]">
                 {buildRuntimeStateLabel(environment.runtimeState)}
               </div>
             )}
-            <div className="mt-3 text-sm text-muted-foreground">
-              {statusSummary ?? buildEnvironmentHeaderMeta(environment) ?? '等待运行态数据'}
+
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-full border border-success/20 bg-success/10 px-3 py-1.5 font-medium text-success">
+                {primaryStatusSummary}
+              </span>
+              <span className="rounded-full border border-foreground/8 bg-background/72 px-3 py-1.5 text-muted-foreground">
+                {environment.runtimeState?.readyReplicas ?? 0}/
+                {environment.runtimeState?.desiredReplicas ?? 0} 个应用副本可用
+              </span>
+              {runtimeAction}
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {runtimeAction}
-            {environment.primaryDomainUrl ? (
-              <Button asChild variant="ghost" className="h-11 rounded-full px-5 text-sm">
-                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  打开地址
-                </a>
+
+          <div className="flex min-h-[180px] flex-col justify-between rounded-[28px] border border-foreground/8 bg-foreground px-5 py-5 text-background shadow-[0_22px_54px_rgba(43,40,34,0.18)] sm:px-6">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-background/55">
+                下一步
+              </div>
+              <div className="mt-3 text-2xl font-semibold tracking-[-0.04em]">
+                {environment.primaryDomainUrl ? '确认线上入口' : '查看发布状态'}
+              </div>
+              <div className="mt-2 text-sm leading-6 text-background/62">
+                {environment.primaryDomainUrl
+                  ? '直接打开当前环境，或进入发布记录查看本次变更与放量状态。'
+                  : '当前环境暂无访问地址，先从发布记录确认部署和路由状态。'}
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              {environment.primaryDomainUrl ? (
+                <Button
+                  asChild
+                  variant="secondary"
+                  className="h-11 rounded-full bg-background px-5 text-sm text-foreground hover:bg-background/90"
+                >
+                  <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                    打开
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              ) : null}
+              <Button
+                asChild
+                variant="ghost"
+                className="h-11 rounded-full px-5 text-sm text-background hover:bg-background/12 hover:text-background"
+              >
+                <Link href={deliveryHref}>
+                  {outgoingFlows.length > 0 ? '发布与提升' : '查看发布'}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
               </Button>
-            ) : null}
-            <Button asChild className="h-11 rounded-full px-5 text-sm">
-              <Link href={deliveryHref}>
-                {outgoingFlows.length > 0 ? '发布与提升' : '查看发布'}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            </div>
           </div>
         </div>
       </section>
