@@ -50,6 +50,8 @@ EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.3.0}"
 DNSPOD_WEBHOOK_CHART_VERSION="${DNSPOD_WEBHOOK_CHART_VERSION:-1.5.2}"
 BYTEBASE_CHART_VERSION="${BYTEBASE_CHART_VERSION:-1.1.2}"
 BYTEBASE_IMAGE_VERSION="${BYTEBASE_IMAGE_VERSION:-3.17.1}"
+BYTEBASE_IMAGE_REGISTRY="${BYTEBASE_IMAGE_REGISTRY:-docker.io}"
+BYTEBASE_IMAGE_REPOSITORY="${BYTEBASE_IMAGE_REPOSITORY:-bytebase/bytebase}"
 
 CERT_MANAGER_CHART_REF="${CERT_MANAGER_CHART_REF:-jetstack/cert-manager}"
 ARGOCD_CHART_REF="${ARGOCD_CHART_REF:-argo/argo-cd}"
@@ -1069,6 +1071,9 @@ if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
     --set-string "bytebase.option.external-url=$(bytebase_public_url)" \
     --set-string "bytebase.option.externalPg.existingPgURLSecret=${BYTEBASE_METADATA_URL_SECRET}" \
     --set-string "bytebase.option.externalPg.existingPgURLSecretKey=${BYTEBASE_METADATA_URL_SECRET_KEY}" \
+    --set-string "global.azure.images.bytebase.registry=${BYTEBASE_IMAGE_REGISTRY}" \
+    --set-string "global.azure.images.bytebase.image=${BYTEBASE_IMAGE_REPOSITORY}" \
+    --set-string "global.azure.images.bytebase.tag=${BYTEBASE_IMAGE_VERSION}" \
     --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
 
   if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then
