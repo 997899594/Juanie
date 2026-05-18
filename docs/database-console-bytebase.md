@@ -52,6 +52,12 @@ BYTEBASE_HOSTNAME=bytebase.juanie.art \
 bash deploy/k8s/scripts/init-server.sh
 ```
 
+Bootstrap refuses to install Bytebase on small nodes by default. The default guard requires at
+least `6144MiB` total memory and `1536MiB` currently available memory because Bytebase plus its
+metadata database are long-running platform services, not a lightweight page plugin. Override
+`BYTEBASE_MIN_NODE_MEMORY_MIB`, `BYTEBASE_MIN_AVAILABLE_MEMORY_MIB`, or set
+`BYTEBASE_RESOURCE_CHECK_ENABLED=false` only after intentionally accepting the capacity risk.
+
 By default bootstrap creates a dedicated CloudNativePG cluster named `bytebase-metadata` in the
 Bytebase namespace. This database stores Bytebase users, projects, instance mappings, SQL history,
 and settings. It is not a child application database.

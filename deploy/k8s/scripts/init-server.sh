@@ -52,6 +52,9 @@ BYTEBASE_CHART_VERSION="${BYTEBASE_CHART_VERSION:-1.1.2}"
 BYTEBASE_IMAGE_VERSION="${BYTEBASE_IMAGE_VERSION:-3.17.1}"
 BYTEBASE_IMAGE_REGISTRY="${BYTEBASE_IMAGE_REGISTRY:-docker.io}"
 BYTEBASE_IMAGE_REPOSITORY="${BYTEBASE_IMAGE_REPOSITORY:-bytebase/bytebase}"
+BYTEBASE_RESOURCE_CHECK_ENABLED="${BYTEBASE_RESOURCE_CHECK_ENABLED:-true}"
+BYTEBASE_MIN_NODE_MEMORY_MIB="${BYTEBASE_MIN_NODE_MEMORY_MIB:-6144}"
+BYTEBASE_MIN_AVAILABLE_MEMORY_MIB="${BYTEBASE_MIN_AVAILABLE_MEMORY_MIB:-1536}"
 
 CERT_MANAGER_CHART_REF="${CERT_MANAGER_CHART_REF:-jetstack/cert-manager}"
 ARGOCD_CHART_REF="${ARGOCD_CHART_REF:-argo/argo-cd}"
@@ -634,6 +637,36 @@ get_secret_value() {
   kubectl get secret "${secret_name}" -n "${namespace}" -o "jsonpath={.data.${key}}" | decode_base64
 }
 
+read_meminfo_mib() {
+  local key="$1"
+  awk -v key="${key}:" '$1 == key { printf "%d\n", int($2 / 1024); found = 1 } END { if (!found) exit 1 }' /proc/meminfo
+}
+
+ensure_bytebase_resource_budget() {
+  local total_mib
+  local available_mib
+
+  if [[ "${BYTEBASE_RESOURCE_CHECK_ENABLED}" != "true" ]]; then
+    log_warn "Bytebase 资源基线检查已关闭。"
+    return
+  fi
+
+  total_mib="$(read_meminfo_mib MemTotal)"
+  available_mib="$(read_meminfo_mib MemAvailable)"
+
+  if (( total_mib < BYTEBASE_MIN_NODE_MEMORY_MIB )); then
+    log_error "当前节点内存 ${total_mib}MiB，不满足 Bytebase 最低 ${BYTEBASE_MIN_NODE_MEMORY_MIB}MiB。"
+    log_error "请扩容节点、使用外部 Bytebase，或显式设置 BYTEBASE_RESOURCE_CHECK_ENABLED=false 后再安装。"
+    exit 1
+  fi
+
+  if (( available_mib < BYTEBASE_MIN_AVAILABLE_MEMORY_MIB )); then
+    log_error "当前可用内存 ${available_mib}MiB，不满足 Bytebase 安装最低 ${BYTEBASE_MIN_AVAILABLE_MEMORY_MIB}MiB。"
+    log_error "请先释放资源、扩容节点，或显式设置 BYTEBASE_RESOURCE_CHECK_ENABLED=false 后再安装。"
+    exit 1
+  fi
+}
+
 ensure_bytebase_metadata_credentials_secret() {
   if kubectl get secret "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" -n "${BYTEBASE_NAMESPACE}" >/dev/null 2>&1; then
     log_info "复用 Bytebase metadata DB 凭证 Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CREDENTIALS_SECRET}"
@@ -1061,6 +1094,7 @@ wait_for_labeled_deployments "${CNPG_NAMESPACE}" app.kubernetes.io/instance=clou
 
 if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
   log_section "安装 Bytebase"
+  ensure_bytebase_resource_budget
   ensure_bytebase_metadata_database
   helm_upgrade_install \
     bytebase \
