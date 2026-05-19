@@ -16,6 +16,20 @@ import {
 } from '@/lib/repositories/source-workspace';
 
 const execFileAsync = promisify(execFile);
+const validDrizzleDialects = new Set([
+  'postgresql',
+  'mysql',
+  'sqlite',
+  'turso',
+  'singlestore',
+  'gel',
+]);
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, 'gu');
+
+interface DrizzleExportOptions {
+  dialect: string;
+  schema: string;
+}
 
 export interface DesiredSchemaArtifact {
   source: SchemaSource;
@@ -63,6 +77,95 @@ async function runCommand(
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
   };
+}
+
+function stripAnsiSequences(value: string): string {
+  return value.replace(ansiEscapePattern, '');
+}
+
+export function validateDesiredSchemaSqlOutput(output: string): string {
+  const schemaSql = stripAnsiSequences(output).trim();
+
+  if (!schemaSql) {
+    throw new Error('Drizzle 导出的 desired schema 为空');
+  }
+
+  const nonSqlMarkers = [
+    /Interactive prompts require a TTY/i,
+    /\bPulling schema from database\b/i,
+    /\bReading config file\b/i,
+    /\bUsing ['"][^'"]+['"] driver for database querying\b/i,
+    /\bWarning\s+You are about to execute current statements\b/i,
+  ];
+
+  if (nonSqlMarkers.some((marker) => marker.test(schemaSql))) {
+    throw new Error('Drizzle desired schema 导出包含交互式提示或数据库 diff 输出，已拒绝执行');
+  }
+
+  if (
+    !/\b(CREATE|ALTER|DROP|COMMENT|INSERT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|DO)\b/i.test(
+      schemaSql
+    )
+  ) {
+    throw new Error('Drizzle desired schema 导出结果不像可执行 SQL，已拒绝执行');
+  }
+
+  return schemaSql;
+}
+
+function normalizeDrizzleSchemaConfigValue(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    const schemaPaths = value
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((item) => item.trim());
+
+    if (schemaPaths.length > 0) {
+      return schemaPaths.join(',');
+    }
+  }
+
+  throw new Error('Drizzle 配置缺少 schema，无法导出 desired schema');
+}
+
+function normalizeDrizzleDialectConfigValue(value: unknown): string {
+  if (typeof value !== 'string' || !validDrizzleDialects.has(value)) {
+    throw new Error('Drizzle 配置缺少有效 dialect，无法导出 desired schema');
+  }
+
+  return value;
+}
+
+export function resolveDrizzleExportOptionsFromConfig(config: unknown): DrizzleExportOptions {
+  const normalizedConfig =
+    config && typeof config === 'object' && 'default' in config
+      ? (config as { default: unknown }).default
+      : config;
+
+  if (!normalizedConfig || typeof normalizedConfig !== 'object') {
+    throw new Error('Drizzle 配置格式无效，无法导出 desired schema');
+  }
+
+  const configRecord = normalizedConfig as Record<string, unknown>;
+
+  return {
+    dialect: normalizeDrizzleDialectConfigValue(configRecord.dialect),
+    schema: normalizeDrizzleSchemaConfigValue(configRecord.schema),
+  };
+}
+
+async function loadDrizzleExportOptions(input: {
+  repoDir: string;
+  sourceConfigPath: string;
+}): Promise<DrizzleExportOptions> {
+  const configPath = path.join(input.repoDir, input.sourceConfigPath);
+  const configUrl = pathToFileURL(configPath);
+  configUrl.searchParams.set('t', Date.now().toString(36));
+  const configModule = await import(configUrl.toString());
+  return resolveDrizzleExportOptionsFromConfig(configModule);
 }
 
 async function createSourceWorkspace(input: {
@@ -169,14 +272,22 @@ function resolveBunCommand(args: string[]): { command: string; args: string[] } 
 
 async function resolveBunCommands(repoDir: string): Promise<{
   install: { command: string; args: string[] };
-  execDrizzleKit: (configPath: string) => { command: string; args: string[] };
+  execDrizzleKit: (options: DrizzleExportOptions) => { command: string; args: string[] };
 }> {
   return {
     install: resolveBunCommand(
       (await hasBunLockfile(repoDir)) ? ['install', '--frozen-lockfile'] : ['install']
     ),
-    execDrizzleKit: (configPath) =>
-      resolveBunCommand(['x', 'drizzle-kit', 'export', '--config', configPath]),
+    execDrizzleKit: (options) =>
+      resolveBunCommand([
+        'x',
+        'drizzle-kit',
+        'export',
+        '--dialect',
+        options.dialect,
+        '--schema',
+        options.schema,
+      ]),
   };
 }
 
@@ -211,16 +322,16 @@ async function exportDrizzleDesiredSchema(input: {
     env,
   });
 
-  const drizzleExport = commands.execDrizzleKit(sourceConfigPath);
+  const exportOptions = await loadDrizzleExportOptions({
+    repoDir: input.workspace.repoDir,
+    sourceConfigPath,
+  });
+  const drizzleExport = commands.execDrizzleKit(exportOptions);
   const { stdout } = await runCommand(drizzleExport.command, drizzleExport.args, {
     cwd: input.workspace.repoDir,
     env,
   });
-  const schemaSql = stdout.trim();
-
-  if (!schemaSql) {
-    throw new Error('Drizzle 导出的 desired schema 为空');
-  }
+  const schemaSql = validateDesiredSchemaSqlOutput(stdout);
 
   const schemaDir = path.join(input.workspace.tempRoot, '.juanie', 'desired-schema');
   const schemaFilePath = path.join(schemaDir, 'schema.sql');
