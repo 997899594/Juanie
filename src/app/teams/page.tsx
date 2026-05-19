@@ -34,12 +34,7 @@ export default async function TeamsPage() {
       />
 
       {teamCards.length === 0 ? (
-        <EmptyState
-          icon={<Users className="h-8 w-8" />}
-          title="还没有团队"
-          action={{ label: '新建团队', href: '/teams/new' }}
-          className="min-h-80"
-        />
+        <EmptyState icon={<Users className="h-8 w-8" />} title="还没有团队" className="min-h-80" />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teamCards.map((team) => {
@@ -66,19 +61,6 @@ export default async function TeamsPage() {
               </Link>
             );
           })}
-
-          <Link
-            href="/teams/new"
-            className={
-              shellClassName +
-              ' flex min-h-40 flex-col items-center justify-center px-5 py-4 text-center transition-colors hover:bg-white/90'
-            }
-          >
-            <div className="mb-3 rounded-[18px] bg-background/80 p-3">
-              <Plus className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-sm font-semibold">新建团队</div>
-          </Link>
         </div>
       )}
     </PageShell>

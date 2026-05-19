@@ -74,7 +74,6 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
         <EmptyState
           icon={<FolderKanban className="h-8 w-8" />}
           title="没有项目"
-          action={{ label: '新建项目', href: '/projects/new' }}
           className="min-h-80"
         />
       ) : (
