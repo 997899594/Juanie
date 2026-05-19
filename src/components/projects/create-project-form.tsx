@@ -1326,7 +1326,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             <DisclosurePanel
-              title="启动变量"
+              title="变量明细"
               meta={`${readyInitialVariables.length} 个项目级变量`}
               open={reviewVariablesOpen}
               onToggle={() => setReviewVariablesOpen((current) => !current)}
