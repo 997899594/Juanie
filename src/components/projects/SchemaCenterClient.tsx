@@ -561,15 +561,6 @@ export function SchemaCenterClient({
                             </a>
                           </Button>
                         ) : null}
-
-                        {database.console ? (
-                          <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
-                            <a href={database.console.databaseUrl} target="_blank" rel="noreferrer">
-                              控制台
-                              <ExternalLink className="ml-1 h-3.5 w-3.5" />
-                            </a>
-                          </Button>
-                        ) : null}
                       </div>
                     </div>
 

@@ -426,11 +426,6 @@ export function EnvironmentResourcePanel({
           <div className={resourceEyebrowClassName}>环境资源</div>
           <div className="mt-2 text-sm font-medium">容量与异常</div>
         </div>
-        <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
-          <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
-            查看环境日志
-          </Link>
-        </Button>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">

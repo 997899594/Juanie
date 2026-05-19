@@ -1,4 +1,4 @@
-import { ArrowLeft, ScrollText } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
@@ -30,7 +30,6 @@ export function ReleaseDetailDashboard({
 }: ReleaseDetailDashboardProps) {
   const { release, previousReleaseLink, sourceReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
-  const environmentLogsHref = `/projects/${projectId}/environments/${environmentId}/logs`;
   const releasesHref = `/projects/${projectId}/environments/${environmentId}/delivery`;
   const releaseStateKey = buildReleaseEventStateKey(release);
   const releaseTitle = getReleaseDisplayTitle(release);
@@ -53,12 +52,6 @@ export function ReleaseDetailDashboard({
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" className="h-9 px-4">
-            <Link href={environmentLogsHref}>
-              <ScrollText className="h-3.5 w-3.5" />
-              日志
-            </Link>
-          </Button>
           <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
             <Link href={releasesHref}>
               <ArrowLeft className="h-3.5 w-3.5" />
