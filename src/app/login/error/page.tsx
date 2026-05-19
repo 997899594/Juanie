@@ -12,7 +12,7 @@ const authErrorCopy: Record<
     title: '登录服务暂时不可用',
     summary: 'GitHub 已完成授权，但 Juanie 服务端没有完成后续登录确认。',
     operatorHint:
-      '管理员需要检查 OAuth 配置、NEXTAUTH_URL / NEXTAUTH_SECRET，以及服务端是否能访问 GitHub token 接口。',
+      '管理员需要检查登录提供方配置、回调地址、服务密钥，以及服务端是否能完成 GitHub 登录确认。',
   },
   AccessDenied: {
     title: '没有登录权限',
@@ -34,7 +34,7 @@ function getAuthErrorCopy(error?: string) {
   return {
     title: '登录没有完成',
     summary: '登录过程中遇到了服务端异常。',
-    operatorHint: '请检查服务端 auth 日志，确认 OAuth provider、数据库连接和外部网络是否正常。',
+    operatorHint: '请检查服务端登录日志，确认登录提供方、数据库连接和外部网络是否正常。',
   };
 }
 

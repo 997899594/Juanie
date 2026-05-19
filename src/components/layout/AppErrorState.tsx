@@ -101,7 +101,7 @@ export function AppErrorState({
               </p>
               {code ? (
                 <div className="mt-4 rounded-2xl bg-[rgba(248,246,242,0.92)] px-4 py-3 font-mono text-xs text-muted-foreground">
-                  error={code}
+                  错误编号：{code}
                 </div>
               ) : null}
               {detail ? (
