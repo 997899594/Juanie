@@ -4,7 +4,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { hasExecutable } from '@/lib/atlas/cli';
-import { getPostgresCapabilityExtensions } from '@/lib/databases/capabilities';
+import {
+  getPostgresCapabilityExtensions,
+  inferDatabaseCapabilitiesFromText,
+} from '@/lib/databases/capabilities';
 import {
   drizzleSchemaConfigCandidates,
   resolveSpecificationSource,
@@ -119,7 +122,8 @@ export function addPostgresCapabilityExtensionsToSchemaSql(
   schemaSql: string,
   capabilities: readonly string[] | null | undefined
 ): string {
-  const extensions = getPostgresCapabilityExtensions(capabilities);
+  const requiredCapabilities = inferDatabaseCapabilitiesFromText(schemaSql, capabilities);
+  const extensions = getPostgresCapabilityExtensions(requiredCapabilities);
   if (extensions.length === 0) {
     return schemaSql;
   }

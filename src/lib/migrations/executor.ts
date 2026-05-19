@@ -5,8 +5,10 @@ import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
 import { AtlasCommandError, runAtlasCommand } from '@/lib/atlas/cli';
 import {
+  formatDatabaseCapabilityIssues,
   inferDatabaseCapabilitiesFromText,
   normalizeDatabaseCapabilities,
+  reconcileDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
@@ -387,8 +389,35 @@ export async function executeDrizzleMigrationsForSpec(
       'info'
     );
 
+    const resolvedCapabilities = resolveExecutionDatabaseCapabilities(
+      spec.database.capabilities,
+      artifact.schemaSql
+    );
+    const executionDatabase = {
+      ...spec.database,
+      capabilities: resolvedCapabilities,
+    };
+
+    if (
+      normalizeDatabaseCapabilities(resolvedCapabilities).join(',') !==
+      normalizeDatabaseCapabilities(spec.database.capabilities).join(',')
+    ) {
+      await log(
+        `🧩 ${spec.database.name}: 从 desired schema 推断数据库能力 ${resolvedCapabilities.join(', ')}`,
+        'info'
+      );
+    }
+
+    const capabilityCheck = await reconcileDatabaseCapabilities(
+      executionDatabase,
+      resolvedCapabilities
+    );
+    if (!capabilityCheck.satisfied) {
+      throw new Error(formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues));
+    }
+
     const plan = await planApplyDesiredSchema({
-      database: spec.database,
+      database: executionDatabase,
       desiredSchemaUrl: artifact.schemaFileUrl,
     });
 
@@ -400,7 +429,7 @@ export async function executeDrizzleMigrationsForSpec(
     await log(`🔄 ${spec.database.name}: Atlas 将应用 desired schema 差异`, 'info');
 
     await applyDesiredSchemaToDatabase({
-      database: spec.database,
+      database: executionDatabase,
       desiredSchemaUrl: artifact.schemaFileUrl,
       onOutputLine: (line, stream) => {
         void log(line, stream === 'stderr' ? 'warn' : 'info');

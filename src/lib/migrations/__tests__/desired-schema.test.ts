@@ -54,4 +54,18 @@ CREATE TABLE "users" (
         'CREATE TABLE chunks (embedding vector(1536));'
     );
   });
+
+  it('infers postgres capability extensions from desired schema sql', () => {
+    expect(
+      addPostgresCapabilityExtensionsToSchemaSql(
+        'CREATE TABLE chunks (embedding vector(1536));\nCREATE INDEX chunks_trgm_idx ON chunks USING gin (content gin_trgm_ops);',
+        []
+      )
+    ).toBe(
+      'CREATE EXTENSION IF NOT EXISTS "pg_trgm";\n' +
+        'CREATE EXTENSION IF NOT EXISTS "vector";\n\n' +
+        'CREATE TABLE chunks (embedding vector(1536));\n' +
+        'CREATE INDEX chunks_trgm_idx ON chunks USING gin (content gin_trgm_ops);'
+    );
+  });
 });
