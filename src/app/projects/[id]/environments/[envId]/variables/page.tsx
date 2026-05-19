@@ -40,7 +40,6 @@ export default async function ProjectEnvironmentVariablesPage({
       <EnvVarManager
         projectId={id}
         environmentId={environment.id}
-        environmentName={environment.name}
         canManage={access.member.role === 'owner' || access.member.role === 'admin'}
         disabledSummary={
           access.member.role === 'owner' || access.member.role === 'admin'

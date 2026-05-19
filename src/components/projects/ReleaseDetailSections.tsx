@@ -136,7 +136,7 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
           </div>
         )}
         <div>
-          <div className={releaseSectionTitleClassName}>变更</div>
+          <div className={releaseSectionTitleClassName}>本次变化</div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.changed}</div>
         </div>
         <div>
@@ -223,7 +223,7 @@ export function ReleaseDiffSection({
   return (
     <section className={releaseShellClassName}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold">变更</div>
+        <div className="text-sm font-semibold">版本差异</div>
         {previousReleaseLink ? (
           <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
             <Link

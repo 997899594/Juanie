@@ -293,10 +293,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="project">
           <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">项目信息</div>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
               <div className="space-y-2">
                 <Label htmlFor="name">项目名称</Label>
                 <Input
@@ -355,10 +352,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="runtime">
           <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="console-divider-bottom px-5 py-4">
-              <div className="text-sm font-semibold">环境与数据库</div>
-            </div>
-            <div className="space-y-6 px-5 py-4">
+            <div className="space-y-6 px-5 py-5">
               <section className="space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   环境
@@ -520,10 +514,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="danger">
           <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
-            <div className="px-5 py-4">
-              <div className="text-sm font-semibold text-destructive">危险操作</div>
-            </div>
-            <div className="px-5 py-4">
+            <div className="px-5 py-5">
               {project.yourRole === 'owner' ? (
                 <>
                   <div className="rounded-[22px] bg-[rgba(196,85,77,0.08)] p-4 sm:p-5 md:flex md:items-center md:justify-between">

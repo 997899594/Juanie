@@ -80,7 +80,6 @@ type EnvVarView = 'effective' | 'direct' | 'service';
 interface EnvVarManagerProps {
   projectId: string;
   environmentId: string;
-  environmentName: string;
   canManage?: boolean;
   disabledSummary?: string | null;
 }
@@ -594,7 +593,6 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
 export function EnvVarManager({
   projectId,
   environmentId,
-  environmentName,
   canManage = true,
   disabledSummary,
 }: EnvVarManagerProps) {
@@ -635,16 +633,7 @@ export function EnvVarManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h3 className="text-sm font-medium capitalize">{environmentName}</h3>
-          {!loading ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              生效 {effectiveVars.length} · 直配 {directVars.length} · 服务覆盖{' '}
-              {serviceOverrideCount}
-            </p>
-          ) : null}
-        </div>
+      <div className="flex justify-end">
         <EnvVarDialog
           projectId={projectId}
           environmentId={environmentId}

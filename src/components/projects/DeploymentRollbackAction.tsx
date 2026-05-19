@@ -151,7 +151,7 @@ export function DeploymentRollbackAction({
 
             <div className="space-y-4">
               <div className={dialogPanelClassName}>
-                <div className="mb-3 text-sm font-semibold text-foreground">回滚检查</div>
+                <div className="mb-3 text-sm font-semibold text-foreground">执行条件</div>
 
                 {loadingPlan ? (
                   <EmptyState title="检查中" className="min-h-28 rounded-[20px]" />
