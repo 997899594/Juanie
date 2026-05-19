@@ -30,7 +30,16 @@ export async function handleCopilotRoute<TScope extends CopilotRouteScope>(input
     const parsed = copilotRequestSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Copilot 请求格式不正确' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'Copilot 请求格式不正确',
+          issues: parsed.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
     }
 
     const reply = await input.generateReply(scope, parsed.data.messages);

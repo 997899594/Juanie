@@ -5,7 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useCopilotConversation } from '@/hooks/useCopilotConversation';
 import { getCommandBarConfig } from '@/lib/ai/command-bar';
@@ -44,6 +50,23 @@ function matchesReplayMessages(
       currentMessages[index]?.role === message.role &&
       currentMessages[index]?.content === message.content
   );
+}
+
+function toCopilotRequestMessages(
+  messages: Array<{ role: string; content: string }>
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  return messages
+    .filter(
+      (message): message is { role: 'user' | 'assistant'; content: string } =>
+        (message.role === 'user' || message.role === 'assistant') &&
+        typeof message.content === 'string' &&
+        message.content.trim().length > 0
+    )
+    .slice(-12)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim().slice(0, 3800),
+    }));
 }
 
 const defaultChatError = '稍后重试';
@@ -254,6 +277,7 @@ export function GlobalAIPanel() {
     } satisfies { id: string; role: 'user'; content: string; createdAt: string };
     const assistantMessageId = buildMessageId();
     const nextMessages = [...conversation.messages, userMessage];
+    const requestMessages = toCopilotRequestMessages(nextMessages);
 
     conversation.archiveCurrent();
     conversation.setMessages(nextMessages);
@@ -278,10 +302,7 @@ export function GlobalAIPanel() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: nextMessages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
+          messages: requestMessages,
         }),
       });
 
@@ -469,6 +490,9 @@ export function GlobalAIPanel() {
                   <div className="mt-1 text-[13px] text-[rgba(15,23,42,0.48)]">{config.title}</div>
                 </div>
               </div>
+              <DialogDescription className="sr-only">
+                当前页面的 AI 对话面板，会读取当前项目、环境或发布上下文。
+              </DialogDescription>
             </DialogHeader>
 
             {isChatMode ? (
@@ -610,10 +634,16 @@ export function GlobalAIPanel() {
                         )}
                       >
                         {message.role === 'assistant' ? (
-                          <StreamdownMessage
-                            content={message.content}
-                            isStreaming={streamingMessageId === message.id}
-                          />
+                          message.content ? (
+                            <StreamdownMessage
+                              content={message.content}
+                              isStreaming={streamingMessageId === message.id}
+                            />
+                          ) : (
+                            <div className="py-2 text-[rgba(15,23,42,0.42)]">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </div>
+                          )
                         ) : (
                           <div className="whitespace-pre-wrap">{message.content}</div>
                         )}
