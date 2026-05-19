@@ -379,7 +379,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       showEnvironmentNav={Boolean(selectedEnvironment)}
       title={`${selectedEnvironment?.name ?? '环境'} · 发布`}
       actions={
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 lg:flex">
           <StatusIndicator
             status={isConnected ? 'success' : 'neutral'}
             label={isConnected ? '在线' : '离线'}

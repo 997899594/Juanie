@@ -138,7 +138,6 @@ export function ProjectEnvironmentIndex({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground xl:justify-end">
-                  <span>进入环境</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </div>
               </div>
@@ -295,12 +294,7 @@ export function ProjectRecentReleaseSnapshot({
   return (
     <section className="console-panel overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">最近发布</div>
-          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-            <Link href={`/projects/${projectId}/environments`}>全部发布</Link>
-          </Button>
-        </div>
+        <div className="text-sm font-semibold">最近发布</div>
       </div>
 
       <div className="space-y-2 p-3">

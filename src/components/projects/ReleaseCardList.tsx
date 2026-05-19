@@ -143,24 +143,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                       <span>{formatPlatformTimeContext(release.createdAt) ?? '—'}</span>
                     </div>
                     <div className="flex w-full items-center gap-2 sm:w-auto">
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        className="min-w-0 flex-1 rounded-full sm:flex-none"
-                      >
-                        <Link
-                          href={`/projects/${projectId}/environments/${release.environment.id}/logs`}
-                        >
-                          日志
-                        </Link>
-                      </Button>
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        className="min-w-0 flex-1 rounded-full sm:flex-none"
-                      >
+                      <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
                         <Link
                           href={buildReleaseDetailPath(
                             projectId,
@@ -168,7 +151,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                             release.id
                           )}
                         >
-                          发布
+                          详情
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
