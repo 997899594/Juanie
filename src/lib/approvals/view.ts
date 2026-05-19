@@ -44,6 +44,10 @@ export interface ApprovalRunLike {
   database: {
     name: string;
     type: string;
+    schemaState?: {
+      status: string;
+      actualVersion?: string | null;
+    } | null;
   };
   environment: EnvironmentKindLike & {
     id: string;

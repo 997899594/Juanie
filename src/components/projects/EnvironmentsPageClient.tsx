@@ -701,9 +701,9 @@ function EnvironmentOverviewPanel({
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {runtimeAction}
             {environment.primaryDomainUrl ? (
-              <Button asChild className="h-9 rounded-full px-4 text-sm">
+              <Button asChild variant="secondary" className="h-9 rounded-full px-4 text-sm">
                 <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  打开
+                  打开应用
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </Button>
@@ -758,7 +758,7 @@ function EnvironmentOverviewPanel({
               <Button asChild variant="ghost" className="h-10 rounded-full px-4 text-sm">
                 <Link href={schemaHref}>数据库</Link>
               </Button>
-              <Button asChild className="h-10 rounded-full px-4 text-sm">
+              <Button asChild variant="secondary" className="h-10 rounded-full px-4 text-sm">
                 <a href={primaryDatabaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
                   打开控制台
                   <ExternalLink className="h-3.5 w-3.5" />

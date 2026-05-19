@@ -82,4 +82,35 @@ describe('approvals service', () => {
     expect(result.stats[2]?.value).toBe(1);
     expect(result.attentionRuns.map((run) => run.id)).toEqual(['run-2']);
   });
+
+  it('does not surface failed migration runs once schema inspection is aligned', () => {
+    const result = buildApprovalsPageData({
+      filterState: 'failed',
+      runs: [
+        {
+          id: 'run-1',
+          projectId: 'proj-1',
+          releaseId: 'rel-1',
+          lockKey: 'db-1:env-1',
+          status: 'failed',
+          createdAt: '2026-03-26T00:00:00.000Z',
+          database: {
+            name: 'postgres',
+            type: 'postgresql',
+            schemaState: {
+              status: 'aligned',
+              actualVersion: 'abc123',
+            },
+          },
+          environment: { id: 'env-production', name: 'production' },
+          project: { name: 'demo' },
+          specification: { tool: 'drizzle', phase: 'preDeploy', command: 'bun run db:push' },
+        },
+      ],
+    });
+
+    expect(result.stats[0]?.value).toBe(0);
+    expect(result.stats[2]?.value).toBe(0);
+    expect(result.attentionRuns).toEqual([]);
+  });
 });

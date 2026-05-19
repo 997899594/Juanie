@@ -18,17 +18,22 @@ export function buildApprovalsPageData<TRun extends ApprovalRunLike>(input: {
   runs: TRun[];
   filterState: AttentionFilterState;
 }) {
-  const activeAttentionRuns = filterAttentionRuns(input.runs);
+  const unresolvedRuns = input.runs.filter((run) => !isResolvedBySchemaState(run));
+  const activeAttentionRuns = filterAttentionRuns(unresolvedRuns);
   const filteredRuns =
     input.filterState === 'all'
       ? activeAttentionRuns
-      : filterAttentionRuns(input.runs, input.filterState);
-  const attentionStats = getAttentionStats(input.runs);
+      : filterAttentionRuns(unresolvedRuns, input.filterState);
+  const attentionStats = getAttentionStats(unresolvedRuns);
 
   return {
     stats: buildApprovalStats(attentionStats),
     attentionRuns: decorateApprovalRuns(filteredRuns),
   };
+}
+
+function isResolvedBySchemaState(run: ApprovalRunLike): boolean {
+  return run.status === 'failed' && run.database.schemaState?.status === 'aligned';
 }
 
 export type ApprovalsPageData = ReturnType<typeof buildApprovalsPageData>;
@@ -64,7 +69,11 @@ export async function getApprovalsPageData(input: {
           where: (run, { inArray }) => inArray(run.projectId, projectIds),
           orderBy: (run, { desc }) => [desc(run.createdAt)],
           with: {
-            database: true,
+            database: {
+              with: {
+                schemaState: true,
+              },
+            },
             environment: {
               with: {
                 domains: true,
