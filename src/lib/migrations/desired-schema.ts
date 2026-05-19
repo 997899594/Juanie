@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { hasExecutable } from '@/lib/atlas/cli';
+import { getPostgresCapabilityExtensions } from '@/lib/databases/capabilities';
 import {
   drizzleSchemaConfigCandidates,
   resolveSpecificationSource,
@@ -48,6 +49,7 @@ interface DesiredSchemaExportInput {
   revision: string;
   sourceConfigPath?: string | null;
   connectionString?: string | null;
+  capabilities?: readonly string[] | null;
 }
 
 async function pathExists(pathname: string): Promise<boolean> {
@@ -111,6 +113,22 @@ export function validateDesiredSchemaSqlOutput(output: string): string {
   }
 
   return schemaSql;
+}
+
+export function addPostgresCapabilityExtensionsToSchemaSql(
+  schemaSql: string,
+  capabilities: readonly string[] | null | undefined
+): string {
+  const extensions = getPostgresCapabilityExtensions(capabilities);
+  if (extensions.length === 0) {
+    return schemaSql;
+  }
+
+  const prelude = extensions
+    .map((extension) => `CREATE EXTENSION IF NOT EXISTS "${extension}";`)
+    .join('\n');
+
+  return `${prelude}\n\n${schemaSql}`;
 }
 
 function normalizeDrizzleSchemaConfigValue(value: unknown): string {
@@ -308,6 +326,7 @@ function buildSchemaExportEnv(connectionString?: string | null): NodeJS.ProcessE
 async function exportDrizzleDesiredSchema(input: {
   sourceConfigPath?: string | null;
   connectionString?: string | null;
+  capabilities?: readonly string[] | null;
   workspace: SourceWorkspaceContext;
 }): Promise<Omit<DesiredSchemaArtifact, 'source' | 'revision' | 'workspaceDir' | 'cleanup'>> {
   const sourceConfigPath = await resolveDrizzleConfigPath({
@@ -331,7 +350,11 @@ async function exportDrizzleDesiredSchema(input: {
     cwd: input.workspace.repoDir,
     env,
   });
-  const schemaSql = validateDesiredSchemaSqlOutput(stdout);
+  const exportedSchemaSql = validateDesiredSchemaSqlOutput(stdout);
+  const schemaSql =
+    exportOptions.dialect === 'postgresql'
+      ? addPostgresCapabilityExtensionsToSchemaSql(exportedSchemaSql, input.capabilities)
+      : exportedSchemaSql;
 
   const schemaDir = path.join(input.workspace.tempRoot, '.juanie', 'desired-schema');
   const schemaFilePath = path.join(schemaDir, 'schema.sql');
@@ -362,6 +385,7 @@ export async function exportDesiredSchemaFromRepository(
     const result = await exportDrizzleDesiredSchema({
       sourceConfigPath: input.sourceConfigPath,
       connectionString: input.connectionString,
+      capabilities: input.capabilities,
       workspace,
     });
 
@@ -389,5 +413,6 @@ export async function exportDesiredSchemaForSpec(
     revision,
     sourceConfigPath: spec.specification.sourceConfigPath,
     connectionString: spec.database.connectionString,
+    capabilities: spec.database.capabilities,
   });
 }

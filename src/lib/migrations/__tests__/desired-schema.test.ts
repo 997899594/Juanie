@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  addPostgresCapabilityExtensionsToSchemaSql,
   resolveDrizzleExportOptionsFromConfig,
   validateDesiredSchemaSqlOutput,
 } from '@/lib/migrations/desired-schema';
@@ -39,5 +40,18 @@ CREATE TABLE "users" (
 );
 `)
     ).toContain('CREATE TABLE "users"');
+  });
+
+  it('prepends declared postgres capability extensions to desired schema sql', () => {
+    expect(
+      addPostgresCapabilityExtensionsToSchemaSql('CREATE TABLE chunks (embedding vector(1536));', [
+        'vector',
+        'pg_trgm',
+      ])
+    ).toBe(
+      'CREATE EXTENSION IF NOT EXISTS "pg_trgm";\n' +
+        'CREATE EXTENSION IF NOT EXISTS "vector";\n\n' +
+        'CREATE TABLE chunks (embedding vector(1536));'
+    );
   });
 });
