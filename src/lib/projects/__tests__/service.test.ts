@@ -33,6 +33,7 @@ describe('project overview service', () => {
           },
         },
       ] as never,
+      role: 'owner',
       projectEnvironments: [
         {
           id: 'env-1',

@@ -3,9 +3,16 @@ import { ProjectOverviewDashboard } from '@/components/projects/ProjectOverviewD
 import { auth } from '@/lib/auth';
 import { getProjectOverviewPageData } from '@/lib/projects/service';
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ new?: string }>;
+}) {
   const session = await auth();
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   if (!session?.user?.id) {
     redirect('/login');
@@ -15,5 +22,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   if (!pageData?.project) redirect('/projects');
 
-  return <ProjectOverviewDashboard projectId={id} pageData={pageData} />;
+  return (
+    <ProjectOverviewDashboard
+      projectId={id}
+      pageData={pageData}
+      initialCreatePreviewOpen={resolvedSearchParams?.new === 'preview'}
+    />
+  );
 }

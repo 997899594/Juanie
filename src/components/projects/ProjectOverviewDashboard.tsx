@@ -14,11 +14,16 @@ import type { ProjectOverviewPageData } from '@/lib/projects/service';
 interface ProjectOverviewDashboardProps {
   projectId: string;
   pageData: ProjectOverviewPageData;
+  initialCreatePreviewOpen?: boolean;
 }
 
 const overviewShellClassName = 'console-panel px-5 py-5';
 
-export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
+export function ProjectOverviewDashboard({
+  projectId,
+  pageData,
+  initialCreatePreviewOpen = false,
+}: ProjectOverviewDashboardProps) {
   const {
     project,
     environmentCards,
@@ -125,7 +130,12 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
+        <ProjectEnvironmentIndex
+          projectId={projectId}
+          environments={environmentCards}
+          governance={pageData.previewEnvironmentActions}
+          initialCreateOpen={initialCreatePreviewOpen}
+        />
         <div className="space-y-3">
           <ProjectRecentReleaseSnapshot projectId={projectId} releases={recentReleaseCards} />
           <ProjectRuntimeSnapshot

@@ -1,8 +1,8 @@
-import { ArrowRight, Database, Globe2, Plus, Server } from 'lucide-react';
+import { ArrowRight, Database, Globe2, Server } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { ProjectPreviewEnvironmentLauncher } from '@/components/projects/ProjectPreviewEnvironmentLauncher';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 import { getReleaseStatusDecoration } from '@/lib/releases/status-presentation';
@@ -66,9 +66,13 @@ function getEnvironmentSecondaryLine(
 export function ProjectEnvironmentIndex({
   projectId,
   environments,
+  governance,
+  initialCreateOpen,
 }: {
   projectId: string;
   environments: ProjectOverviewPageData['environmentCards'];
+  governance: ProjectOverviewPageData['previewEnvironmentActions'];
+  initialCreateOpen?: boolean;
 }) {
   const sortedEnvironments = [...environments].sort((left, right) => {
     const leftPriority = left.isProduction ? 0 : left.isPreview ? 2 : 1;
@@ -86,12 +90,11 @@ export function ProjectEnvironmentIndex({
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">环境</div>
-          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-            <Link href={`/projects/${projectId}/environments?new=preview`}>
-              <Plus className="h-3.5 w-3.5" />
-              新建预览
-            </Link>
-          </Button>
+          <ProjectPreviewEnvironmentLauncher
+            projectId={projectId}
+            governance={governance}
+            initialOpen={initialCreateOpen}
+          />
         </div>
       </div>
 

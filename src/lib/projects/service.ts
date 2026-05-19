@@ -14,6 +14,7 @@ import {
   teams,
   users,
 } from '@/lib/db/schema';
+import { buildEnvironmentPageGovernanceSnapshot } from '@/lib/environments/governance-view';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { decorateEnvironmentList } from '@/lib/environments/view';
 import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
@@ -99,6 +100,7 @@ export function buildProjectOverviewPageData<
       sourceDatabaseId?: string | null;
     }> | null;
   }>;
+  role: TeamRole;
   environmentTrackingReleases: Array<{
     id: string;
     environmentId: string;
@@ -180,6 +182,7 @@ export function buildProjectOverviewPageData<
         };
       })
     ),
+    previewEnvironmentActions: buildEnvironmentPageGovernanceSnapshot(input.role),
     serviceCards: decorateProjectServices(input.projectServices),
     domainCards: decorateProjectDomains(input.projectDomains),
     attentionItems: decorateProjectAttentionRuns(attentionRuns),
@@ -355,6 +358,7 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     teamMemberCount: teamMemberCountResult[0]?.count ?? 0,
     teamMembersPreview,
     projectEnvironments,
+    role: access.member.role,
     environmentTrackingReleases,
     projectServices,
     projectDatabases,
