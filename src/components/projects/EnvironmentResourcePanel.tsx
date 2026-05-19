@@ -1,7 +1,6 @@
 'use client';
 
 import { AlertTriangle, Boxes, Clock3, Database, ServerCrash } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -601,16 +600,9 @@ export function EnvironmentResourcePanel({
             <div>
               <div className="text-sm font-medium">Pod 原始日志 · {selectedPod}</div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
-                <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
-                  环境日志
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" className="" onClick={() => setSelectedPod('')}>
-                关闭
-              </Button>
-            </div>
+            <Button variant="ghost" size="sm" className="" onClick={() => setSelectedPod('')}>
+              关闭
+            </Button>
           </div>
           <div className="p-3">
             <pre
