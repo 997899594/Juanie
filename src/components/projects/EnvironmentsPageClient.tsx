@@ -1012,7 +1012,7 @@ export function EnvironmentsPageClient({
     return (
       <Button
         type="button"
-        variant={action === 'sleep' ? 'ghost' : 'default'}
+        variant="ghost"
         size="sm"
         className="h-9 rounded-full px-4"
         disabled={runtimeActionId === environment.id}

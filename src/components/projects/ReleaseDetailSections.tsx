@@ -554,7 +554,7 @@ export function ReleaseExecutionSections({
                       </div>
                     ) : isExternalArtifactReference(reference) ? (
                       <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <Button asChild size="sm" className="rounded-full">
+                        <Button asChild variant="ghost" size="sm" className="rounded-full">
                           <a href={reference} target="_blank" rel="noreferrer">
                             下载
                           </a>

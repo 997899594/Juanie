@@ -86,7 +86,7 @@ export function ProjectEnvironmentIndex({
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">环境</div>
-          <Button asChild size="sm" className="h-8 rounded-full px-3">
+          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
             <Link href={`/projects/${projectId}/environments?new=preview`}>
               <Plus className="h-3.5 w-3.5" />
               新建预览

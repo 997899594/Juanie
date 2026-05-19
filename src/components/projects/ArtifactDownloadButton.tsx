@@ -40,6 +40,7 @@ export function ArtifactDownloadButton({ releaseId, artifactId }: ArtifactDownlo
   return (
     <Button
       type="button"
+      variant="ghost"
       size="sm"
       className="rounded-full"
       disabled={isDownloading}
