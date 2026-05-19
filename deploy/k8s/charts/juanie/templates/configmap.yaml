@@ -50,7 +50,7 @@ data:
   {{- if hasKey .Values.env "AI_ENABLED" }}
   AI_ENABLED: {{ .Values.env.AI_ENABLED | quote }}
   {{- end }}
-  AI_302_BASE_URL: {{ .Values.env.AI_302_BASE_URL | default "https://api.302.ai/v1" | quote }}
+  AI_302_BASE_URL: {{ .Values.env.AI_302_BASE_URL | default "https://api.302ai.cn/v1" | quote }}
   AI_DEFAULT_PLAN: {{ .Values.env.AI_DEFAULT_PLAN | default "free" | quote }}
   AI_MODEL: {{ .Values.env.AI_MODEL | default "gpt-5.2" | quote }}
   AI_MODEL_PRO: {{ .Values.env.AI_MODEL_PRO | default "gpt-5.2-pro" | quote }}

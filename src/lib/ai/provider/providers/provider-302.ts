@@ -14,6 +14,9 @@ export class Provider302Adapter implements JuanieAIProviderAdapter {
   private readonly client = createOpenAI({
     baseURL: aiConfig.provider.baseUrl,
     apiKey: aiConfig.provider.apiKey ?? undefined,
+    headers: {
+      Accept: 'application/json',
+    },
   });
 
   isConfigured(): boolean {
