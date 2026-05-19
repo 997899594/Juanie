@@ -304,7 +304,7 @@ export function SchemaCenterClient({
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               {databaseConsole.sqlEditorUrl ? (
-                <Button asChild className="h-10 rounded-full px-4">
+                <Button asChild variant="secondary" className="h-10 rounded-full px-4">
                   <a href={databaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
                     打开控制台
                     <ExternalLink className="h-3.5 w-3.5" />

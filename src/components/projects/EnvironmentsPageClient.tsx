@@ -631,9 +631,6 @@ function EnvironmentOverviewPanel({
   const titleClassName =
     'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
   const deliveryHref = `/projects/${projectId}/environments/${environment.id}/delivery`;
-  const schemaHref = `/projects/${projectId}/environments/${environment.id}/schema`;
-  const consoleDatabases = environment.databases.filter((database) => Boolean(database.console));
-  const primaryDatabaseConsole = consoleDatabases[0]?.console ?? null;
   const primaryDomainHost = environment.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
   const primaryStatusSummary = statusSummary ?? buildEnvironmentHeaderMeta(environment);
   const flowRows = [
@@ -691,30 +688,12 @@ function EnvironmentOverviewPanel({
                   {primaryStatusSummary}
                 </span>
               ) : null}
-              <span className="rounded-full bg-foreground/[0.045] px-3 py-1 text-xs text-muted-foreground">
-                {environment.runtimeState?.readyReplicas ?? 0}/
-                {environment.runtimeState?.desiredReplicas ?? 0} 副本
-              </span>
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {runtimeAction}
-            {environment.primaryDomainUrl ? (
-              <Button asChild variant="secondary" className="h-9 rounded-full px-4 text-sm">
-                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  打开应用
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </Button>
-            ) : null}
-            <Button asChild variant="ghost" className="h-9 rounded-full px-4 text-sm">
-              <Link href={deliveryHref}>
-                发布
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
+          {runtimeAction ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">{runtimeAction}</div>
+          ) : null}
         </div>
       </section>
 
@@ -735,39 +714,6 @@ function EnvironmentOverviewPanel({
           ))}
         </div>
       </section>
-
-      {primaryDatabaseConsole ? (
-        <section className={cn(shellClassName, 'px-5 py-5')}>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{primaryDatabaseConsole.label}</Badge>
-                <Badge variant="secondary" className="border-success/30 text-success">
-                  {primaryDatabaseConsole.accessModeLabel}
-                </Badge>
-              </div>
-              <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
-                <Database className="h-4 w-4" />
-                数据库工作台
-              </div>
-              <div className="mt-2 text-sm leading-6 text-muted-foreground">
-                {consoleDatabases.length} 个数据库已接入控制台；结构变更仍走发布、提升或修复流程。
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Button asChild variant="ghost" className="h-10 rounded-full px-4 text-sm">
-                <Link href={schemaHref}>数据库</Link>
-              </Button>
-              <Button asChild variant="secondary" className="h-10 rounded-full px-4 text-sm">
-                <a href={primaryDatabaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
-                  打开控制台
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </Button>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
         <section className={shellClassName}>

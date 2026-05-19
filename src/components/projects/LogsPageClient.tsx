@@ -36,8 +36,6 @@ type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
 const shellClassName = 'console-panel px-5 py-5';
 
-const subCardClassName = 'console-inset rounded-[16px] px-4 py-4';
-
 interface LogsPageClientProps {
   projectId: string;
   projectName: string;
@@ -217,7 +215,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             </Select>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <div className="hidden flex-wrap items-center gap-2 lg:flex xl:justify-end">
             <Button
               variant="ghost"
               size="sm"
@@ -235,25 +233,6 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
               清空
             </Button>
           </div>
-        </div>
-
-        <div className={cn(subCardClassName, 'mt-4 flex flex-wrap items-center gap-3 text-xs')}>
-          <span className="text-muted-foreground">当前环境</span>
-          <span className="font-medium text-foreground">
-            {selectedEnvironment?.name ?? '未选择'}
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <StatusIndicator
-            status={statusColor[status]}
-            pulse={status === 'streaming'}
-            label={statusLabel[status]}
-          />
-          {lastLineLabel ? (
-            <>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">最后输出 {lastLineLabel}</span>
-            </>
-          ) : null}
         </div>
       </div>
 

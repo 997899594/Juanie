@@ -231,12 +231,10 @@ function buildDatabaseSnapshotItems(databases: ProjectOverviewPageData['database
 }
 
 export function ProjectRuntimeSnapshot({
-  projectId,
   services,
   databases,
   domains,
 }: {
-  projectId: string;
   services: ProjectOverviewPageData['serviceCards'];
   databases: ProjectOverviewPageData['databaseCards'];
   domains: ProjectOverviewPageData['domainCards'];
@@ -248,12 +246,7 @@ export function ProjectRuntimeSnapshot({
   return (
     <section className="console-panel overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">运行资产</div>
-          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-            <Link href={`/projects/${projectId}/environments`}>查看环境</Link>
-          </Button>
-        </div>
+        <div className="text-sm font-semibold">运行资产</div>
       </div>
 
       <div className="space-y-4 p-4">

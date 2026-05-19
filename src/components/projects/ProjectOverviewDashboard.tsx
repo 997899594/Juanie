@@ -129,7 +129,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
         <div className="space-y-3">
           <ProjectRecentReleaseSnapshot projectId={projectId} releases={recentReleaseCards} />
           <ProjectRuntimeSnapshot
-            projectId={projectId}
             services={serviceCards}
             databases={databaseCards}
             domains={domainCards}
