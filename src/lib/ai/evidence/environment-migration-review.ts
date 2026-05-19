@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { loadAIEnvironmentContext } from '@/lib/ai/context/environment-context';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
-import { collapseRunsToLatestByLockKey } from '@/lib/migrations/attention';
+import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
 
 export interface EnvironmentMigrationReviewEvidence {
   teamId: string;
@@ -77,11 +77,8 @@ export async function buildEnvironmentMigrationReviewEvidence(input: {
     },
   });
 
-  const attentionRuns = collapseRunsToLatestByLockKey(
-    rawMigrationRuns.filter((run) =>
-      ['awaiting_approval', 'awaiting_external_completion', 'failed'].includes(run.status)
-    )
-  );
+  const attentionRuns = filterAttentionRuns(rawMigrationRuns);
+  const attentionStats = getAttentionStats(rawMigrationRuns);
   const blockedCount = environment.databases.filter(
     (database) => database.schemaState?.status === 'blocked'
   ).length;
@@ -101,12 +98,9 @@ export async function buildEnvironmentMigrationReviewEvidence(input: {
     latestMigrationStatus: environment.latestMigrationRun?.status ?? null,
     migration: {
       totalRuns: rawMigrationRuns.length,
-      awaitingApprovalCount: rawMigrationRuns.filter((run) => run.status === 'awaiting_approval')
-        .length,
-      awaitingExternalCount: rawMigrationRuns.filter(
-        (run) => run.status === 'awaiting_external_completion'
-      ).length,
-      failedCount: rawMigrationRuns.filter((run) => run.status === 'failed').length,
+      awaitingApprovalCount: attentionStats.approval,
+      awaitingExternalCount: attentionStats.external,
+      failedCount: attentionStats.failed,
       runningCount: rawMigrationRuns.filter((run) =>
         ['queued', 'planning', 'running'].includes(run.status)
       ).length,
