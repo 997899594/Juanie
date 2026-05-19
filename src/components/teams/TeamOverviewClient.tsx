@@ -81,7 +81,6 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         <EmptyState
           icon={<FolderKanban className="h-8 w-8 text-muted-foreground" />}
           title="没有项目"
-          action={{ label: '新建项目', href: '/projects/new' }}
           className="min-h-80"
         />
       ) : (

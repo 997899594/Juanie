@@ -189,7 +189,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             <div className="text-sm font-semibold">AI Control Plane</div>
           </div>
           {overview.canEdit ? (
-            <Button type="submit" className="h-9 px-4" disabled={savingAI}>
+            <Button type="submit" variant="ghost" className="h-9 px-4" disabled={savingAI}>
               {savingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存 AI 配置'}
             </Button>
           ) : null}

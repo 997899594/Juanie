@@ -468,74 +468,79 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
         <EmptyState
           icon={<Users className="h-8 w-8 text-muted-foreground" />}
           title="没有成员"
-          action={{ label: '邀请成员', onClick: () => setIsOpen(true) }}
           className="min-h-80"
         />
       ) : (
         <div className="ui-floating console-list overflow-hidden px-0 py-0">
-          {overview.members.map((member) => (
-            <div
-              key={member.id}
-              className="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10 rounded-xl">
-                  <AvatarImage src={member.user.image ?? undefined} />
-                  <AvatarFallback className="rounded-xl bg-secondary text-xs font-semibold">
-                    {getInitials(member.user.name, member.user.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">
-                    {member.user.name || member.user.email}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{member.user.email}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {member.roleLabel} · 加入于 {member.createdAtLabel}
-                  </p>
+          {overview.members.map((member) => {
+            const actionNotes = [
+              member.actions.canChangeRole ? null : member.actions.roleSummary,
+              member.actions.canRemove ? null : member.actions.removeSummary,
+            ].filter(Boolean);
+
+            return (
+              <div
+                key={member.id}
+                className="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10 rounded-xl">
+                    <AvatarImage src={member.user.image ?? undefined} />
+                    <AvatarFallback className="rounded-xl bg-secondary text-xs font-semibold">
+                      {getInitials(member.user.name, member.user.email)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {member.user.name || member.user.email}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{member.user.email}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {member.roleLabel} · 加入于 {member.createdAtLabel}
+                    </p>
+                    {actionNotes.length > 0 ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {actionNotes.join(' · ')}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <Select
-                  value={member.role}
-                  onValueChange={(value) => handleChangeRole(member.id, value)}
-                  disabled={!member.actions.canChangeRole}
-                >
-                  <SelectTrigger className="h-9 w-28 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner" disabled>
-                      拥有者
-                    </SelectItem>
-                    <SelectItem value="admin">管理员</SelectItem>
-                    <SelectItem value="member">成员</SelectItem>
-                    <SelectItem value="delivery">交付人员</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {member.role !== 'owner' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteId(member.id)}
-                    disabled={!member.actions.canRemove}
-                    title={member.actions.removeSummary}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={member.role}
+                    onValueChange={(value) => handleChangeRole(member.id, value)}
+                    disabled={!member.actions.canChangeRole}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <div className="md:ml-auto md:min-w-44">
-                <div className="text-xs text-muted-foreground">{member.actions.roleSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {member.actions.removeSummary}
+                    <SelectTrigger className="h-9 w-28 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner" disabled>
+                        拥有者
+                      </SelectItem>
+                      <SelectItem value="admin">管理员</SelectItem>
+                      <SelectItem value="member">成员</SelectItem>
+                      <SelectItem value="delivery">交付人员</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {member.role !== 'owner' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteId(member.id)}
+                      disabled={!member.actions.canRemove}
+                      title={member.actions.removeSummary}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
