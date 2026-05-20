@@ -272,49 +272,54 @@ export async function planApplyDesiredSchema(input: {
   database: AtlasDatabaseTarget;
   desiredSchemaUrl: string;
 }): Promise<AtlasSchemaApplyPlan> {
-  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
-  if (!databaseUrl) {
-    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
+  const diff = await runAtlasSchemaDiff({
+    database: input.database,
+    to: input.desiredSchemaUrl,
+  });
+
+  return {
+    hasChanges: diff.hasChanges,
+    planSql: diff.diffSql,
+  };
+}
+
+async function executeAtlasSchemaDiffSql(input: {
+  database: AtlasDatabaseTarget;
+  databaseUrl: string;
+  sql: string;
+}): Promise<void> {
+  if (!input.sql.trim()) {
+    return;
   }
 
-  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type, {
-    capabilities: input.database.capabilities,
+  if (input.database.type === 'postgresql') {
+    const client = new PgClient({ connectionString: input.databaseUrl });
+    await client.connect();
+
+    try {
+      await client.query(input.sql);
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+    return;
+  }
+
+  const connection = await mysql.createConnection({
+    uri: input.databaseUrl,
+    multipleStatements: true,
   });
 
   try {
-    const args = [
-      'schema',
-      'apply',
-      '--url',
-      databaseUrl,
-      '--to',
-      input.desiredSchemaUrl,
-      '--dev-url',
-      devDatabase.url,
-      '--dry-run',
-      '--format',
-      '{{ sql . }}',
-      ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
-        '--exclude',
-        pattern,
-      ]),
-    ];
-
-    const { stdout } = await runAtlasCommand(args);
-    const planSql = stdout.trim();
-
-    return {
-      hasChanges: planSql.length > 0,
-      planSql,
-    };
+    await connection.query(input.sql);
   } finally {
-    await devDatabase.cleanup().catch(() => undefined);
+    await connection.end().catch(() => undefined);
   }
 }
 
 export async function applyDesiredSchemaToDatabase(input: {
   database: AtlasDatabaseTarget;
   desiredSchemaUrl: string;
+  planSql?: string | null;
   onOutputLine?: (line: string, stream: 'stdout' | 'stderr') => void;
 }): Promise<void> {
   const databaseUrl = resolveAtlasDatabaseUrl(input.database);
@@ -322,34 +327,25 @@ export async function applyDesiredSchemaToDatabase(input: {
     throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
   }
 
-  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type, {
-    capabilities: input.database.capabilities,
-  });
+  const planSql =
+    input.planSql ??
+    (
+      await planApplyDesiredSchema({
+        database: input.database,
+        desiredSchemaUrl: input.desiredSchemaUrl,
+      })
+    ).planSql;
 
-  try {
-    await runAtlasCommand(
-      [
-        'schema',
-        'apply',
-        '--url',
-        databaseUrl,
-        '--to',
-        input.desiredSchemaUrl,
-        '--dev-url',
-        devDatabase.url,
-        '--auto-approve',
-        ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
-          '--exclude',
-          pattern,
-        ]),
-      ],
-      {
-        onOutputLine: input.onOutputLine,
-      }
-    );
-  } finally {
-    await devDatabase.cleanup().catch(() => undefined);
+  if (!planSql.trim()) {
+    return;
   }
+
+  input.onOutputLine?.('Applying Atlas schema diff SQL', 'stdout');
+  await executeAtlasSchemaDiffSql({
+    database: input.database,
+    databaseUrl,
+    sql: planSql,
+  });
 }
 
 async function getAppliedAtlasVersionsPostgres(connectionString: string): Promise<string[]> {

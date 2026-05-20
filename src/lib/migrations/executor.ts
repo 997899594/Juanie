@@ -431,6 +431,7 @@ export async function executeDrizzleMigrationsForSpec(
     await applyDesiredSchemaToDatabase({
       database: executionDatabase,
       desiredSchemaUrl: artifact.schemaFileUrl,
+      planSql: plan.planSql,
       onOutputLine: (line, stream) => {
         void log(line, stream === 'stderr' ? 'warn' : 'info');
       },
