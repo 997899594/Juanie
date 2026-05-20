@@ -109,6 +109,7 @@ describe('release planning', () => {
 
     expect(approvalChips).toEqual([{ key: 'approval-gate', label: '等待审批', tone: 'danger' }]);
     expect(productionProtectionChips.length).toBe(1);
+    expect(panel.canSubmit).toBe(true);
     expect(panel.issueSummary).toBe(
       '这次发布包含 1 个生产前置迁移，需要在发布详情审批后才会执行。'
     );
@@ -153,6 +154,57 @@ describe('release planning', () => {
     expect(plan.schema.blockingCount).toBe(1);
     expect(plan.summary).toBe('存在 1 个数据库 schema 门禁未满足');
     expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:blocking')).toBe(true);
+  });
+
+  it('presents schema blockers before approval-only guidance', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: true, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [
+        {
+          environment: { isProduction: true, isPreview: false },
+          specification: {
+            executionMode: 'automatic',
+            phase: 'preDeploy',
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'manual_in_production',
+          },
+        },
+      ],
+      schemaGate: {
+        canCreate: false,
+        checkedCount: 1,
+        blockingCount: 1,
+        blockingReason: '存在 1 个数据库 schema 门禁未满足',
+        summary: '数据库账本与仓库迁移链不一致',
+        nextActionLabel: '先在环境页处理数据库纳管',
+        customSignals: [
+          {
+            key: 'schema:blocking',
+            label: 'Schema 门禁 1 项',
+            tone: 'danger',
+          },
+        ],
+        states: [
+          {
+            databaseId: 'db-1',
+            databaseName: 'postgresql',
+            status: 'drifted',
+            statusLabel: '已漂移',
+            summary: '数据库账本与仓库迁移链不一致',
+          },
+        ],
+      },
+    });
+
+    const panel = buildReleasePlanningPanel({ plan });
+
+    expect(plan.issue?.code).toBe('approval_blocked');
+    expect(panel.canSubmit).toBe(false);
+    expect(panel.issueSummary).toBe(
+      '存在 1 个数据库 schema 门禁未满足：数据库账本与仓库迁移链不一致'
+    );
+    expect(panel.issueSummary).not.toContain('发布详情审批');
   });
 
   it('allows release creation when schema gate only reports pending migrations', () => {

@@ -2,7 +2,7 @@
 
 import { ArrowUpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,15 @@ interface PromotionActionProps {
   sourceEnvironmentId?: string | null;
   className?: string;
   compact?: boolean;
+}
+
+interface PromotionPlanRefreshInput {
+  key: string;
+  flowId: string | null;
+  refreshSchema?: boolean;
+  loadingKey?: boolean;
+  refreshingKey?: boolean;
+  errorMessage: string;
 }
 
 function getPromotionPlanKey(flowId?: string | null): string {
@@ -48,6 +57,11 @@ function mergePromotionPlanItems(
     : [...currentPlans, nextPlan];
 }
 
+function hasActiveSchemaRefresh(plan: Pick<ProjectPromotionPlanView, 'plan'> | null): boolean {
+  const refresh = plan?.plan.schema.refresh;
+  return Boolean(refresh && refresh.queuedCount + refresh.runningCount > 0);
+}
+
 export function PromotionAction({
   projectId,
   promotionPlans: initialPromotionPlans,
@@ -68,6 +82,11 @@ export function PromotionAction({
     message: string;
   } | null>(null);
   const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const schemaRefreshFollowUpTimerRef = useRef<number | null>(null);
+  const planRequestSeqRef = useRef(0);
+  const latestPlanRequestSeqByKeyRef = useRef(new Map<string, number>());
+  const refreshPromotionPlanRef = useRef<((input: PromotionPlanRefreshInput) => void) | null>(null);
+  const dialogOpenRef = useRef(dialogOpen);
   const activePromotionPlans = sourceEnvironmentId
     ? promotionPlans.filter((plan) => plan.sourceEnvironment?.id === sourceEnvironmentId)
     : promotionPlans;
@@ -117,12 +136,101 @@ export function PromotionAction({
         : '提升到下游';
 
   useEffect(() => {
+    dialogOpenRef.current = dialogOpen;
+  }, [dialogOpen]);
+
+  const clearSchemaRefreshFollowUpTimer = useCallback(() => {
+    if (schemaRefreshFollowUpTimerRef.current !== null) {
+      window.clearTimeout(schemaRefreshFollowUpTimerRef.current);
+      schemaRefreshFollowUpTimerRef.current = null;
+    }
+  }, []);
+
+  const refreshPromotionPlan = useCallback(
+    (input: PromotionPlanRefreshInput) => {
+      const requestSeq = planRequestSeqRef.current + 1;
+      planRequestSeqRef.current = requestSeq;
+      latestPlanRequestSeqByKeyRef.current.set(input.key, requestSeq);
+
+      if (input.loadingKey) {
+        setPlanLoadingKey(input.key);
+        setPlanError(null);
+      } else if (input.refreshingKey) {
+        setPlanRefreshingKey(input.key);
+      }
+
+      return fetchPromotionPlan({
+        projectId,
+        flowId: input.flowId,
+        refreshSchema: input.refreshSchema,
+      })
+        .then((plan) => {
+          if (latestPlanRequestSeqByKeyRef.current.get(input.key) !== requestSeq) {
+            return;
+          }
+
+          setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
+          setLoadedPlanKeys((currentKeys) => {
+            const nextKeys = new Set(currentKeys);
+            nextKeys.add(input.key);
+            return nextKeys;
+          });
+          setPlanError((currentError) => (currentError?.key === input.key ? null : currentError));
+
+          clearSchemaRefreshFollowUpTimer();
+          if (dialogOpenRef.current && hasActiveSchemaRefresh(plan)) {
+            schemaRefreshFollowUpTimerRef.current = window.setTimeout(() => {
+              if (!dialogOpenRef.current) {
+                return;
+              }
+
+              refreshPromotionPlanRef.current?.({
+                key: input.key,
+                flowId: input.flowId,
+                refreshingKey: true,
+                errorMessage: '同步最新 Schema 预检失败',
+              });
+            }, 2500);
+          }
+        })
+        .catch((error) => {
+          if (latestPlanRequestSeqByKeyRef.current.get(input.key) !== requestSeq) {
+            return;
+          }
+
+          setPlanError({
+            key: input.key,
+            message: error instanceof Error ? error.message : input.errorMessage,
+          });
+          if (input.loadingKey) {
+            setLoadedPlanKeys((currentKeys) => {
+              const nextKeys = new Set(currentKeys);
+              nextKeys.delete(input.key);
+              return nextKeys;
+            });
+          }
+        })
+        .finally(() => {
+          setPlanLoadingKey((currentKey) => (currentKey === input.key ? null : currentKey));
+          setPlanRefreshingKey((currentKey) => (currentKey === input.key ? null : currentKey));
+        });
+    },
+    [clearSchemaRefreshFollowUpTimer, projectId]
+  );
+
+  useEffect(() => {
+    refreshPromotionPlanRef.current = refreshPromotionPlan;
+  }, [refreshPromotionPlan]);
+
+  useEffect(() => {
     setPromotionPlans(initialPromotionPlans);
     setLoadedPlanKeys(new Set());
     setPlanLoadingKey(null);
     setPlanRefreshingKey(null);
     setPlanError(null);
-  }, [initialPromotionPlans]);
+    clearSchemaRefreshFollowUpTimer();
+    latestPlanRequestSeqByKeyRef.current.clear();
+  }, [clearSchemaRefreshFollowUpTimer, initialPromotionPlans]);
 
   useEffect(() => {
     const hasSelectedFlow = activePromotionPlans.some((plan) => plan.flowId === selectedFlowId);
@@ -146,9 +254,26 @@ export function PromotionAction({
       if (realtimeRefreshTimerRef.current !== null) {
         window.clearTimeout(realtimeRefreshTimerRef.current);
       }
+      clearSchemaRefreshFollowUpTimer();
     },
-    []
+    [clearSchemaRefreshFollowUpTimer]
   );
+
+  useEffect(() => {
+    if (selectedPlanKey) {
+      clearSchemaRefreshFollowUpTimer();
+    }
+  }, [clearSchemaRefreshFollowUpTimer, selectedPlanKey]);
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      clearSchemaRefreshFollowUpTimer();
+    }
+
+    return () => {
+      clearSchemaRefreshFollowUpTimer();
+    };
+  }, [clearSchemaRefreshFollowUpTimer, dialogOpen]);
 
   useEffect(() => {
     if (!dialogOpen || !hasPromotionTarget) {
@@ -156,51 +281,15 @@ export function PromotionAction({
     }
 
     const key = getPromotionPlanKey(selectedFlowId);
-    let cancelled = false;
 
-    setPlanLoadingKey(key);
-    setPlanError(null);
-
-    fetchPromotionPlan({ projectId, flowId: selectedFlowId, refreshSchema: true })
-      .then((plan) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
-        setLoadedPlanKeys((currentKeys) => {
-          const nextKeys = new Set(currentKeys);
-          nextKeys.add(key);
-          return nextKeys;
-        });
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPlanError({
-          key,
-          message: error instanceof Error ? error.message : '加载提升预检失败',
-        });
-        setLoadedPlanKeys((currentKeys) => {
-          const nextKeys = new Set(currentKeys);
-          nextKeys.delete(key);
-          return nextKeys;
-        });
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setPlanLoadingKey((currentKey) => (currentKey === key ? null : currentKey));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dialogOpen, hasPromotionTarget, projectId, selectedFlowId]);
+    refreshPromotionPlan({
+      key,
+      flowId: selectedFlowId,
+      refreshSchema: true,
+      loadingKey: true,
+      errorMessage: '加载提升预检失败',
+    });
+  }, [dialogOpen, hasPromotionTarget, refreshPromotionPlan, selectedFlowId]);
 
   useSchemaRepairs({
     projectId,
@@ -221,26 +310,12 @@ export function PromotionAction({
       }
 
       realtimeRefreshTimerRef.current = window.setTimeout(() => {
-        setPlanRefreshingKey(key);
-        fetchPromotionPlan({ projectId, flowId: selectedFlowId })
-          .then((plan) => {
-            setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
-            setLoadedPlanKeys((currentKeys) => {
-              const nextKeys = new Set(currentKeys);
-              nextKeys.add(key);
-              return nextKeys;
-            });
-            setPlanError((currentError) => (currentError?.key === key ? null : currentError));
-          })
-          .catch((error) => {
-            setPlanError({
-              key,
-              message: error instanceof Error ? error.message : '同步最新提升预检失败',
-            });
-          })
-          .finally(() => {
-            setPlanRefreshingKey((currentKey) => (currentKey === key ? null : currentKey));
-          });
+        refreshPromotionPlan({
+          key,
+          flowId: selectedFlowId,
+          refreshingKey: true,
+          errorMessage: '同步最新提升预检失败',
+        });
       }, 180);
     },
   });

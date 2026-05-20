@@ -141,7 +141,31 @@ function mergePlanningChips(chips: ReleasePlanningPanelChip[]): ReleasePlanningP
   return Array.from(merged.values());
 }
 
+function getPlanningBlockingSummary(plan: ReleasePlanningViewLike): string | null {
+  if (!plan.blockingReason) {
+    return null;
+  }
+
+  if (plan.schema.blockingCount > 0 && plan.schema.summary) {
+    return `${plan.blockingReason}：${plan.schema.summary}`;
+  }
+
+  if (
+    plan.platformSignals.primarySummary &&
+    plan.platformSignals.primarySummary !== plan.blockingReason
+  ) {
+    return `${plan.blockingReason}：${plan.platformSignals.primarySummary}`;
+  }
+
+  return plan.blockingReason;
+}
+
 function getPlanningIssueSummary(plan: ReleasePlanningViewLike): string | null {
+  const blockingSummary = getPlanningBlockingSummary(plan);
+  if (blockingSummary) {
+    return blockingSummary;
+  }
+
   if (plan.issue?.code === 'approval_blocked') {
     const migrationCount = plan.migration.preDeployCount || plan.migration.automaticCount;
     const migrationLabel = plan.migration.preDeployCount > 0 ? '生产前置迁移' : '生产迁移';
