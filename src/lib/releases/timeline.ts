@@ -7,12 +7,67 @@ import type { ReleaseTimelineItem, ReleaseViewLike } from '@/lib/releases/releas
 import {
   getDeploymentStatusDecoration,
   getMigrationStatusDecoration,
+  getReleaseStatusDecoration,
   getTimelineTone,
 } from '@/lib/releases/status-presentation';
-import { formatPlatformTimeContext } from '@/lib/time/format';
+import { formatPlatformRelativeTime } from '@/lib/time/format';
 
 function formatTimelineTimestamp(value?: Date | string | null): string | null {
-  return formatPlatformTimeContext(value);
+  return formatPlatformRelativeTime(value);
+}
+
+function getReleaseTimelineTitle(status: string): string {
+  const titles: Record<string, string> = {
+    queued: '发布排队',
+    planning: '规划发布',
+    migration_pre_running: '前置迁移中',
+    awaiting_approval: '等待审批',
+    awaiting_external_completion: '等待外部完成',
+    migration_pre_failed: '前置迁移失败',
+    deploying: '发布进行中',
+    awaiting_rollout: '等待放量',
+    verifying: '发布校验中',
+    verification_failed: '校验失败',
+    migration_post_running: '后置迁移中',
+    degraded: '发布降级',
+    succeeded: '发布完成',
+    failed: '发布失败',
+    canceled: '发布取消',
+  };
+
+  return titles[status] ?? `发布${getReleaseStatusDecoration(status).label}`;
+}
+
+function getMigrationTimelineTitle(status: string): string {
+  const titles: Record<string, string> = {
+    queued: '迁移排队',
+    awaiting_approval: '迁移待审批',
+    awaiting_external_completion: '迁移待外部完成',
+    planning: '规划迁移',
+    running: '迁移执行中',
+    success: '迁移完成',
+    failed: '迁移失败',
+    canceled: '迁移取消',
+    skipped: '迁移跳过',
+  };
+
+  return titles[status] ?? `迁移${getMigrationStatusDecoration(status).label ?? status}`;
+}
+
+function getDeploymentTimelineTitle(status: string, serviceName: string): string {
+  const titles: Record<string, string> = {
+    queued: `${serviceName} 排队`,
+    building: `${serviceName} 构建中`,
+    deploying: `${serviceName} 部署中`,
+    awaiting_rollout: `${serviceName} 待放量`,
+    verification_failed: `${serviceName} 校验失败`,
+    running: `${serviceName} 运行中`,
+    canceled: `${serviceName} 取消`,
+    failed: `${serviceName} 失败`,
+    rolled_back: `${serviceName} 已回滚`,
+  };
+
+  return titles[status] ?? `${serviceName} ${getDeploymentStatusDecoration(status).label}`;
 }
 
 function buildMigrationRetryTimelineItems(
@@ -81,7 +136,7 @@ export function buildReleaseTimeline(input: {
     key: 'release-created',
     type: 'release',
     at: formatTimelineTimestamp(release.createdAt),
-    title: '发布已创建',
+    title: '创建发布',
     description: getReleaseDisplayTitle(release),
     tone: 'neutral',
     href: releaseHref,
@@ -118,7 +173,7 @@ export function buildReleaseTimeline(input: {
       key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
       type: 'migration',
       at: formatTimelineTimestamp(run.createdAt),
-      title: `迁移${getMigrationStatusDecoration(run.status).label ?? run.status}`,
+      title: getMigrationTimelineTitle(run.status),
       description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${getMigrationPhaseLabel(
         run.specification?.phase ?? 'manual'
       )}`,
@@ -138,8 +193,8 @@ export function buildReleaseTimeline(input: {
       key: `deployment-${deployment.id ?? `${deployment.serviceId ?? 'service'}-${deployment.status}`}`,
       type: 'deployment',
       at: formatTimelineTimestamp(deployment.createdAt),
-      title: `部署${getDeploymentStatusDecoration(deployment.status).label ?? deployment.status}`,
-      description: serviceName,
+      title: getDeploymentTimelineTitle(deployment.status, serviceName),
+      description: '服务部署',
       tone: getTimelineTone(deployment.status, 'deployment'),
       href: releaseHref,
       sortValue: deployment.createdAt ? new Date(deployment.createdAt).getTime() : 0,
@@ -191,7 +246,7 @@ export function buildReleaseTimeline(input: {
       key: 'release-result',
       type: 'release',
       at: formatTimelineTimestamp(release.updatedAt),
-      title: `发布${input.statusLabel}`,
+      title: getReleaseTimelineTitle(release.status),
       description: release.errorMessage ?? getReleaseDisplayTitle(release),
       tone: getTimelineTone(release.status, 'release'),
       href: releaseHref,

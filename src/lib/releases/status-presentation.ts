@@ -27,7 +27,7 @@ export const releaseStatusDecorations: Record<string, ReleaseStatusDecoration> =
 export const deploymentStatusDecorations: Record<string, ReleaseStatusDecoration> = {
   queued: { color: 'neutral', pulse: false, label: '排队中' },
   building: { color: 'info', pulse: true, label: '构建中' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
+  deploying: { color: 'info', pulse: true, label: '部署中' },
   awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
   verification_failed: { color: 'error', pulse: false, label: '校验失败' },
   running: { color: 'success', pulse: false, label: '运行中' },

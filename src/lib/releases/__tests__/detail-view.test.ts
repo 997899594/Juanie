@@ -86,6 +86,12 @@ describe('release detail view', () => {
       )
     ).toBe(true);
     expect(release.timeline.some((item) => item.key === 'source-release-rel-1')).toBe(true);
+    expect(release.timeline.map((item) => item.title)).toContain('创建发布');
+    expect(release.timeline.map((item) => item.title)).toContain('迁移待审批');
+    expect(release.timeline.map((item) => item.title)).toContain('web 运行中');
+    expect(release.timeline.map((item) => item.title)).toContain('发布降级');
+    expect(release.timeline.map((item) => item.title)).not.toContain('发布发布中');
+    expect(release.timeline.map((item) => item.title)).not.toContain('部署发布中');
     expect(release.deploymentItems[0]?.serviceName).toBe('web');
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
     expect(release.migrationItems[0]?.approvalToken).toBe('token-1');
