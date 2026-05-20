@@ -1,22 +1,16 @@
 'use client';
 
-import { ArrowUpCircle, ScrollText } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
-import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
-import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
-import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
-import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 
 interface ReleasesPageClientProps {
@@ -24,57 +18,10 @@ interface ReleasesPageClientProps {
   initialData: Awaited<ReturnType<typeof getProjectReleasesPageData>>;
 }
 
-function getPromotionPlanKey(flowId?: string | null): string {
-  return flowId ?? '__default__';
-}
-
-function mergePromotionPlanItems(
-  currentPlans: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'],
-  plan: Awaited<ReturnType<typeof fetchPromotionPlan>>
-): Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'] {
-  const nextKey = getPromotionPlanKey(plan.flowId);
-  const previousPlan = currentPlans.find(
-    (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
-  );
-  const nextPlan = {
-    ...plan,
-    ai: previousPlan?.ai ?? null,
-  };
-  const hasPlan = currentPlans.some(
-    (currentPlan) => getPromotionPlanKey(currentPlan.flowId) === nextKey
-  );
-
-  return hasPlan
-    ? currentPlans.map((currentPlan) =>
-        getPromotionPlanKey(currentPlan.flowId) === nextKey ? nextPlan : currentPlan
-      )
-    : [...currentPlans, nextPlan];
-}
-
 export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [promoting, setPromoting] = useState(false);
-  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
-  const [promotionPlans, setPromotionPlans] = useState(initialData.promotionPlans);
-  const [loadedPromotionPlanKeys, setLoadedPromotionPlanKeys] = useState<Set<string>>(new Set());
-  const [promotionPlanLoadingKey, setPromotionPlanLoadingKey] = useState<string | null>(null);
-  const [promotionPlanError, setPromotionPlanError] = useState<{
-    key: string;
-    message: string;
-  } | null>(null);
-  const [promotionPlanRefreshingKey, setPromotionPlanRefreshingKey] = useState<string | null>(null);
-  const promotionPlanRealtimeRefreshTimerRef = useRef<number | null>(null);
-  const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
-    initialData.promotionPlans.find((plan) =>
-      plan.targetEnvironment
-        ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
-        : false
-    )?.flowId ??
-      initialData.promotionPlans[0]?.flowId ??
-      null
-  );
   const initialLatestRelease = initialData.releaseItems[0];
   const initialLatestReleaseState = buildReleaseEventStateKey(
     initialLatestRelease
@@ -106,80 +53,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     filter !== 'all'
       ? (environments.find((environment) => environment.id === filter) ?? null)
       : null;
-  const activePromotionPlans = selectedEnvironment
-    ? promotionPlans.filter((plan) => plan.sourceEnvironment?.id === selectedEnvironment.id)
-    : promotionPlans;
-
-  useEffect(() => {
-    setPromotionPlans(initialData.promotionPlans);
-    setLoadedPromotionPlanKeys(new Set());
-    setPromotionPlanLoadingKey(null);
-    setPromotionPlanError(null);
-  }, [initialData.promotionPlans]);
-
-  useEffect(() => {
-    const hasSelectedFlow = activePromotionPlans.some(
-      (plan) => plan.flowId === selectedPromotionFlowId
-    );
-
-    if (hasSelectedFlow) {
-      return;
-    }
-
-    setSelectedPromotionFlowId(
-      activePromotionPlans.find((plan) =>
-        plan.targetEnvironment
-          ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
-          : false
-      )?.flowId ??
-        activePromotionPlans[0]?.flowId ??
-        null
-    );
-  }, [
-    activePromotionPlans,
-    initialData.governance.promotion.manageableTargetIds,
-    selectedPromotionFlowId,
-  ]);
-
-  const handlePromote = async () => {
-    if (promoting) return;
-    const planKey = getPromotionPlanKey(selectedPromotionFlowId);
-    if (!loadedPromotionPlanKeys.has(planKey)) {
-      toast.error('实时预检还没有完成，请稍等一下');
-      return;
-    }
-
-    setPromoting(true);
-
-    try {
-      const data = await createPromotionRelease({
-        projectId,
-        flowId: selectedPromotionFlowId,
-      });
-
-      toast.success(
-        data.tagName
-          ? `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'} · 成功后写入 ${data.tagName}`
-          : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
-      );
-      setPromoteDialogOpen(false);
-      if (data.releasePath) {
-        router.push(data.releasePath);
-        return;
-      }
-
-      if (data.releaseId && data.targetEnvironmentId) {
-        router.push(buildReleaseDetailPath(projectId, data.targetEnvironmentId, data.releaseId));
-        return;
-      }
-
-      router.refresh();
-    } catch (promoteError) {
-      toast.error(promoteError instanceof Error ? promoteError.message : '创建提升发布失败');
-    } finally {
-      setPromoting(false);
-    }
-  };
 
   const updateFilters = (next: {
     env?: string;
@@ -199,12 +72,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
   const filtered = initialData.filteredReleaseItems;
-  const incomingPromotionPlans = selectedEnvironment
-    ? promotionPlans.filter((plan) => plan.targetEnvironment?.id === selectedEnvironment.id)
-    : [];
-  const outgoingPromotionPlans = selectedEnvironment
-    ? promotionPlans.filter((plan) => plan.sourceEnvironment?.id === selectedEnvironment.id)
-    : [];
   const manageableEnvironments = environments.filter((environment) => {
     if (!governance.manageableEnvironmentIds.includes(environment.id)) {
       return false;
@@ -220,157 +87,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
 
     return true;
   });
-  const hasPromotionTarget = activePromotionPlans.length > 0;
-  const selectedPromotionPlan =
-    activePromotionPlans.find((plan) => plan.flowId === selectedPromotionFlowId) ??
-    activePromotionPlans[0] ??
-    null;
-  const selectedPromotionPlanKey = getPromotionPlanKey(
-    selectedPromotionPlan?.flowId ?? selectedPromotionFlowId
-  );
-  const loadingPromotionPlan =
-    promoteDialogOpen && promotionPlanLoadingKey === selectedPromotionPlanKey;
-  const refreshingPromotionPlan =
-    promoteDialogOpen && promotionPlanRefreshingKey === selectedPromotionPlanKey;
-  const selectedPromotionPlanError =
-    promotionPlanError?.key === selectedPromotionPlanKey ? promotionPlanError.message : null;
-  const selectedPromotionPlanLoaded = loadedPromotionPlanKeys.has(selectedPromotionPlanKey);
-  const canManageSelectedTarget = selectedPromotionPlan?.targetEnvironment
-    ? governance.promotion.manageableTargetIds.includes(selectedPromotionPlan.targetEnvironment.id)
-    : false;
-  const canPromote =
-    hasPromotionTarget &&
-    !!selectedPromotionPlan?.sourceRelease &&
-    canManageSelectedTarget &&
-    selectedPromotionPlanLoaded &&
-    !loadingPromotionPlan &&
-    !selectedPromotionPlanError &&
-    (selectedPromotionPlan.plan.canCreate ?? true) &&
-    !selectedPromotionPlan.plan.blockingReason;
-  const promoteButtonTitle =
-    !selectedPromotionPlan || !selectedPromotionPlan.targetEnvironment
-      ? '当前环境没有下游提升链路'
-      : !canManageSelectedTarget
-        ? governance.promotion.summary
-        : (selectedPromotionPlan.plan.blockingReason ??
-          `将当前环境提升到 ${selectedPromotionPlan.targetEnvironment.name}`);
   const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
     ...release,
     sourceRef: release.sourceRef ?? '',
     sourceCommitSha: release.sourceCommitSha ?? null,
   }));
-  const shouldShowEnvironmentFlow =
-    !!selectedEnvironment &&
-    ((selectedEnvironment.deliveryRules?.length ?? 0) > 0 ||
-      incomingPromotionPlans.length > 0 ||
-      outgoingPromotionPlans.length > 0);
-  const shellClassName = 'console-panel px-5 py-5';
-
-  useEffect(
-    () => () => {
-      if (promotionPlanRealtimeRefreshTimerRef.current !== null) {
-        window.clearTimeout(promotionPlanRealtimeRefreshTimerRef.current);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!promoteDialogOpen || !hasPromotionTarget) {
-      return;
-    }
-
-    const key = getPromotionPlanKey(selectedPromotionFlowId);
-    let cancelled = false;
-
-    setPromotionPlanLoadingKey(key);
-    setPromotionPlanError(null);
-
-    fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId, refreshSchema: true })
-      .then((plan) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
-        setLoadedPromotionPlanKeys((currentKeys) => {
-          const nextKeys = new Set(currentKeys);
-          nextKeys.add(key);
-          return nextKeys;
-        });
-      })
-      .catch((fetchError) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPromotionPlanError({
-          key,
-          message: fetchError instanceof Error ? fetchError.message : '加载提升预检失败',
-        });
-        setLoadedPromotionPlanKeys((currentKeys) => {
-          const nextKeys = new Set(currentKeys);
-          nextKeys.delete(key);
-          return nextKeys;
-        });
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setPromotionPlanLoadingKey((currentKey) => (currentKey === key ? null : currentKey));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [hasPromotionTarget, projectId, promoteDialogOpen, selectedPromotionFlowId]);
-
-  useSchemaRepairs({
-    projectId,
-    envId: promoteDialogOpen ? selectedPromotionPlan?.targetEnvironment?.id : null,
-    enabled: promoteDialogOpen && Boolean(selectedPromotionPlan?.targetEnvironment?.id),
-    onRepair: (repair) => {
-      if (
-        !promoteDialogOpen ||
-        !selectedPromotionPlan?.targetEnvironment ||
-        repair.environmentId !== selectedPromotionPlan.targetEnvironment.id
-      ) {
-        return;
-      }
-
-      const key = selectedPromotionPlanKey;
-      if (promotionPlanRealtimeRefreshTimerRef.current !== null) {
-        window.clearTimeout(promotionPlanRealtimeRefreshTimerRef.current);
-      }
-
-      promotionPlanRealtimeRefreshTimerRef.current = window.setTimeout(() => {
-        setPromotionPlanRefreshingKey(key);
-        fetchPromotionPlan({ projectId, flowId: selectedPromotionFlowId })
-          .then((plan) => {
-            setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
-            setLoadedPromotionPlanKeys((currentKeys) => {
-              const nextKeys = new Set(currentKeys);
-              nextKeys.add(key);
-              return nextKeys;
-            });
-            setPromotionPlanError((currentError) =>
-              currentError?.key === key ? null : currentError
-            );
-          })
-          .catch((fetchError) => {
-            setPromotionPlanError({
-              key,
-              message: fetchError instanceof Error ? fetchError.message : '同步最新提升预检失败',
-            });
-          })
-          .finally(() => {
-            setPromotionPlanRefreshingKey((currentKey) => (currentKey === key ? null : currentKey));
-          });
-      }, 180);
-    },
-  });
 
   return (
     <EnvironmentPageFrame
@@ -394,18 +115,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               router.refresh();
             }}
           />
-          {hasPromotionTarget && (
-            <Button
-              size="sm"
-              className="h-9 px-4"
-              onClick={() => setPromoteDialogOpen(true)}
-              disabled={promoting || !governance.promotion.allowed}
-              title={promoteButtonTitle}
-            >
-              <ArrowUpCircle className="h-3.5 w-3.5" />
-              {promoting ? '创建中...' : '提升到下游'}
-            </Button>
-          )}
           {selectedEnvironment ? (
             <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
               <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}>
@@ -417,89 +126,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       }
     >
       {error && <div className="console-inset px-4 py-3 text-sm text-foreground">{error}</div>}
-
-      <ReleasePromoteDialog
-        open={promoteDialogOpen}
-        onOpenChange={setPromoteDialogOpen}
-        promotionPlans={activePromotionPlans}
-        selectedFlowId={selectedPromotionFlowId}
-        onSelectedFlowIdChange={setSelectedPromotionFlowId}
-        canPromote={canPromote}
-        promoting={promoting}
-        loadingPlan={loadingPromotionPlan}
-        refreshingPlan={refreshingPromotionPlan}
-        planError={selectedPromotionPlanError}
-        onPromote={handlePromote}
-      />
-
-      {shouldShowEnvironmentFlow ? (
-        <section className="grid gap-3 lg:grid-cols-3">
-          <div className={shellClassName}>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              当前环境
-            </div>
-            <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
-              {selectedEnvironment?.name}
-            </div>
-            <div className="mt-2 text-sm text-muted-foreground">
-              {selectedEnvironment?.scopeLabel ?? selectedEnvironment?.sourceLabel ?? '环境'}
-            </div>
-            {selectedEnvironment?.deliveryMode === 'promote_only' ? (
-              <div className="mt-3 text-xs text-muted-foreground">仅接受提升</div>
-            ) : null}
-            {(selectedEnvironment?.deliveryRules?.length ?? 0) > 0 ? (
-              <div className="mt-3 text-xs text-muted-foreground">
-                {(selectedEnvironment?.deliveryRules ?? [])
-                  .slice(0, 2)
-                  .map((rule) =>
-                    `${rule.kind === 'pull_request' ? 'PR' : rule.kind === 'branch' ? '分支' : rule.kind === 'tag' ? '标签' : '手动'} ${rule.pattern ?? ''}`.trim()
-                  )
-                  .join(' · ')}
-              </div>
-            ) : null}
-          </div>
-
-          {incomingPromotionPlans.length > 0 ? (
-            <div className={shellClassName}>
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                来自
-              </div>
-              <div className="mt-3 space-y-2.5">
-                {incomingPromotionPlans.slice(0, 3).map((plan) => (
-                  <div
-                    key={
-                      plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
-                    }
-                    className="console-inset px-3 py-2.5 text-sm text-foreground"
-                  >
-                    {plan.sourceEnvironment?.name ?? '来源环境'}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {outgoingPromotionPlans.length > 0 ? (
-            <div className={shellClassName}>
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                可提升到
-              </div>
-              <div className="mt-3 space-y-2.5">
-                {outgoingPromotionPlans.slice(0, 3).map((plan) => (
-                  <div
-                    key={
-                      plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
-                    }
-                    className="console-inset px-3 py-2.5 text-sm text-foreground"
-                  >
-                    {plan.targetEnvironment?.name ?? '目标环境'}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
 
       <ReleaseFilterToolbar
         environmentOptions={initialData.environmentOptions}
@@ -533,17 +159,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               router.refresh();
             }}
           />
-          {hasPromotionTarget && (
-            <Button
-              size="sm"
-              onClick={() => setPromoteDialogOpen(true)}
-              disabled={promoting || !governance.promotion.allowed}
-              title={promoteButtonTitle}
-            >
-              <ArrowUpCircle className="h-3.5 w-3.5" />
-              {promoting ? '创建中...' : '提升'}
-            </Button>
-          )}
         </div>
       </div>
     </EnvironmentPageFrame>

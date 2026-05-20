@@ -1,9 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
-import {
-  listLatestAIPluginSnapshotsByResourceIds,
-  type StoredAIPluginSnapshot,
-} from '@/lib/ai/runtime/snapshot-service';
+import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, releases, type TeamRole } from '@/lib/db/schema';
@@ -17,7 +14,7 @@ import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview'
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
-import { buildPromotionPlans, type PromotionPlanSnapshot } from '@/lib/releases/planning';
+import type { PromotionPlanSnapshot } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import {
@@ -346,7 +343,7 @@ export async function getProjectReleaseListData(project: ProjectReleaseContext) 
   );
 }
 
-type PromotionAIView = {
+export type PromotionAIView = {
   summary: string | null;
   strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
   confidence: 'low' | 'medium' | 'high' | null;
@@ -364,47 +361,9 @@ type PromotionAIView = {
   errorMessage: string | null;
 };
 
-type ProjectPromotionPlanView = PromotionPlanSnapshot & {
+export type ProjectPromotionPlanView = PromotionPlanSnapshot & {
   ai: PromotionAIView | null;
 };
-
-function buildCachedPromotionAIView(
-  snapshot: StoredAIPluginSnapshot<ReleasePlan> | null
-): PromotionAIView | null {
-  if (!snapshot) {
-    return {
-      summary: null,
-      strategy: null,
-      confidence: null,
-      riskLevel: null,
-      reasons: [],
-      checks: [],
-      stale: false,
-      source: 'none',
-      generatedAt: null,
-      errorMessage: null,
-    };
-  }
-
-  const output = snapshot.output;
-  return {
-    summary: output.recommendation.summary,
-    strategy: output.recommendation.strategy,
-    confidence: output.recommendation.confidence,
-    riskLevel: output.risk.level,
-    reasons: output.recommendation.why.slice(0, 3),
-    checks: output.checks.slice(0, 3).map((check) => ({
-      key: check.key,
-      label: check.label,
-      status: check.status,
-      summary: check.summary,
-    })),
-    stale: true,
-    source: 'cache',
-    generatedAt: snapshot.generatedAt,
-    errorMessage: null,
-  };
-}
 
 export function buildProjectReleasesPageData(input: {
   releaseItems: ReturnType<typeof buildProjectReleaseListItems>;
@@ -443,7 +402,6 @@ export function buildProjectReleasesPageData(input: {
     sourceLabel?: string | null;
   }>;
   role: TeamRole;
-  promotionPlans: ProjectPromotionPlanView[];
   envFilter?: string | null;
   riskFilter?: string | null;
   fixedEnvFilter?: boolean;
@@ -451,11 +409,6 @@ export function buildProjectReleasesPageData(input: {
   const governance = buildReleasePageGovernanceSnapshot({
     role: input.role,
     environments: input.environments,
-    promotionTargets: input.promotionPlans
-      .map((plan) => plan.targetEnvironment)
-      .filter((environment): environment is NonNullable<typeof environment> =>
-        Boolean(environment)
-      ),
   });
   const selectedEnv = input.envFilter && input.envFilter.length > 0 ? input.envFilter : 'all';
   const defaultRiskFilter = input.fixedEnvFilter ? 'all' : 'attention';
@@ -496,8 +449,6 @@ export function buildProjectReleasesPageData(input: {
       ...buildLightweightReleaseListStats(filteredReleaseItems),
       { label: '实时', value: '离线' as const },
     ],
-    promotionPlans: input.promotionPlans,
-    hasPromotionTarget: input.promotionPlans.length > 0,
   };
 }
 
@@ -508,7 +459,7 @@ export async function getProjectReleasesPageData(input: {
   riskFilter?: string | null;
   fixedEnvFilter?: boolean;
 }) {
-  const [releaseCards, environmentList, promotionPlansRaw] = await Promise.all([
+  const [releaseCards, environmentList] = await Promise.all([
     getProjectReleaseListData(input.project),
     db.query.environments.findMany({
       where: eq(environments.projectId, input.project.id),
@@ -537,22 +488,7 @@ export async function getProjectReleasesPageData(input: {
         },
       },
     }),
-    buildPromotionPlans(input.project.id, { includeLiveChecks: false }).catch(() => []),
   ]);
-  const promotionAISnapshots = await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
-    pluginId: 'release-intelligence',
-    teamId: input.project.teamId,
-    resourceType: 'release',
-    resourceIds: promotionPlansRaw
-      .map((plan) => plan.sourceRelease?.id ?? null)
-      .filter((releaseId): releaseId is string => Boolean(releaseId)),
-  }).catch(() => new Map<string, StoredAIPluginSnapshot<ReleasePlan>>());
-  const promotionPlans = promotionPlansRaw.map((plan) => ({
-    ...plan,
-    ai: plan.sourceRelease
-      ? buildCachedPromotionAIView(promotionAISnapshots.get(plan.sourceRelease.id) ?? null)
-      : null,
-  }));
 
   return buildProjectReleasesPageData({
     releaseItems: buildProjectReleaseListItems(releaseCards),
@@ -563,7 +499,6 @@ export async function getProjectReleasesPageData(input: {
       sourceLabel: getEnvironmentSourceLabel(environment),
     })),
     role: input.role,
-    promotionPlans,
     envFilter: input.envFilter,
     riskFilter: input.riskFilter,
     fixedEnvFilter: input.fixedEnvFilter,

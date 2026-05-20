@@ -18,6 +18,7 @@ import {
   PreviewEnvironmentDialog,
   type PreviewEnvironmentDialogInput,
 } from '@/components/projects/PreviewEnvironmentDialog';
+import { PromotionAction } from '@/components/projects/PromotionAction';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +55,8 @@ import {
   getEnvironmentPriority,
   getRuntimeAction,
 } from '@/lib/environments/client-view-model';
+import type { ReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
+import type { ProjectPromotionPlanView } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
 
 interface ActivityStatusDecoration {
@@ -363,12 +366,14 @@ function EnvironmentOverviewPanel({
   environment,
   incomingFlows,
   outgoingFlows,
+  promotionAction,
   runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   incomingFlows: DeliveryControlFlowRecord[];
   outgoingFlows: DeliveryControlFlowRecord[];
+  promotionAction?: ReactNode;
   runtimeAction?: ReactNode;
 }) {
   const sourceSummary = buildEnvironmentSourceSummary(environment);
@@ -468,8 +473,11 @@ function EnvironmentOverviewPanel({
             </div>
           </div>
 
-          {runtimeAction ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">{runtimeAction}</div>
+          {promotionAction || runtimeAction ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {promotionAction}
+              {runtimeAction}
+            </div>
           ) : null}
         </div>
       </section>
@@ -568,12 +576,14 @@ function EnvironmentExpandedContent({
   environment,
   incomingFlows,
   outgoingFlows,
+  promotionAction,
   runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   incomingFlows: DeliveryControlFlowRecord[];
   outgoingFlows: DeliveryControlFlowRecord[];
+  promotionAction?: ReactNode;
   runtimeAction?: ReactNode;
 }) {
   return (
@@ -582,6 +592,7 @@ function EnvironmentExpandedContent({
       environment={environment}
       incomingFlows={incomingFlows}
       outgoingFlows={outgoingFlows}
+      promotionAction={promotionAction}
       runtimeAction={runtimeAction}
     />
   );
@@ -625,7 +636,9 @@ interface EnvironmentsPageClientProps {
         createdAtLabel: string | null;
       }>;
     };
+    promotionGovernance: ReleasePageGovernanceSnapshot;
     deliveryControl: DeliveryControlState;
+    promotionPlans: ProjectPromotionPlanView[];
     environments: EnvironmentRecord[];
   };
 }
@@ -855,6 +868,14 @@ export function EnvironmentsPageClient({
               environment={focusedEnvironment}
               incomingFlows={focusedIncomingFlows}
               outgoingFlows={focusedOutgoingFlows}
+              promotionAction={
+                <PromotionAction
+                  projectId={projectId}
+                  promotionPlans={initialData.promotionPlans}
+                  governance={initialData.promotionGovernance}
+                  sourceEnvironmentId={focusedEnvironment.id}
+                />
+              }
               runtimeAction={renderRuntimeAction(focusedEnvironment)}
             />
           ) : (

@@ -63,7 +63,6 @@ describe('release service', () => {
         },
       ],
       role: 'member',
-      promotionPlans: [],
       envFilter: 'env-staging',
       riskFilter: null,
       fixedEnvFilter: true,
@@ -129,7 +128,6 @@ describe('release service', () => {
         },
       ],
       role: 'member',
-      promotionPlans: [],
       riskFilter: null,
     });
 

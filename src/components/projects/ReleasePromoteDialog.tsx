@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
-import type { getProjectReleasesPageData } from '@/lib/releases/service';
+import type { ProjectPromotionPlanView } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
 
 const dialogPanelClassName = 'console-panel p-5 sm:p-6';
@@ -72,7 +72,7 @@ function getPromotionStrategyLabel(
 interface ReleasePromoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  promotionPlans: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'];
+  promotionPlans: ProjectPromotionPlanView[];
   selectedFlowId: string | null;
   onSelectedFlowIdChange: (flowId: string | null) => void;
   canPromote: boolean;

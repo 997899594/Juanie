@@ -30,6 +30,9 @@ import {
 } from '@/lib/environments/page-runtime';
 import { getEnvironmentRuntimeState } from '@/lib/environments/runtime-control';
 import { decorateEnvironmentList } from '@/lib/environments/view';
+import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
+import { buildPromotionPlans } from '@/lib/releases/planning';
+import type { ProjectPromotionPlanView } from '@/lib/releases/service';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 import { syncLatestSchemaRepairPlans } from '@/lib/schema-management/review-sync';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-safety/presentation';
@@ -191,6 +194,13 @@ export async function getProjectEnvironmentListData(input: {
     }),
   ]);
   const latestRepairPlans = await syncLatestSchemaRepairPlans(latestRepairPlansResult);
+  const promotionPlans = await buildPromotionPlans(projectId, { includeLiveChecks: false }).catch(
+    () => []
+  );
+  const promotionPlanViews: ProjectPromotionPlanView[] = promotionPlans.map((plan) => ({
+    ...plan,
+    ai: null,
+  }));
   const runtimeIndexes = buildEnvironmentRuntimeIndexes({
     releases: releaseList,
     deployments: deploymentList,
@@ -349,12 +359,22 @@ export async function getProjectEnvironmentListData(input: {
 
   return {
     governance: governanceData.governance,
+    promotionGovernance: buildReleasePageGovernanceSnapshot({
+      role: input.role,
+      environments: environmentList,
+      promotionTargets: promotionPlanViews
+        .map((plan) => plan.targetEnvironment)
+        .filter((environment): environment is NonNullable<typeof environment> =>
+          Boolean(environment)
+        ),
+    }),
     deliveryControl: buildDeliveryControlSnapshot({
       role: input.role,
       environments: environmentList,
       deliveryRules: deliveryRuleList,
       promotionFlows: promotionFlowList,
     }),
+    promotionPlans: promotionPlanViews,
     environments: decoratedEnvironments,
   };
 }
