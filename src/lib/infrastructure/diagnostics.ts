@@ -124,6 +124,11 @@ interface PodIssue {
   timestamp: Date | null;
 }
 
+interface CurrentResourceScope {
+  activePodNames: Set<string>;
+  activePodUids: Set<string>;
+}
+
 function safeDate(value?: Date | string | null): Date | null {
   if (!value) {
     return null;
@@ -252,6 +257,32 @@ function getEventTime(event: k8s.CoreV1Event): Date | null {
     safeDate((event as { firstTimestamp?: Date | string | null }).firstTimestamp) ??
     safeDate(event.metadata?.creationTimestamp)
   );
+}
+
+function buildCurrentResourceScope(pods: k8s.V1Pod[]): CurrentResourceScope {
+  const activePods = pods.filter((pod) => !safeDate(pod.metadata?.deletionTimestamp));
+
+  return {
+    activePodNames: new Set(
+      activePods.map((pod) => pod.metadata?.name).filter((name): name is string => Boolean(name))
+    ),
+    activePodUids: new Set(
+      activePods.map((pod) => pod.metadata?.uid).filter((uid): uid is string => Boolean(uid))
+    ),
+  };
+}
+
+function isEventForCurrentResource(event: k8s.CoreV1Event, scope: CurrentResourceScope): boolean {
+  const involved = event.involvedObject;
+  if (involved?.kind !== 'Pod') {
+    return true;
+  }
+
+  if (involved.uid && scope.activePodUids.has(involved.uid)) {
+    return true;
+  }
+
+  return Boolean(involved.name && scope.activePodNames.has(involved.name));
 }
 
 function toTitleCaseReason(reason?: string | null): string {
@@ -929,9 +960,11 @@ export async function getInfrastructureDiagnostics(
     deploymentStrategy: input.deploymentStrategy,
   });
   const window = computeReleaseWindow(input.releaseWindow);
+  const currentScope = buildCurrentResourceScope(namespacePods);
   const incidents = dedupeIncidents(
     [
       ...events
+        .filter((event) => isEventForCurrentResource(event, currentScope))
         .map((event) => describeEvent(event))
         .filter((event): event is EventIssue => event !== null),
       ...describePodIssues(namespacePods),
