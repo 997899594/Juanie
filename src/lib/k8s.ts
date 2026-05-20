@@ -1134,88 +1134,103 @@ export async function updateDeployment(
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
+  const maxAttempts = 4;
 
-  const current = await apps.readNamespacedDeployment({ namespace, name });
-  const currentMetadataAnnotations = { ...(current.metadata?.annotations ?? {}) };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const current = await apps.readNamespacedDeployment({ namespace, name });
+      const currentMetadataAnnotations = { ...(current.metadata?.annotations ?? {}) };
 
-  for (const annotationKey of LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR) {
-    delete currentMetadataAnnotations[annotationKey];
-  }
+      for (const annotationKey of LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR) {
+        delete currentMetadataAnnotations[annotationKey];
+      }
 
-  const containers = current.spec?.template?.spec?.containers || [];
-  const updatedContainers = containers.map((container) => {
-    const port = spec.port ?? container.ports?.[0]?.containerPort ?? 3000;
-    const updatedContainer = {
-      ...container,
-      image: spec.image ?? container.image,
-      ports:
-        spec.port !== undefined
-          ? [{ containerPort: spec.port, name: 'http', protocol: 'TCP' }]
-          : container.ports,
-      env: spec.env
-        ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
-        : container.env,
-      // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
-      ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
-      ...(spec.enableHttpProbes === false
-        ? {}
-        : buildHttpProbes({ healthcheckPath: spec.healthcheckPath, port })),
-      resources: {
-        requests: {
-          cpu: spec.cpuRequest ?? container.resources?.requests?.cpu ?? '100m',
-          memory: spec.memoryRequest ?? container.resources?.requests?.memory ?? '256Mi',
-        },
-        limits: {
-          cpu: spec.cpuLimit ?? container.resources?.limits?.cpu ?? '500m',
-          memory: spec.memoryLimit ?? container.resources?.limits?.memory ?? '512Mi',
-        },
-      },
-    };
-
-    if (spec.enableHttpProbes === false) {
-      delete updatedContainer.readinessProbe;
-      delete updatedContainer.livenessProbe;
-    }
-
-    return updatedContainer;
-  });
-
-  // Always bump restartedAt so the pod rolls even when the image tag is unchanged.
-  // This ensures pods pick up the latest ConfigMap/Secret values from envFrom.
-  const existingAnnotations = current.spec?.template?.metadata?.annotations || {};
-  const updated: k8s.V1Deployment = {
-    apiVersion: 'apps/v1',
-    kind: 'Deployment',
-    metadata: {
-      ...current.metadata,
-      annotations: currentMetadataAnnotations,
-    },
-    spec: {
-      replicas: spec.replicas ?? current.spec?.replicas,
-      revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
-      selector: current.spec?.selector || { matchLabels: { app: name } },
-      template: {
-        metadata: {
-          ...(current.spec?.template?.metadata || { labels: { app: name } }),
-          annotations: {
-            ...existingAnnotations,
-            'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+      const containers = current.spec?.template?.spec?.containers || [];
+      const updatedContainers = containers.map((container) => {
+        const port = spec.port ?? container.ports?.[0]?.containerPort ?? 3000;
+        const updatedContainer = {
+          ...container,
+          image: spec.image ?? container.image,
+          ports:
+            spec.port !== undefined
+              ? [{ containerPort: spec.port, name: 'http', protocol: 'TCP' }]
+              : container.ports,
+          env: spec.env
+            ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+            : container.env,
+          // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
+          ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
+          ...(spec.enableHttpProbes === false
+            ? {}
+            : buildHttpProbes({ healthcheckPath: spec.healthcheckPath, port })),
+          resources: {
+            requests: {
+              cpu: spec.cpuRequest ?? container.resources?.requests?.cpu ?? '100m',
+              memory: spec.memoryRequest ?? container.resources?.requests?.memory ?? '256Mi',
+            },
+            limits: {
+              cpu: spec.cpuLimit ?? container.resources?.limits?.cpu ?? '500m',
+              memory: spec.memoryLimit ?? container.resources?.limits?.memory ?? '512Mi',
+            },
           },
+        };
+
+        if (spec.enableHttpProbes === false) {
+          delete updatedContainer.readinessProbe;
+          delete updatedContainer.livenessProbe;
+        }
+
+        return updatedContainer;
+      });
+
+      // Always bump restartedAt so the pod rolls even when the image tag is unchanged.
+      // This ensures pods pick up the latest ConfigMap/Secret values from envFrom.
+      const existingAnnotations = current.spec?.template?.metadata?.annotations || {};
+      const updated: k8s.V1Deployment = {
+        apiVersion: 'apps/v1',
+        kind: 'Deployment',
+        metadata: {
+          ...current.metadata,
+          annotations: currentMetadataAnnotations,
         },
         spec: {
-          ...current.spec?.template?.spec,
-          ...(spec.imagePullSecrets !== undefined
-            ? {
-                imagePullSecrets: spec.imagePullSecrets.map((secretName) => ({ name: secretName })),
-              }
-            : {}),
-          containers: updatedContainers,
+          replicas: spec.replicas ?? current.spec?.replicas,
+          revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
+          selector: current.spec?.selector || { matchLabels: { app: name } },
+          template: {
+            metadata: {
+              ...(current.spec?.template?.metadata || { labels: { app: name } }),
+              annotations: {
+                ...existingAnnotations,
+                'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+              },
+            },
+            spec: {
+              ...current.spec?.template?.spec,
+              ...(spec.imagePullSecrets !== undefined
+                ? {
+                    imagePullSecrets: spec.imagePullSecrets.map((secretName) => ({
+                      name: secretName,
+                    })),
+                  }
+                : {}),
+              containers: updatedContainers,
+            },
+          },
         },
-      },
-    },
-  };
+      };
 
-  await apps.replaceNamespacedDeployment({ namespace, name, body: updated });
+      await apps.replaceNamespacedDeployment({ namespace, name, body: updated });
+      return;
+    } catch (error) {
+      if (isK8sConflictError(error) && attempt < maxAttempts) {
+        await sleep(150 * attempt);
+        continue;
+      }
+
+      throw error;
+    }
+  }
 }
 
 /**

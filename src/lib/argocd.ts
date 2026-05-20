@@ -48,6 +48,12 @@ interface ArgoRolloutResourceLike {
     pauseConditions?: Array<{
       reason?: string;
     }>;
+    conditions?: Array<{
+      type?: string;
+      status?: string;
+      reason?: string;
+      message?: string;
+    }>;
   };
 }
 
@@ -105,6 +111,14 @@ function toNumber(value: number | string | undefined): number | null {
 }
 
 function isArgoRolloutReady(rollout: ArgoRolloutResourceLike): boolean {
+  const invalidCondition = rollout.status?.conditions?.find(
+    (condition) => condition.type === 'InvalidSpec' && condition.status === 'True'
+  );
+
+  if (rollout.status?.phase === 'Degraded' || invalidCondition) {
+    return false;
+  }
+
   const generation = toNumber(rollout.metadata?.generation);
   const observedGeneration = toNumber(rollout.status?.observedGeneration);
 
@@ -131,6 +145,10 @@ function describeArgoRolloutState(rollout: ArgoRolloutResourceLike | null): stri
 
   return [
     `phase=${rollout.status?.phase ?? 'unknown'}`,
+    rollout.status?.conditions
+      ?.filter((condition) => condition.status === 'True' && condition.reason)
+      .map((condition) => `${condition.type ?? 'condition'}=${condition.reason}`)
+      .join(', '),
     `observed=${rollout.status?.observedGeneration ?? 'unknown'}`,
     `generation=${rollout.metadata?.generation ?? 'unknown'}`,
     `updated=${rollout.status?.updatedReplicas ?? 0}`,
@@ -233,6 +251,19 @@ async function upsertArgocdResource(ref: ArgocdResourceRef, body: unknown): Prom
 
     throw error;
   }
+}
+
+async function patchArgocdResource(ref: ArgocdResourceRef, body: unknown[]): Promise<void> {
+  const { custom } = getK8sClient();
+
+  await custom.patchNamespacedCustomObject({
+    group: ARGO_API_GROUP,
+    version: ARGO_API_VERSION,
+    namespace: ref.namespace,
+    plural: ref.plural,
+    name: ref.name,
+    body,
+  });
 }
 
 async function deleteArgocdResource(ref: ArgocdResourceRef): Promise<void> {
@@ -415,20 +446,9 @@ export async function scaleArgoRolloutIfExists(input: {
     return false;
   }
 
-  await upsertArgocdResource(
-    {
-      namespace: input.namespace,
-      plural: 'rollouts',
-      name: input.name,
-    },
-    {
-      ...current,
-      spec: {
-        ...current.spec,
-        replicas: input.replicas,
-      },
-    }
-  );
+  await patchArgocdResource({ namespace: input.namespace, plural: 'rollouts', name: input.name }, [
+    { op: 'replace', path: '/spec/replicas', value: input.replicas },
+  ]);
 
   return true;
 }
@@ -440,31 +460,17 @@ export async function resumeArgoRollout(namespace: string, name: string): Promis
     throw new Error(`Argo Rollout ${namespace}/${name} not found`);
   }
 
-  await upsertArgocdResource(
-    {
-      namespace,
-      plural: 'rollouts',
-      name,
-    },
-    {
-      ...current,
-      spec: {
-        ...current.spec,
-        paused: false,
-        strategy: {
-          ...current.spec?.strategy,
-          ...(current.spec?.strategy?.blueGreen
-            ? {
-                blueGreen: {
-                  ...current.spec.strategy.blueGreen,
-                  autoPromotionEnabled: true,
-                },
-              }
-            : {}),
-        },
-      },
-    }
-  );
+  const operations: unknown[] = [{ op: 'add', path: '/spec/paused', value: false }];
+
+  if (current.spec?.strategy?.blueGreen) {
+    operations.push({
+      op: 'add',
+      path: '/spec/strategy/blueGreen/autoPromotionEnabled',
+      value: true,
+    });
+  }
+
+  await patchArgocdResource({ namespace, plural: 'rollouts', name }, operations);
 }
 
 export function upsertArgoApplicationSet(manifest: ArgoApplicationSetManifest): Promise<void> {
