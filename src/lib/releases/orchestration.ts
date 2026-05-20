@@ -273,6 +273,7 @@ export async function startReleaseDeploymentStage(
   if (release.status !== 'deploying') {
     await updateReleaseStatus(release.id, 'deploying');
   }
+  await cancelSupersededPendingReleases(release);
 
   releaseOrchestrationLogger.info('Starting release deployment stage', {
     ...buildTraceLogFields({

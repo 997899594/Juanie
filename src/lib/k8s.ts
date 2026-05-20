@@ -541,6 +541,34 @@ function isK8sConflictError(error: unknown): boolean {
   return (candidate.code ?? candidate.statusCode) === 409;
 }
 
+export function getPlatformOperationPodTerminalStatus(
+  pod: k8s.V1Pod | null
+): Extract<PlatformOperationJobStatus, 'succeeded' | 'failed'> | null {
+  if (!pod) {
+    return null;
+  }
+
+  if (pod.status?.phase === 'Succeeded') {
+    return 'succeeded';
+  }
+
+  if (pod.status?.phase === 'Failed') {
+    return 'failed';
+  }
+
+  const statuses = [
+    ...(pod.status?.initContainerStatuses ?? []),
+    ...(pod.status?.containerStatuses ?? []),
+  ];
+  if (statuses.length === 0 || statuses.some((status) => !status.state?.terminated)) {
+    return null;
+  }
+
+  return statuses.every((status) => status.state?.terminated?.exitCode === 0)
+    ? 'succeeded'
+    : 'failed';
+}
+
 async function waitForJobDeleted(input: {
   namespace: string;
   name: string;
@@ -598,7 +626,8 @@ export async function getPlatformOperationJobSnapshot(input: {
     const pod = pods[0] ?? null;
     const completeCondition = getJobCondition(job, 'Complete');
     const failedCondition = getJobCondition(job, 'Failed');
-    const terminal = Boolean(completeCondition || failedCondition);
+    const podTerminalStatus = getPlatformOperationPodTerminalStatus(pod);
+    const terminal = Boolean(completeCondition || failedCondition || podTerminalStatus);
     const logs =
       terminal && pod?.metadata?.name
         ? (
@@ -612,24 +641,24 @@ export async function getPlatformOperationJobSnapshot(input: {
           ).trim() || null
         : null;
 
-    if (completeCondition) {
+    if (completeCondition || podTerminalStatus === 'succeeded') {
       return {
         status: 'succeeded',
-        message: completeCondition.message ?? completeCondition.reason ?? null,
+        message: completeCondition?.message ?? completeCondition?.reason ?? logs,
         logs,
         job,
         pod,
       };
     }
 
-    if (failedCondition) {
+    if (failedCondition || podTerminalStatus === 'failed') {
       return {
         status: 'failed',
         message:
           logs ??
           (pod ? getPodStatusMessage(pod) : null) ??
-          failedCondition.message ??
-          failedCondition.reason ??
+          failedCondition?.message ??
+          failedCondition?.reason ??
           'operation job failed',
         logs,
         job,
