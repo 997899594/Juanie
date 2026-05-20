@@ -19,6 +19,7 @@ export type AuditAction =
   | 'environment.preview_deleted'
   | 'environment.preview_cleanup_completed'
   | 'environment.remediation_triggered'
+  | 'database.console_opened'
   | 'team.ai_control_plane_updated'
   | 'team.member_added'
   | 'team.member_removed'
@@ -32,6 +33,7 @@ export type ResourceType =
   | 'deployment'
   | 'release'
   | 'environment'
+  | 'database'
   | 'team'
   | 'member'
   | 'cluster'
@@ -105,6 +107,7 @@ export function formatAuditAction(action: AuditAction): string {
     'environment.preview_deleted': 'deleted preview environment',
     'environment.preview_cleanup_completed': 'completed preview cleanup',
     'environment.remediation_triggered': 'triggered environment remediation',
+    'database.console_opened': 'opened database console',
     'team.ai_control_plane_updated': 'updated AI control plane',
     'team.member_added': 'added team member',
     'team.member_removed': 'removed team member',

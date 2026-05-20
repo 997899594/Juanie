@@ -25,9 +25,46 @@ Set these on the Juanie chart or local environment:
 BYTEBASE_ENABLED=true
 BYTEBASE_URL=https://bytebase.juanie.art
 BYTEBASE_SQL_EDITOR_PATH=/sql-editor
+BYTEBASE_OIDC_CLIENT_ID=bytebase
+BYTEBASE_OIDC_ISSUER=https://juanie.art
 ```
 
-Optional deep-link template:
+Juanie does not send users to a blank Bytebase workspace. The database card calls Juanie's
+`POST /api/projects/:id/databases/:dbId/console` endpoint first. That endpoint logs in to Bytebase,
+configures the Juanie OIDC provider in Bytebase, creates the matching Bytebase project /
+environment / instance when missing, syncs the instance, then returns a database-scoped SQL editor
+URL.
+
+Juanie exposes the OIDC endpoints Bytebase needs:
+
+- `/.well-known/openid-configuration`
+- `/api/oidc/authorize`
+- `/api/oidc/token`
+- `/api/oidc/userinfo`
+- `/api/oidc/jwks`
+
+The browser login identity is the current Juanie user through OIDC. The database connection identity
+is still the application database owner from Juanie's managed database connection string.
+
+No separate Bytebase account setup is required for the first run. If
+`BYTEBASE_SERVICE_ACCOUNT_EMAIL` / `BYTEBASE_SERVICE_ACCOUNT_KEY` are absent, Juanie derives a stable
+platform bootstrap identity from `NEXTAUTH_SECRET`, signs up Bytebase's first admin when needed, and
+reuses that identity for future provisioning. Operators may still override it with an explicit
+Bytebase automation user.
+
+For first-time Bytebase bootstrapping, set:
+
+```bash
+BYTEBASE_BOOTSTRAP_EMAIL=platform@juanie.art
+BYTEBASE_BOOTSTRAP_PASSWORD=...
+BYTEBASE_BOOTSTRAP_TITLE="Juanie Platform"
+```
+
+After the first admin exists, operators may provide a dedicated Bytebase service account /
+automation user for `BYTEBASE_SERVICE_ACCOUNT_EMAIL` and `BYTEBASE_SERVICE_ACCOUNT_KEY`, but it is
+not required for the default Juanie-managed flow.
+
+Optional custom deep-link template:
 
 ```bash
 BYTEBASE_DATABASE_URL_TEMPLATE="{workspaceUrl}/projects/{projectName}/environments/{environmentName}/databases/{databaseName}"
@@ -39,8 +76,8 @@ Supported template keys:
 `databaseId`, `databaseName`, `databaseLabel`, `databaseType`, `host`, `port`, `namespace`,
 `serviceName`.
 
-If no template is configured, Juanie opens the Bytebase SQL editor. This avoids hard-coding a
-Bytebase internal route shape and lets operators adjust the link after Bytebase upgrades.
+If no template is configured, Juanie opens the database-scoped Bytebase SQL editor URL returned by
+the provisioning endpoint.
 
 ## Bootstrap
 

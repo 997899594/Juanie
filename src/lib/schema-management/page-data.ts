@@ -4,6 +4,7 @@ import {
   buildDatabaseConsoleOverview,
   getBytebaseConsoleConfig,
 } from '@/lib/database-console/bytebase';
+import { getDatabaseInsights } from '@/lib/databases/insights';
 import { db } from '@/lib/db';
 import { environments, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
@@ -37,6 +38,7 @@ export async function getProjectSchemaCenterData(input: {
             host: true,
             port: true,
             databaseName: true,
+            connectionString: true,
             namespace: true,
             serviceName: true,
             sourceDatabaseId: true,
@@ -72,62 +74,68 @@ export async function getProjectSchemaCenterData(input: {
     }
   }
 
-  const environmentsWithSchema = environmentList.map((environment) => ({
-    id: environment.id,
-    name: environment.name,
-    kind: environment.kind,
-    isProduction: isProductionEnvironment(environment),
-    isPreview: isPreviewEnvironment(environment),
-    actions: buildEnvironmentManageActionSnapshot(input.role, environment),
-    databases: environment.databases.map((database) => {
-      const latestRepairPlan = latestRepairPlans.get(database.id) ?? null;
-      const latestAtlasRun = latestAtlasRunByDatabase.get(database.id) ?? null;
+  const environmentsWithSchema = await Promise.all(
+    environmentList.map(async (environment) => ({
+      id: environment.id,
+      name: environment.name,
+      kind: environment.kind,
+      isProduction: isProductionEnvironment(environment),
+      isPreview: isPreviewEnvironment(environment),
+      actions: buildEnvironmentManageActionSnapshot(input.role, environment),
+      databases: await Promise.all(
+        environment.databases.map(async (database) => {
+          const { connectionString: _connectionString, ...safeDatabase } = database;
+          const latestRepairPlan = latestRepairPlans.get(database.id) ?? null;
+          const latestAtlasRun = latestAtlasRunByDatabase.get(database.id) ?? null;
 
-      return {
-        ...database,
-        schemaState: database.schemaState
-          ? {
-              ...database.schemaState,
-              statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
-            }
-          : null,
-        latestRepairPlan,
-        latestAtlasRun: latestAtlasRun
-          ? {
-              ...latestAtlasRun,
-              generatedFiles: Array.isArray(latestAtlasRun.generatedFiles)
-                ? (latestAtlasRun.generatedFiles as string[])
-                : null,
-              artifactFiles:
-                typeof latestAtlasRun.artifactFiles === 'object' &&
-                latestAtlasRun.artifactFiles !== null
-                  ? (latestAtlasRun.artifactFiles as Record<string, string>)
-                  : null,
-              diffSummary:
-                typeof latestAtlasRun.diffSummary === 'object' &&
-                latestAtlasRun.diffSummary !== null &&
-                'changedFiles' in latestAtlasRun.diffSummary &&
-                'fileStats' in latestAtlasRun.diffSummary
-                  ? (latestAtlasRun.diffSummary as {
-                      changedFiles: string[];
-                      fileStats: Array<{
-                        file: string;
-                        added: number;
-                        removed: number;
-                      }>;
-                    })
-                  : null,
-            }
-          : null,
-        console: buildBytebaseDatabaseConsoleLink({
-          config: databaseConsoleConfig,
-          project: input.project,
-          environment,
-          database,
-        }),
-      };
-    }),
-  }));
+          return {
+            ...safeDatabase,
+            insights: await getDatabaseInsights(database),
+            schemaState: database.schemaState
+              ? {
+                  ...database.schemaState,
+                  statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
+                }
+              : null,
+            latestRepairPlan,
+            latestAtlasRun: latestAtlasRun
+              ? {
+                  ...latestAtlasRun,
+                  generatedFiles: Array.isArray(latestAtlasRun.generatedFiles)
+                    ? (latestAtlasRun.generatedFiles as string[])
+                    : null,
+                  artifactFiles:
+                    typeof latestAtlasRun.artifactFiles === 'object' &&
+                    latestAtlasRun.artifactFiles !== null
+                      ? (latestAtlasRun.artifactFiles as Record<string, string>)
+                      : null,
+                  diffSummary:
+                    typeof latestAtlasRun.diffSummary === 'object' &&
+                    latestAtlasRun.diffSummary !== null &&
+                    'changedFiles' in latestAtlasRun.diffSummary &&
+                    'fileStats' in latestAtlasRun.diffSummary
+                      ? (latestAtlasRun.diffSummary as {
+                          changedFiles: string[];
+                          fileStats: Array<{
+                            file: string;
+                            added: number;
+                            removed: number;
+                          }>;
+                        })
+                      : null,
+                }
+              : null,
+            console: buildBytebaseDatabaseConsoleLink({
+              config: databaseConsoleConfig,
+              project: input.project,
+              environment,
+              database,
+            }),
+          };
+        })
+      ),
+    }))
+  );
 
   const selectedEnvironment = input.selectedEnvId
     ? (environmentsWithSchema.find((environment) => environment.id === input.selectedEnvId) ?? null)

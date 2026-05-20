@@ -56,6 +56,22 @@ export interface Env {
   AI_MODEL?: string;
   AI_MODEL_PRO?: string;
   AI_MODEL_TOOL?: string;
+
+  // Database console / Bytebase
+  BYTEBASE_ENABLED?: 'true' | 'false';
+  BYTEBASE_URL?: string;
+  BYTEBASE_PUBLIC_URL?: string;
+  BYTEBASE_API_TOKEN?: string;
+  BYTEBASE_SERVICE_ACCOUNT_EMAIL?: string;
+  BYTEBASE_SERVICE_ACCOUNT_KEY?: string;
+  BYTEBASE_BOOTSTRAP_EMAIL?: string;
+  BYTEBASE_BOOTSTRAP_PASSWORD?: string;
+  BYTEBASE_BOOTSTRAP_TITLE?: string;
+  BYTEBASE_OIDC_CLIENT_ID?: string;
+  BYTEBASE_OIDC_CLIENT_SECRET?: string;
+  BYTEBASE_OIDC_ISSUER?: string;
+  OIDC_TOKEN_SECRET?: string;
+  OIDC_JWT_PRIVATE_KEY?: string;
 }
 
 declare global {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
+import { Database, ExternalLink, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -30,6 +30,13 @@ interface SchemaCenterDatabaseRecord {
   type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   status: string | null;
   sourceDatabaseId: string | null;
+  insights: {
+    available: boolean;
+    status: 'ready' | 'unsupported' | 'not_configured' | 'unavailable';
+    tableCount: number | null;
+    estimatedRows: number | null;
+    checkedAt: string;
+  };
   schemaState: {
     status:
       | 'aligned'
@@ -127,7 +134,16 @@ type SchemaCenterActionKey =
   | 'markAligned'
   | 'generateSuggestion'
   | 'confirm'
-  | 'discard';
+  | 'discard'
+  | 'console';
+
+interface DatabaseConsoleOpenResponse {
+  url: string;
+}
+
+interface ErrorResponse {
+  error?: string;
+}
 
 type SchemaCenterSchemaStateStatus = NonNullable<
   SchemaCenterDatabaseRecord['schemaState']
@@ -173,6 +189,23 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
 const shellClassName = 'console-panel px-5 py-5';
 
 const subCardClassName = 'console-inset px-4 py-4';
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => null)) as T | ErrorResponse | null;
+
+  if (!response.ok) {
+    const message =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof payload.error === 'string'
+        ? payload.error
+        : '请求失败';
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
 
 export function SchemaCenterClient({
   projectId,
@@ -261,11 +294,24 @@ export function SchemaCenterClient({
 
     return plan;
   };
+  const openDatabaseConsole = async (databaseId: string) => {
+    setPendingAction({ databaseId, action: 'console' });
+    try {
+      const response = await fetch(`/api/projects/${projectId}/databases/${databaseId}/console`, {
+        method: 'POST',
+      });
+      const result = await parseJsonResponse<DatabaseConsoleOpenResponse>(response);
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '打开控制台失败');
+    } finally {
+      setPendingAction(null);
+    }
+  };
   const focusedEnvironment =
     (initialEnvId
       ? data.environments.find((environment) => environment.id === initialEnvId)
       : null) ?? null;
-  const databaseConsole = data.databaseConsole.enabled ? data.databaseConsole : null;
 
   return (
     <EnvironmentPageFrame
@@ -285,43 +331,6 @@ export function SchemaCenterClient({
         </div>
       }
     >
-      {databaseConsole ? (
-        <section className="console-panel mb-4 overflow-hidden px-5 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{databaseConsole.label}</Badge>
-                <Badge variant="secondary" className="border-success/30 text-success">
-                  {databaseConsole.accessModeLabel}
-                </Badge>
-              </div>
-              <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
-                数据库工作台
-              </div>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                {databaseConsole.summary}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              {databaseConsole.sqlEditorUrl ? (
-                <Button asChild variant="secondary" className="h-10 rounded-full px-4">
-                  <a href={databaseConsole.sqlEditorUrl} target="_blank" rel="noreferrer">
-                    打开控制台
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </Button>
-              ) : null}
-            </div>
-          </div>
-          <div className="console-inset mt-4 flex items-start gap-3 px-4 py-3">
-            <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground" />
-            <div className="text-sm leading-6 text-muted-foreground">
-              {databaseConsole.changeManagementSummary}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       <div className={shellClassName}>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className={subCardClassName}>
@@ -412,7 +421,7 @@ export function SchemaCenterClient({
                 return (
                   <div key={database.id} className={subCardClassName}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 space-y-2">
+                      <div className="min-w-0 flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium text-foreground">{database.name}</div>
                           <Badge variant="secondary">{database.type}</Badge>
@@ -443,9 +452,56 @@ export function SchemaCenterClient({
                             .filter(Boolean)
                             .join(' · ')}
                         </div>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <div className="console-surface rounded-[14px] px-3 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                              表
+                            </div>
+                            <div className="mt-2 text-lg font-semibold text-foreground">
+                              {database.insights.available && database.insights.tableCount !== null
+                                ? database.insights.tableCount
+                                : '—'}
+                            </div>
+                          </div>
+                          <div className="console-surface rounded-[14px] px-3 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                              行
+                            </div>
+                            <div className="mt-2 text-lg font-semibold text-foreground">
+                              {database.insights.available &&
+                              database.insights.estimatedRows !== null
+                                ? database.insights.estimatedRows.toLocaleString('zh-CN')
+                                : '—'}
+                            </div>
+                          </div>
+                          <div className="console-surface rounded-[14px] px-3 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                              账本
+                            </div>
+                            <div className="mt-2 text-lg font-semibold text-foreground">
+                              {state?.hasLedger ? '有' : '—'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
+                        {database.console ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={hasPendingAction}
+                            onClick={() => void openDatabaseConsole(database.id)}
+                          >
+                            {isPendingAction(database.id, 'console') ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            控制台
+                          </Button>
+                        ) : null}
+
                         <Button
                           variant="ghost"
                           size="sm"
