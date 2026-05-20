@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildPromoteArgoRolloutPatch,
+  buildScaleArgoRolloutPatch,
+  getArgoRolloutReadiness,
+} from '@/lib/argocd';
+import {
   requiresManualArgoRolloutPromotion,
   shouldUseArgoRolloutsForService,
   supportsArgoRolloutsDeploymentStrategy,
@@ -49,5 +54,60 @@ describe('Argo Rollouts workload routing', () => {
     expect(requiresManualArgoRolloutPromotion('canary')).toBe(false);
     expect(requiresManualArgoRolloutPromotion('controlled')).toBe(true);
     expect(requiresManualArgoRolloutPromotion('blue_green')).toBe(true);
+  });
+
+  it('uses targeted rollout command patches instead of replacing the rollout spec', () => {
+    expect(buildScaleArgoRolloutPatch(2)).toEqual([
+      { op: 'add', path: '/spec/replicas', value: 2 },
+    ]);
+    expect(buildPromoteArgoRolloutPatch({ hasBlueGreenStrategy: true })).toEqual([
+      { op: 'add', path: '/spec/paused', value: false },
+      { op: 'add', path: '/spec/strategy/blueGreen/autoPromotionEnabled', value: true },
+    ]);
+    expect(buildPromoteArgoRolloutPatch({ hasBlueGreenStrategy: false })).toEqual([
+      { op: 'add', path: '/spec/paused', value: false },
+    ]);
+  });
+
+  it('does not treat degraded or invalid rollouts as ready', () => {
+    expect(
+      getArgoRolloutReadiness({
+        metadata: { generation: 3 },
+        spec: { replicas: 1 },
+        status: {
+          phase: 'Degraded',
+          observedGeneration: 3,
+          updatedReplicas: 1,
+          availableReplicas: 1,
+        },
+      })
+    ).toEqual({ ready: false, state: 'degraded' });
+
+    expect(
+      getArgoRolloutReadiness({
+        metadata: { generation: 3 },
+        spec: { replicas: 1 },
+        status: {
+          phase: 'Healthy',
+          observedGeneration: 3,
+          updatedReplicas: 1,
+          availableReplicas: 1,
+          conditions: [{ type: 'InvalidSpec', status: 'True', reason: 'InvalidSpec' }],
+        },
+      })
+    ).toEqual({ ready: false, state: 'degraded' });
+
+    expect(
+      getArgoRolloutReadiness({
+        metadata: { generation: 3 },
+        spec: { replicas: 1 },
+        status: {
+          phase: 'Healthy',
+          observedGeneration: 3,
+          updatedReplicas: 1,
+          availableReplicas: 1,
+        },
+      })
+    ).toEqual({ ready: true, state: 'healthy' });
   });
 });

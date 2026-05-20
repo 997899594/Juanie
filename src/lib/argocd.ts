@@ -1,8 +1,10 @@
+import * as k8s from '@kubernetes/client-node';
 import { getK8sClient } from '@/lib/k8s';
 
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 const ARGO_API_GROUP = 'argoproj.io';
 const ARGO_API_VERSION = 'v1alpha1';
+const ARGO_FIELD_MANAGER = 'juanie-control-plane';
 
 interface ArgocdResourceRef {
   namespace: string;
@@ -10,7 +12,7 @@ interface ArgocdResourceRef {
   name: string;
 }
 
-interface ArgoRolloutResourceLike {
+export interface ArgoRolloutResourceLike {
   metadata?: {
     name?: string;
     namespace?: string;
@@ -110,32 +112,51 @@ function toNumber(value: number | string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isArgoRolloutReady(rollout: ArgoRolloutResourceLike): boolean {
+export type ArgoRolloutReadiness =
+  | { ready: true; state: 'healthy' | 'scaled_to_zero' }
+  | { ready: false; state: 'missing' | 'observing' | 'paused' | 'progressing' | 'degraded' };
+
+export function getArgoRolloutReadiness(
+  rollout: ArgoRolloutResourceLike | null
+): ArgoRolloutReadiness {
+  if (!rollout) {
+    return { ready: false, state: 'missing' };
+  }
+
   const invalidCondition = rollout.status?.conditions?.find(
     (condition) => condition.type === 'InvalidSpec' && condition.status === 'True'
   );
 
   if (rollout.status?.phase === 'Degraded' || invalidCondition) {
-    return false;
+    return { ready: false, state: 'degraded' };
+  }
+
+  if (rollout.spec?.paused || (rollout.status?.pauseConditions?.length ?? 0) > 0) {
+    return { ready: false, state: 'paused' };
   }
 
   const generation = toNumber(rollout.metadata?.generation);
   const observedGeneration = toNumber(rollout.status?.observedGeneration);
 
   if (generation !== null && (observedGeneration === null || observedGeneration < generation)) {
-    return false;
+    return { ready: false, state: 'observing' };
   }
 
   const desiredReplicas = rollout.spec?.replicas ?? 1;
 
   if (desiredReplicas === 0) {
-    return true;
+    return { ready: true, state: 'scaled_to_zero' };
   }
 
-  return (
+  const ready =
     (rollout.status?.updatedReplicas ?? 0) >= desiredReplicas &&
-    (rollout.status?.availableReplicas ?? 0) >= desiredReplicas
-  );
+    (rollout.status?.availableReplicas ?? 0) >= desiredReplicas;
+
+  return ready ? { ready: true, state: 'healthy' } : { ready: false, state: 'progressing' };
+}
+
+function isArgoRolloutReady(rollout: ArgoRolloutResourceLike): boolean {
+  return getArgoRolloutReadiness(rollout).ready;
 }
 
 function describeArgoRolloutState(rollout: ArgoRolloutResourceLike | null): string {
@@ -179,78 +200,17 @@ async function getArgocdResource<T>(ref: ArgocdResourceRef): Promise<T | null> {
   }
 }
 
-function buildArgocdResourcePatch(body: unknown): unknown[] {
-  if (!body || typeof body !== 'object') {
-    return [];
-  }
+async function upsertArgocdResource(_ref: ArgocdResourceRef, body: unknown): Promise<void> {
+  const { object } = getK8sClient();
 
-  const bodyRecord = body as Record<string, unknown>;
-  const metadata =
-    bodyRecord.metadata && typeof bodyRecord.metadata === 'object'
-      ? (bodyRecord.metadata as Record<string, unknown>)
-      : {};
-  const operations: unknown[] = [];
-
-  if (metadata.labels && typeof metadata.labels === 'object') {
-    operations.push({
-      op: 'add',
-      path: '/metadata/labels',
-      value: metadata.labels,
-    });
-  }
-
-  if (metadata.annotations && typeof metadata.annotations === 'object') {
-    operations.push({
-      op: 'add',
-      path: '/metadata/annotations',
-      value: metadata.annotations,
-    });
-  }
-
-  if (bodyRecord.spec && typeof bodyRecord.spec === 'object') {
-    operations.push({
-      op: 'replace',
-      path: '/spec',
-      value: bodyRecord.spec,
-    });
-  }
-
-  return operations;
-}
-
-async function upsertArgocdResource(ref: ArgocdResourceRef, body: unknown): Promise<void> {
-  const { custom } = getK8sClient();
-
-  try {
-    await custom.getNamespacedCustomObject({
-      group: ARGO_API_GROUP,
-      version: ARGO_API_VERSION,
-      namespace: ref.namespace,
-      plural: ref.plural,
-      name: ref.name,
-    });
-    await custom.patchNamespacedCustomObject({
-      group: ARGO_API_GROUP,
-      version: ARGO_API_VERSION,
-      namespace: ref.namespace,
-      plural: ref.plural,
-      name: ref.name,
-      body: buildArgocdResourcePatch(body),
-    });
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      await custom.createNamespacedCustomObject({
-        group: ARGO_API_GROUP,
-        version: ARGO_API_VERSION,
-        namespace: ref.namespace,
-        plural: ref.plural,
-        body,
-      });
-      return;
-    }
-
-    throw error;
-  }
+  await object.patch(
+    body as k8s.KubernetesObject,
+    undefined,
+    undefined,
+    ARGO_FIELD_MANAGER,
+    true,
+    k8s.PatchStrategy.ServerSideApply
+  );
 }
 
 async function patchArgocdResource(ref: ArgocdResourceRef, body: unknown[]): Promise<void> {
@@ -264,6 +224,24 @@ async function patchArgocdResource(ref: ArgocdResourceRef, body: unknown[]): Pro
     name: ref.name,
     body,
   });
+}
+
+export function buildScaleArgoRolloutPatch(replicas: number): unknown[] {
+  return [{ op: 'add', path: '/spec/replicas', value: replicas }];
+}
+
+export function buildPromoteArgoRolloutPatch(input: { hasBlueGreenStrategy: boolean }): unknown[] {
+  const operations: unknown[] = [{ op: 'add', path: '/spec/paused', value: false }];
+
+  if (input.hasBlueGreenStrategy) {
+    operations.push({
+      op: 'add',
+      path: '/spec/strategy/blueGreen/autoPromotionEnabled',
+      value: true,
+    });
+  }
+
+  return operations;
 }
 
 async function deleteArgocdResource(ref: ArgocdResourceRef): Promise<void> {
@@ -446,9 +424,10 @@ export async function scaleArgoRolloutIfExists(input: {
     return false;
   }
 
-  await patchArgocdResource({ namespace: input.namespace, plural: 'rollouts', name: input.name }, [
-    { op: 'replace', path: '/spec/replicas', value: input.replicas },
-  ]);
+  await patchArgocdResource(
+    { namespace: input.namespace, plural: 'rollouts', name: input.name },
+    buildScaleArgoRolloutPatch(input.replicas)
+  );
 
   return true;
 }
@@ -460,17 +439,12 @@ export async function resumeArgoRollout(namespace: string, name: string): Promis
     throw new Error(`Argo Rollout ${namespace}/${name} not found`);
   }
 
-  const operations: unknown[] = [{ op: 'add', path: '/spec/paused', value: false }];
-
-  if (current.spec?.strategy?.blueGreen) {
-    operations.push({
-      op: 'add',
-      path: '/spec/strategy/blueGreen/autoPromotionEnabled',
-      value: true,
-    });
-  }
-
-  await patchArgocdResource({ namespace, plural: 'rollouts', name }, operations);
+  await patchArgocdResource(
+    { namespace, plural: 'rollouts', name },
+    buildPromoteArgoRolloutPatch({
+      hasBlueGreenStrategy: Boolean(current.spec?.strategy?.blueGreen),
+    })
+  );
 }
 
 export function upsertArgoApplicationSet(manifest: ArgoApplicationSetManifest): Promise<void> {

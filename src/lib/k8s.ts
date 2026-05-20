@@ -20,6 +20,7 @@ let k8sAppsApi: k8s.AppsV1Api | null = null;
 let k8sCustomApi: k8s.CustomObjectsApi | null = null;
 let k8sNetworkingApi: k8s.NetworkingV1Api | null = null;
 let k8sBatchApi: k8s.BatchV1Api | null = null;
+let k8sObjectApi: k8s.KubernetesObjectApi | null = null;
 let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
 const k8sLogger = logger.child({ component: 'k8s' });
@@ -93,6 +94,7 @@ export function initK8sClient(): void {
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
     k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
+    k8sObjectApi = k8s.KubernetesObjectApi.makeApiClient(kc);
     k8sLogger.info('Kubernetes client initialized');
   } catch (error) {
     k8sLogger.warn('Failed to initialize Kubernetes client', {
@@ -107,6 +109,7 @@ export function getK8sClient(): {
   custom: k8s.CustomObjectsApi;
   networking: k8s.NetworkingV1Api;
   batch: k8s.BatchV1Api;
+  object: k8s.KubernetesObjectApi;
   config: k8s.KubeConfig;
 } {
   if (
@@ -115,6 +118,7 @@ export function getK8sClient(): {
     !k8sCustomApi ||
     !k8sNetworkingApi ||
     !k8sBatchApi ||
+    !k8sObjectApi ||
     !kubeConfig
   ) {
     initK8sClient();
@@ -124,6 +128,7 @@ export function getK8sClient(): {
       !k8sCustomApi ||
       !k8sNetworkingApi ||
       !k8sBatchApi ||
+      !k8sObjectApi ||
       !kubeConfig
     ) {
       throw new Error('K8s client not initialized');
@@ -136,6 +141,7 @@ export function getK8sClient(): {
     custom: k8sCustomApi,
     networking: k8sNetworkingApi,
     batch: k8sBatchApi,
+    object: k8sObjectApi,
     config: kubeConfig,
   };
 }
