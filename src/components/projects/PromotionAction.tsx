@@ -72,6 +72,7 @@ export function PromotionAction({
 }: PromotionActionProps) {
   const router = useRouter();
   const [promoting, setPromoting] = useState(false);
+  const [preflighting, setPreflighting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [promotionPlans, setPromotionPlans] = useState(initialPromotionPlans);
   const [loadedPlanKeys, setLoadedPlanKeys] = useState<Set<string>>(new Set());
@@ -109,6 +110,7 @@ export function PromotionAction({
   const refreshingPlan = dialogOpen && planRefreshingKey === selectedPlanKey;
   const selectedPlanError = planError?.key === selectedPlanKey ? planError.message : null;
   const selectedPlanLoaded = loadedPlanKeys.has(selectedPlanKey);
+  const selectedPlanSchemaRefreshActive = hasActiveSchemaRefresh(selectedPlan);
   const canManageTarget = selectedPlan?.targetEnvironment
     ? governance.promotion.manageableTargetIds.includes(selectedPlan.targetEnvironment.id)
     : false;
@@ -118,7 +120,10 @@ export function PromotionAction({
     canManageTarget &&
     selectedPlanLoaded &&
     !loadingPlan &&
+    !refreshingPlan &&
     !selectedPlanError &&
+    !selectedPlanSchemaRefreshActive &&
+    !preflighting &&
     (selectedPlan.plan.canCreate ?? true) &&
     !selectedPlan.plan.blockingReason;
   const buttonTitle =
@@ -127,13 +132,15 @@ export function PromotionAction({
       : !canManageTarget
         ? governance.promotion.summary
         : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
-  const buttonLabel = promoting
-    ? '创建中...'
-    : selectedPlan?.targetEnvironment?.name
-      ? `提升到 ${selectedPlan.targetEnvironment.name}`
-      : compact
-        ? '提升'
-        : '提升到下游';
+  const buttonLabel = preflighting
+    ? '确认中...'
+    : promoting
+      ? '创建中...'
+      : selectedPlan?.targetEnvironment?.name
+        ? `提升到 ${selectedPlan.targetEnvironment.name}`
+        : compact
+          ? '提升'
+          : '提升到下游';
 
   useEffect(() => {
     dialogOpenRef.current = dialogOpen;
@@ -321,11 +328,50 @@ export function PromotionAction({
   });
 
   const handlePromote = async () => {
-    if (promoting) return;
+    if (promoting || preflighting) return;
     const planKey = getPromotionPlanKey(selectedFlowId);
     if (!loadedPlanKeys.has(planKey)) {
       toast.error('实时预检还没有完成，请稍等一下');
       return;
+    }
+    if (loadingPlan || refreshingPlan || selectedPlanSchemaRefreshActive) {
+      toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');
+      return;
+    }
+
+    setPreflighting(true);
+
+    try {
+      const latestPlan = await fetchPromotionPlan({
+        projectId,
+        flowId: selectedFlowId,
+      });
+      setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, latestPlan));
+      setLoadedPlanKeys((currentKeys) => {
+        const nextKeys = new Set(currentKeys);
+        nextKeys.add(planKey);
+        return nextKeys;
+      });
+
+      if (hasActiveSchemaRefresh(latestPlan)) {
+        toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');
+        return;
+      }
+
+      if (!latestPlan.sourceRelease) {
+        toast.error(`${latestPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可复用的成功发布`);
+        return;
+      }
+
+      if (!(latestPlan.plan.canCreate ?? true) || latestPlan.plan.blockingReason) {
+        toast.error(latestPlan.plan.blockingReason ?? latestPlan.plan.summary ?? '提升预检未通过');
+        return;
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '确认提升预检失败');
+      return;
+    } finally {
+      setPreflighting(false);
     }
 
     setPromoting(true);
@@ -390,6 +436,7 @@ export function PromotionAction({
         loadingPlan={loadingPlan}
         refreshingPlan={refreshingPlan}
         planError={selectedPlanError}
+        preflighting={preflighting}
         onPromote={handlePromote}
       />
     </>

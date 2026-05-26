@@ -77,6 +77,7 @@ interface ReleasePromoteDialogProps {
   onSelectedFlowIdChange: (flowId: string | null) => void;
   canPromote: boolean;
   promoting: boolean;
+  preflighting?: boolean;
   loadingPlan?: boolean;
   refreshingPlan?: boolean;
   planError?: string | null;
@@ -91,6 +92,7 @@ export function ReleasePromoteDialog({
   onSelectedFlowIdChange,
   canPromote,
   promoting,
+  preflighting = false,
   loadingPlan = false,
   refreshingPlan = false,
   planError = null,
@@ -111,6 +113,9 @@ export function ReleasePromoteDialog({
   const schemaRefreshChipVisible = promotePanel?.chips.some(
     (chip) => chip.key === 'schema:refreshing'
   );
+  const confirmLabel = selectedPlan?.plan.releasePolicy.requiresApproval
+    ? '创建并进入审批'
+    : '确认提升';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -291,9 +296,15 @@ export function ReleasePromoteDialog({
           <Button
             className="w-full rounded-full sm:w-auto"
             onClick={onPromote}
-            disabled={promoting || loadingPlan || !canPromote}
+            disabled={preflighting || promoting || loadingPlan || !canPromote}
           >
-            {promoting ? '创建中...' : loadingPlan ? '预检中...' : '确认提升'}
+            {preflighting
+              ? '确认预检...'
+              : promoting
+                ? '创建中...'
+                : loadingPlan
+                  ? '预检中...'
+                  : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

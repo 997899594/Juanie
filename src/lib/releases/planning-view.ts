@@ -102,6 +102,7 @@ function getChipPresentation(chip: ReleasePlanningPanelChip): ReleasePlanningPan
       ...chip,
       key: 'approval-gate',
       label: '等待审批',
+      tone: 'neutral',
     };
   }
 
@@ -109,6 +110,7 @@ function getChipPresentation(chip: ReleasePlanningPanelChip): ReleasePlanningPan
     return {
       ...chip,
       key: 'approval-gate',
+      tone: 'neutral',
     };
   }
 

@@ -6,10 +6,14 @@ import { isK8sAvailable } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
+import {
+  shouldUseArgoRolloutsForService,
+  supportsArgoRolloutsDeploymentStrategy,
+} from '@/lib/releases/argo-rollouts';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
 import { resumeReleaseAfterDeploymentProgress } from '@/lib/releases/orchestration';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
-import { cleanupCandidateResources } from '@/lib/releases/workloads';
+import { buildServiceVerificationPlan, cleanupCandidateResources } from '@/lib/releases/workloads';
 import { buildTraceLogFields } from '@/lib/trace/context';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
 import type { DeploymentJobData } from './index';
@@ -63,6 +67,22 @@ async function cleanupFailedCandidateResources(deploymentId: string): Promise<bo
   ]);
 
   if (!project || !environment?.namespace || !service) {
+    return false;
+  }
+
+  if (
+    supportsArgoRolloutsDeploymentStrategy(environment.deploymentStrategy) &&
+    shouldUseArgoRolloutsForService({
+      strategy: environment.deploymentStrategy,
+      service,
+      hasBlockingVerification: buildServiceVerificationPlan(service).blockingPaths.length > 0,
+    })
+  ) {
+    await logDeployment(
+      deploymentId,
+      'Skipped standalone candidate cleanup because Argo Rollouts owns the preview service',
+      'warn'
+    );
     return false;
   }
 

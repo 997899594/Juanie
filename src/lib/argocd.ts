@@ -47,6 +47,10 @@ export interface ArgoRolloutResourceLike {
     readyReplicas?: number;
     availableReplicas?: number;
     updatedReplicas?: number;
+    blueGreen?: {
+      activeSelector?: string;
+      previewSelector?: string;
+    };
     pauseConditions?: Array<{
       reason?: string;
     }>;
@@ -242,6 +246,21 @@ export function buildPromoteArgoRolloutPatch(input: { hasBlueGreenStrategy: bool
   }
 
   return operations;
+}
+
+export function isArgoRolloutCompleted(rollout: ArgoRolloutResourceLike | null): boolean {
+  if (!rollout) {
+    return false;
+  }
+
+  const completedCondition = rollout.status?.conditions?.some(
+    (condition) => condition.type === 'Completed' && condition.status === 'True'
+  );
+  const blueGreenSettled =
+    !rollout.status?.blueGreen?.previewSelector ||
+    rollout.status.blueGreen.previewSelector === rollout.status.blueGreen.activeSelector;
+
+  return rollout.status?.phase === 'Healthy' && Boolean(completedCondition) && blueGreenSettled;
 }
 
 async function deleteArgocdResource(ref: ArgocdResourceRef): Promise<void> {

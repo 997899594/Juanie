@@ -107,7 +107,7 @@ describe('release planning', () => {
       (chip) => chip.key === 'production-protection'
     );
 
-    expect(approvalChips).toEqual([{ key: 'approval-gate', label: '等待审批', tone: 'danger' }]);
+    expect(approvalChips).toEqual([{ key: 'approval-gate', label: '等待审批', tone: 'neutral' }]);
     expect(productionProtectionChips.length).toBe(1);
     expect(panel.canSubmit).toBe(true);
     expect(panel.issueSummary).toBe(

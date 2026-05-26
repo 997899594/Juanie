@@ -3,6 +3,7 @@ import {
   buildPromoteArgoRolloutPatch,
   buildScaleArgoRolloutPatch,
   getArgoRolloutReadiness,
+  isArgoRolloutCompleted,
 } from '@/lib/argocd';
 import {
   requiresManualArgoRolloutPromotion,
@@ -67,6 +68,34 @@ describe('Argo Rollouts workload routing', () => {
     expect(buildPromoteArgoRolloutPatch({ hasBlueGreenStrategy: false })).toEqual([
       { op: 'add', path: '/spec/paused', value: false },
     ]);
+  });
+
+  it('recognizes completed blue-green rollouts only after active and preview selectors settle', () => {
+    expect(
+      isArgoRolloutCompleted({
+        status: {
+          phase: 'Healthy',
+          blueGreen: {
+            activeSelector: 'stable-hash',
+            previewSelector: 'stable-hash',
+          },
+          conditions: [{ type: 'Completed', status: 'True', reason: 'RolloutCompleted' }],
+        },
+      })
+    ).toBe(true);
+
+    expect(
+      isArgoRolloutCompleted({
+        status: {
+          phase: 'Healthy',
+          blueGreen: {
+            activeSelector: 'stable-hash',
+            previewSelector: 'candidate-hash',
+          },
+          conditions: [{ type: 'Completed', status: 'True', reason: 'RolloutCompleted' }],
+        },
+      })
+    ).toBe(false);
   });
 
   it('does not treat degraded or invalid rollouts as ready', () => {

@@ -1,6 +1,7 @@
 import {
   type ArgoRolloutSpec,
   getArgoRollout,
+  isArgoRolloutCompleted,
   resumeArgoRollout,
   upsertArgoRollout,
   waitForArgoRolloutReady,
@@ -133,8 +134,13 @@ export async function deployArgoRolloutWorkload(input: {
     getArgoRollout(input.namespace, input.rolloutName),
     deploymentExists(input.namespace, input.rolloutName),
   ]);
+  const existingImage = existingRollout?.spec?.template?.spec?.containers?.[0]?.image ?? null;
+  const existingImageAlreadyActive =
+    existingImage === input.imageName && isArgoRolloutCompleted(existingRollout);
   const awaitingRollout =
-    requiresManualPromotion && (Boolean(existingRollout) || legacyStableDeploymentExists);
+    requiresManualPromotion &&
+    (Boolean(existingRollout) || legacyStableDeploymentExists) &&
+    !existingImageAlreadyActive;
   const verificationServiceName =
     awaitingRollout && usesPreviewService ? input.previewServiceName : input.stableServiceName;
   const verificationServiceLabel = awaitingRollout && usesPreviewService ? 'preview' : 'active';
@@ -152,79 +158,114 @@ export async function deployArgoRolloutWorkload(input: {
     });
   }
 
-  await upsertArgoRollout(
-    buildArgoRolloutSpec({
-      namespace: input.namespace,
-      rolloutName: input.rolloutName,
-      stableServiceName: input.stableServiceName,
-      previewServiceName: usesPreviewService ? input.previewServiceName : undefined,
-      imageName: input.imageName,
-      strategy: input.strategy,
-      autoPromotionEnabled: !awaitingRollout,
-      service: input.service,
-      env: input.env,
-      envFrom: input.envFrom,
-      imagePullSecrets: input.imagePullSecrets,
-    })
-  );
-
-  await input.onLog?.(
-    existingRollout
-      ? `Updated Argo Rollout ${input.rolloutName} → ${input.imageName}`
-      : `Created Argo Rollout ${input.rolloutName} → ${input.imageName}`
-  );
-
-  await waitForArgoRolloutReady({
+  const nextSpec = buildArgoRolloutSpec({
     namespace: input.namespace,
-    name: input.rolloutName,
+    rolloutName: input.rolloutName,
+    stableServiceName: input.stableServiceName,
+    previewServiceName: usesPreviewService ? input.previewServiceName : undefined,
+    imageName: input.imageName,
+    strategy: input.strategy,
+    autoPromotionEnabled: !awaitingRollout,
+    service: input.service,
+    env: input.env,
+    envFrom: input.envFrom,
+    imagePullSecrets: input.imagePullSecrets,
   });
-  await input.onLog?.(`Argo Rollout ${input.rolloutName} is ready for verification`);
+  const rollbackSpec =
+    awaitingRollout && existingImage && existingImage !== input.imageName
+      ? buildArgoRolloutSpec({
+          namespace: input.namespace,
+          rolloutName: input.rolloutName,
+          stableServiceName: input.stableServiceName,
+          previewServiceName: usesPreviewService ? input.previewServiceName : undefined,
+          imageName: existingImage,
+          strategy: input.strategy,
+          autoPromotionEnabled: true,
+          service: input.service,
+          env: input.env,
+          envFrom: input.envFrom,
+          imagePullSecrets: input.imagePullSecrets,
+        })
+      : null;
 
-  if (input.verificationPlan.blockingPaths.length > 0) {
-    await verifyServiceReachability({
-      namespace: input.namespace,
-      serviceName: verificationServiceName,
-      port: input.service.port ?? 3000,
-      paths: input.verificationPlan.blockingPaths,
-      timeoutMs: 60_000,
-      pollMs: 3_000,
-    });
+  let awaitingPromotionAfterReady = awaitingRollout;
+
+  try {
+    await upsertArgoRollout(nextSpec);
+
     await input.onLog?.(
-      `Verified ${verificationServiceLabel} service ${verificationServiceName} on ${input.verificationPlan.blockingPaths.join(', ')}`
+      existingRollout
+        ? `Updated Argo Rollout ${input.rolloutName} → ${input.imageName}`
+        : `Created Argo Rollout ${input.rolloutName} → ${input.imageName}`
     );
-  }
 
-  if (input.verificationPlan.observedPaths.length > 0) {
-    try {
+    const readyRollout = await waitForArgoRolloutReady({
+      namespace: input.namespace,
+      name: input.rolloutName,
+    });
+    await input.onLog?.(`Argo Rollout ${input.rolloutName} is ready for verification`);
+    awaitingPromotionAfterReady = awaitingRollout && !isArgoRolloutCompleted(readyRollout);
+
+    if (input.verificationPlan.blockingPaths.length > 0) {
       await verifyServiceReachability({
         namespace: input.namespace,
         serviceName: verificationServiceName,
         port: input.service.port ?? 3000,
-        paths: input.verificationPlan.observedPaths,
-        timeoutMs: 30_000,
+        paths: input.verificationPlan.blockingPaths,
+        timeoutMs: 60_000,
         pollMs: 3_000,
       });
       await input.onLog?.(
-        `Observed ${verificationServiceLabel} entry checks ${verificationServiceName} on ${input.verificationPlan.observedPaths.join(', ')}`
-      );
-    } catch (error) {
-      await input.onWarn?.(
-        `Observed ${verificationServiceLabel} entry checks failed for ${verificationServiceName}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Verified ${verificationServiceLabel} service ${verificationServiceName} on ${input.verificationPlan.blockingPaths.join(', ')}`
       );
     }
-  }
 
-  if (!awaitingRollout) {
-    await Promise.all([
-      deleteDeployment(input.namespace, input.rolloutName).catch(() => undefined),
-      deleteDeployment(input.namespace, input.previewServiceName).catch(() => undefined),
-    ]);
+    if (input.verificationPlan.observedPaths.length > 0) {
+      try {
+        await verifyServiceReachability({
+          namespace: input.namespace,
+          serviceName: verificationServiceName,
+          port: input.service.port ?? 3000,
+          paths: input.verificationPlan.observedPaths,
+          timeoutMs: 30_000,
+          pollMs: 3_000,
+        });
+        await input.onLog?.(
+          `Observed ${verificationServiceLabel} entry checks ${verificationServiceName} on ${input.verificationPlan.observedPaths.join(', ')}`
+        );
+      } catch (error) {
+        await input.onWarn?.(
+          `Observed ${verificationServiceLabel} entry checks failed for ${verificationServiceName}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    if (!awaitingPromotionAfterReady) {
+      await Promise.all([
+        deleteDeployment(input.namespace, input.rolloutName).catch(() => undefined),
+        deleteDeployment(input.namespace, input.previewServiceName).catch(() => undefined),
+      ]);
+    }
+  } catch (error) {
+    if (rollbackSpec) {
+      await input.onWarn?.(
+        `Argo Rollout ${input.rolloutName} verification failed; restoring previous stable image`
+      );
+      await upsertArgoRollout(rollbackSpec);
+      await waitForArgoRolloutReady({
+        namespace: input.namespace,
+        name: input.rolloutName,
+      });
+      await input.onWarn?.(`Restored Argo Rollout ${input.rolloutName} → ${existingImage}`);
+    }
+
+    throw error;
   }
 
   return {
-    awaitingRollout,
+    awaitingRollout: awaitingPromotionAfterReady,
   };
 }
 
