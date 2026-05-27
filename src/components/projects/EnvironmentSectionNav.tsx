@@ -15,9 +15,11 @@ export function EnvironmentSectionNav({
 }) {
   const pathname = usePathname();
 
-  const baseHref = environmentId
-    ? `/projects/${projectId}/environments/${environmentId}`
-    : `/projects/${projectId}/environments`;
+  if (!environmentId) {
+    return null;
+  }
+
+  const baseHref = `/projects/${projectId}/environments/${environmentId}`;
 
   return (
     <SectionNav
@@ -27,9 +29,7 @@ export function EnvironmentSectionNav({
       items={environmentNav
         .filter((item) => (audience === 'delivery' ? item.href === '/delivery' : true))
         .map((item) => {
-          const href = environmentId
-            ? buildEnvironmentNavHref(projectId, environmentId, item.href)
-            : `${baseHref}${item.href}`;
+          const href = buildEnvironmentNavHref(projectId, environmentId, item.href);
           const isActive =
             item.href === ''
               ? pathname === baseHref

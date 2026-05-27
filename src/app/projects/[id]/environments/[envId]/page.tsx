@@ -31,12 +31,5 @@ export default async function ProjectEnvironmentDetailPage({
     role: access.member.role,
   });
 
-  return (
-    <EnvironmentsPageClient
-      projectId={id}
-      initialData={initialData}
-      initialEnvId={envId}
-      focusMode
-    />
-  );
+  return <EnvironmentsPageClient projectId={id} initialData={initialData} initialEnvId={envId} />;
 }

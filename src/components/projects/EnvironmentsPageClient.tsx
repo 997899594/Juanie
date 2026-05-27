@@ -1,36 +1,11 @@
 'use client';
-import {
-  Activity,
-  ArrowRight,
-  Database,
-  ExternalLink,
-  GitBranch,
-  Globe,
-  Package2,
-  Plus,
-  Trash2,
-} from 'lucide-react';
+import { Activity, Database, ExternalLink, GitBranch, Globe, Package2 } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { EnvironmentRollbackAction } from '@/components/projects/EnvironmentRollbackAction';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
-import {
-  PreviewEnvironmentDialog,
-  type PreviewEnvironmentDialogInput,
-} from '@/components/projects/PreviewEnvironmentDialog';
 import { PromotionAction } from '@/components/projects/PromotionAction';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -38,10 +13,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 import {
   setEnvironmentRuntimeState as controlEnvironmentRuntime,
-  createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
   type DeliveryRoutingRuleInput,
-  deletePreviewEnvironment,
   type EnvironmentRuntimeState,
   fetchProjectEnvironments,
   type PromotionFlowInput,
@@ -49,11 +22,9 @@ import {
 import {
   buildEnvironmentDatabaseSummary,
   buildEnvironmentHeaderMeta,
-  buildEnvironmentListSummary,
   buildEnvironmentSourceSummary,
   buildEnvironmentVersionSummary,
   buildRuntimeStateLabel,
-  getEnvironmentPriority,
   getRuntimeAction,
 } from '@/lib/environments/client-view-model';
 import type { ReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
@@ -285,72 +256,6 @@ interface EnvironmentRecord {
     canDelete?: boolean;
     deleteSummary?: string;
   };
-}
-
-function EnvironmentListCard({
-  projectId,
-  environment,
-  runtimeAction,
-  deleteAction,
-}: {
-  projectId: string;
-  environment: EnvironmentRecord;
-  runtimeAction?: ReactNode;
-  deleteAction?: ReactNode;
-}) {
-  const meta = buildEnvironmentHeaderMeta(environment);
-  const statusBadges = [
-    environment.runtimeState?.state === 'sleeping' ? '已休眠' : null,
-    environment.policy.primarySignal?.label ?? null,
-    environment.previewLifecycle?.stateLabel ?? null,
-  ].filter(Boolean);
-  const summary = buildEnvironmentListSummary(environment);
-
-  return (
-    <div className="console-surface rounded-[24px] p-4 sm:p-5">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              className={cn(
-                'h-2 w-2 rounded-full',
-                environment.isPreview
-                  ? 'bg-info'
-                  : environment.namespace
-                    ? 'bg-success'
-                    : 'bg-warning'
-              )}
-            />
-            <span className="text-sm font-semibold capitalize">{environment.name}</span>
-            {statusBadges.map((label) => (
-              <Badge key={label} variant="secondary" className="rounded-full px-2.5 py-0.5">
-                {label}
-              </Badge>
-            ))}
-          </div>
-
-          {meta ? (
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              {meta}
-            </div>
-          ) : null}
-
-          <div className="text-sm leading-6 text-foreground">{summary}</div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          {runtimeAction}
-          <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-            <Link href={`/projects/${projectId}/environments/${environment.id}`}>
-              进入环境
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          {deleteAction}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function EnvironmentOverviewPanel({
@@ -599,8 +504,6 @@ function EnvironmentExpandedContent({
 interface EnvironmentsPageClientProps {
   projectId: string;
   initialEnvId?: string | null;
-  focusMode?: boolean;
-  initialCreateOpen?: boolean;
   initialData: {
     governance: {
       roleLabel: string;
@@ -644,126 +547,24 @@ interface EnvironmentsPageClientProps {
 export function EnvironmentsPageClient({
   projectId,
   initialEnvId,
-  focusMode = false,
-  initialCreateOpen = false,
   initialData,
 }: EnvironmentsPageClientProps) {
   const [environments, setEnvironments] = useState(initialData.environments);
-  const [governance, setGovernance] = useState(initialData.governance);
-  const [dialogOpen, setDialogOpen] = useState(initialCreateOpen);
-  const [dialogLoading, setDialogLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [runtimeActionId, setRuntimeActionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialCreateOpen) {
-      setDialogOpen(true);
-    }
-  }, [initialCreateOpen]);
 
   const fetchEnvironments = useCallback(async () => {
     try {
       const data =
         await fetchProjectEnvironments<EnvironmentsPageClientProps['initialData']>(projectId);
       setEnvironments(data.environments);
-      setGovernance(data.governance);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '加载环境失败');
     }
   }, [projectId]);
 
-  const standardEnvironments = useMemo(
-    () =>
-      [...environments]
-        .filter((environment) => environment.kind !== 'preview' && !environment.isPreview)
-        .sort((left, right) => {
-          const leftPriority = getEnvironmentPriority(left);
-          const rightPriority = getEnvironmentPriority(right);
-
-          if (leftPriority !== rightPriority) {
-            return leftPriority - rightPriority;
-          }
-
-          return left.name.localeCompare(right.name);
-        }),
-    [environments]
-  );
-  const previewEnvironments = useMemo(
-    () =>
-      [...environments]
-        .filter((environment) => environment.kind === 'preview' || environment.isPreview)
-        .sort((left, right) => left.name.localeCompare(right.name)),
-    [environments]
-  );
   const focusedEnvironment =
     (initialEnvId ? environments.find((environment) => environment.id === initialEnvId) : null) ??
     null;
-  const focusedEnvironmentMeta = focusedEnvironment
-    ? buildEnvironmentHeaderMeta(focusedEnvironment)
-    : undefined;
-  const focusedIncomingFlows = focusedEnvironment
-    ? initialData.deliveryControl.promotionFlows.filter(
-        (flow) => flow.isActive && flow.targetEnvironmentId === focusedEnvironment.id
-      )
-    : [];
-  const focusedOutgoingFlows = focusedEnvironment
-    ? initialData.deliveryControl.promotionFlows.filter(
-        (flow) => flow.isActive && flow.sourceEnvironmentId === focusedEnvironment.id
-      )
-    : [];
-
-  const handleCreatePreview = async (input: PreviewEnvironmentDialogInput) => {
-    setDialogLoading(true);
-
-    const branch = input.branch.trim();
-    const prNumber = input.prNumber.trim();
-    const ttlHours = input.ttlHours.trim();
-
-    if (!branch && !prNumber) {
-      setDialogLoading(false);
-      throw new Error('至少填写分支或 PR 号。');
-    }
-    if (branch && prNumber) {
-      setDialogLoading(false);
-      throw new Error('分支和 PR 号一次只能填写一个。');
-    }
-
-    try {
-      const data = await createPreviewEnvironment({
-        projectId,
-        branch: branch || undefined,
-        prNumber: prNumber ? Number.parseInt(prNumber, 10) : undefined,
-        ttlHours: ttlHours ? Number.parseInt(ttlHours, 10) : undefined,
-        databaseStrategy: input.databaseStrategy,
-      });
-
-      setDialogOpen(false);
-      toast.success(
-        data.launchState === 'building'
-          ? `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在构建，完成后会自动部署`
-          : `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在部署`
-      );
-      await fetchEnvironments();
-    } catch (error) {
-      throw error instanceof Error ? error : new Error('创建预览环境失败');
-    } finally {
-      setDialogLoading(false);
-    }
-  };
-
-  const handleDeletePreview = async (environmentId: string) => {
-    setDeletingId(environmentId);
-
-    try {
-      await deletePreviewEnvironment(projectId, environmentId);
-      toast.success('预览环境已删除');
-      await fetchEnvironments();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '删除预览环境失败');
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   const handleRuntimeControl = async (environment: EnvironmentRecord, action: 'sleep' | 'wake') => {
     setRuntimeActionId(environment.id);
@@ -806,193 +607,69 @@ export function EnvironmentsPageClient({
     );
   };
 
+  if (!focusedEnvironment) {
+    return (
+      <PageShell size="section">
+        <PageHeader
+          title="环境"
+          actions={
+            <Button asChild variant="ghost" className="h-10 rounded-full px-5">
+              <Link href={`/projects/${projectId}`}>返回项目总览</Link>
+            </Button>
+          }
+        />
+        <EmptyState icon={<Globe className="h-12 w-12" />} title="环境不存在" />
+      </PageShell>
+    );
+  }
+
+  const focusedEnvironmentMeta = buildEnvironmentHeaderMeta(focusedEnvironment);
+  const focusedIncomingFlows = initialData.deliveryControl.promotionFlows.filter(
+    (flow) => flow.isActive && flow.targetEnvironmentId === focusedEnvironment.id
+  );
+  const focusedOutgoingFlows = initialData.deliveryControl.promotionFlows.filter(
+    (flow) => flow.isActive && flow.sourceEnvironmentId === focusedEnvironment.id
+  );
+
   return (
     <PageShell size="section">
       <PageHeader
-        title={focusMode && focusedEnvironment ? focusedEnvironment.name : '环境'}
-        description={focusMode ? focusedEnvironmentMeta : undefined}
+        title={focusedEnvironment.name}
+        description={focusedEnvironmentMeta}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {focusMode && focusedEnvironment ? (
-              <Button asChild variant="ghost" className="h-10 rounded-full px-5">
-                <Link href={`/projects/${projectId}`}>返回项目总览</Link>
-              </Button>
-            ) : null}
-            {!focusMode ? (
-              <Button
-                className="h-10 rounded-full px-5"
-                onClick={() => setDialogOpen(true)}
-                disabled={!governance.createPreview.allowed}
-              >
-                <Plus className="h-4 w-4" />
-                启动预览环境
-              </Button>
-            ) : null}
+            <Button asChild variant="ghost" className="h-10 rounded-full px-5">
+              <Link href={`/projects/${projectId}`}>返回项目总览</Link>
+            </Button>
           </div>
         }
       />
 
-      {focusMode ? (
-        <EnvironmentSectionNav projectId={projectId} environmentId={focusedEnvironment?.id} />
-      ) : null}
+      <EnvironmentSectionNav projectId={projectId} environmentId={focusedEnvironment.id} />
 
-      <PreviewEnvironmentDialog
-        open={dialogOpen}
-        loading={dialogLoading}
-        disabled={!governance.createPreview.allowed}
-        disabledSummary={governance.createPreview.summary}
-        allowIsolatedClone={governance.createIsolatedPreview.allowed}
-        isolatedCloneSummary={governance.createIsolatedPreview.summary}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-        }}
-        onSubmit={handleCreatePreview}
+      <EnvironmentExpandedContent
+        projectId={projectId}
+        environment={focusedEnvironment}
+        incomingFlows={focusedIncomingFlows}
+        outgoingFlows={focusedOutgoingFlows}
+        promotionAction={
+          <PromotionAction
+            projectId={projectId}
+            promotionPlans={initialData.promotionPlans}
+            governance={initialData.promotionGovernance}
+            sourceEnvironmentId={focusedEnvironment.id}
+          />
+        }
+        rollbackAction={
+          <EnvironmentRollbackAction
+            projectId={projectId}
+            environmentId={focusedEnvironment.id}
+            disabled={!focusedEnvironment.actions.canConfigureStrategy}
+            disabledSummary={focusedEnvironment.actions.configureStrategySummary}
+          />
+        }
+        runtimeAction={renderRuntimeAction(focusedEnvironment)}
       />
-
-      {environments.length === 0 ? (
-        <EmptyState
-          icon={<Globe className="h-12 w-12" />}
-          title="还没有环境"
-          action={{
-            label: '启动预览环境',
-            onClick: () => setDialogOpen(true),
-          }}
-        />
-      ) : (
-        <div className="space-y-6">
-          {focusMode && focusedEnvironment ? (
-            <EnvironmentExpandedContent
-              projectId={projectId}
-              environment={focusedEnvironment}
-              incomingFlows={focusedIncomingFlows}
-              outgoingFlows={focusedOutgoingFlows}
-              promotionAction={
-                <PromotionAction
-                  projectId={projectId}
-                  promotionPlans={initialData.promotionPlans}
-                  governance={initialData.promotionGovernance}
-                  sourceEnvironmentId={focusedEnvironment.id}
-                />
-              }
-              rollbackAction={
-                <EnvironmentRollbackAction
-                  projectId={projectId}
-                  environmentId={focusedEnvironment.id}
-                  disabled={!focusedEnvironment.actions.canConfigureStrategy}
-                  disabledSummary={focusedEnvironment.actions.configureStrategySummary}
-                />
-              }
-              runtimeAction={renderRuntimeAction(focusedEnvironment)}
-            />
-          ) : (
-            <>
-              <section className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <Globe className="h-4 w-4" />
-                    核心环境
-                  </div>
-                  {standardEnvironments.length > 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      {standardEnvironments.length} 个
-                    </div>
-                  ) : null}
-                </div>
-                {standardEnvironments.length === 0 ? (
-                  <div className="console-inset rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
-                    暂无环境
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {standardEnvironments.map((environment) => (
-                      <EnvironmentListCard
-                        key={environment.id}
-                        projectId={projectId}
-                        environment={environment}
-                        runtimeAction={renderRuntimeAction(environment)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <GitBranch className="h-4 w-4" />
-                    预览环境
-                  </div>
-                  {previewEnvironments.length > 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      {previewEnvironments.length} 个
-                    </div>
-                  ) : null}
-                </div>
-
-                {previewEnvironments.length === 0 ? (
-                  <EmptyState title="暂无预览环境" className="min-h-40 rounded-[20px]" />
-                ) : (
-                  <div className="space-y-3">
-                    {previewEnvironments.map((environment) => (
-                      <EnvironmentListCard
-                        key={environment.id}
-                        projectId={projectId}
-                        environment={environment}
-                        runtimeAction={renderRuntimeAction(environment)}
-                        deleteAction={
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 rounded-full px-4"
-                                disabled={
-                                  deletingId === environment.id || !environment.actions?.canDelete
-                                }
-                                title={environment.actions?.deleteSummary}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                {environment.cleanupState?.state === 'expired_ready'
-                                  ? '立即回收'
-                                  : '结束环境'}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent size="compact">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  <span className="font-medium text-foreground">
-                                    {environment.name}
-                                  </span>{' '}
-                                  及关联资源会一起删除。
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="w-full rounded-full sm:w-auto">
-                                  取消
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeletePreview(environment.id)}
-                                  className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-                                  disabled={
-                                    deletingId === environment.id || !environment.actions?.canDelete
-                                  }
-                                >
-                                  {deletingId === environment.id ? '处理中...' : '确认结束'}
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            </>
-          )}
-        </div>
-      )}
     </PageShell>
   );
 }

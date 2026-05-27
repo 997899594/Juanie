@@ -348,6 +348,10 @@ function generateBreadcrumbs(
   let currentPath = '';
   segments.forEach((segment, index) => {
     currentPath += `/${segment}`;
+    if (segment === 'environments' && segments[index + 1]) {
+      return;
+    }
+
     // Replace project UUID with the actual project name
     const isProjectId = project && segment === project.projectId;
     const isEnvironmentId =
