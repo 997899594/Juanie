@@ -1,0 +1,283 @@
+'use client';
+
+import { RotateCcw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  createEnvironmentRollbackRelease,
+  type EnvironmentRollbackCandidateResponse,
+  type EnvironmentRollbackPlanResponse,
+  fetchEnvironmentRollbackPlan,
+} from '@/lib/releases/client-actions';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
+import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
+import { formatPlatformTimeContext } from '@/lib/time/format';
+import { cn } from '@/lib/utils';
+
+const dialogPanelClassName = 'console-panel p-5 sm:p-6';
+const dialogSubtleClassName = 'console-inset px-4 py-3';
+
+function getCandidateLabel(candidate: EnvironmentRollbackCandidateResponse): string {
+  const shortSha = candidate.sourceCommitSha?.slice(0, 7);
+  const createdAt = formatPlatformTimeContext(candidate.createdAt);
+  return [shortSha ?? candidate.sourceRef, createdAt].filter(Boolean).join(' · ');
+}
+
+function formatImageLabel(imageUrl: string): string {
+  const imageName = imageUrl.split('/').pop() ?? imageUrl;
+  const [repository, tag] = imageName.split(':');
+  if (!tag) return repository;
+  return `${repository}:${tag}`;
+}
+
+interface EnvironmentRollbackActionProps {
+  projectId: string;
+  environmentId: string;
+  disabled?: boolean;
+  disabledSummary?: string | null;
+}
+
+export function EnvironmentRollbackAction({
+  projectId,
+  environmentId,
+  disabled = false,
+  disabledSummary,
+}: EnvironmentRollbackActionProps) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedReleaseId, setSelectedReleaseId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<EnvironmentRollbackPlanResponse | null>(null);
+
+  const loadPlan = useCallback(
+    async (sourceReleaseId?: string | null, syncSelection = false) => {
+      setLoadingPlan(true);
+      setError(null);
+
+      try {
+        const data = await fetchEnvironmentRollbackPlan({
+          projectId,
+          environmentId,
+          sourceReleaseId,
+        });
+        setPlan(data);
+
+        if (syncSelection) {
+          setSelectedReleaseId(data.sourceRelease?.id ?? data.candidates[0]?.id ?? null);
+        }
+      } catch (requestError) {
+        setPlan(null);
+        setError(requestError instanceof Error ? requestError.message : '加载回滚检查失败');
+      } finally {
+        setLoadingPlan(false);
+      }
+    },
+    [environmentId, projectId]
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    void loadPlan(null, true);
+  }, [loadPlan, open]);
+
+  const selectedCandidate = useMemo(
+    () => plan?.candidates.find((candidate) => candidate.id === selectedReleaseId) ?? null,
+    [plan?.candidates, selectedReleaseId]
+  );
+  const selectedArtifacts = selectedCandidate?.artifacts ?? plan?.sourceRelease?.artifacts ?? [];
+  const planningPanel = plan
+    ? buildReleasePlanningPanel({
+        plan: plan.plan,
+        sourceCommitSha: plan.sourceRelease?.sourceCommitSha,
+      })
+    : null;
+
+  const handleSelectRelease = (releaseId: string) => {
+    setSelectedReleaseId(releaseId);
+    void loadPlan(releaseId, false);
+  };
+
+  const handleRollback = async () => {
+    if (!selectedReleaseId) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const data = await createEnvironmentRollbackRelease({
+        projectId,
+        environmentId,
+        sourceReleaseId: selectedReleaseId,
+      });
+
+      setOpen(false);
+      toast.success('环境回滚发布已创建');
+
+      if (data.releasePath) {
+        router.push(data.releasePath);
+        return;
+      }
+
+      if (data.releaseId) {
+        router.push(buildReleaseDetailPath(projectId, environmentId, data.releaseId));
+        return;
+      }
+
+      router.refresh();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : '创建环境回滚失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const unavailableReason =
+    disabledSummary ??
+    plan?.plan.blockingReason ??
+    (plan?.candidates.length === 0 ? '暂无可回滚版本' : null);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 rounded-full px-4"
+          disabled={disabled}
+          title={disabled ? (unavailableReason ?? undefined) : undefined}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          回滚环境
+        </Button>
+      </DialogTrigger>
+      <DialogContent size="form" layout="form">
+        <DialogHeader chrome>
+          <DialogTitle>回滚环境</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
+              <div className={dialogPanelClassName}>
+                <div className="text-sm font-semibold text-foreground">目标版本</div>
+                <div className="mt-4">
+                  <Select
+                    value={selectedReleaseId ?? ''}
+                    onValueChange={handleSelectRelease}
+                    disabled={loadingPlan || submitting || (plan?.candidates.length ?? 0) === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择成功 release" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(plan?.candidates ?? []).map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {getCandidateLabel(candidate)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedArtifacts.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedArtifacts.map((artifact) => (
+                      <Badge
+                        key={artifact.service.id}
+                        variant="secondary"
+                        className="max-w-full gap-1 rounded-full px-2 py-0.5 font-normal"
+                      >
+                        <span className="shrink-0 font-medium">{artifact.service.name}</span>
+                        <span className="truncate text-muted-foreground">
+                          {formatImageLabel(artifact.imageUrl)}
+                        </span>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {error ? (
+                <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>{error}</div>
+              ) : null}
+            </div>
+
+            <div className="space-y-4">
+              <div className={dialogPanelClassName}>
+                <div className="mb-3 text-sm font-semibold text-foreground">执行条件</div>
+
+                {loadingPlan ? (
+                  <EmptyState title="检查中" className="min-h-28 rounded-[20px]" />
+                ) : planningPanel ? (
+                  <div className="space-y-3">
+                    <PlatformSignalBlock
+                      chips={planningPanel.chips}
+                      summary={planningPanel.issueSummary}
+                      nextActionLabel={planningPanel.nextActionLabel}
+                      summaryClassName="rounded-[20px]"
+                    />
+
+                    {planningPanel.blockingReason ? (
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>
+                        {planningPanel.blockingReason}
+                      </div>
+                    ) : null}
+
+                    {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
+                      <PlatformSignalChipList chips={planningPanel.warningChips} />
+                    )}
+                  </div>
+                ) : (
+                  <EmptyState title="暂无检查结果" className="min-h-28 rounded-[20px]" />
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogBody>
+
+        <DialogFooter chrome>
+          <Button
+            variant="ghost"
+            className="w-full rounded-full sm:w-auto"
+            onClick={() => setOpen(false)}
+          >
+            关闭
+          </Button>
+          <Button
+            className="w-full rounded-full sm:w-auto"
+            onClick={handleRollback}
+            disabled={submitting || loadingPlan || !selectedReleaseId || !planningPanel?.canSubmit}
+          >
+            {submitting ? '创建中...' : '确认回滚'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

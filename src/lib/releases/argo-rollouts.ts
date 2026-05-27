@@ -19,6 +19,8 @@ import type {
   WorkloadEnvFromRef,
 } from '@/lib/releases/workloads';
 
+const ARGO_ROLLOUT_VERIFICATION_TIMEOUT_MS = 180_000;
+
 export type ArgoRolloutsDeploymentStrategy = Extract<
   ProgressiveDeploymentStrategy | 'rolling',
   'rolling' | 'controlled' | 'canary' | 'blue_green'
@@ -212,7 +214,7 @@ export async function deployArgoRolloutWorkload(input: {
         serviceName: verificationServiceName,
         port: input.service.port ?? 3000,
         paths: input.verificationPlan.blockingPaths,
-        timeoutMs: 60_000,
+        timeoutMs: ARGO_ROLLOUT_VERIFICATION_TIMEOUT_MS,
         pollMs: 3_000,
       });
       await input.onLog?.(

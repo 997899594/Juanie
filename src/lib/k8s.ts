@@ -1912,6 +1912,14 @@ export async function waitForDeploymentReady(input: {
       name: input.name,
     });
 
+    const generation = deployment.metadata?.generation ?? 0;
+    const observedGeneration = deployment.status?.observedGeneration ?? 0;
+    if (generation > 0 && observedGeneration < generation) {
+      lastObservedIssue = `observed ${observedGeneration}/${generation}`;
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      continue;
+    }
+
     const desiredReplicas = deployment.spec?.replicas ?? 1;
     const readyReplicas = deployment.status?.readyReplicas ?? 0;
     const updatedReplicas = deployment.status?.updatedReplicas ?? 0;

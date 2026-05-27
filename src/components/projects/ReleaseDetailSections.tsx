@@ -2,7 +2,6 @@ import { Clock3, Dot, GitBranch, Package2, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { ArtifactDownloadButton } from '@/components/projects/ArtifactDownloadButton';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
-import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
@@ -601,13 +600,6 @@ export function ReleaseExecutionSections({
                           <Badge variant="secondary">v{deployment.version}</Badge>
                         )}
                       </div>
-                      <DeploymentRollbackAction
-                        projectId={projectId}
-                        environmentId={release.environment.id}
-                        deploymentId={deployment.id}
-                        disabled={!releaseActions.canManage}
-                        disabledSummary={releaseActions.summary}
-                      />
                     </div>
                     {deployment.errorMessage && (
                       <div className="mb-3 rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">

@@ -1,5 +1,5 @@
 import type { ReleaseServiceInput } from '@/lib/releases';
-import type { PromotionPlanSnapshot } from '@/lib/releases/planning';
+import type { PromotionPlanSnapshot, ReleasePlanningSnapshot } from '@/lib/releases/planning';
 
 interface ApiErrorResponse {
   error?: string;
@@ -83,80 +83,32 @@ export interface ManualReleasePlanResponse {
   };
 }
 
-export interface RollbackPlanResponse {
-  sourceDeployment: {
-    id: string;
+export interface EnvironmentRollbackCandidateResponse {
+  id: string;
+  sourceRef: string;
+  sourceCommitSha: string | null;
+  configCommitSha: string | null;
+  summary: string | null;
+  createdAt: string;
+  artifacts: Array<{
+    service: {
+      id: string;
+      name: string;
+    };
     imageUrl: string;
+    imageDigest: string | null;
+  }>;
+}
+
+export interface EnvironmentRollbackPlanResponse {
+  sourceRelease: EnvironmentRollbackCandidateResponse | null;
+  candidates: EnvironmentRollbackCandidateResponse[];
+  currentRelease: {
+    id: string;
+    status: string;
     commitSha: string | null;
-    environmentId: string;
-    serviceId: string | null;
-    branch: string | null;
   } | null;
-  plan: {
-    canCreate: boolean;
-    blockingReason: string | null;
-    summary: string | null;
-    issue: {
-      code: string;
-      kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
-      label: string;
-      summary: string;
-      nextActionLabel: string;
-    } | null;
-    platformSignals: {
-      chips: Array<{
-        key: string;
-        label: string;
-        tone: 'danger' | 'neutral';
-      }>;
-      primarySummary: string | null;
-      nextActionLabel: string | null;
-    };
-    releasePolicy: {
-      requiresApproval: boolean;
-      primarySignal: {
-        code: string;
-        kind: 'environment' | 'release';
-        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-    };
-    environmentPolicy: {
-      primarySignal: {
-        code: string;
-        kind: 'environment' | 'release';
-        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-    };
-    migration: {
-      preDeployCount: number;
-      postDeployCount: number;
-      automaticCount: number;
-      manualPlatformCount: number;
-      externalCount: number;
-      warnings: string[];
-      requiresExternalCompletion?: boolean;
-      primarySignal: {
-        code: string;
-        kind: 'migration';
-        level: 'warning' | 'approval_required';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-    };
-    schema: {
-      checkedCount: number;
-      blockingCount: number;
-      summary: string | null;
-      nextActionLabel: string | null;
-    };
-  };
+  plan: ReleasePlanningSnapshot;
 }
 
 export interface DeploymentRolloutPlanResponse {
@@ -255,29 +207,48 @@ export async function createManualRelease(input: {
   return parseJsonResponse<{ id?: string }>(response, '创建手动发布失败');
 }
 
-export async function fetchRollbackPlan(input: {
+export async function fetchEnvironmentRollbackPlan(input: {
   projectId: string;
-  deploymentId: string;
-}): Promise<RollbackPlanResponse> {
+  environmentId: string;
+  sourceReleaseId?: string | null;
+}): Promise<EnvironmentRollbackPlanResponse> {
+  const params = new URLSearchParams();
+  if (input.sourceReleaseId) {
+    params.set('sourceReleaseId', input.sourceReleaseId);
+  }
+
+  const query = params.toString();
   const response = await fetch(
-    `/api/projects/${input.projectId}/deployments/${input.deploymentId}/rollback`
+    `/api/projects/${input.projectId}/environments/${input.environmentId}/rollback${
+      query ? `?${query}` : ''
+    }`
   );
 
-  return parseJsonResponse<RollbackPlanResponse>(response, '加载回滚预检失败');
+  return parseJsonResponse<EnvironmentRollbackPlanResponse>(response, '加载回滚预检失败');
 }
 
-export async function createRollbackRelease(input: {
+export async function createEnvironmentRollbackRelease(input: {
   projectId: string;
-  deploymentId: string;
-}): Promise<{ releaseId?: string }> {
+  environmentId: string;
+  sourceReleaseId?: string | null;
+}): Promise<{ releaseId?: string; releasePath?: string | null }> {
   const response = await fetch(
-    `/api/projects/${input.projectId}/deployments/${input.deploymentId}/rollback`,
+    `/api/projects/${input.projectId}/environments/${input.environmentId}/rollback`,
     {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sourceReleaseId: input.sourceReleaseId ?? null,
+      }),
     }
   );
 
-  return parseJsonResponse<{ releaseId?: string }>(response, '创建回滚发布失败');
+  return parseJsonResponse<{ releaseId?: string; releasePath?: string | null }>(
+    response,
+    '创建回滚发布失败'
+  );
 }
 
 export async function fetchDeploymentRolloutPlan(input: {

@@ -1,9 +1,37 @@
 import { describe, expect, it } from 'bun:test';
-import { summarizeReleasePlan } from '@/lib/releases/planning';
+import { getPromotionSourceBlockingReason, summarizeReleasePlan } from '@/lib/releases/planning';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { previewDatabaseGuardMessage } from '@/lib/releases/preview-database-guard';
 
 describe('release planning', () => {
+  it('blocks promotion when the source environment latest release failed', () => {
+    expect(
+      getPromotionSourceBlockingReason({
+        sourceEnvironmentName: 'staging',
+        latestRelease: {
+          status: 'failed',
+          sourceCommitSha: 'ce8e87038397bb2fab8a9d9c07bcf361920baec1',
+        },
+        deployableArtifactCount: 2,
+        deploymentStatuses: ['running', 'failed'],
+      })
+    ).toBe('staging 最新发布 ce8e870 当前状态为失败，不能提升历史成功版本');
+  });
+
+  it('blocks promotion when a succeeded source release has an unhealthy deployment', () => {
+    expect(
+      getPromotionSourceBlockingReason({
+        sourceEnvironmentName: 'staging',
+        latestRelease: {
+          status: 'succeeded',
+          sourceCommitSha: '313ccb1177b48f0e4e7f36f6d77b04ea81126fda',
+        },
+        deployableArtifactCount: 2,
+        deploymentStatuses: ['running', 'verification_failed'],
+      })
+    ).toBe('staging 最新成功发布仍有服务未运行：校验失败');
+  });
+
   it('summarizes approval-gated production plans', () => {
     const plan = summarizeReleasePlan({
       environment: { isProduction: true, isPreview: false },

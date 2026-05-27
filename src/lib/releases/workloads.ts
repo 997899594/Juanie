@@ -4,6 +4,7 @@ import {
   deleteDeployment,
   deleteService,
   getCiliumHTTPRoutes,
+  getDeploymentSnapshot,
   getDeployments,
   getServices,
   updateDeployment,
@@ -382,45 +383,75 @@ export async function promoteCandidateSnapshotToStable(input: {
 }) {
   await ensureServiceResource(input.namespace, input.stableName, input.snapshot.port);
   const enableHttpProbes = input.service.type === 'web';
+  const previousStableSnapshot = input.stableExists
+    ? await getDeploymentSnapshot(input.namespace, input.stableName)
+    : null;
 
-  if (input.stableExists) {
-    await updateDeployment(input.namespace, input.stableName, {
-      image: input.snapshot.image ?? undefined,
-      port: input.snapshot.port,
-      env: input.snapshot.env,
-      envFrom: input.snapshot.envFrom,
-      replicas: input.snapshot.replicas,
-      imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
-      healthcheckPath: input.service.healthcheckPath ?? undefined,
-      enableHttpProbes,
-      cpuRequest: input.snapshot.cpuRequest,
-      cpuLimit: input.snapshot.cpuLimit,
-      memoryRequest: input.snapshot.memoryRequest,
-      memoryLimit: input.snapshot.memoryLimit,
+  try {
+    if (input.stableExists) {
+      await updateDeployment(input.namespace, input.stableName, {
+        image: input.snapshot.image ?? undefined,
+        port: input.snapshot.port,
+        env: input.snapshot.env,
+        envFrom: input.snapshot.envFrom,
+        replicas: input.snapshot.replicas,
+        imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
+        healthcheckPath: input.service.healthcheckPath ?? undefined,
+        enableHttpProbes,
+        cpuRequest: input.snapshot.cpuRequest,
+        cpuLimit: input.snapshot.cpuLimit,
+        memoryRequest: input.snapshot.memoryRequest,
+        memoryLimit: input.snapshot.memoryLimit,
+      });
+      await input.onLog?.(`Updated ${input.stableName} → ${input.snapshot.image}`);
+    } else if (input.snapshot.image) {
+      await createDeployment(input.namespace, input.stableName, {
+        image: input.snapshot.image,
+        port: input.snapshot.port,
+        replicas: input.snapshot.replicas,
+        env: input.snapshot.env,
+        envFrom: input.snapshot.envFrom,
+        imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
+        healthcheckPath: input.service.healthcheckPath ?? undefined,
+        enableHttpProbes,
+        cpuRequest: input.snapshot.cpuRequest,
+        cpuLimit: input.snapshot.cpuLimit,
+        memoryRequest: input.snapshot.memoryRequest,
+        memoryLimit: input.snapshot.memoryLimit,
+      });
+      await input.onLog?.(`Created ${input.stableName} → ${input.snapshot.image}`);
+    }
+
+    await waitForDeploymentReady({
+      namespace: input.namespace,
+      name: input.stableName,
     });
-    await input.onLog?.(`Updated ${input.stableName} → ${input.snapshot.image}`);
-  } else if (input.snapshot.image) {
-    await createDeployment(input.namespace, input.stableName, {
-      image: input.snapshot.image,
-      port: input.snapshot.port,
-      replicas: input.snapshot.replicas,
-      env: input.snapshot.env,
-      envFrom: input.snapshot.envFrom,
-      imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
-      healthcheckPath: input.service.healthcheckPath ?? undefined,
-      enableHttpProbes,
-      cpuRequest: input.snapshot.cpuRequest,
-      cpuLimit: input.snapshot.cpuLimit,
-      memoryRequest: input.snapshot.memoryRequest,
-      memoryLimit: input.snapshot.memoryLimit,
-    });
-    await input.onLog?.(`Created ${input.stableName} → ${input.snapshot.image}`);
+  } catch (error) {
+    if (input.stableExists && previousStableSnapshot?.image) {
+      await input.onLog?.(`Restoring ${input.stableName} → ${previousStableSnapshot.image}`);
+      await updateDeployment(input.namespace, input.stableName, {
+        image: previousStableSnapshot.image,
+        port: previousStableSnapshot.port,
+        env: previousStableSnapshot.env,
+        envFrom: previousStableSnapshot.envFrom,
+        replicas: previousStableSnapshot.replicas,
+        imagePullSecrets: previousStableSnapshot.imagePullSecrets ?? [],
+        healthcheckPath: input.service.healthcheckPath ?? undefined,
+        enableHttpProbes,
+        cpuRequest: previousStableSnapshot.cpuRequest,
+        cpuLimit: previousStableSnapshot.cpuLimit,
+        memoryRequest: previousStableSnapshot.memoryRequest,
+        memoryLimit: previousStableSnapshot.memoryLimit,
+      });
+      await waitForDeploymentReady({
+        namespace: input.namespace,
+        name: input.stableName,
+      });
+      await input.onLog?.(`Restored ${input.stableName} → ${previousStableSnapshot.image}`);
+    }
+
+    throw error;
   }
-
-  await waitForDeploymentReady({
-    namespace: input.namespace,
-    name: input.stableName,
-  });
 
   if (input.candidateVerified) {
     await input.onLog?.(

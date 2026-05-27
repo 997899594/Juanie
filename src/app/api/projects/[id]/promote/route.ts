@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import {
   getProjectAccessOrThrow,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { environments, promotionFlows, releases } from '@/lib/db/schema';
+import { environments, promotionFlows } from '@/lib/db/schema';
 import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -16,7 +16,7 @@ import { createProjectRelease } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
-import { buildPromotionPlan } from '@/lib/releases/planning';
+import { buildPromotionPlan, resolvePromotableSourceRelease } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
@@ -121,33 +121,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const sourceRelease = await db.query.releases.findFirst({
-      where: and(
-        eq(releases.projectId, id),
-        eq(releases.environmentId, promotion.sourceEnvironment.id),
-        eq(releases.status, 'succeeded')
-      ),
-      orderBy: [desc(releases.createdAt)],
-      with: {
-        artifacts: {
-          with: {
-            service: true,
-          },
-        },
-      },
+    const promotionSource = await resolvePromotableSourceRelease({
+      projectId: id,
+      sourceEnvironment: promotion.sourceEnvironment,
     });
 
-    const sourceArtifacts = sourceRelease
-      ? getDeployableReleaseArtifacts(sourceRelease.artifacts)
-      : [];
-
-    if (!sourceRelease || sourceArtifacts.length === 0) {
+    if (!promotionSource.sourceRelease) {
       return NextResponse.json(
-        { error: `${promotion.sourceEnvironment.name} 来源发布缺少可复用制品，请先重新发布` },
-        { status: 400 }
+        {
+          error:
+            promotionSource.blockingReason ??
+            `${promotion.sourceEnvironment.name} 来源发布缺少可复用制品，请先重新发布`,
+        },
+        { status: 409 }
       );
     }
 
+    const { sourceRelease, sourceArtifacts } = promotionSource;
     const promotedRelease = await createProjectRelease({
       projectId: id,
       environmentId: promotion.targetEnvironment.id,

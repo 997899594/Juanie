@@ -299,9 +299,9 @@ export function ReleasePromoteDialog({
             disabled={preflighting || promoting || loadingPlan || !canPromote}
           >
             {preflighting
-              ? '确认预检...'
+              ? '确认最新版本...'
               : promoting
-                ? '创建中...'
+                ? '创建发布...'
                 : loadingPlan
                   ? '预检中...'
                   : confirmLabel}

@@ -204,13 +204,11 @@ export async function getReadinessResponse() {
     try {
       response.checks.redis = await checkRedis();
     } catch (error) {
-      response.status = 'unhealthy';
+      response.status = 'degraded';
       response.checks.redis = {
-        status: 'fail',
+        status: 'warn',
         message: error instanceof Error ? error.message : 'Redis connection failed',
       };
-
-      return failJson(response, startTime);
     }
   }
 

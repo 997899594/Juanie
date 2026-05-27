@@ -205,6 +205,7 @@ async function reconcileEnvironmentRuntime(input: {
   projectId: string;
   environment: WritableEnvironmentVariableScope['environment'];
   serviceId?: string | null;
+  restartRuntime?: boolean;
   logContext: Record<string, unknown>;
 }): Promise<void> {
   const targetEnvironments = input.environment
@@ -244,7 +245,7 @@ async function reconcileEnvironmentRuntime(input: {
       });
     }
 
-    if (!isK8sAvailable() || !environment.namespace) {
+    if (!input.restartRuntime || !isK8sAvailable() || !environment.namespace) {
       continue;
     }
 
@@ -314,6 +315,7 @@ export async function createEnvironmentVariableForProject(input: {
   isSecret: boolean;
   environmentId?: string | null;
   serviceId?: string | null;
+  restartRuntime?: boolean;
 }) {
   await getProjectAccessWithRoleOrThrow(
     input.projectId,
@@ -380,6 +382,7 @@ export async function createEnvironmentVariableForProject(input: {
     projectId: input.projectId,
     environment: scope.environment,
     serviceId: scope.serviceId,
+    restartRuntime: input.restartRuntime,
     logContext: {
       key: input.key,
       serviceId: scope.serviceId,
@@ -397,6 +400,7 @@ export async function updateEnvironmentVariableForProject(input: {
   key?: string;
   value?: string;
   isSecret?: boolean;
+  restartRuntime?: boolean;
 }) {
   await getProjectAccessWithRoleOrThrow(
     input.projectId,
@@ -511,6 +515,7 @@ export async function updateEnvironmentVariableForProject(input: {
     projectId: input.projectId,
     environment,
     serviceId: envVar.serviceId,
+    restartRuntime: input.restartRuntime,
     logContext: {
       variableId: envVar.id,
       environmentId: envVar.environmentId,
@@ -525,6 +530,7 @@ export async function deleteEnvironmentVariableForProject(input: {
   projectId: string;
   userId: string;
   variableId: string;
+  restartRuntime?: boolean;
 }) {
   await getProjectAccessWithRoleOrThrow(
     input.projectId,
@@ -555,6 +561,7 @@ export async function deleteEnvironmentVariableForProject(input: {
     projectId: input.projectId,
     environment,
     serviceId: envVar.serviceId,
+    restartRuntime: input.restartRuntime,
     logContext: {
       variableId: envVar.id,
       environmentId: envVar.environmentId,

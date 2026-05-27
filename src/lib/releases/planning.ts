@@ -1,12 +1,13 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
-  deployments,
+  type DeploymentStatus,
   type EnvironmentKind,
   environments,
   type PromotionFlowStrategy,
   projects,
   promotionFlows,
+  type ReleaseStatus,
   releases,
   services,
 } from '@/lib/db/schema';
@@ -30,7 +31,6 @@ import {
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
 import { requireProjectRepositoryContext } from '@/lib/projects/context';
-import { getProjectSourceRef } from '@/lib/projects/refs';
 import type { ReleaseServiceInput } from '@/lib/releases';
 import {
   canCreateReleaseWithEntryPoint,
@@ -135,10 +135,101 @@ export interface PromotionPlanSnapshot {
   plan: ReleasePlanningSnapshot;
 }
 
+export interface EnvironmentRollbackCandidate {
+  id: string;
+  sourceRef: string;
+  sourceCommitSha: string | null;
+  configCommitSha: string | null;
+  summary: string | null;
+  createdAt: Date;
+  artifacts: Array<{
+    service: {
+      id: string;
+      name: string;
+    };
+    imageUrl: string;
+    imageDigest: string | null;
+  }>;
+}
+
 interface PromotionPlanningOptions {
   includeLiveChecks?: boolean;
   schemaGateMode?: 'live' | 'stored';
   requestSchemaRefresh?: boolean;
+}
+
+function getReleaseStatusLabel(status: ReleaseStatus): string {
+  const labels: Record<ReleaseStatus, string> = {
+    queued: '排队中',
+    planning: '规划中',
+    migration_pre_running: '前置迁移中',
+    awaiting_approval: '等待审批',
+    awaiting_external_completion: '等待外部完成',
+    migration_pre_failed: '前置迁移失败',
+    deploying: '部署中',
+    awaiting_rollout: '等待放量',
+    verifying: '校验中',
+    verification_failed: '校验失败',
+    migration_post_running: '后置迁移中',
+    degraded: '降级',
+    succeeded: '成功',
+    failed: '失败',
+    canceled: '已取消',
+  };
+
+  return labels[status] ?? status;
+}
+
+function getDeploymentStatusLabel(status: DeploymentStatus): string {
+  const labels: Record<DeploymentStatus, string> = {
+    queued: '排队中',
+    migration_pending: '等待迁移',
+    migration_running: '迁移中',
+    migration_failed: '迁移失败',
+    building: '构建中',
+    deploying: '部署中',
+    awaiting_rollout: '等待放量',
+    verification_failed: '校验失败',
+    running: '运行中',
+    canceled: '已取消',
+    failed: '失败',
+    rolled_back: '已回滚',
+  };
+
+  return labels[status] ?? status;
+}
+
+export function getPromotionSourceBlockingReason(input: {
+  sourceEnvironmentName: string;
+  latestRelease: { status: ReleaseStatus; sourceCommitSha: string | null } | null;
+  deployableArtifactCount: number;
+  deploymentStatuses: DeploymentStatus[];
+}): string | null {
+  if (!input.latestRelease) {
+    return `${input.sourceEnvironmentName} 暂无可提升的发布，请先发布并验证通过`;
+  }
+
+  if (input.latestRelease.status !== 'succeeded') {
+    const commitLabel = input.latestRelease.sourceCommitSha?.slice(0, 7) ?? '最新版本';
+    return `${input.sourceEnvironmentName} 最新发布 ${commitLabel} 当前状态为${getReleaseStatusLabel(input.latestRelease.status)}，不能提升历史成功版本`;
+  }
+
+  if (input.deployableArtifactCount === 0) {
+    return `${input.sourceEnvironmentName} 最新成功发布缺少可复用制品，请先重新发布`;
+  }
+
+  const nonRunningDeploymentStatus = input.deploymentStatuses.find(
+    (status) => status !== 'running'
+  );
+  if (nonRunningDeploymentStatus) {
+    return `${input.sourceEnvironmentName} 最新成功发布仍有服务未运行：${getDeploymentStatusLabel(nonRunningDeploymentStatus)}`;
+  }
+
+  if (input.deploymentStatuses.length === 0) {
+    return `${input.sourceEnvironmentName} 最新成功发布缺少已验证的服务部署记录，请先重新发布`;
+  }
+
+  return null;
 }
 
 function buildStaticPlanningSnapshot(input: {
@@ -548,6 +639,48 @@ function toPromotionPlanEnvironment(
   };
 }
 
+export async function resolvePromotableSourceRelease(input: {
+  projectId: string;
+  sourceEnvironment: Pick<typeof environments.$inferSelect, 'id' | 'name'>;
+}) {
+  const latestRelease = await db.query.releases.findFirst({
+    where: and(
+      eq(releases.projectId, input.projectId),
+      eq(releases.environmentId, input.sourceEnvironment.id)
+    ),
+    orderBy: [desc(releases.createdAt)],
+    with: {
+      artifacts: {
+        with: {
+          service: true,
+        },
+      },
+      deployments: true,
+    },
+  });
+
+  const sourceArtifacts = latestRelease
+    ? getDeployableReleaseArtifacts(latestRelease.artifacts)
+    : [];
+  const blockingReason = getPromotionSourceBlockingReason({
+    sourceEnvironmentName: input.sourceEnvironment.name,
+    latestRelease: latestRelease
+      ? {
+          status: latestRelease.status,
+          sourceCommitSha: latestRelease.sourceCommitSha,
+        }
+      : null,
+    deployableArtifactCount: sourceArtifacts.length,
+    deploymentStatuses: latestRelease?.deployments.map((deployment) => deployment.status) ?? [],
+  });
+
+  return {
+    sourceRelease: blockingReason ? null : latestRelease,
+    sourceArtifacts: blockingReason ? [] : sourceArtifacts,
+    blockingReason,
+  };
+}
+
 async function buildPromotionPlanForResolution(
   projectId: string,
   resolution: PromotionFlowResolution,
@@ -582,38 +715,26 @@ async function buildPromotionPlanForResolution(
     });
   }
 
-  const sourceRelease = await db.query.releases.findFirst({
-    where: and(
-      eq(releases.projectId, projectId),
-      eq(releases.environmentId, resolution.sourceEnvironment.id),
-      eq(releases.status, 'succeeded')
-    ),
-    orderBy: [desc(releases.createdAt)],
-    with: {
-      artifacts: {
-        with: {
-          service: true,
-        },
-      },
-    },
+  const promotionSource = await resolvePromotableSourceRelease({
+    projectId,
+    sourceEnvironment: resolution.sourceEnvironment,
   });
 
-  const sourceArtifacts = sourceRelease
-    ? getDeployableReleaseArtifacts(sourceRelease.artifacts)
-    : [];
-
-  if (!sourceRelease || sourceArtifacts.length === 0) {
+  if (!promotionSource.sourceRelease) {
     return buildStaticPromotionPlan({
       sourceEnvironment,
       targetEnvironment,
       flowId: resolution.flow?.id ?? null,
       strategy,
       requiresApproval,
-      blockingReason: `${resolution.sourceEnvironment.name} 暂无可复用的成功发布`,
+      blockingReason:
+        promotionSource.blockingReason ??
+        `${resolution.sourceEnvironment.name} 暂无可复用的成功发布`,
       environment: resolution.targetEnvironment,
     });
   }
 
+  const { sourceRelease, sourceArtifacts } = promotionSource;
   const plan = includeLiveChecks
     ? await buildProjectReleasePlan({
         projectId,
@@ -738,45 +859,141 @@ export async function buildPromotionPlans(
   );
 }
 
-export async function buildRollbackPlan(input: {
-  projectId: string;
-  deploymentId: string;
-}): Promise<{
-  sourceDeployment: {
+function buildRollbackCandidate<
+  TRelease extends {
     id: string;
-    imageUrl: string;
+    status: ReleaseStatus;
+    sourceRef: string;
+    sourceCommitSha: string | null;
+    configCommitSha: string | null;
+    summary: string | null;
+    createdAt: Date;
+    artifacts: Array<{
+      serviceId: string | null;
+      service?: {
+        id: string;
+        name: string;
+      } | null;
+      imageDigest?: string | null;
+    }>;
+    deployments: Array<{
+      status: DeploymentStatus;
+    }>;
+  },
+>(release: TRelease, projectServiceIds: Set<string>): EnvironmentRollbackCandidate | null {
+  if (release.status !== 'succeeded') {
+    return null;
+  }
+
+  const artifacts = getDeployableReleaseArtifacts(release.artifacts)
+    .map((artifact) => {
+      if (!artifact.service || !artifact.serviceId) {
+        return null;
+      }
+
+      const imageUrl = getReleaseArtifactUri(artifact);
+      if (!imageUrl) {
+        return null;
+      }
+
+      return {
+        service: {
+          id: artifact.service.id,
+          name: artifact.service.name,
+        },
+        imageUrl,
+        imageDigest: artifact.imageDigest ?? null,
+      };
+    })
+    .filter(
+      (
+        artifact
+      ): artifact is {
+        service: { id: string; name: string };
+        imageUrl: string;
+        imageDigest: string | null;
+      } => Boolean(artifact)
+    );
+
+  if (artifacts.length === 0) {
+    return null;
+  }
+
+  const artifactServiceIds = new Set(artifacts.map((artifact) => artifact.service.id));
+  const coversEveryProjectService =
+    projectServiceIds.size === 0 ||
+    Array.from(projectServiceIds).every((serviceId) => artifactServiceIds.has(serviceId));
+
+  if (!coversEveryProjectService) {
+    return null;
+  }
+
+  if (
+    release.deployments.length === 0 ||
+    release.deployments.some((deployment) => deployment.status !== 'running')
+  ) {
+    return null;
+  }
+
+  return {
+    id: release.id,
+    sourceRef: release.sourceRef,
+    sourceCommitSha: release.sourceCommitSha ?? null,
+    configCommitSha: release.configCommitSha ?? release.sourceCommitSha ?? null,
+    summary: release.summary ?? null,
+    createdAt: release.createdAt,
+    artifacts,
+  };
+}
+
+export async function buildEnvironmentRollbackPlan(input: {
+  projectId: string;
+  environmentId: string;
+  sourceReleaseId?: string | null;
+  schemaGateMode?: PromotionPlanningOptions['schemaGateMode'];
+  requestSchemaRefresh?: boolean;
+}): Promise<{
+  sourceRelease: EnvironmentRollbackCandidate | null;
+  candidates: EnvironmentRollbackCandidate[];
+  currentRelease: {
+    id: string;
+    status: ReleaseStatus;
     commitSha: string | null;
-    environmentId: string;
-    serviceId: string | null;
-    branch: string | null;
   } | null;
   plan: ReleasePlanningSnapshot;
 }> {
-  const { project } = await requireProjectRepositoryContext(input.projectId);
-
-  const targetDeployment = await db.query.deployments.findFirst({
-    where: eq(deployments.id, input.deploymentId),
-  });
-
-  if (!targetDeployment || targetDeployment.projectId !== input.projectId) {
-    return {
-      sourceDeployment: null,
-      plan: buildStaticPlanningSnapshot({
-        canCreate: false,
-        blockingReason: 'Deployment not found',
-        environment: { isProduction: false },
-        summary: null,
-      }),
-    };
-  }
-
-  const environment = await db.query.environments.findFirst({
-    where: eq(environments.id, targetDeployment.environmentId),
-  });
+  const [environment, projectServices, releaseList] = await Promise.all([
+    db.query.environments.findFirst({
+      where: eq(environments.id, input.environmentId),
+    }),
+    db.query.services.findMany({
+      where: eq(services.projectId, input.projectId),
+      columns: {
+        id: true,
+      },
+    }),
+    db.query.releases.findMany({
+      where: and(
+        eq(releases.projectId, input.projectId),
+        eq(releases.environmentId, input.environmentId)
+      ),
+      orderBy: [desc(releases.createdAt)],
+      with: {
+        artifacts: {
+          with: {
+            service: true,
+          },
+        },
+        deployments: true,
+      },
+    }),
+  ]);
 
   if (!environment || environment.projectId !== input.projectId) {
     return {
-      sourceDeployment: null,
+      sourceRelease: null,
+      candidates: [],
+      currentRelease: null,
       plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'Environment not found',
@@ -786,12 +1003,34 @@ export async function buildRollbackPlan(input: {
     };
   }
 
-  if (!targetDeployment.imageUrl) {
+  const latestRelease = releaseList[0] ?? null;
+  const latestSucceededReleaseId = latestRelease?.status === 'succeeded' ? latestRelease.id : null;
+  const projectServiceIds = new Set(projectServices.map((service) => service.id));
+  const candidates = releaseList
+    .map((release) => buildRollbackCandidate(release, projectServiceIds))
+    .filter((candidate): candidate is EnvironmentRollbackCandidate => Boolean(candidate))
+    .filter((candidate) => candidate.id !== latestSucceededReleaseId);
+  const sourceRelease = input.sourceReleaseId
+    ? (candidates.find((candidate) => candidate.id === input.sourceReleaseId) ?? null)
+    : (candidates[0] ?? null);
+
+  if (!sourceRelease) {
+    const blockingReason = input.sourceReleaseId
+      ? '所选 release 不是可回滚的完整成功快照'
+      : '当前环境没有可回滚的完整成功 release 快照';
     return {
-      sourceDeployment: null,
+      sourceRelease: null,
+      candidates,
+      currentRelease: latestRelease
+        ? {
+            id: latestRelease.id,
+            status: latestRelease.status,
+            commitSha: latestRelease.sourceCommitSha ?? null,
+          }
+        : null,
       plan: buildStaticPlanningSnapshot({
         canCreate: false,
-        blockingReason: 'Deployment has no image URL — cannot roll back to this version',
+        blockingReason,
         environment,
       }),
     };
@@ -799,27 +1038,30 @@ export async function buildRollbackPlan(input: {
 
   const plan = await buildProjectReleasePlan({
     projectId: input.projectId,
-    environmentId: targetDeployment.environmentId,
-    services: [
-      {
-        id: targetDeployment.serviceId ?? undefined,
-        image: targetDeployment.imageUrl,
-      },
-    ],
-    sourceRef: getProjectSourceRef({ branch: targetDeployment.branch, ...project }),
-    sourceCommitSha: targetDeployment.commitSha ?? null,
+    environmentId: input.environmentId,
+    services: sourceRelease.artifacts.map((artifact) => ({
+      id: artifact.service.id,
+      name: artifact.service.name,
+      image: artifact.imageUrl,
+      digest: artifact.imageDigest,
+    })),
+    sourceRef: sourceRelease.sourceRef,
+    sourceCommitSha: sourceRelease.sourceCommitSha,
     entryPoint: 'rollback',
+    schemaGateMode: input.schemaGateMode,
+    requestSchemaRefresh: input.requestSchemaRefresh,
   });
 
   return {
-    sourceDeployment: {
-      id: targetDeployment.id,
-      imageUrl: targetDeployment.imageUrl,
-      commitSha: targetDeployment.commitSha ?? null,
-      environmentId: targetDeployment.environmentId,
-      serviceId: targetDeployment.serviceId ?? null,
-      branch: targetDeployment.branch ?? null,
-    },
+    sourceRelease,
+    candidates,
+    currentRelease: latestRelease
+      ? {
+          id: latestRelease.id,
+          status: latestRelease.status,
+          commitSha: latestRelease.sourceCommitSha ?? null,
+        }
+      : null,
     plan,
   };
 }

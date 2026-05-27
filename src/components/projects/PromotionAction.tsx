@@ -133,9 +133,9 @@ export function PromotionAction({
         ? governance.promotion.summary
         : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
   const buttonLabel = preflighting
-    ? '确认中...'
+    ? '确认最新版本...'
     : promoting
-      ? '创建中...'
+      ? '创建发布...'
       : selectedPlan?.targetEnvironment?.name
         ? `提升到 ${selectedPlan.targetEnvironment.name}`
         : compact
@@ -358,13 +358,13 @@ export function PromotionAction({
         return;
       }
 
-      if (!latestPlan.sourceRelease) {
-        toast.error(`${latestPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可复用的成功发布`);
+      if (!(latestPlan.plan.canCreate ?? true) || latestPlan.plan.blockingReason) {
+        toast.error(latestPlan.plan.blockingReason ?? latestPlan.plan.summary ?? '提升预检未通过');
         return;
       }
 
-      if (!(latestPlan.plan.canCreate ?? true) || latestPlan.plan.blockingReason) {
-        toast.error(latestPlan.plan.blockingReason ?? latestPlan.plan.summary ?? '提升预检未通过');
+      if (!latestPlan.sourceRelease) {
+        toast.error(`${latestPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可提升的最新成功发布`);
         return;
       }
     } catch (error) {

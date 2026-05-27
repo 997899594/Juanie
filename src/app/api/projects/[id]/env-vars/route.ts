@@ -47,6 +47,7 @@ const createEnvVarSchema = z.object({
   isSecret: z.boolean().default(false),
   environmentId: z.string().uuid().nullable().optional(),
   serviceId: z.string().uuid().nullable().optional(),
+  restartRuntime: z.boolean().default(false),
 });
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    const { key, value, isSecret, environmentId, serviceId } = payload.data;
+    const { key, value, isSecret, environmentId, serviceId, restartRuntime } = payload.data;
     const created = await createEnvironmentVariableForProject({
       projectId,
       userId: session.user.id,
@@ -71,6 +72,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       isSecret,
       environmentId,
       serviceId,
+      restartRuntime,
     });
 
     return NextResponse.json(created, { status: 201 });

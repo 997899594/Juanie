@@ -25,6 +25,7 @@ const updateEnvVarSchema = z.object({
     .optional(),
   value: z.string().optional(),
   isSecret: z.boolean().optional(),
+  restartRuntime: z.boolean().default(false),
 });
 
 export async function PUT(request: Request, { params }: RouteParams) {
@@ -47,6 +48,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       key: payload.data.key,
       value: payload.data.value,
       isSecret: payload.data.isSecret,
+      restartRuntime: payload.data.restartRuntime,
     });
 
     return NextResponse.json(result);
@@ -55,14 +57,17 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
+export async function DELETE(request: Request, { params }: RouteParams) {
   try {
     const { id: projectId, varId } = await params;
     const session = await requireSession();
+    const url = new URL(request.url);
+    const restartRuntime = url.searchParams.get('restartRuntime') === 'true';
     const result = await deleteEnvironmentVariableForProject({
       projectId,
       userId: session.user.id,
       variableId: varId,
+      restartRuntime,
     });
 
     return NextResponse.json(result);

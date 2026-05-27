@@ -1,8 +1,19 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import { Eye, EyeOff, KeyRound, Loader2, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  Check,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  RotateCw,
+  Trash2,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -141,6 +152,8 @@ function EnvVarDialog({
   const isEdit = !!editTarget;
   const [open, setOpen] = useState(false);
   const [showValue, setShowValue] = useState(false);
+  const restartRuntimeRef = useRef(false);
+  const [submitMode, setSubmitMode] = useState<'save' | 'save-and-restart' | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -158,6 +171,7 @@ function EnvVarDialog({
         key: value.key.trim(),
         value: value.value,
         isSecret: value.isSecret,
+        restartRuntime: restartRuntimeRef.current,
       };
 
       if (!isEdit) {
@@ -175,12 +189,33 @@ function EnvVarDialog({
         throw new Error(data.error ?? '保存变量失败');
       }
 
-      toast.success(isEdit ? '变量已更新' : '变量已添加');
+      toast.success(
+        restartRuntimeRef.current
+          ? isEdit
+            ? '变量已更新并触发重启'
+            : '变量已添加并触发重启'
+          : isEdit
+            ? '变量已更新'
+            : '变量已添加'
+      );
       setOpen(false);
       onSuccess();
       form.reset();
     },
   });
+
+  const submitWithRestart = (restartRuntime: boolean) => {
+    restartRuntimeRef.current = restartRuntime;
+    setSubmitMode(restartRuntime ? 'save-and-restart' : 'save');
+    void form
+      .handleSubmit()
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : '保存变量失败');
+      })
+      .finally(() => {
+        setSubmitMode(null);
+      });
+  };
 
   // 打开时重置表单
   useEffect(() => {
@@ -205,9 +240,7 @@ function EnvVarDialog({
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            void form.handleSubmit().catch((error: unknown) => {
-              toast.error(error instanceof Error ? error.message : '保存变量失败');
-            });
+            submitWithRestart(false);
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
@@ -351,16 +384,41 @@ function EnvVarDialog({
                 isSubmitting: state.isSubmitting,
               })}
             >
-              {({ canSubmit, isSubmitting }) => (
-                <Button
-                  type="submit"
-                  className="w-full rounded-full sm:w-auto"
-                  disabled={!canSubmit || disabled}
-                >
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {isEdit ? '更新变量' : '添加变量'}
-                </Button>
-              )}
+              {({ canSubmit, isSubmitting }) => {
+                const submittingSave = isSubmitting && submitMode === 'save';
+                const submittingRestart = isSubmitting && submitMode === 'save-and-restart';
+
+                return (
+                  <>
+                    <Button
+                      type="submit"
+                      className="w-full rounded-full sm:w-auto"
+                      disabled={!canSubmit || disabled || isSubmitting}
+                    >
+                      {submittingSave ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                      {isEdit ? '仅更新' : '仅添加'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full rounded-full sm:w-auto"
+                      disabled={!canSubmit || disabled || isSubmitting}
+                      onClick={() => submitWithRestart(true)}
+                    >
+                      {submittingRestart ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-4 w-4" />
+                      )}
+                      {isEdit ? '更新并重启' : '添加并重启'}
+                    </Button>
+                  </>
+                );
+              }}
             </form.Subscribe>
           </DialogFooter>
         </form>

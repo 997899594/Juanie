@@ -13,6 +13,7 @@ import {
 import Link from 'next/link';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { EnvironmentRollbackAction } from '@/components/projects/EnvironmentRollbackAction';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import {
   PreviewEnvironmentDialog,
@@ -367,6 +368,7 @@ function EnvironmentOverviewPanel({
   incomingFlows,
   outgoingFlows,
   promotionAction,
+  rollbackAction,
   runtimeAction,
 }: {
   projectId: string;
@@ -374,6 +376,7 @@ function EnvironmentOverviewPanel({
   incomingFlows: DeliveryControlFlowRecord[];
   outgoingFlows: DeliveryControlFlowRecord[];
   promotionAction?: ReactNode;
+  rollbackAction?: ReactNode;
   runtimeAction?: ReactNode;
 }) {
   const sourceSummary = buildEnvironmentSourceSummary(environment);
@@ -473,9 +476,10 @@ function EnvironmentOverviewPanel({
             </div>
           </div>
 
-          {promotionAction || runtimeAction ? (
+          {promotionAction || rollbackAction || runtimeAction ? (
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {promotionAction}
+              {rollbackAction}
               {runtimeAction}
             </div>
           ) : null}
@@ -577,6 +581,7 @@ function EnvironmentExpandedContent({
   incomingFlows,
   outgoingFlows,
   promotionAction,
+  rollbackAction,
   runtimeAction,
 }: {
   projectId: string;
@@ -584,6 +589,7 @@ function EnvironmentExpandedContent({
   incomingFlows: DeliveryControlFlowRecord[];
   outgoingFlows: DeliveryControlFlowRecord[];
   promotionAction?: ReactNode;
+  rollbackAction?: ReactNode;
   runtimeAction?: ReactNode;
 }) {
   return (
@@ -593,6 +599,7 @@ function EnvironmentExpandedContent({
       incomingFlows={incomingFlows}
       outgoingFlows={outgoingFlows}
       promotionAction={promotionAction}
+      rollbackAction={rollbackAction}
       runtimeAction={runtimeAction}
     />
   );
@@ -874,6 +881,14 @@ export function EnvironmentsPageClient({
                   promotionPlans={initialData.promotionPlans}
                   governance={initialData.promotionGovernance}
                   sourceEnvironmentId={focusedEnvironment.id}
+                />
+              }
+              rollbackAction={
+                <EnvironmentRollbackAction
+                  projectId={projectId}
+                  environmentId={focusedEnvironment.id}
+                  disabled={!focusedEnvironment.actions.canConfigureStrategy}
+                  disabledSummary={focusedEnvironment.actions.configureStrategySummary}
                 />
               }
               runtimeAction={renderRuntimeAction(focusedEnvironment)}
