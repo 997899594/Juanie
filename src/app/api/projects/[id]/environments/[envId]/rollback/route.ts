@@ -107,7 +107,7 @@ export async function POST(
 
     if (!rollback.sourceRelease || !rollback.plan.canCreate) {
       return NextResponse.json(
-        { error: rollback.plan.blockingReason ?? 'Unable to roll back environment' },
+        { error: rollback.plan.blockingReason ?? '无法创建回滚发布' },
         { status: 409 }
       );
     }
