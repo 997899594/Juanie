@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { buildEnvironmentListSummary } from '@/lib/environments/client-view-model';
 import { decorateEnvironmentList } from '@/lib/environments/view';
 
 describe('environment list view', () => {
@@ -94,6 +95,34 @@ describe('environment list view', () => {
     expect(environment?.gitTracking?.shortCommitSha).toBe('abcdef1');
     expect(environment?.gitTracking?.releaseTagName).toBe('juanie-production-2026.04.16-abcdef1');
     expect(environment?.gitTracking?.releaseId).toBe('rel-success');
+  });
+
+  it('keeps list summaries focused on environment state instead of access urls', () => {
+    expect(
+      buildEnvironmentListSummary({
+        kind: 'production',
+        namespace: 'nexusnote-uclhhb-production',
+        isProduction: true,
+        branch: 'main',
+        isPreview: false,
+        databases: [],
+        databaseBindingSummary: { inheritedCount: 0 },
+        policy: { primarySignal: null },
+        platformSignals: {
+          primarySummary: '版本 main 发布 · 3f6fd6c',
+        },
+        scopeLabel: null,
+        sourceLabel: null,
+        expiryLabel: null,
+        primaryDomainUrl: 'https://nexusnote.juanie.art',
+        previewLifecycle: null,
+        latestReleaseCard: null,
+        sourceBuild: null,
+        gitTracking: null,
+        cleanupState: null,
+        runtimeState: null,
+      })
+    ).toBe('版本 main 发布 · 3f6fd6c');
   });
 
   it('keeps persistent environments pending before the first successful release', () => {

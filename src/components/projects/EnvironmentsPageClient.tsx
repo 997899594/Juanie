@@ -335,16 +335,7 @@ function EnvironmentListCard({
             </div>
           ) : null}
 
-          <div
-            className={cn(
-              'text-foreground',
-              environment.primaryDomainUrl
-                ? 'truncate text-xl font-semibold tracking-tight'
-                : 'text-sm leading-6'
-            )}
-          >
-            {summary}
-          </div>
+          <div className="text-sm leading-6 text-foreground">{summary}</div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">

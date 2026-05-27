@@ -149,10 +149,6 @@ export function getRuntimeAction(
 }
 
 export function buildEnvironmentListSummary(environment: EnvironmentClientViewRecord): string {
-  if (environment.primaryDomainUrl) {
-    return environment.primaryDomainUrl.replace(/^https?:\/\//, '');
-  }
-
   return buildEnvironmentStatusSummary(environment);
 }
 
