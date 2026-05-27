@@ -136,5 +136,15 @@ jobs:
 
             kubectl -n juanie rollout status deployment/juanie-web --timeout=10m
             kubectl -n juanie rollout status deployment/juanie-worker --timeout=10m
-            curl -fsS https://juanie.art/api/health/ready >/dev/null
+            for attempt in $(seq 1 24); do
+              if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
+                break
+              fi
+
+              if [ "${attempt}" -eq 24 ]; then
+                curl -fsS https://juanie.art/api/health/ready
+              fi
+
+              sleep 5
+            done
             rm -rf "/tmp/juanie-direct-deploy-${GITHUB_SHA}"
