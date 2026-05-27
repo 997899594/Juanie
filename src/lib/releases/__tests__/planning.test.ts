@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { getPromotionSourceBlockingReason, summarizeReleasePlan } from '@/lib/releases/planning';
+import {
+  getDuplicatePromotionBlockingReason,
+  getPromotionSourceBlockingReason,
+  summarizeReleasePlan,
+} from '@/lib/releases/planning';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { previewDatabaseGuardMessage } from '@/lib/releases/preview-database-guard';
 
@@ -30,6 +34,36 @@ describe('release planning', () => {
         deploymentStatuses: ['running', 'verification_failed'],
       })
     ).toBe('staging 最新成功发布仍有服务未运行：校验失败');
+  });
+
+  it('blocks duplicate promotion while the target already uses the source release', () => {
+    expect(
+      getDuplicatePromotionBlockingReason({
+        sourceEnvironmentName: 'staging',
+        targetEnvironmentName: 'production',
+        sourceReleaseId: 'rel-staging',
+        sourceCommitSha: '313ccb1177b48f0e4e7f36f6d77b04ea81126fda',
+        targetRelease: {
+          sourceReleaseId: 'rel-staging',
+          status: 'succeeded',
+        },
+      })
+    ).toBe('staging 的 313ccb1 已经提升到 production（成功），无需重复提升');
+  });
+
+  it('allows retrying a failed duplicate promotion attempt', () => {
+    expect(
+      getDuplicatePromotionBlockingReason({
+        sourceEnvironmentName: 'staging',
+        targetEnvironmentName: 'production',
+        sourceReleaseId: 'rel-staging',
+        sourceCommitSha: '313ccb1177b48f0e4e7f36f6d77b04ea81126fda',
+        targetRelease: {
+          sourceReleaseId: 'rel-staging',
+          status: 'verification_failed',
+        },
+      })
+    ).toBe(null);
   });
 
   it('summarizes approval-gated production plans', () => {

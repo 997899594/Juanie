@@ -117,6 +117,7 @@ export interface PromotionPlanSnapshot {
   flowId: string | null;
   strategy: PromotionFlowStrategy | null;
   requiresApproval: boolean;
+  isAlreadyPromoted: boolean;
   sourceRelease: {
     id: string;
     summary: string | null;
@@ -157,6 +158,14 @@ interface PromotionPlanningOptions {
   schemaGateMode?: 'live' | 'stored';
   requestSchemaRefresh?: boolean;
 }
+
+const retryableDuplicatePromotionStatuses = [
+  'migration_pre_failed',
+  'verification_failed',
+  'degraded',
+  'failed',
+  'canceled',
+] as const satisfies ReleaseStatus[];
 
 function getReleaseStatusLabel(status: ReleaseStatus): string {
   const labels: Record<ReleaseStatus, string> = {
@@ -230,6 +239,35 @@ export function getPromotionSourceBlockingReason(input: {
   }
 
   return null;
+}
+
+function isRetryableDuplicatePromotionStatus(status: ReleaseStatus): boolean {
+  return retryableDuplicatePromotionStatuses.includes(
+    status as (typeof retryableDuplicatePromotionStatuses)[number]
+  );
+}
+
+export function getDuplicatePromotionBlockingReason(input: {
+  sourceEnvironmentName: string;
+  targetEnvironmentName: string;
+  sourceReleaseId: string;
+  sourceCommitSha: string | null;
+  targetRelease: {
+    sourceReleaseId: string | null;
+    status: ReleaseStatus;
+  } | null;
+}): string | null {
+  if (!input.targetRelease || input.targetRelease.sourceReleaseId !== input.sourceReleaseId) {
+    return null;
+  }
+
+  if (isRetryableDuplicatePromotionStatus(input.targetRelease.status)) {
+    return null;
+  }
+
+  const sourceLabel = input.sourceCommitSha?.slice(0, 7) ?? '当前版本';
+
+  return `${input.sourceEnvironmentName} 的 ${sourceLabel} 已经提升到 ${input.targetEnvironmentName}（${getReleaseStatusLabel(input.targetRelease.status)}），无需重复提升`;
 }
 
 function buildStaticPlanningSnapshot(input: {
@@ -604,9 +642,11 @@ export async function buildProjectReleasePlan(input: {
 function buildStaticPromotionPlan(input: {
   sourceEnvironment?: PromotionPlanSnapshot['sourceEnvironment'];
   targetEnvironment?: PromotionPlanSnapshot['targetEnvironment'];
+  sourceRelease?: PromotionPlanSnapshot['sourceRelease'];
   flowId?: string | null;
   strategy?: PromotionFlowStrategy | null;
   requiresApproval?: boolean;
+  isAlreadyPromoted?: boolean;
   blockingReason: string;
   environment?: PlanningEnvironmentLike;
 }): PromotionPlanSnapshot {
@@ -614,13 +654,54 @@ function buildStaticPromotionPlan(input: {
     flowId: input.flowId ?? null,
     strategy: input.strategy ?? null,
     requiresApproval: input.requiresApproval ?? false,
-    sourceRelease: null,
+    isAlreadyPromoted: input.isAlreadyPromoted ?? false,
+    sourceRelease: input.sourceRelease ?? null,
     sourceEnvironment: input.sourceEnvironment ?? null,
     targetEnvironment: input.targetEnvironment ?? null,
     plan: buildStaticPlanningSnapshot({
       canCreate: false,
       blockingReason: input.blockingReason,
       environment: input.environment ?? input.targetEnvironment ?? { isProduction: false },
+    }),
+  };
+}
+
+export async function resolveDuplicatePromotion(input: {
+  projectId: string;
+  targetEnvironmentId: string;
+  targetEnvironmentName: string;
+  sourceEnvironmentName: string;
+  sourceReleaseId: string;
+  sourceCommitSha: string | null;
+}): Promise<{
+  latestTargetRelease: {
+    id: string;
+    sourceReleaseId: string | null;
+    status: ReleaseStatus;
+  } | null;
+  blockingReason: string | null;
+}> {
+  const latestTargetRelease = await db.query.releases.findFirst({
+    where: and(
+      eq(releases.projectId, input.projectId),
+      eq(releases.environmentId, input.targetEnvironmentId)
+    ),
+    orderBy: [desc(releases.createdAt)],
+    columns: {
+      id: true,
+      sourceReleaseId: true,
+      status: true,
+    },
+  });
+
+  return {
+    latestTargetRelease: latestTargetRelease ?? null,
+    blockingReason: getDuplicatePromotionBlockingReason({
+      sourceEnvironmentName: input.sourceEnvironmentName,
+      targetEnvironmentName: input.targetEnvironmentName,
+      sourceReleaseId: input.sourceReleaseId,
+      sourceCommitSha: input.sourceCommitSha,
+      targetRelease: latestTargetRelease ?? null,
     }),
   };
 }
@@ -735,6 +816,33 @@ async function buildPromotionPlanForResolution(
   }
 
   const { sourceRelease, sourceArtifacts } = promotionSource;
+  const duplicatePromotion = await resolveDuplicatePromotion({
+    projectId,
+    targetEnvironmentId: resolution.targetEnvironment.id,
+    targetEnvironmentName: resolution.targetEnvironment.name,
+    sourceEnvironmentName: resolution.sourceEnvironment.name,
+    sourceReleaseId: sourceRelease.id,
+    sourceCommitSha: sourceRelease.sourceCommitSha,
+  });
+
+  if (duplicatePromotion.blockingReason) {
+    return buildStaticPromotionPlan({
+      sourceEnvironment,
+      targetEnvironment,
+      sourceRelease: {
+        id: sourceRelease.id,
+        summary: sourceRelease.summary,
+        sourceCommitSha: sourceRelease.sourceCommitSha,
+      },
+      flowId: resolution.flow?.id ?? null,
+      strategy,
+      requiresApproval,
+      isAlreadyPromoted: true,
+      blockingReason: duplicatePromotion.blockingReason,
+      environment: resolution.targetEnvironment,
+    });
+  }
+
   const plan = includeLiveChecks
     ? await buildProjectReleasePlan({
         projectId,
@@ -762,6 +870,7 @@ async function buildPromotionPlanForResolution(
     flowId: resolution.flow?.id ?? null,
     strategy,
     requiresApproval,
+    isAlreadyPromoted: false,
     sourceRelease: {
       id: sourceRelease.id,
       summary: sourceRelease.summary,

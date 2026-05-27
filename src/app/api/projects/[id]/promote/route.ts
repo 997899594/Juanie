@@ -16,7 +16,11 @@ import { createProjectRelease } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
-import { buildPromotionPlan, resolvePromotableSourceRelease } from '@/lib/releases/planning';
+import {
+  buildPromotionPlan,
+  resolveDuplicatePromotion,
+  resolvePromotableSourceRelease,
+} from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
@@ -138,6 +142,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const { sourceRelease, sourceArtifacts } = promotionSource;
+    const duplicatePromotion = await resolveDuplicatePromotion({
+      projectId: id,
+      targetEnvironmentId: promotion.targetEnvironment.id,
+      targetEnvironmentName: promotion.targetEnvironment.name,
+      sourceEnvironmentName: promotion.sourceEnvironment.name,
+      sourceReleaseId: sourceRelease.id,
+      sourceCommitSha: sourceRelease.sourceCommitSha,
+    });
+
+    if (duplicatePromotion.blockingReason) {
+      return NextResponse.json({ error: duplicatePromotion.blockingReason }, { status: 409 });
+    }
+
     const promotedRelease = await createProjectRelease({
       projectId: id,
       environmentId: promotion.targetEnvironment.id,

@@ -62,6 +62,15 @@ function hasActiveSchemaRefresh(plan: Pick<ProjectPromotionPlanView, 'plan'> | n
   return Boolean(refresh && refresh.queuedCount + refresh.runningCount > 0);
 }
 
+function isManageablePromotionPlan(
+  plan: ProjectPromotionPlanView,
+  manageableTargetIds: string[]
+): boolean {
+  return plan.targetEnvironment
+    ? manageableTargetIds.includes(plan.targetEnvironment.id) && !plan.isAlreadyPromoted
+    : false;
+}
+
 export function PromotionAction({
   projectId,
   promotionPlans: initialPromotionPlans,
@@ -92,9 +101,7 @@ export function PromotionAction({
     : promotionPlans;
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(
     activePromotionPlans.find((plan) =>
-      plan.targetEnvironment
-        ? governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
-        : false
+      isManageablePromotionPlan(plan, governance.promotion.manageableTargetIds)
     )?.flowId ??
       activePromotionPlans[0]?.flowId ??
       null
@@ -115,6 +122,7 @@ export function PromotionAction({
   const canPromote =
     hasPromotionTarget &&
     !!selectedPlan?.sourceRelease &&
+    !selectedPlan.isAlreadyPromoted &&
     canManageTarget &&
     !loadingPlan &&
     !refreshingPlan &&
@@ -126,18 +134,22 @@ export function PromotionAction({
   const buttonTitle =
     !selectedPlan || !selectedPlan.targetEnvironment
       ? '当前环境没有下游提升链路'
-      : !canManageTarget
-        ? governance.promotion.summary
-        : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
+      : selectedPlan.isAlreadyPromoted
+        ? (selectedPlan.plan.blockingReason ?? `已提升到 ${selectedPlan.targetEnvironment.name}`)
+        : !canManageTarget
+          ? governance.promotion.summary
+          : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
   const buttonLabel = preflighting
     ? '确认最新版本...'
     : promoting
       ? '创建发布...'
-      : selectedPlan?.targetEnvironment?.name
-        ? `提升到 ${selectedPlan.targetEnvironment.name}`
-        : compact
-          ? '提升'
-          : '提升到下游';
+      : selectedPlan?.isAlreadyPromoted && selectedPlan.targetEnvironment?.name
+        ? `已提升到 ${selectedPlan.targetEnvironment.name}`
+        : selectedPlan?.targetEnvironment?.name
+          ? `提升到 ${selectedPlan.targetEnvironment.name}`
+          : compact
+            ? '提升'
+            : '提升到下游';
 
   useEffect(() => {
     dialogOpenRef.current = dialogOpen;
@@ -231,9 +243,7 @@ export function PromotionAction({
 
     setSelectedFlowId(
       activePromotionPlans.find((plan) =>
-        plan.targetEnvironment
-          ? governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
-          : false
+        isManageablePromotionPlan(plan, governance.promotion.manageableTargetIds)
       )?.flowId ??
         activePromotionPlans[0]?.flowId ??
         null
@@ -376,7 +386,11 @@ export function PromotionAction({
         size="sm"
         className={className}
         onClick={() => setDialogOpen(true)}
-        disabled={promoting || !governance.promotion.allowed}
+        disabled={
+          promoting ||
+          !governance.promotion.allowed ||
+          (selectedPlan?.isAlreadyPromoted && activePromotionPlans.length === 1)
+        }
         title={buttonTitle}
       >
         <ArrowUpCircle className="h-3.5 w-3.5" />
