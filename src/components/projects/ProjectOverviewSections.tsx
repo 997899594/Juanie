@@ -12,9 +12,6 @@ function getEnvironmentSummary(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string {
   return (
-    (environment.isProduction && environment.primaryDomainUrl
-      ? environment.primaryDomainUrl.replace(/^https?:\/\//, '')
-      : null) ??
     environment.platformSignals.primarySummary ??
     (environment.latestReleaseCard ? `版本 ${environment.latestReleaseCard.title}` : null) ??
     environment.previewLifecycle?.stateLabel ??
