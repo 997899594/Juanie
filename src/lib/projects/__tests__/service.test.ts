@@ -80,6 +80,13 @@ describe('project overview service', () => {
           sourceCommitSha: 'abc1234def5678',
           sourceRef: 'refs/heads/main',
           environment: { id: 'env-1', name: 'production', isPreview: false },
+          sourceRelease: {
+            id: 'rel-staging',
+            summary: 'staging 发布 · abc1234',
+            sourceCommitSha: 'abc1234def5678',
+            sourceRef: 'refs/heads/main',
+            environment: { id: 'env-staging', name: 'staging', isPreview: false },
+          },
           artifacts: [],
           status: 'succeeded',
         },
@@ -96,6 +103,13 @@ describe('project overview service', () => {
     expect(result.environmentCards[0]?.gitTracking?.trackingBranchName).toBe(
       'juanie-env-production'
     );
+    expect(result.environmentCards[0]?.latestReleaseCard?.sourceRelease).toEqual({
+      id: 'rel-staging',
+      title: 'staging 发布 · abc1234',
+      environmentId: 'env-staging',
+      environmentName: 'staging',
+      shortCommitSha: 'abc1234',
+    });
     expect(result.serviceCards[0]?.name).toBe('web');
     expect(result.domainCards[0]?.url).toBe('https://demo.juanie.run');
     expect(result.recentReleaseCards[0]?.title).toBe('main 发布 · abc1234');

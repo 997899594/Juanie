@@ -69,6 +69,18 @@ interface EnvironmentViewLike {
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
     createdAt?: Date | string | null;
+    sourceRelease?: {
+      id: string;
+      summary?: string | null;
+      sourceRef?: string | null;
+      sourceCommitSha?: string | null;
+      environment?: {
+        id: string;
+        name?: string | null;
+        isPreview?: boolean | null;
+        isProduction?: boolean | null;
+      } | null;
+    } | null;
     environment?: {
       isPreview?: boolean | null;
     } | null;
@@ -100,6 +112,13 @@ export interface EnvironmentListDecorations {
     shortCommitSha: string | null;
     createdAtLabel: string | null;
     statusDecoration: ReleaseStatusDecoration;
+    sourceRelease: {
+      id: string;
+      title: string;
+      environmentId: string | null;
+      environmentName: string;
+      shortCommitSha: string | null;
+    } | null;
   } | null;
   sourceBuild: EnvironmentSourceBuildPresentation | null;
   gitTracking: {
@@ -216,6 +235,17 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
           shortCommitSha: environment.latestRelease.sourceCommitSha?.slice(0, 7) ?? null,
           createdAtLabel: formatPlatformTimeContext(environment.latestRelease.createdAt),
           statusDecoration: getReleaseStatusDecoration(environment.latestRelease.status),
+          sourceRelease: environment.latestRelease.sourceRelease
+            ? {
+                id: environment.latestRelease.sourceRelease.id,
+                title: getReleaseDisplayTitle(environment.latestRelease.sourceRelease),
+                environmentId: environment.latestRelease.sourceRelease.environment?.id ?? null,
+                environmentName:
+                  environment.latestRelease.sourceRelease.environment?.name ?? '来源环境',
+                shortCommitSha:
+                  environment.latestRelease.sourceRelease.sourceCommitSha?.slice(0, 7) ?? null,
+              }
+            : null,
         }
       : null;
     const gitTracking = buildEnvironmentGitTracking(environment, sourceBuild);

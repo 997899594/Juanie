@@ -11,13 +11,28 @@ import { formatPlatformRelativeTime } from '@/lib/time/format';
 function getEnvironmentSummary(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string {
+  const promotionSourceSummary = getEnvironmentPromotionSourceSummary(environment);
+
   return (
+    promotionSourceSummary ??
     environment.platformSignals.primarySummary ??
     (environment.latestReleaseCard ? `版本 ${environment.latestReleaseCard.title}` : null) ??
     environment.previewLifecycle?.stateLabel ??
     environment.scopeLabel ??
     '进入环境'
   );
+}
+
+function getEnvironmentPromotionSourceSummary(
+  environment: ProjectOverviewPageData['environmentCards'][number]
+): string | null {
+  const sourceRelease = environment.latestReleaseCard?.sourceRelease;
+
+  if (!sourceRelease) {
+    return null;
+  }
+
+  return `从 ${sourceRelease.environmentName} · ${sourceRelease.title} 提升`;
 }
 
 function getEnvironmentGitSummary(
@@ -50,6 +65,10 @@ function getEnvironmentGitSummary(
 function getEnvironmentSecondaryLine(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string | null {
+  if (getEnvironmentPromotionSourceSummary(environment) && environment.latestReleaseCard) {
+    return `当前版本 ${environment.latestReleaseCard.title}`;
+  }
+
   const secondary =
     getEnvironmentGitSummary(environment) ?? environment.previewLifecycle?.summary ?? null;
 

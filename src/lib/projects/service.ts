@@ -168,6 +168,15 @@ export function buildProjectOverviewPageData<
                 sourceRef: latestRelease.sourceRef,
                 sourceCommitSha: latestRelease.sourceCommitSha,
                 createdAt: latestRelease.createdAt,
+                sourceRelease: latestRelease.sourceRelease
+                  ? {
+                      id: latestRelease.sourceRelease.id,
+                      summary: latestRelease.sourceRelease.summary,
+                      sourceRef: latestRelease.sourceRelease.sourceRef,
+                      sourceCommitSha: latestRelease.sourceRelease.sourceCommitSha,
+                      environment: latestRelease.sourceRelease.environment,
+                    }
+                  : null,
                 environment: latestRelease.environment,
               }
             : null,
@@ -294,6 +303,11 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
         artifacts: {
           with: {
             service: true,
+          },
+        },
+        sourceRelease: {
+          with: {
+            environment: true,
           },
         },
       },

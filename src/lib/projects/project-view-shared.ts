@@ -137,6 +137,18 @@ export interface ProjectReleaseLike {
   sourceCommitSha?: string | null;
   sourceRef?: string | null;
   summary?: string | null;
+  sourceRelease?: {
+    id: string;
+    summary?: string | null;
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    environment?: {
+      id: string;
+      name?: string | null;
+      isPreview?: boolean | null;
+      isProduction?: boolean | null;
+    } | null;
+  } | null;
   artifacts: Array<{
     kind?: string | null;
     serviceId?: string | null;
