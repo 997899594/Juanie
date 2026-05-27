@@ -541,7 +541,10 @@ export function ReleaseExecutionSections({
                     )}
                     {isManagedArtifactReference(reference) ? (
                       <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <ArtifactDownloadButton releaseId={releaseId} artifactId={artifact.id} />
+                        <ArtifactDownloadButton
+                          releaseId={artifact.releaseId ?? releaseId}
+                          artifactId={artifact.id}
+                        />
                         <span className="break-all text-xs text-muted-foreground">
                           {formatArtifactReference(reference)}
                         </span>

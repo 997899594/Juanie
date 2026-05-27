@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
 import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
@@ -12,7 +12,11 @@ import {
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
-import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
+import {
+  getDeliveryReleaseArtifacts,
+  getDeployableReleaseArtifacts,
+  getReleaseArtifactUri,
+} from '@/lib/releases/artifacts';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import type { PromotionPlanSnapshot } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -137,6 +141,47 @@ function attachReleaseApprovalTokens<TRelease extends Awaited<ReturnType<typeof 
             })
           : null,
     })),
+  };
+}
+
+async function attachRelatedDeliveryArtifacts<
+  TRelease extends Awaited<ReturnType<typeof getReleaseById>>,
+>(release: TRelease) {
+  if (!release?.sourceCommitSha) {
+    return release;
+  }
+
+  const relatedReleases = await db.query.releases.findMany({
+    where: and(
+      eq(releases.projectId, release.projectId),
+      eq(releases.environmentId, release.environmentId),
+      eq(releases.sourceRef, release.sourceRef),
+      eq(releases.sourceCommitSha, release.sourceCommitSha)
+    ),
+    with: {
+      artifacts: {
+        with: {
+          service: true,
+        },
+      },
+    },
+  });
+  const existingArtifactIds = new Set(
+    release.artifacts.map((artifact) => artifact.id).filter(Boolean)
+  );
+  const relatedDeliveryArtifacts = relatedReleases.flatMap((relatedRelease) =>
+    getDeliveryReleaseArtifacts(relatedRelease.artifacts).filter(
+      (artifact) => !existingArtifactIds.has(artifact.id)
+    )
+  );
+
+  if (relatedDeliveryArtifacts.length === 0) {
+    return release;
+  }
+
+  return {
+    ...release,
+    artifacts: [...release.artifacts, ...relatedDeliveryArtifacts],
   };
 }
 
@@ -613,8 +658,10 @@ export async function getReleaseDetailPageData(input: {
   });
 
   const releaseWithFilePreviews = await attachReleaseMigrationFilePreviews(release);
+  const releaseWithRelatedDeliveryArtifacts =
+    await attachRelatedDeliveryArtifacts(releaseWithFilePreviews);
   const releaseWithApprovalTokens = attachReleaseApprovalTokens(
-    releaseWithFilePreviews,
+    releaseWithRelatedDeliveryArtifacts,
     input.actorUserId
   );
 
