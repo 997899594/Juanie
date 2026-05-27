@@ -75,7 +75,6 @@ export function PromotionAction({
   const [preflighting, setPreflighting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [promotionPlans, setPromotionPlans] = useState(initialPromotionPlans);
-  const [loadedPlanKeys, setLoadedPlanKeys] = useState<Set<string>>(new Set());
   const [planLoadingKey, setPlanLoadingKey] = useState<string | null>(null);
   const [planRefreshingKey, setPlanRefreshingKey] = useState<string | null>(null);
   const [planError, setPlanError] = useState<{
@@ -109,7 +108,6 @@ export function PromotionAction({
   const loadingPlan = dialogOpen && planLoadingKey === selectedPlanKey;
   const refreshingPlan = dialogOpen && planRefreshingKey === selectedPlanKey;
   const selectedPlanError = planError?.key === selectedPlanKey ? planError.message : null;
-  const selectedPlanLoaded = loadedPlanKeys.has(selectedPlanKey);
   const selectedPlanSchemaRefreshActive = hasActiveSchemaRefresh(selectedPlan);
   const canManageTarget = selectedPlan?.targetEnvironment
     ? governance.promotion.manageableTargetIds.includes(selectedPlan.targetEnvironment.id)
@@ -118,7 +116,6 @@ export function PromotionAction({
     hasPromotionTarget &&
     !!selectedPlan?.sourceRelease &&
     canManageTarget &&
-    selectedPlanLoaded &&
     !loadingPlan &&
     !refreshingPlan &&
     !selectedPlanError &&
@@ -177,11 +174,6 @@ export function PromotionAction({
           }
 
           setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, plan));
-          setLoadedPlanKeys((currentKeys) => {
-            const nextKeys = new Set(currentKeys);
-            nextKeys.add(input.key);
-            return nextKeys;
-          });
           setPlanError((currentError) => (currentError?.key === input.key ? null : currentError));
 
           clearSchemaRefreshFollowUpTimer();
@@ -209,13 +201,6 @@ export function PromotionAction({
             key: input.key,
             message: error instanceof Error ? error.message : input.errorMessage,
           });
-          if (input.loadingKey) {
-            setLoadedPlanKeys((currentKeys) => {
-              const nextKeys = new Set(currentKeys);
-              nextKeys.delete(input.key);
-              return nextKeys;
-            });
-          }
         })
         .finally(() => {
           setPlanLoadingKey((currentKey) => (currentKey === input.key ? null : currentKey));
@@ -231,7 +216,6 @@ export function PromotionAction({
 
   useEffect(() => {
     setPromotionPlans(initialPromotionPlans);
-    setLoadedPlanKeys(new Set());
     setPlanLoadingKey(null);
     setPlanRefreshingKey(null);
     setPlanError(null);
@@ -282,22 +266,6 @@ export function PromotionAction({
     };
   }, [clearSchemaRefreshFollowUpTimer, dialogOpen]);
 
-  useEffect(() => {
-    if (!dialogOpen || !hasPromotionTarget) {
-      return;
-    }
-
-    const key = getPromotionPlanKey(selectedFlowId);
-
-    refreshPromotionPlan({
-      key,
-      flowId: selectedFlowId,
-      refreshSchema: true,
-      loadingKey: true,
-      errorMessage: '加载提升预检失败',
-    });
-  }, [dialogOpen, hasPromotionTarget, refreshPromotionPlan, selectedFlowId]);
-
   useSchemaRepairs({
     projectId,
     envId: dialogOpen ? selectedPlan?.targetEnvironment?.id : null,
@@ -329,11 +297,6 @@ export function PromotionAction({
 
   const handlePromote = async () => {
     if (promoting || preflighting) return;
-    const planKey = getPromotionPlanKey(selectedFlowId);
-    if (!loadedPlanKeys.has(planKey)) {
-      toast.error('实时预检还没有完成，请稍等一下');
-      return;
-    }
     if (loadingPlan || refreshingPlan || selectedPlanSchemaRefreshActive) {
       toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');
       return;
@@ -347,11 +310,6 @@ export function PromotionAction({
         flowId: selectedFlowId,
       });
       setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, latestPlan));
-      setLoadedPlanKeys((currentKeys) => {
-        const nextKeys = new Set(currentKeys);
-        nextKeys.add(planKey);
-        return nextKeys;
-      });
 
       if (hasActiveSchemaRefresh(latestPlan)) {
         toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');

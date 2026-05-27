@@ -57,7 +57,7 @@ describe('release planning', () => {
     expect(plan.summary).toBe('生产环境的破坏性迁移必须人工审批');
   });
 
-  it('surfaces unresolved manual and external pre-deploy gates', () => {
+  it('allows release creation with manual and external pre-deploy gates', () => {
     const plan = summarizeReleasePlan({
       environment: { isProduction: true, isPreview: false },
       services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
@@ -101,7 +101,8 @@ describe('release planning', () => {
       ],
     });
 
-    expect(plan.blockingReason).toBe('存在未满足的前置迁移门禁');
+    expect(plan.canCreate).toBe(true);
+    expect(plan.blockingReason).toBe(null);
     expect(plan.releasePolicy.requiresApproval).toBe(true);
     expect(plan.issue?.code).toBe('approval_blocked');
     expect(plan.migration.preDeployCount).toBe(3);

@@ -408,13 +408,12 @@ export function summarizeReleasePlan(input: {
     migrationSpecs: input.migrationSpecs,
   });
   const requiresExternalCompletion = preDeployExternalCount > 0;
-  const migrationBlockingReason =
+  const migrationSummary =
     preDeployManualPlatformCount > 0 || preDeployExternalCount > 0
-      ? '存在未满足的前置迁移门禁'
+      ? '发布创建后会进入前置迁移等待流程'
       : null;
   const schemaGate = input.schemaGate ?? null;
-  const blockingReason =
-    previewDatabaseGuard.blockingReason ?? schemaGate?.blockingReason ?? migrationBlockingReason;
+  const blockingReason = previewDatabaseGuard.blockingReason ?? schemaGate?.blockingReason ?? null;
   const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
   const totalAutomatic = automaticSpecs.length;
   const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
@@ -488,6 +487,7 @@ export function summarizeReleasePlan(input: {
       blockingReason ??
       previewDatabaseGuard.summary ??
       schemaGate?.summary ??
+      migrationSummary ??
       releasePolicy.summary ??
       environmentPolicy.summary ??
       environmentInheritance?.summary ??
