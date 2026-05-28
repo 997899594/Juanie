@@ -289,6 +289,7 @@ export async function upsertServiceWorkload(input: {
   await waitForDeploymentReady({
     namespace: input.namespace,
     name: input.resourceName,
+    minReadyMs: input.service.type === 'web' ? 0 : 15_000,
   });
 }
 
@@ -425,6 +426,7 @@ export async function promoteCandidateSnapshotToStable(input: {
     await waitForDeploymentReady({
       namespace: input.namespace,
       name: input.stableName,
+      minReadyMs: input.service.type === 'web' ? 0 : 15_000,
     });
   } catch (error) {
     if (input.stableExists && previousStableSnapshot?.image) {
@@ -446,6 +448,7 @@ export async function promoteCandidateSnapshotToStable(input: {
       await waitForDeploymentReady({
         namespace: input.namespace,
         name: input.stableName,
+        minReadyMs: input.service.type === 'web' ? 0 : 15_000,
       });
       await input.onLog?.(`Restored ${input.stableName} → ${previousStableSnapshot.image}`);
     }

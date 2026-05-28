@@ -2,6 +2,13 @@ import { existsSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
 import {
+  describeReplicaSetReadiness,
+  formatK8sLabelSelector,
+  getReplicaSetPodLabelSelector,
+  isReplicaSetReadyForDeployment,
+  selectActiveDeploymentReplicaSet,
+} from '@/lib/k8s/deployment-rollout';
+import {
   describeDeploymentPodIssues,
   formatPodWarningEvent,
   getEventTimestamp,
@@ -304,6 +311,19 @@ export async function getDeployments(namespace: string): Promise<k8s.V1Deploymen
   const { apps } = getK8sClient();
 
   const response = await apps.listNamespacedDeployment({ namespace });
+  return response.items;
+}
+
+async function getReplicaSets(
+  namespace: string,
+  labelSelector?: string
+): Promise<k8s.V1ReplicaSet[]> {
+  const { apps } = getK8sClient();
+
+  const response = await apps.listNamespacedReplicaSet({
+    namespace,
+    labelSelector,
+  });
   return response.items;
 }
 
@@ -1899,12 +1919,16 @@ export async function waitForDeploymentReady(input: {
   name: string;
   timeoutMs?: number;
   pollMs?: number;
+  minReadyMs?: number;
 }) {
   const timeoutMs = input.timeoutMs ?? 10 * 60 * 1000;
   const pollMs = input.pollMs ?? 3000;
+  const minReadyMs = input.minReadyMs ?? 0;
   const deadline = Date.now() + timeoutMs;
   const { apps } = getK8sClient();
   let lastObservedIssue: string | null = null;
+  let readySince: number | null = null;
+  let readyReplicaSetUid: string | null = null;
 
   while (Date.now() < deadline) {
     const deployment = await apps.readNamespacedDeployment({
@@ -1920,10 +1944,6 @@ export async function waitForDeploymentReady(input: {
       continue;
     }
 
-    const desiredReplicas = deployment.spec?.replicas ?? 1;
-    const readyReplicas = deployment.status?.readyReplicas ?? 0;
-    const updatedReplicas = deployment.status?.updatedReplicas ?? 0;
-    const availableReplicas = deployment.status?.availableReplicas ?? 0;
     const progressingCondition = deployment.status?.conditions?.find(
       (condition) => condition.type === 'Progressing'
     );
@@ -1932,11 +1952,15 @@ export async function waitForDeploymentReady(input: {
       throw new Error(progressingCondition.message ?? 'Deployment rollout failed');
     }
 
-    const selectorLabels = deployment.spec?.selector?.matchLabels ?? {};
-    const labelSelector = Object.entries(selectorLabels)
-      .map(([key, value]) => `${key}=${value}`)
-      .join(',');
-    const pods = await getPods(input.namespace, labelSelector || undefined);
+    const deploymentSelector = formatK8sLabelSelector(deployment.spec?.selector?.matchLabels ?? {});
+    const replicaSets = await getReplicaSets(input.namespace, deploymentSelector || undefined);
+    const activeReplicaSet = selectActiveDeploymentReplicaSet(deployment, replicaSets);
+    const activeReplicaSetSelector = activeReplicaSet
+      ? getReplicaSetPodLabelSelector(activeReplicaSet)
+      : null;
+    const pods = activeReplicaSetSelector
+      ? await getPods(input.namespace, activeReplicaSetSelector)
+      : [];
     const podIssue = describeDeploymentPodIssues(pods);
     if (podIssue) {
       throw new Error(podIssue);
@@ -1944,19 +1968,31 @@ export async function waitForDeploymentReady(input: {
 
     const eventIssue = await describeDeploymentEventIssues(input.namespace, pods);
 
-    if (
-      desiredReplicas > 0 &&
-      readyReplicas >= desiredReplicas &&
-      updatedReplicas >= desiredReplicas &&
-      availableReplicas >= desiredReplicas
-    ) {
-      return;
+    if (activeReplicaSet && isReplicaSetReadyForDeployment(deployment, activeReplicaSet)) {
+      const activeReplicaSetUid =
+        activeReplicaSet.metadata?.uid ?? activeReplicaSet.metadata?.name ?? null;
+      if (!readySince || readyReplicaSetUid !== activeReplicaSetUid) {
+        readySince = Date.now();
+        readyReplicaSetUid = activeReplicaSetUid;
+      }
+
+      const readyDurationMs = Date.now() - readySince;
+      if (readyDurationMs >= minReadyMs) {
+        return;
+      }
+
+      lastObservedIssue = `${describeReplicaSetReadiness(
+        deployment,
+        activeReplicaSet
+      )}; waiting ${Math.ceil((minReadyMs - readyDurationMs) / 1000)}s stability window`;
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      continue;
     }
 
     lastObservedIssue =
       eventIssue ??
       progressingCondition?.message ??
-      `ready ${readyReplicas}/${desiredReplicas}, updated ${updatedReplicas}/${desiredReplicas}`;
+      describeReplicaSetReadiness(deployment, activeReplicaSet);
 
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
