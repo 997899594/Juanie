@@ -6,6 +6,7 @@ This repository is connected to **Juanie**.
 
 - `{{CI_FILE}}`
 - `juanie.yaml`
+- `.juanie/delivery-artifacts.sh`
 - `.env.juanie.example`
 - `JUANIE.md`
 
@@ -21,6 +22,7 @@ These files are injected and updated by Juanie during project import or project 
 
 - service build and runtime structure
 - schema and database intent from `juanie.yaml`
+- customer deliverable extraction rules from `juanie.yaml`
 - application source at the selected branch or commit
 
 ## What Juanie owns outside this repo
@@ -28,6 +30,7 @@ These files are injected and updated by Juanie during project import or project 
 - environment variables and secrets
 - managed databases and networking
 - preview and release orchestration
+- managed artifact storage and signed customer downloads
 
 Project: `{{PROJECT_NAME}}`
 Slug: `{{PROJECT_SLUG}}`

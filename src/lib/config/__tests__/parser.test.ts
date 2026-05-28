@@ -214,39 +214,34 @@ services:
       command: pnpm --filter dualx-server build
       package:
         strategy: pnpm-deploy
-      outputs:
-        - from: apps/dualx-server/dist
-          to: app/dist
     run:
       command: ./bin/start
       port: 6014
 deliverables:
-  - name: kit
-    type: package
-    monorepo:
-      appDir: kit
+  - name: dualx-server-baremetal
+    type: baremetal
+    source:
+      service: dualx-server
     variants:
-      - name: sdk
-        build:
-          command: pnpm --filter @dualx/kit build:sdk
-          outputs:
-            - from: kit/dist/sdk
-              to: package
+      - name: linux-amd64
+        platform: linux/amd64
+        extract:
+          from: /app/dist
+          to: .
         package:
-          format: tgz
-          platform: any
+          format: tar.gz
         checks:
-          - command: pnpm --filter @dualx/kit test
+          - command: test -n "$(find "$JUANIE_ARTIFACT_STAGE" -mindepth 1 -print -quit)"
 `);
 
     expect(parsed.isValid).toBe(true);
     expect(parsed.monorepo?.affected?.inputs).toEqual(['kit/**', 'acs/**']);
     expect(parsed.services[0]?.runtime?.framework).toBe('nest');
     expect(parsed.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
-    expect(parsed.deliverables?.[0]?.variants[0]?.package.format).toBe('tgz');
+    expect(parsed.deliverables?.[0]?.variants[0]?.extract.from).toBe('/app/dist');
   });
 
-  it('keeps package deliverables from becoming fake services', () => {
+  it('requires delivery artifacts to declare the source image service', () => {
     const parsed = parseJuanieConfig(`
 services:
   - name: web
@@ -259,8 +254,8 @@ deliverables:
     type: package
     variants:
       - name: sdk
-        build:
-          command: npm run build:sdk
+        extract:
+          from: /app/dist
         package:
           format: tgz
           platform: any
@@ -268,7 +263,7 @@ deliverables:
 
     expect(parsed.isValid).toBe(false);
     expect(parsed.errors).toContain(
-      'deliverables.0.monorepo.appDir: package deliverables must declare monorepo.appDir'
+      'deliverables.0.source.service: deliverables must declare source.service for image-derived extraction'
     );
   });
 });

@@ -76,19 +76,24 @@ detect:
             isSharedInputFile(file)
         );
 
-      const selected = shouldBuildAll
-        ? services
-        : services.filter((service) =>
-            changedFiles.some(
-              (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
-            )
-          );
       const selectedDeliverables = shouldBuildAll
         ? deliverables
         : deliverables.filter((deliverable) =>
             changedFiles.some(
               (file) => file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
             )
+          );
+      const sourceServicesForDeliverables = new Set(
+        selectedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
+      );
+      const selected = shouldBuildAll
+        ? services
+        : services.filter(
+            (service) =>
+              sourceServicesForDeliverables.has(service.name) ||
+              changedFiles.some(
+                (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+              )
           );
 
       writeFileSync('services.json', JSON.stringify(selected));
@@ -216,12 +221,17 @@ build:
 
 deliver:
   stage: deliver
-  image: node:22
+  image: docker:24
+  services:
+    - docker:24-dind
   needs:
     - job: detect
       artifacts: true
+    - job: build
+      optional: true
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl jq zip && rm -rf /var/lib/apt/lists/*
+    - apk add --no-cache bash curl jq ruby tar zip
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
       set -euo pipefail
@@ -232,122 +242,56 @@ deliver:
         exit 0
       fi
 
-      if [ -f bun.lock ] || [ -f bun.lockb ]; then
-        npm install -g bun
-        bun install --frozen-lockfile
-      elif [ -f pnpm-lock.yaml ]; then
-        corepack enable
-        pnpm install --frozen-lockfile
-      elif [ -f yarn.lock ]; then
-        corepack enable
-        yarn install --immutable
-      elif [ -f package-lock.json ]; then
-        npm ci
-      else
-        npm install
-      fi
-
-      mkdir -p .juanie/deliverables
+      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
 
       printf '%s' "$DELIVERABLES_JSON" | jq -c '.[]' | while IFS= read -r DELIVERABLE; do
-        NAME=$(printf '%s' "$DELIVERABLE" | jq -r '.name')
-        KIND=$(printf '%s' "$DELIVERABLE" | jq -r '.type')
-        APP_DIR=$(printf '%s' "$DELIVERABLE" | jq -r '.appDir // "."')
-        VARIANT=$(printf '%s' "$DELIVERABLE" | jq -r '.variant.name')
-        PLATFORM=$(printf '%s' "$DELIVERABLE" | jq -r '.variant.platform // .variant.package.platform // "any"')
-        FORMAT=$(printf '%s' "$DELIVERABLE" | jq -r '.variant.package.format')
-        BUILD_COMMAND=$(printf '%s' "$DELIVERABLE" | jq -r '.variant.build.command // ""')
-        SAFE_NAME=$(printf '%s' "$NAME" | tr -cs 'A-Za-z0-9_.-' '-')
-        SAFE_VARIANT=$(printf '%s' "$VARIANT" | tr -cs 'A-Za-z0-9_.-' '-')
-        SAFE_PLATFORM=$(printf '%s' "$PLATFORM" | tr -cs 'A-Za-z0-9_.-' '-')
-        BASE=".juanie/deliverables/${SAFE_NAME}-${SAFE_VARIANT}"
-        STAGE="$BASE/stage"
-        ARCHIVE="$BASE/${SAFE_NAME}-${SAFE_VARIANT}-${SAFE_PLATFORM}.${FORMAT}"
+        SOURCE_SERVICE="$(printf '%s' "$DELIVERABLE" | jq -r '.sourceService')"
+        IMAGE_TAG="$CI_REGISTRY_IMAGE/$SOURCE_SERVICE:sha-$SOURCE_SHA"
+        RELEASE_SERVICES_JSON="$(jq -cn --arg name "$SOURCE_SERVICE" --arg image "$IMAGE_TAG" '[{name: $name, image: $image}]')"
 
-        rm -rf "$BASE"
-        mkdir -p "$STAGE"
+        LOOKUP_PAYLOAD="$(
+          jq -cn \
+            --arg repository "$CI_PROJECT_PATH" \
+            --arg sha "$SOURCE_SHA" \
+            --arg ref "$RELEASE_REF" \
+            --arg service "$SOURCE_SERVICE" \
+            '{repository: $repository, sha: $sha, ref: $ref, service: $service}'
+        )"
+        LOOKUP_RESPONSE="$(
+          curl -fsSL -X POST "https://juanie.art/api/releases/lookup" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CI_JOB_TOKEN" \
+            -d "$LOOKUP_PAYLOAD"
+        )"
 
-        if [ -n "$BUILD_COMMAND" ]; then
-          bash -lc "$BUILD_COMMAND"
+        RELEASE_ID="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.id')"
+        RELEASE_PATH="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.releasePath // empty')"
+        RELEASE_STATUS="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.status')"
+        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
+          echo 'Juanie release lookup did not return a release id'
+          exit 1
         fi
 
-        printf '%s' "$DELIVERABLE" | jq -c '.variant.build.outputs // [] | .[]' | while read -r OUTPUT; do
-          FROM=$(printf '%s' "$OUTPUT" | jq -r '.from')
-          TO=$(printf '%s' "$OUTPUT" | jq -r '.to')
-          mkdir -p "$(dirname "$STAGE/$TO")"
-          cp -R "$FROM" "$STAGE/$TO"
-        done
-
-        if [ -z "$(find "$STAGE" -mindepth 1 -print -quit)" ]; then
-          cp -R "$APP_DIR/." "$STAGE"
-        fi
-
-        printf '%s' "$DELIVERABLE" | jq -r '.variant.checks // [] | .[].command' | while read -r CHECK_COMMAND; do
-          [ -z "$CHECK_COMMAND" ] && continue
-          bash -lc "$CHECK_COMMAND"
-        done
-
-        case "$FORMAT" in
-          tgz|tar.gz)
-            tar -czf "$ARCHIVE" -C "$STAGE" .
-            ;;
-          zip)
-            ABS_ARCHIVE="$PWD/$ARCHIVE"
-            (cd "$STAGE" && zip -qr "$ABS_ARCHIVE" .)
-            ;;
-          directory)
-            ARCHIVE="$STAGE"
+        case "$RELEASE_STATUS" in
+          succeeded|awaiting_rollout)
             ;;
           *)
-            echo "Unsupported deliverable format: $FORMAT"
+            echo "Juanie release ${RELEASE_ID} is ${RELEASE_STATUS}; delivery artifact extraction is not allowed"
+            if [ -n "$RELEASE_PATH" ]; then
+              echo "Release detail: https://juanie.art${RELEASE_PATH}"
+            fi
             exit 1
             ;;
         esac
 
-        ARTIFACT_URI="$CI_PROJECT_URL/-/jobs/$CI_JOB_ID/artifacts/download"
-        RELEASE_PAYLOAD=$(jq -cn \
-          --arg repository "$CI_PROJECT_PATH" \
-          --arg sha "${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}" \
-          --arg ref "${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}" \
-          --arg kind "$KIND" \
-          --arg name "$NAME" \
-          --arg variant "$VARIANT" \
-          --arg platform "$PLATFORM" \
-          --arg format "$FORMAT" \
-          --arg uri "$ARTIFACT_URI" \
-          '{
-            repository: $repository,
-            sha: $sha,
-            ref: $ref,
-            artifacts: [
-              {
-                kind: $kind,
-                name: $name,
-                variant: $variant,
-                platform: $platform,
-                format: $format,
-                uri: $uri
-              }
-            ]
-          }')
-
-        RELEASE_RESPONSE_FILE="$(mktemp)"
-        RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer $CI_JOB_TOKEN" \
-          -d "$RELEASE_PAYLOAD")
-        RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
-        rm -f "$RELEASE_RESPONSE_FILE"
-
-        echo "$RELEASE_RESPONSE"
-
-        if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-          echo "Juanie delivery artifact request failed with HTTP ${RELEASE_STATUS}"
-          exit 1
-        fi
+        printf '%s' "$DELIVERABLE" | jq -c '[.]' > .juanie-deliverables.json
+        JUANIE_TOKEN="$CI_JOB_TOKEN" \
+          JUANIE_RELEASE_ID="$RELEASE_ID" \
+          JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
+          JUANIE_RELEASE_SERVICES_JSON="$RELEASE_SERVICES_JSON" \
+          JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json \
+          bash .juanie/delivery-artifacts.sh
       done
-  artifacts:
-    paths:
-      - .juanie/deliverables
   rules:
     - if: $CI_PIPELINE_SOURCE

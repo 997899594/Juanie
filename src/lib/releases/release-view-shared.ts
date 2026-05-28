@@ -110,6 +110,8 @@ export interface ReleaseViewLike {
     } | null;
     imageUrl?: string | null;
     imageDigest?: string | null;
+    sourceImageDigest?: string | null;
+    sourceImagePlatform?: string | null;
   }>;
   migrationRuns: Array<{
     id?: string;

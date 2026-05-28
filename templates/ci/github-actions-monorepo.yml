@@ -106,13 +106,6 @@ jobs:
                 isSharedInputFile(file)
             );
 
-          const selected = shouldBuildAll
-            ? services
-            : services.filter((service) =>
-                changedFiles.some(
-                  (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
-                )
-              );
           const selectedDeliverables = shouldBuildAll
             ? deliverables
             : deliverables.filter((deliverable) =>
@@ -120,6 +113,18 @@ jobs:
                   (file) =>
                     file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
                 )
+              );
+          const sourceServicesForDeliverables = new Set(
+            selectedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
+          );
+          const selected = shouldBuildAll
+            ? services
+            : services.filter(
+                (service) =>
+                  sourceServicesForDeliverables.has(service.name) ||
+                  changedFiles.some(
+                    (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+                  )
               );
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `services=${JSON.stringify(selected)}\n`);
@@ -254,7 +259,9 @@ jobs:
           exit 1
 
   deliver:
-    needs: detect
+    needs:
+      - detect
+      - build
     if: ${{ needs.detect.outputs.deliverables != '[]' }}
     strategy:
       matrix:
@@ -262,178 +269,82 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.JUANIE_SOURCE_SHA }}
 
-      - uses: actions/setup-node@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
         with:
-          node-version: 22
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: oven-sh/setup-bun@v2
-        if: ${{ hashFiles('bun.lock', 'bun.lockb') != '' }}
-        with:
-          bun-version: latest
-
-      - name: Install workspace dependencies
-        run: |
-          set -euo pipefail
-
-          if [ -f bun.lock ] || [ -f bun.lockb ]; then
-            bun install --frozen-lockfile
-          elif [ -f pnpm-lock.yaml ]; then
-            corepack enable
-            pnpm install --frozen-lockfile
-          elif [ -f yarn.lock ]; then
-            corepack enable
-            yarn install --immutable
-          elif [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-
-      - name: Build customer artifact
+      - name: Resolve source release
+        id: release
         env:
-          JUANIE_DELIVERABLE_JSON: ${{ toJson(matrix.deliverable) }}
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
-          node <<'NODE' > .juanie-deliverable.env
-          const fs = require('node:fs');
-          const deliverable = JSON.parse(process.env.JUANIE_DELIVERABLE_JSON);
-          const safe = (value) => String(value ?? 'artifact').replace(/[^a-zA-Z0-9_.-]/g, '-');
-          const name = safe(deliverable.name);
-          const variant = safe(deliverable.variant?.name);
-          const format = deliverable.variant?.package?.format ?? 'tgz';
-          const platform = deliverable.variant?.platform ?? deliverable.variant?.package?.platform ?? 'any';
-          const base = `.juanie/deliverables/${name}-${variant}`;
-          const archiveName = `${name}-${variant}-${platform}.${format === 'tar.gz' ? 'tar.gz' : format}`;
-          console.log(`DELIVERABLE_NAME=${name}`);
-          console.log(`DELIVERABLE_VARIANT=${variant}`);
-          console.log(`DELIVERABLE_PLATFORM=${platform}`);
-          console.log(`DELIVERABLE_FORMAT=${format}`);
-          console.log(`DELIVERABLE_BASE=${base}`);
-          console.log(`DELIVERABLE_STAGE=${base}/stage`);
-          console.log(`DELIVERABLE_PATH=${base}/${archiveName}`);
-          fs.writeFileSync('.juanie-deliverable.command', deliverable.variant?.build?.command ?? '');
-          fs.writeFileSync(
-            '.juanie-deliverable.checks.json',
-            JSON.stringify(deliverable.variant?.checks ?? [])
-          );
-          fs.writeFileSync(
-            '.juanie-deliverable.outputs.json',
-            JSON.stringify(deliverable.variant?.build?.outputs ?? [])
-          );
-          NODE
+          source_service='${{ matrix.deliverable.sourceService }}'
+          image_tag=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${source_service}:sha-${{ env.JUANIE_SOURCE_SHA }}
+          release_services_json="$(jq -cn --arg name "$source_service" --arg image "$image_tag" '[{name: $name, image: $image}]')"
+          lookup_payload="$(
+            jq -cn \
+              --arg repository "${GITHUB_REPOSITORY}" \
+              --arg sha "${JUANIE_SOURCE_SHA}" \
+              --arg ref "${JUANIE_RELEASE_REF}" \
+              --arg service "$source_service" \
+              '{repository: $repository, sha: $sha, ref: $ref, service: $service}'
+          )"
 
-          set -a
-          source .juanie-deliverable.env
-          set +a
-          mkdir -p "$DELIVERABLE_STAGE"
+          lookup_response="$(
+            curl -fsSL -X POST "https://juanie.art/api/releases/lookup" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${JUANIE_TOKEN}" \
+              -d "$lookup_payload"
+          )"
 
-          BUILD_COMMAND="$(cat .juanie-deliverable.command)"
-          if [ -n "$BUILD_COMMAND" ]; then
-            bash -lc "$BUILD_COMMAND"
-          fi
-
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const { execFileSync } = require('node:child_process');
-          const outputs = JSON.parse(fs.readFileSync('.juanie-deliverable.outputs.json', 'utf8'));
-          const stage = process.env.DELIVERABLE_STAGE;
-          for (const output of outputs) {
-            const target = path.join(stage, output.to || '.');
-            fs.mkdirSync(path.dirname(target), { recursive: true });
-            execFileSync('cp', ['-R', output.from, target], { stdio: 'inherit' });
+          release_id="$(printf '%s' "$lookup_response" | jq -r '.release.id')"
+          release_path="$(printf '%s' "$lookup_response" | jq -r '.release.releasePath // empty')"
+          status="$(printf '%s' "$lookup_response" | jq -r '.release.status')"
+          [ -n "$release_id" ] && [ "$release_id" != "null" ] || {
+            echo 'Juanie release lookup did not return a release id'
+            exit 1
           }
-          if (outputs.length === 0) {
-            const appDir = JSON.parse(process.env.JUANIE_DELIVERABLE_JSON).appDir || '.';
-            execFileSync('cp', ['-R', `${appDir}/.`, stage], { stdio: 'inherit' });
-          }
-          NODE
 
-          CHECKS=$(node -p 'JSON.parse(require("node:fs").readFileSync(".juanie-deliverable.checks.json", "utf8")).map((item) => item.command).join("\n")')
-          while IFS= read -r CHECK_COMMAND; do
-            [ -z "$CHECK_COMMAND" ] && continue
-            bash -lc "$CHECK_COMMAND"
-          done <<< "$CHECKS"
-
-          mkdir -p "$(dirname "$DELIVERABLE_PATH")"
-          case "$DELIVERABLE_FORMAT" in
-            tgz|tar.gz)
-              tar -czf "$DELIVERABLE_PATH" -C "$DELIVERABLE_STAGE" .
-              ;;
-            zip)
-              ABS_DELIVERABLE_PATH="$PWD/$DELIVERABLE_PATH"
-              (cd "$DELIVERABLE_STAGE" && zip -qr "$ABS_DELIVERABLE_PATH" .)
-              ;;
-            directory)
-              DELIVERABLE_PATH="$DELIVERABLE_STAGE"
+          case "$status" in
+            succeeded|awaiting_rollout)
+              echo "artifacts_ready=true" >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "Unsupported deliverable format: $DELIVERABLE_FORMAT"
+              echo "Juanie release ${release_id} is ${status}; delivery artifact extraction is not allowed"
+              if [ -n "$release_path" ]; then
+                echo "Release detail: https://juanie.art${release_path}"
+              fi
               exit 1
               ;;
           esac
 
-          echo "DELIVERABLE_PATH=$DELIVERABLE_PATH" >> "$GITHUB_ENV"
-          echo "DELIVERABLE_NAME=$DELIVERABLE_NAME" >> "$GITHUB_ENV"
-          echo "DELIVERABLE_VARIANT=$DELIVERABLE_VARIANT" >> "$GITHUB_ENV"
-          echo "DELIVERABLE_PLATFORM=$DELIVERABLE_PLATFORM" >> "$GITHUB_ENV"
-          echo "DELIVERABLE_FORMAT=$DELIVERABLE_FORMAT" >> "$GITHUB_ENV"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_services_json<<JUANIE_RELEASE_SERVICES"
+            echo "$release_services_json"
+            echo "JUANIE_RELEASE_SERVICES"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Upload customer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.DELIVERABLE_NAME }}-${{ env.DELIVERABLE_VARIANT }}-${{ env.DELIVERABLE_PLATFORM }}
-          path: ${{ env.DELIVERABLE_PATH }}
-          if-no-files-found: error
-
-      - name: Register Juanie delivery artifact
+      - name: Extract and Register Delivery Artifact
+        if: ${{ steps.release.outputs.artifacts_ready == 'true' }}
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          JUANIE_REPOSITORY: ${{ github.repository }}
+          JUANIE_RELEASE_SERVICES_JSON: ${{ steps.release.outputs.release_services_json }}
         run: |
           set -euo pipefail
-
-          ARTIFACT_URI="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          RELEASE_PAYLOAD=$(jq -cn \
-            --arg repository "${{ github.repository }}" \
-            --arg sha "${{ env.JUANIE_SOURCE_SHA }}" \
-            --arg ref "${{ env.JUANIE_RELEASE_REF }}" \
-            --arg kind "${{ matrix.deliverable.type }}" \
-            --arg name "$DELIVERABLE_NAME" \
-            --arg variant "$DELIVERABLE_VARIANT" \
-            --arg platform "$DELIVERABLE_PLATFORM" \
-            --arg format "$DELIVERABLE_FORMAT" \
-            --arg uri "$ARTIFACT_URI" \
-            '{
-              repository: $repository,
-              sha: $sha,
-              ref: $ref,
-              artifacts: [
-                {
-                  kind: $kind,
-                  name: $name,
-                  variant: $variant,
-                  platform: $platform,
-                  format: $format,
-                  uri: $uri
-                }
-              ]
-            }')
-
-          RELEASE_RESPONSE_FILE="$(mktemp)"
-          RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -d "$RELEASE_PAYLOAD")
-          RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
-          rm -f "$RELEASE_RESPONSE_FILE"
-
-          echo "$RELEASE_RESPONSE"
-
-          if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-            echo "Juanie delivery artifact request failed with HTTP ${RELEASE_STATUS}"
-            exit 1
-          fi
+          jq -n --argjson item '${{ toJson(matrix.deliverable) }}' '[$item]' > .juanie-deliverables.json
+          JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json bash .juanie/delivery-artifacts.sh

@@ -56,7 +56,14 @@ function getArtifactTitle(artifact: ReleasePageData['release']['artifacts'][numb
 }
 
 function getArtifactMeta(artifact: ReleasePageData['release']['artifacts'][number]): string {
-  return [artifact.platform, artifact.format, artifact.status].filter(Boolean).join(' · ');
+  return [
+    artifact.platform,
+    artifact.format,
+    artifact.sourceImageDigest ? `image ${artifact.sourceImageDigest.slice(0, 18)}...` : null,
+    artifact.status,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function isExternalArtifactReference(reference: string | null): reference is string {

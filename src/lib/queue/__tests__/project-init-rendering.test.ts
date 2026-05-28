@@ -12,6 +12,7 @@ import {
   renderGitHubCIMonorepo,
   renderJuanieConfig,
   resolvePackageScriptCommand,
+  selectMonorepoCiWork,
 } from '@/lib/queue/project-init';
 
 describe('project init migration inference', () => {
@@ -486,7 +487,9 @@ describe('project init migration inference', () => {
     expect(config).toContain('monorepo:');
     expect(config).toContain('appDir: packages/worker');
     expect(config).toContain('# monorepo tells Juanie how to calculate affected services');
-    expect(config).toContain('# deliverables are customer-downloadable artifacts.');
+    expect(config).toContain(
+      '# deliverables are customer-downloadable artifacts extracted from verified service images.'
+    );
     expect(config).toContain('inputs:');
     expect(config).toContain('- packages/**');
   });
@@ -522,12 +525,6 @@ describe('project init migration inference', () => {
               strategy: 'dockerfile',
               context: '.',
               dockerfile: 'packages/worker/Dockerfile',
-              outputs: [
-                {
-                  from: 'packages/worker/dist',
-                  to: 'app/dist',
-                },
-              ],
             },
           },
         },
@@ -579,23 +576,18 @@ describe('project init migration inference', () => {
         configJson: {
           deliverables: [
             {
-              name: 'kit',
-              type: 'package',
-              monorepo: {
-                appDir: 'kit',
-              },
+              name: 'web-baremetal',
+              type: 'baremetal',
+              source: { service: 'web' },
               variants: [
                 {
-                  name: 'sdk',
-                  build: {
-                    command: 'pnpm --filter @dualx/kit build:sdk',
-                    outputs: [{ from: 'kit/dist/sdk', to: 'package' }],
-                  },
+                  name: 'linux-amd64',
+                  platform: 'linux/amd64',
+                  extract: { from: '/app/dist', to: '.' },
                   package: {
-                    format: 'tgz',
-                    platform: 'any',
+                    format: 'tar.gz',
                   },
-                  checks: [{ command: 'pnpm --filter @dualx/kit test' }],
+                  checks: [{ command: 'test -d "$JUANIE_ARTIFACT_STAGE"' }],
                 },
               ],
             },
@@ -628,25 +620,24 @@ describe('project init migration inference', () => {
     );
 
     expect(config).toContain('deliverables:');
-    expect(config).toContain('- name: kit');
-    expect(config).toContain('command: pnpm --filter @dualx/kit build:sdk');
+    expect(config).toContain('- name: web-baremetal');
+    expect(config).toContain('service: web');
+    expect(config).toContain('from: /app/dist');
     expect(config).not.toContain('# deliverables:');
 
     const projectWithDeliverableConfig = {
       configJson: {
         deliverables: [
           {
-            name: 'kit',
-            type: 'package',
-            monorepo: { appDir: 'kit' },
+            name: 'web-baremetal',
+            type: 'baremetal',
+            source: { service: 'web' },
             variants: [
               {
-                name: 'sdk',
-                build: {
-                  command: 'pnpm --filter @dualx/kit build:sdk',
-                  outputs: [{ from: 'kit/dist/sdk', to: 'package' }],
-                },
-                package: { format: 'tgz', platform: 'any' },
+                name: 'linux-amd64',
+                platform: 'linux/amd64',
+                extract: { from: '/app/dist', to: '.' },
+                package: { format: 'tar.gz' },
               },
             ],
           },
@@ -660,9 +651,43 @@ describe('project init migration inference', () => {
       )
     );
 
-    expect(deliverables[0]?.name).toBe('kit');
-    expect(deliverables[0]?.variant.name).toBe('sdk');
-    expect(encodedDeliverables[0]?.variant.package.format).toBe('tgz');
+    expect(deliverables[0]?.name).toBe('web-baremetal');
+    expect(deliverables[0]?.sourceService).toBe('web');
+    expect(deliverables[0]?.variant.extract.from).toBe('/app/dist');
+    expect(encodedDeliverables[0]?.variant.package.format).toBe('tar.gz');
+  });
+
+  it('builds the source service when only an image-derived deliverable changed', () => {
+    const result = selectMonorepoCiWork({
+      shouldBuildAll: false,
+      changedFiles: ['packages/exporter/README.md'],
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          appDir: 'apps/web',
+          build: {},
+        },
+      ],
+      deliverables: [
+        {
+          name: 'web-baremetal',
+          type: 'baremetal',
+          appDir: 'packages/exporter',
+          sourceService: 'web',
+          variant: {
+            name: 'linux-amd64',
+            platform: 'linux/amd64',
+            extract: { from: '/app/dist', to: '.' },
+            package: { format: 'tar.gz' },
+            checks: [],
+          },
+        },
+      ],
+    });
+
+    expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
+    expect(result.services.map((service) => service.name)).toEqual(['web']);
   });
 
   it('builds yarn commands without run', () => {

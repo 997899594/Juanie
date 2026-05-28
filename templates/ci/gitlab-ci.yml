@@ -1,5 +1,6 @@
 stages:
   - build
+  - deliver
 
 variables:
   REGISTRY: $CI_REGISTRY
@@ -220,6 +221,9 @@ build:
         echo "Release detail: https://juanie.art${RELEASE_PATH}"
       fi
 
+      printf '%s' "$RELEASE_ID" > .juanie-release-id
+      printf '%s' "$RELEASE_SERVICES_JSON" > .juanie-release-services.json
+
       for attempt in $(seq 1 180); do
         STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
           -H "Authorization: Bearer $CI_JOB_TOKEN")
@@ -233,11 +237,17 @@ build:
 
         case "$RESOLUTION" in
           succeeded)
+            printf '%s' 'true' > .juanie-artifacts-ready
             exit 0
             ;;
           action_required)
             if [ -n "$RELEASE_PATH" ]; then
               echo "Juanie release requires manual action: https://juanie.art${RELEASE_PATH}"
+            fi
+            if [ "$STATUS" = "awaiting_rollout" ]; then
+              printf '%s' 'true' > .juanie-artifacts-ready
+            else
+              printf '%s' 'false' > .juanie-artifacts-ready
             fi
             exit 0
             ;;
@@ -252,5 +262,41 @@ build:
 
       echo "Timed out waiting for Juanie release ${RELEASE_ID}"
       exit 1
+  artifacts:
+    paths:
+      - .juanie-release-id
+      - .juanie-release-services.json
+      - .juanie-artifacts-ready
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
+
+deliver:
+  stage: deliver
+  image: docker:24
+  services:
+    - docker:24-dind
+  needs:
+    - job: build
+      artifacts: true
+  before_script:
+    - apk add --no-cache bash curl jq ruby tar zip
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - |
+      set -euo pipefail
+
+      if [ ! -f .juanie-artifacts-ready ] || [ "$(cat .juanie-artifacts-ready)" != "true" ]; then
+        echo "Release is not ready for delivery artifact extraction"
+        exit 0
+      fi
+
+      RELEASE_ID="$(cat .juanie-release-id)"
+      RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)"
+
+      JUANIE_TOKEN="$CI_JOB_TOKEN" \
+        JUANIE_RELEASE_ID="$RELEASE_ID" \
+        JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
+        JUANIE_RELEASE_SERVICES_JSON="$RELEASE_SERVICES_JSON" \
+        bash .juanie/delivery-artifacts.sh
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"

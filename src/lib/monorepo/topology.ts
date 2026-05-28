@@ -25,10 +25,6 @@ export interface RepositoryTopologyBuild {
   context?: string;
   target?: string;
   definition?: string;
-  outputs?: Array<{
-    from: string;
-    to: string;
-  }>;
   package?: {
     strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
   };
@@ -293,7 +289,6 @@ function toTopologyServiceFromConfig(service: ServiceConfig): RepositoryTopology
           context: service.build.context,
           target: service.build.target,
           definition: service.build.definition,
-          outputs: service.build.outputs,
           package: service.build.package,
         }
       : undefined,

@@ -43,13 +43,6 @@ const runtimeSchema = z
   })
   .strict();
 
-const buildOutputSchema = z
-  .object({
-    from: pathPatternSchema,
-    to: pathPatternSchema,
-  })
-  .strict();
-
 const buildPackageSchema = z
   .object({
     strategy: z.enum(['pnpm-deploy', 'pnpm-pack', 'npm-pack', 'copy', 'custom']),
@@ -78,7 +71,6 @@ const buildSchema = z
     context: z.string().optional(),
     target: z.string().optional(),
     definition: z.string().optional(),
-    outputs: z.array(buildOutputSchema).max(100).optional(),
     package: buildPackageSchema.optional(),
   })
   .strict();
@@ -209,7 +201,12 @@ const deliverableVariantSchema = z
   .object({
     name: z.string().min(1).max(100),
     platform: z.string().min(1).max(80).optional(),
-    build: buildSchema,
+    extract: z
+      .object({
+        from: pathPatternSchema,
+        to: pathPatternSchema.optional().default('.'),
+      })
+      .strict(),
     package: packageSchema,
     checks: z.array(checkSchema).max(20).optional(),
   })
@@ -241,11 +238,11 @@ const deliverableSchema = z
       });
     }
 
-    if (deliverable.type === 'package' && !deliverable.monorepo?.appDir) {
+    if (!deliverable.source?.service) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'package deliverables must declare monorepo.appDir',
-        path: ['monorepo', 'appDir'],
+        message: 'deliverables must declare source.service for image-derived extraction',
+        path: ['source', 'service'],
       });
     }
   });

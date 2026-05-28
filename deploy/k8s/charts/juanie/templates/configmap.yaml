@@ -58,6 +58,7 @@ data:
   FEISHU_ALLOWED_EMAIL_DOMAINS: {{ .Values.env.FEISHU_ALLOWED_EMAIL_DOMAINS | default "" | quote }}
   ARTIFACT_STORAGE_ENDPOINT: {{ .Values.env.ARTIFACT_STORAGE_ENDPOINT | default "" | quote }}
   ARTIFACT_STORAGE_REGION: {{ .Values.env.ARTIFACT_STORAGE_REGION | default "auto" | quote }}
+  ARTIFACT_STORAGE_BUCKET: {{ .Values.env.ARTIFACT_STORAGE_BUCKET | default "" | quote }}
   ARTIFACT_STORAGE_FORCE_PATH_STYLE: {{ .Values.env.ARTIFACT_STORAGE_FORCE_PATH_STYLE | default "false" | quote }}
   ARTIFACT_DOWNLOAD_TTL_SECONDS: {{ .Values.env.ARTIFACT_DOWNLOAD_TTL_SECONDS | default "300" | quote }}
   BYTEBASE_ENABLED: {{ .Values.env.BYTEBASE_ENABLED | default "false" | quote }}

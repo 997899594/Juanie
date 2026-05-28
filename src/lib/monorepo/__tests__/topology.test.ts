@@ -66,24 +66,22 @@ services:
       command: pnpm --filter dualx-server build
       package:
         strategy: pnpm-deploy
-      outputs:
-        - from: apps/dualx-server/dist
-          to: app/dist
     run:
       command: ./bin/start
       port: 6014
 deliverables:
-  - name: kit
-    type: package
-    monorepo:
-      appDir: kit
+  - name: dualx-server-baremetal
+    type: baremetal
+    source:
+      service: dualx-server
     variants:
-      - name: sdk
-        build:
-          command: pnpm --filter @dualx/kit build:sdk
+      - name: linux-amd64
+        platform: linux/amd64
+        extract:
+          from: /app/dist
+          to: .
         package:
-          format: tgz
-          platform: any
+          format: tar.gz
 `;
           }
 
@@ -101,11 +99,8 @@ deliverables:
     expect(topology.configMonorepo?.affected?.inputs).toEqual(['kit/**']);
     expect(topology.services[0]?.runtime?.framework).toBe('nest');
     expect(topology.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
-    expect(topology.services[0]?.build?.outputs?.[0]).toEqual({
-      from: 'apps/dualx-server/dist',
-      to: 'app/dist',
-    });
-    expect(topology.configDeliverables?.[0]?.name).toBe('kit');
+    expect(topology.configDeliverables?.[0]?.name).toBe('dualx-server-baremetal');
+    expect(topology.configDeliverables?.[0]?.source?.service).toBe('dualx-server');
     expect(topology.managedConfigContent).toContain('deliverables:');
   });
 

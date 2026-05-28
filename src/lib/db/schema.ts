@@ -1232,16 +1232,30 @@ export const releaseArtifacts = pgTable(
 
     imageUrl: varchar('imageUrl', { length: 500 }),
     imageDigest: varchar('imageDigest', { length: 255 }),
+    sourceServiceId: uuid('sourceServiceId').references(() => services.id, {
+      onDelete: 'set null',
+    }),
+    sourceImageUri: varchar('sourceImageUri', { length: 1000 }),
+    sourceImageDigest: varchar('sourceImageDigest', { length: 255 }),
+    sourceImagePlatform: varchar('sourceImagePlatform', { length: 80 }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
   },
   (table) => ({
     releaseIdIdx: index('releaseArtifact_releaseId_idx').on(table.releaseId),
     serviceIdIdx: index('releaseArtifact_serviceId_idx').on(table.serviceId),
+    sourceServiceIdIdx: index('releaseArtifact_sourceServiceId_idx').on(table.sourceServiceId),
     kindIdx: index('releaseArtifact_kind_idx').on(table.kind),
     statusIdx: index('releaseArtifact_status_idx').on(table.status),
     releaseServiceUnique: unique('releaseArtifact_release_service_unique').on(
       table.releaseId,
       table.serviceId
+    ),
+    deliveryArtifactUnique: unique('releaseArtifact_release_delivery_unique').on(
+      table.releaseId,
+      table.kind,
+      table.name,
+      table.variant,
+      table.platform
     ),
   })
 );
@@ -1998,6 +2012,10 @@ export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one, man
   }),
   service: one(services, {
     fields: [releaseArtifacts.serviceId],
+    references: [services.id],
+  }),
+  sourceService: one(services, {
+    fields: [releaseArtifacts.sourceServiceId],
     references: [services.id],
   }),
   downloadEvents: many(artifactDownloadEvents),

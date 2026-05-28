@@ -66,6 +66,7 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const projectInitLogger = logger.child({ component: 'project-init' });
+const JUANIE_DELIVERY_SCRIPT_PATH = '.juanie/delivery-artifacts.sh';
 
 export { requiredCapabilitiesForStep } from './project-init-capabilities';
 
@@ -619,10 +620,6 @@ type ProjectConfigServiceEntry = {
     context?: string;
     target?: string;
     definition?: string;
-    outputs?: Array<{
-      from: string;
-      to: string;
-    }>;
     package?: {
       strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
     };
@@ -648,7 +645,10 @@ type ProjectConfigDeliverableEntry = {
   variants: Array<{
     name: string;
     platform?: string;
-    build: ProjectConfigServiceEntry['build'];
+    extract: {
+      from: string;
+      to?: string;
+    };
     package: {
       format: 'tgz' | 'zip' | 'tar.gz' | 'directory';
       platform?: string;
@@ -1096,26 +1096,11 @@ function buildServiceBuildLines(
 function appendBuildPackagingLines(lines: string[], build?: ProjectConfigServiceEntry['build']) {
   if (build?.package) {
     lines.push(
-      '      # package controls service runtime packaging before delivery/export.',
+      '      # package controls service runtime packaging before the image is built.',
       '      package:',
       '        # strategy selects the dependency pruning/packaging tool.',
       `        strategy: ${build.package.strategy}`
     );
-  }
-
-  if (build?.outputs?.length) {
-    lines.push(
-      '      # outputs copy build results into a normalized artifact staging directory.',
-      '      outputs:'
-    );
-    for (const output of build.outputs) {
-      lines.push(
-        '        # from is a path produced by the build command.',
-        `        - from: ${output.from}`,
-        '          # to is the destination path inside the artifact.',
-        `          to: ${output.to}`
-      );
-    }
   }
 }
 
@@ -1300,48 +1285,26 @@ function buildServiceRuntimeLines(serviceConfig?: ProjectConfigServiceEntry): st
 function buildDeliverablesReferenceLines(): string[] {
   return [
     '',
-    '# deliverables are customer-downloadable artifacts. They are not deployed or healthchecked.',
-    '# Uncomment this section when the repository has SDKs, kit packages, offline assets, or bare-metal bundles.',
+    '# deliverables are customer-downloadable artifacts extracted from verified service images.',
+    '# Uncomment this section when the image contains SDKs, offline assets, or bare-metal bundles.',
     '# deliverables:',
     '#   # name is the product name shown on the Release detail download list.',
-    '#   - name: kit',
-    '#     # type package means a reusable package/archive; baremetal means a runnable customer bundle.',
-    '#     type: package',
-    '#     monorepo:',
-    '#       # appDir points at the source directory for this deliverable.',
-    '#       appDir: kit',
-    '#     # variants model different build shapes of the same deliverable.',
-    '#     variants:',
-    '#       # name is the variant label customers choose when downloading.',
-    '#       - name: sdk',
-    '#         build:',
-    '#           # command builds only this variant.',
-    '#           command: pnpm --filter @dualx/kit build:sdk',
-    '#           # outputs are copied into the package staging directory.',
-    '#           outputs:',
-    '#             - from: kit/dist/sdk',
-    '#               to: package',
-    '#         package:',
-    '#           # format controls the final archive/container of this customer artifact.',
-    '#           format: tgz',
-    '#           # platform any means the artifact is OS/CPU independent.',
-    '#           platform: any',
-    '#         # checks prove the artifact is usable before the Release becomes verified.',
-    '#         checks:',
-    '#           - command: pnpm --filter @dualx/kit test',
-    '#   - name: dualx-server-baremetal',
+    '#   - name: app-baremetal',
     '#     type: baremetal',
     '#     source:',
-    '#       # service binds this package to a verified deployable service.',
-    '#       service: dualx-server',
+    '#       # service binds this artifact to the verified deployable image used by the Release.',
+    '#       service: web',
     '#     variants:',
     '#       - name: linux-amd64',
-    '#         platform: linux-amd64',
-    '#         build:',
-    '#           command: pnpm --filter dualx-server build',
+    '#         platform: linux/amd64',
+    '#         # extract copies files out of the verified image digest; no second source build runs.',
+    '#         extract:',
+    '#           from: /app/dist',
+    '#           to: .',
     '#         package:',
     '#           format: tar.gz',
-    '#           platform: linux-amd64',
+    '#         checks:',
+    '#           - command: test -n "$(find "$JUANIE_ARTIFACT_STAGE" -mindepth 1 -print -quit)"',
   ];
 }
 
@@ -1352,7 +1315,7 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
 
   const lines = [
     '',
-    '# deliverables are customer-downloadable artifacts. They are not deployed or healthchecked.',
+    '# deliverables are customer-downloadable artifacts extracted from verified service images.',
     'deliverables:',
   ];
 
@@ -1366,7 +1329,7 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
 
     if (deliverable.monorepo?.appDir) {
       lines.push(
-        '    # monorepo.appDir points at the source directory for this deliverable.',
+        '    # monorepo.appDir is only used for affected-file detection; extraction reads the image.',
         '    monorepo:',
         `      appDir: ${deliverable.monorepo.appDir}`
       );
@@ -1374,14 +1337,14 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
 
     if (deliverable.source?.service) {
       lines.push(
-        '    # source.service binds a bare-metal/export artifact to a verified deployable service.',
+        '    # source.service binds this artifact to a verified deployable service image.',
         '    source:',
         `      service: ${deliverable.source.service}`
       );
     }
 
     lines.push(
-      '    # variants model selectable build outputs of the same deliverable.',
+      '    # variants model selectable extracts of the same deliverable.',
       '    variants:'
     );
     for (const variant of deliverable.variants) {
@@ -1398,22 +1361,11 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
       }
 
       lines.push(
-        '        # build.command creates this variant before packaging.',
-        '        build:'
+        '        # extract copies files from the verified image digest into the package stage.',
+        '        extract:',
+        `          from: ${variant.extract.from}`,
+        `          to: ${variant.extract.to ?? '.'}`
       );
-      if (variant.build?.command) {
-        lines.push(`          command: ${variant.build.command}`);
-      }
-
-      if (variant.build?.outputs?.length) {
-        lines.push(
-          '          # outputs copy build results into a normalized artifact staging directory.',
-          '          outputs:'
-        );
-        for (const output of variant.build.outputs) {
-          lines.push(`            - from: ${output.from}`, `              to: ${output.to}`);
-        }
-      }
 
       lines.push(
         '        # package controls the final archive format and platform metadata.',
@@ -1875,6 +1827,7 @@ async function pushCicdConfig(
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
   files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
+  files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
 
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
@@ -1934,6 +1887,18 @@ function renderGitHubCI(
   );
 }
 
+function renderDeliveryArtifactsScript(): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'delivery-artifacts.sh');
+
+  if (existsSync(templatePath)) {
+    return readFileSync(templatePath, 'utf-8');
+  }
+
+  throw new Error(
+    `Delivery artifact script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
+}
+
 function renderGitLabCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1978,12 +1943,9 @@ interface MonorepoCiDeliverableEntry {
   variant: {
     name: string;
     platform?: string;
-    build: {
-      command?: string;
-      outputs?: Array<{
-        from: string;
-        to: string;
-      }>;
+    extract: {
+      from: string;
+      to?: string;
     };
     package: {
       format: 'tgz' | 'zip' | 'tar.gz' | 'directory';
@@ -2041,9 +2003,9 @@ export function buildMonorepoCiDeliverables(
       variant: {
         name: variant.name,
         platform: variant.platform ?? variant.package.platform,
-        build: {
-          command: variant.build?.command,
-          outputs: variant.build?.outputs,
+        extract: {
+          from: variant.extract.from,
+          to: variant.extract.to ?? '.',
         },
         package: {
           format: variant.package.format,
@@ -2053,6 +2015,38 @@ export function buildMonorepoCiDeliverables(
       },
     }))
   );
+}
+
+export function selectMonorepoCiWork(input: {
+  services: MonorepoCiServiceEntry[];
+  deliverables: MonorepoCiDeliverableEntry[];
+  changedFiles: string[];
+  shouldBuildAll: boolean;
+}): { services: MonorepoCiServiceEntry[]; deliverables: MonorepoCiDeliverableEntry[] } {
+  const selectedDeliverables = input.shouldBuildAll
+    ? input.deliverables
+    : input.deliverables.filter((deliverable) =>
+        input.changedFiles.some(
+          (file) => file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
+        )
+      );
+  const sourceServicesForDeliverables = new Set(
+    selectedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
+  );
+  const selectedServices = input.shouldBuildAll
+    ? input.services
+    : input.services.filter(
+        (service) =>
+          sourceServicesForDeliverables.has(service.name) ||
+          input.changedFiles.some(
+            (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+          )
+      );
+
+  return {
+    services: selectedServices,
+    deliverables: selectedDeliverables,
+  };
 }
 
 export function encodeMonorepoCiServices(

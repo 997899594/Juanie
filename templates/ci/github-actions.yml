@@ -272,6 +272,7 @@ jobs:
           exit 1
 
       - name: Trigger Juanie Release
+        id: release
         env:
           JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -320,6 +321,14 @@ jobs:
             echo "Release detail: https://juanie.art${release_path}"
           fi
 
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_path<<JUANIE_RELEASE_PATH"
+            echo "$release_path"
+            echo "JUANIE_RELEASE_PATH"
+          } >> "$GITHUB_OUTPUT"
+          echo "artifacts_ready=false" >> "$GITHUB_OUTPUT"
+
           for _ in $(seq 1 270); do
             status_response="$(
               curl -fsSL "https://juanie.art/api/releases/${release_id}/status" \
@@ -335,11 +344,15 @@ jobs:
 
             case "$resolution" in
               succeeded)
+                echo "artifacts_ready=true" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
               action_required)
                 if [ -n "$release_path" ]; then
                   echo "Juanie release requires manual action: https://juanie.art${release_path}"
+                fi
+                if [ "$status" = "awaiting_rollout" ]; then
+                  echo "artifacts_ready=true" >> "$GITHUB_OUTPUT"
                 fi
                 exit 0
                 ;;
@@ -354,3 +367,12 @@ jobs:
 
           echo "Timed out waiting for Juanie release ${release_id}"
           exit 1
+
+      - name: Extract and Register Delivery Artifacts
+        if: ${{ steps.release.outputs.artifacts_ready == 'true' }}
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          JUANIE_REPOSITORY: ${{ github.repository }}
+          JUANIE_RELEASE_SERVICES_JSON: ${{ steps.plan.outputs.release_services_json }}
+        run: bash .juanie/delivery-artifacts.sh
