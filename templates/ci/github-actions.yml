@@ -369,10 +369,49 @@ jobs:
           exit 1
 
       - name: Extract and Register Delivery Artifacts
+        id: delivery
         if: ${{ steps.release.outputs.artifacts_ready == 'true' }}
         env:
           JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
           JUANIE_REPOSITORY: ${{ github.repository }}
           JUANIE_RELEASE_SERVICES_JSON: ${{ steps.plan.outputs.release_services_json }}
+          JUANIE_DELIVERY_STORAGE_MODE: github_actions
         run: bash .juanie/delivery-artifacts.sh
+
+      - name: Upload Delivery Artifacts
+        id: upload-delivery
+        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: juanie-delivery-${{ steps.release.outputs.release_id }}
+          path: ${{ steps.delivery.outputs.upload_dir }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Register GitHub Delivery Artifacts
+        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          JUANIE_REPOSITORY: ${{ github.repository }}
+          JUANIE_ARTIFACT_URL: ${{ steps.upload-delivery.outputs.artifact-url }}
+          JUANIE_DELIVERY_MANIFEST: ${{ steps.delivery.outputs.manifest }}
+        run: |
+          set -euo pipefail
+
+          register_payload="$(
+            jq -cn \
+              --arg repository "$JUANIE_REPOSITORY" \
+              --arg artifactUrl "$JUANIE_ARTIFACT_URL" \
+              --slurpfile manifest "$JUANIE_DELIVERY_MANIFEST" \
+              '{
+                repository: $repository,
+                artifacts: ($manifest[0] | map(. + { uri: $artifactUrl } | del(.path)))
+              }'
+          )"
+
+          curl -fsSL -X POST "https://juanie.art/api/releases/${JUANIE_RELEASE_ID}/artifacts" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${JUANIE_TOKEN}" \
+            -d "$register_payload"

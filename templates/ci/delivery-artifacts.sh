@@ -8,8 +8,20 @@ set -euo pipefail
 : "${JUANIE_BASE_URL:=https://juanie.art}"
 
 deliverables_file="${JUANIE_DELIVERABLES_FILE:-.juanie-deliverables.json}"
+delivery_storage_mode="${JUANIE_DELIVERY_STORAGE_MODE:-managed}"
+delivery_manifest="${JUANIE_DELIVERY_MANIFEST:-.juanie/deliverables/manifest.json}"
+delivery_upload_dir="${JUANIE_DELIVERY_UPLOAD_DIR:-juanie-delivery-artifacts/upload}"
 
-ruby <<'RUBY' > "$deliverables_file"
+write_github_output() {
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+  fi
+}
+
+if [ -n "${JUANIE_DELIVERABLES_FILE:-}" ] && [ -f "$deliverables_file" ]; then
+  echo "Using precomputed delivery artifact manifest: ${deliverables_file}"
+else
+  ruby <<'RUBY' > "$deliverables_file"
 require 'json'
 require 'yaml'
 
@@ -49,13 +61,19 @@ end
 
 puts JSON.generate(result)
 RUBY
+fi
 
 if [ "$(jq 'length' "$deliverables_file")" -eq 0 ]; then
   echo "No delivery artifacts configured"
+  write_github_output "has_delivery_artifacts" "false"
   exit 0
 fi
 
 mkdir -p .juanie/deliverables
+if [ "$delivery_storage_mode" = "github_actions" ]; then
+  mkdir -p "$(dirname "$delivery_manifest")" "$delivery_upload_dir"
+  printf '[]\n' > "$delivery_manifest"
+fi
 
 while IFS= read -r deliverable; do
   name="$(jq -r '.name' <<<"$deliverable")"
@@ -130,11 +148,19 @@ while IFS= read -r deliverable; do
   mkdir -p "$archive_base"
   case "$format" in
     tgz|tar.gz)
-      archive="${archive_base}/${safe_name}-${safe_variant}-${safe_platform}.tar.gz"
+      if [ "$delivery_storage_mode" = "github_actions" ]; then
+        archive="${delivery_upload_dir}/${safe_name}-${safe_variant}-${safe_platform}.tar.gz"
+      else
+        archive="${archive_base}/${safe_name}-${safe_variant}-${safe_platform}.tar.gz"
+      fi
       tar -czf "$archive" -C "$stage" .
       ;;
     zip)
-      archive="${archive_base}/${safe_name}-${safe_variant}-${safe_platform}.zip"
+      if [ "$delivery_storage_mode" = "github_actions" ]; then
+        archive="${delivery_upload_dir}/${safe_name}-${safe_variant}-${safe_platform}.zip"
+      else
+        archive="${archive_base}/${safe_name}-${safe_variant}-${safe_platform}.zip"
+      fi
       (cd "$stage" && zip -qr "$OLDPWD/$archive" .)
       ;;
     *)
@@ -145,6 +171,43 @@ while IFS= read -r deliverable; do
 
   checksum="$(sha256sum "$archive" | awk '{print $1}')"
   size_bytes="$(wc -c < "$archive" | tr -d ' ')"
+
+  if [ "$delivery_storage_mode" = "github_actions" ]; then
+    manifest_tmp="$(mktemp)"
+    jq \
+      --arg kind "$kind" \
+      --arg name "$name" \
+      --arg variant "$variant" \
+      --arg platform "$platform" \
+      --arg format "$format" \
+      --arg path "$archive" \
+      --arg checksum "sha256:${checksum}" \
+      --arg sourceService "$source_service" \
+      --arg sourceImageUri "$image" \
+      --arg sourceImageDigest "$digest" \
+      --arg sourceImagePlatform "$platform" \
+      --argjson sizeBytes "$size_bytes" \
+      '. + [
+        {
+          kind: $kind,
+          name: $name,
+          variant: $variant,
+          platform: $platform,
+          format: $format,
+          path: $path,
+          checksum: $checksum,
+          sizeBytes: $sizeBytes,
+          sourceService: $sourceService,
+          sourceImageUri: $sourceImageUri,
+          sourceImageDigest: $sourceImageDigest,
+          sourceImagePlatform: $sourceImagePlatform
+        }
+      ]' \
+      "$delivery_manifest" > "$manifest_tmp"
+    mv "$manifest_tmp" "$delivery_manifest"
+    continue
+  fi
+
   upload_payload="$(
     jq -cn \
       --arg repository "$JUANIE_REPOSITORY" \
@@ -217,3 +280,15 @@ while IFS= read -r deliverable; do
     -H "Authorization: Bearer ${JUANIE_TOKEN}" \
     -d "$register_payload"
 done < <(jq -c '.[]' "$deliverables_file")
+
+if [ "$delivery_storage_mode" = "github_actions" ]; then
+  if [ "$(jq 'length' "$delivery_manifest")" -eq 0 ]; then
+    write_github_output "has_delivery_artifacts" "false"
+    exit 0
+  fi
+
+  write_github_output "has_delivery_artifacts" "true"
+  write_github_output "manifest" "$delivery_manifest"
+  write_github_output "upload_dir" "$delivery_upload_dir"
+  echo "Prepared GitHub Actions delivery artifacts in ${delivery_upload_dir}"
+fi

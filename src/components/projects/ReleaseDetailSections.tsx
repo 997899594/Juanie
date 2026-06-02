@@ -556,11 +556,6 @@ export function ReleaseExecutionSections({
                           {formatArtifactReference(reference)}
                         </span>
                       </div>
-                    ) : role === 'delivery' && isExternalArtifactReference(reference) ? (
-                      <div className="mt-3 text-xs text-muted-foreground">
-                        这个交付物还没有纳入 Juanie
-                        下载网关，请联系项目管理员重新回传到托管对象存储。
-                      </div>
                     ) : isExternalArtifactReference(reference) ? (
                       <div className="mt-3 flex flex-wrap items-center gap-3">
                         <Button asChild variant="ghost" size="sm" className="rounded-full">
