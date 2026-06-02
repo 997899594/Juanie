@@ -13,6 +13,12 @@ export type SchemaRunnerMode = 'schema-repair' | 'inspect' | 'migration';
 export type SchemaRunnerJobStatus = 'missing' | 'running' | 'succeeded' | 'failed';
 export type SchemaRunnerJobStartStatus = 'queued' | 'running';
 
+const defaultSchemaRunnerTimeoutMsByMode: Record<SchemaRunnerMode, number> = {
+  inspect: 600_000,
+  migration: 600_000,
+  'schema-repair': 600_000,
+};
+
 interface SchemaRunnerJobInput {
   namespace: string;
   jobName: string;
@@ -197,7 +203,7 @@ export async function runSchemaRunnerJobAndWait(input: {
     });
     ownsJob = ensured.created;
 
-    const timeoutMs = input.timeoutMs ?? 240_000;
+    const timeoutMs = input.timeoutMs ?? defaultSchemaRunnerTimeoutMsByMode[input.mode];
     const status = await waitForPlatformOperationJob({
       namespace,
       name: input.jobName,

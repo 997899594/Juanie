@@ -19,6 +19,10 @@ export function getContainerTerminatedMessage(
     return null;
   }
 
+  if (terminated.exitCode === 0) {
+    return null;
+  }
+
   return terminated.message
     ? `${terminated.reason ?? 'Terminated'}: ${terminated.message}`
     : (terminated.reason ?? 'Terminated');

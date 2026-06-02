@@ -55,7 +55,7 @@ describe('kubernetes pod diagnostics', () => {
     expect(describeDeploymentPodIssues(pods)).toBe('worker-0 · Error: command failed');
   });
 
-  it('Pod 状态消息优先读取 initContainer 再读取业务容器', () => {
+  it('Pod 状态消息优先读取 initContainer 的等待态再读取业务容器', () => {
     const pod = {
       status: {
         initContainerStatuses: [
@@ -81,6 +81,32 @@ describe('kubernetes pod diagnostics', () => {
     } as k8s.V1Pod;
 
     expect(getPodStatusMessage(pod)).toBe('CreateContainerConfigError: missing secret');
+  });
+
+  it('Pod 状态消息忽略成功退出的 initContainer', () => {
+    const pod = {
+      status: {
+        initContainerStatuses: [
+          {
+            state: {
+              terminated: {
+                exitCode: 0,
+                reason: 'Completed',
+              },
+            },
+          },
+        ],
+        containerStatuses: [
+          {
+            state: {
+              running: {},
+            },
+          },
+        ],
+      },
+    } as k8s.V1Pod;
+
+    expect(getPodStatusMessage(pod)).toBe(null);
   });
 
   it('格式化事件并识别探针类告警', () => {
