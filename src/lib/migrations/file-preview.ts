@@ -12,12 +12,17 @@ import { exportDesiredSchemaFromRepository } from '@/lib/migrations/desired-sche
 import {
   fetchMigrationFilesFromRepoPath,
   listRepositoryDirectoryFromRepoPath,
+  readRepositoryFileFromRepoPath,
 } from '@/lib/migrations/fetch';
 import { getDefaultMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
 const FILE_EXTENSIONS = ['.sql', '.js', '.ts', '.mjs', '.cjs'];
 const MAX_PREVIEW_FILES = 12;
+const MAX_PREVIEW_CONTENT_BYTES = Math.max(
+  Number(process.env.MIGRATION_PREVIEW_CONTENT_BYTES ?? '16384'),
+  1024
+);
 const MAX_PRISMA_DIRS = 24;
 const PREVIEW_CACHE_TTL_MS = Math.max(
   Number(process.env.MIGRATION_PREVIEW_CACHE_TTL_MS ?? '45000'),
@@ -45,11 +50,19 @@ const SUPPORTED_DATABASE_TYPES = ['postgresql', 'mysql', 'redis', 'mongodb'] as 
 export interface MigrationFilePreviewSnapshot {
   sourceLabel: string;
   files: string[];
+  fileDetails?: MigrationFilePreviewDetail[];
   total: number;
   declaredTotal: number;
   executedTotal: number;
   truncated: boolean;
   warning?: string | null;
+}
+
+export interface MigrationFilePreviewDetail {
+  path: string;
+  content: string;
+  truncated: boolean;
+  language: 'sql' | 'javascript' | 'typescript' | 'text';
 }
 
 export type MigrationPendingState = 'pending' | 'none' | 'unknown';
@@ -71,6 +84,7 @@ interface MigrationFilePreviewRunLike {
     id?: string | null;
     type?: string | null;
     connectionString?: string | null;
+    capabilities?: readonly string[] | null;
   } | null;
   status?: string | null;
   release?: {
@@ -85,12 +99,14 @@ interface MigrationFilePreviewRunLike {
 interface DeclaredMigrationPreview {
   sourceLabel: string;
   declaredFiles: string[];
+  declaredFileDetails?: Map<string, MigrationFilePreviewDetail>;
   warning?: string | null;
 }
 
 interface BuildPreviewOptions {
   forceRefresh?: boolean;
   executionStateMode?: 'live' | 'run_status' | 'declared_only';
+  includeFileDetails?: boolean;
 }
 
 type SupportedMigrationTool = (typeof SUPPORTED_MIGRATION_TOOLS)[number];
@@ -211,12 +227,66 @@ function normalizeFileList(files: string[]): string[] {
 function buildDeclaredPreview(
   sourceLabel: string,
   files: string[],
-  warning?: string | null
+  warning?: string | null,
+  details?: Array<{ path: string; content: string }>
 ): DeclaredMigrationPreview {
+  const declaredFiles = normalizeFileList(files);
+  const declaredFileDetails = details
+    ? new Map(
+        details.map((detail) => {
+          const normalizedPath = detail.path.trim();
+          return [normalizedPath, buildFilePreviewDetail(normalizedPath, detail.content)];
+        })
+      )
+    : undefined;
+
   return {
     sourceLabel,
-    declaredFiles: normalizeFileList(files),
+    declaredFiles,
+    declaredFileDetails,
     warning: warning ?? null,
+  };
+}
+
+function getPreviewLanguage(pathname: string): MigrationFilePreviewDetail['language'] {
+  if (pathname.endsWith('.sql')) return 'sql';
+  if (pathname.endsWith('.ts')) return 'typescript';
+  if (pathname.endsWith('.js') || pathname.endsWith('.mjs') || pathname.endsWith('.cjs')) {
+    return 'javascript';
+  }
+  return 'text';
+}
+
+function truncatePreviewContent(content: string): { content: string; truncated: boolean } {
+  const bytes = Buffer.byteLength(content, 'utf8');
+  if (bytes <= MAX_PREVIEW_CONTENT_BYTES) {
+    return { content, truncated: false };
+  }
+
+  let size = 0;
+  let index = 0;
+  for (const char of content) {
+    const nextSize = size + Buffer.byteLength(char, 'utf8');
+    if (nextSize > MAX_PREVIEW_CONTENT_BYTES) {
+      break;
+    }
+    size = nextSize;
+    index += char.length;
+  }
+
+  return {
+    content: content.slice(0, index),
+    truncated: true,
+  };
+}
+
+function buildFilePreviewDetail(pathname: string, content: string): MigrationFilePreviewDetail {
+  const truncated = truncatePreviewContent(content);
+  return {
+    path: pathname,
+    content: truncated.content,
+    truncated: truncated.truncated,
+    language: getPreviewLanguage(pathname),
   };
 }
 
@@ -229,9 +299,17 @@ function buildPendingSnapshot(input: {
   const declaredTotal = input.declaredPreview.declaredFiles.length;
   const normalizedPending = normalizeFileList(input.pendingFiles);
 
+  const pendingPreviewFiles = normalizedPending.slice(0, MAX_PREVIEW_FILES);
+  const fileDetails = input.declaredPreview.declaredFileDetails
+    ? pendingPreviewFiles
+        .map((file) => input.declaredPreview.declaredFileDetails?.get(file))
+        .filter((detail): detail is MigrationFilePreviewDetail => Boolean(detail))
+    : undefined;
+
   return {
     sourceLabel: input.declaredPreview.sourceLabel,
-    files: normalizedPending.slice(0, MAX_PREVIEW_FILES),
+    files: pendingPreviewFiles,
+    fileDetails,
     total: normalizedPending.length,
     declaredTotal,
     executedTotal: Math.min(Math.max(input.executedTotal, 0), declaredTotal),
@@ -303,8 +381,10 @@ function createDeclaredPreviewCacheKey(input: {
   tool: SupportedMigrationTool;
   migrationPath: string;
   revision: string;
+  includeFileDetails: boolean;
 }): string {
-  return `${input.projectId}:${input.tool}:${input.migrationPath}:${input.revision}`;
+  const detailMode = input.includeFileDetails ? 'details' : 'names';
+  return `${input.projectId}:${input.tool}:${input.migrationPath}:${input.revision}:${detailMode}`;
 }
 
 export function invalidateMigrationFilePreviewCache(input?: { projectId?: string | null }): void {
@@ -373,6 +453,32 @@ function isMigrationFile(name: string): boolean {
   return FILE_EXTENSIONS.some((extension) => name.endsWith(extension));
 }
 
+async function resolveRepositoryFilePreviewDetails(input: {
+  projectId: string;
+  migrationPath: string;
+  revision: string;
+  files: string[];
+}): Promise<Array<{ path: string; content: string }>> {
+  const details: Array<{ path: string; content: string }> = [];
+
+  for (const file of input.files) {
+    const content = await withTimeout(
+      readRepositoryFileFromRepoPath(
+        input.projectId,
+        `${input.migrationPath.replace(/\/+$/u, '')}/${file}`,
+        input.revision
+      ),
+      `读取迁移文件 ${file}`
+    );
+
+    if (content) {
+      details.push({ path: file, content });
+    }
+  }
+
+  return details;
+}
+
 function resolvePath(run: MigrationFilePreviewRunLike): string | null {
   const tool = asSupportedMigrationTool(run.specification?.tool);
   if (!tool) {
@@ -398,27 +504,115 @@ function resolvePath(run: MigrationFilePreviewRunLike): string | null {
 async function resolveSqlDeclaredPreview(
   projectId: string,
   migrationPath: string,
-  revision: string
+  revision: string,
+  includeFileDetails: boolean
 ): Promise<DeclaredMigrationPreview> {
   const files = await withTimeout(
     fetchMigrationFilesFromRepoPath(projectId, migrationPath, revision),
     '读取 SQL 迁移目录'
   );
 
+  const migrationFiles = files.map((file) => file.name);
   return buildDeclaredPreview(
     'SQL 目录',
-    files.map((file) => file.name)
+    migrationFiles,
+    null,
+    includeFileDetails
+      ? files.map((file) => ({ path: file.name, content: file.content }))
+      : undefined
   );
 }
 
-async function resolveDrizzleDeclaredPreview(): Promise<DeclaredMigrationPreview> {
-  return buildDeclaredPreview('Desired schema', ['desired-schema.sql']);
+async function resolveDrizzleDeclaredPreview(
+  run: MigrationFilePreviewRunLike,
+  revision: string,
+  includeFileDetails: boolean
+): Promise<DeclaredMigrationPreview> {
+  if (!includeFileDetails) {
+    return buildDeclaredPreview('Desired schema', ['desired-schema.sql']);
+  }
+
+  const databaseTarget = {
+    type: run.database?.type ?? 'redis',
+    connectionString: normalizeRefValue(run.database?.connectionString),
+    host: null,
+    port: null,
+    databaseName: null,
+    username: null,
+    password: null,
+    capabilities: run.database?.capabilities ?? null,
+  };
+
+  if (!isAtlasDatabaseTarget(databaseTarget)) {
+    return buildDeclaredPreview(
+      'Desired schema',
+      ['desired-schema.sql'],
+      '当前仅支持 PostgreSQL / MySQL 的 desired schema 内容预览。'
+    );
+  }
+
+  if (!databaseTarget.connectionString) {
+    return buildDeclaredPreview(
+      'Desired schema',
+      ['desired-schema.sql'],
+      '数据库连接串缺失，无法导出 desired schema 内容预览。'
+    );
+  }
+
+  const exportPromise = exportDesiredSchemaFromRepository({
+    projectId: run.projectId,
+    source: 'drizzle',
+    revision,
+    sourceConfigPath: run.specification?.sourceConfigPath ?? null,
+    connectionString: databaseTarget.connectionString,
+    capabilities: databaseTarget.capabilities,
+  });
+
+  let desiredSchemaWarning: string | null = null;
+  const desiredSchema = await withTimeout(exportPromise, '导出 Drizzle desired schema').catch(
+    (error): null => {
+      if (error instanceof PreviewTimeoutError) {
+        void exportPromise.then((artifact) => artifact.cleanup()).catch(() => undefined);
+      }
+
+      desiredSchemaWarning =
+        error instanceof PreviewTimeoutError
+          ? `${error.operation}超时，已降级为仅显示 desired schema 文件名。`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+
+      return null;
+    }
+  );
+
+  if (!desiredSchema) {
+    return buildDeclaredPreview(
+      'Desired schema',
+      ['desired-schema.sql'],
+      desiredSchemaWarning ?? '导出 Drizzle desired schema 失败，已降级为仅显示文件名。'
+    );
+  }
+
+  try {
+    return buildDeclaredPreview(
+      'Desired schema',
+      ['desired-schema.sql'],
+      desiredSchema.sourceConfigPath
+        ? `基于 ${desiredSchema.sourceConfigPath} 导出`
+        : '基于自动发现的 Drizzle 配置导出',
+      [{ path: 'desired-schema.sql', content: desiredSchema.schemaSql }]
+    );
+  } finally {
+    await desiredSchema.cleanup();
+  }
 }
 
 async function resolvePrismaDeclaredPreview(
   projectId: string,
   migrationPath: string,
-  revision: string
+  revision: string,
+  includeFileDetails: boolean
 ): Promise<DeclaredMigrationPreview> {
   const entries = await withTimeout(
     listRepositoryDirectoryFromRepoPath(projectId, migrationPath, revision),
@@ -455,14 +649,23 @@ async function resolvePrismaDeclaredPreview(
   return buildDeclaredPreview(
     'Prisma 目录',
     files.filter((file): file is string => Boolean(file)),
-    warning
+    warning,
+    includeFileDetails
+      ? await resolveRepositoryFilePreviewDetails({
+          projectId,
+          migrationPath,
+          revision,
+          files: files.filter((file): file is string => Boolean(file)).slice(0, MAX_PREVIEW_FILES),
+        })
+      : undefined
   );
 }
 
 async function resolveGenericDeclaredPreview(
   projectId: string,
   migrationPath: string,
-  revision: string
+  revision: string,
+  includeFileDetails: boolean
 ): Promise<DeclaredMigrationPreview> {
   const entries = await withTimeout(
     listRepositoryDirectoryFromRepoPath(projectId, migrationPath, revision),
@@ -472,27 +675,46 @@ async function resolveGenericDeclaredPreview(
     .filter((entry) => entry.type === 'file' && isMigrationFile(entry.name))
     .map((entry) => entry.name);
 
-  return buildDeclaredPreview('迁移目录', files);
+  return buildDeclaredPreview(
+    '迁移目录',
+    files,
+    null,
+    includeFileDetails
+      ? await resolveRepositoryFilePreviewDetails({
+          projectId,
+          migrationPath,
+          revision,
+          files: files.slice(0, MAX_PREVIEW_FILES),
+        })
+      : undefined
+  );
 }
 
 async function resolveAtlasDeclaredPreview(
   projectId: string,
   migrationPath: string,
-  revision: string
+  revision: string,
+  includeFileDetails: boolean
 ): Promise<DeclaredMigrationPreview> {
   const files = await withTimeout(
     fetchMigrationFilesFromRepoPath(projectId, migrationPath, revision),
     '读取 Atlas 迁移目录'
   );
 
+  const sqlFiles = files.filter((file) => file.name.endsWith('.sql'));
   return buildDeclaredPreview(
     'Atlas 目录',
-    files.filter((file) => file.name.endsWith('.sql')).map((file) => file.name)
+    sqlFiles.map((file) => file.name),
+    null,
+    includeFileDetails
+      ? sqlFiles.map((file) => ({ path: file.name, content: file.content }))
+      : undefined
   );
 }
 
 async function resolveDeclaredPreviewForRun(
-  run: MigrationFilePreviewRunLike
+  run: MigrationFilePreviewRunLike,
+  includeFileDetails: boolean
 ): Promise<DeclaredMigrationPreview | null> {
   const tool = asSupportedMigrationTool(run.specification?.tool);
   const migrationPath = resolvePath(run);
@@ -502,19 +724,19 @@ async function resolveDeclaredPreviewForRun(
 
   const revision = resolveRevision(run);
   if (tool === 'sql') {
-    return resolveSqlDeclaredPreview(run.projectId, migrationPath, revision);
+    return resolveSqlDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
   }
   if (tool === 'atlas') {
-    return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision);
+    return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
   }
   if (tool === 'drizzle') {
-    return resolveDrizzleDeclaredPreview();
+    return resolveDrizzleDeclaredPreview(run, revision, includeFileDetails);
   }
   if (tool === 'prisma') {
-    return resolvePrismaDeclaredPreview(run.projectId, migrationPath, revision);
+    return resolvePrismaDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
   }
 
-  return resolveGenericDeclaredPreview(run.projectId, migrationPath, revision);
+  return resolveGenericDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
 }
 
 async function loadPlatformExecutedNamesByDatabase(
@@ -865,12 +1087,14 @@ async function resolveDeclaredPreviewWithCache(input: {
   migrationPath: string;
   revision: string;
   forceRefresh: boolean;
+  includeFileDetails: boolean;
 }): Promise<DeclaredMigrationPreview | null> {
   const cacheKey = createDeclaredPreviewCacheKey({
     projectId: input.run.projectId,
     tool: input.tool,
     migrationPath: input.migrationPath,
     revision: input.revision,
+    includeFileDetails: input.includeFileDetails,
   });
 
   if (!input.forceRefresh) {
@@ -889,7 +1113,7 @@ async function resolveDeclaredPreviewWithCache(input: {
 
   const resolving = (async () => {
     try {
-      return await resolveDeclaredPreviewForRun(input.run);
+      return await resolveDeclaredPreviewForRun(input.run, input.includeFileDetails);
     } catch (error) {
       const warning =
         error instanceof PreviewTimeoutError
@@ -919,6 +1143,7 @@ export async function buildMigrationFilePreviewByRunId(
   const runtimeExecutionStateByKey = new Map<string, ExecutionStateSnapshot>();
   const forceRefresh = options.forceRefresh ?? false;
   const executionStateMode = options.executionStateMode ?? 'live';
+  const includeFileDetails = options.includeFileDetails ?? false;
   const needsPlatformExecutedNames =
     executionStateMode === 'live' &&
     runs.some((run) => asSupportedMigrationTool(run.specification?.tool) === 'sql');
@@ -941,12 +1166,19 @@ export async function buildMigrationFilePreviewByRunId(
     if (!tool || !migrationPath) {
       continue;
     }
+    const includeDetailsForRun =
+      includeFileDetails &&
+      !(
+        executionStateMode === 'run_status' &&
+        (run.status === 'success' || run.status === 'skipped')
+      );
 
     const cacheKey = createDeclaredPreviewCacheKey({
       projectId: run.projectId,
       tool,
       migrationPath,
       revision,
+      includeFileDetails: includeDetailsForRun,
     });
 
     let declaredPreview = localDeclaredPreview.get(cacheKey);
@@ -957,6 +1189,7 @@ export async function buildMigrationFilePreviewByRunId(
         migrationPath,
         revision,
         forceRefresh,
+        includeFileDetails: includeDetailsForRun,
       });
       localDeclaredPreview.set(cacheKey, declaredPreview);
     }
@@ -1069,6 +1302,7 @@ export async function inspectResolvedMigrationSpecPendingState(
           id: spec.database.id,
           type: spec.database.type,
           connectionString: spec.database.connectionString,
+          capabilities: spec.database.capabilities,
         },
         release: {
           sourceRef: options.sourceRef ?? null,

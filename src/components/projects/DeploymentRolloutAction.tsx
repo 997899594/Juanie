@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRightLeft } from 'lucide-react';
+import { Rocket } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -105,13 +105,13 @@ export function DeploymentRolloutAction({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
+          variant="default"
           size="sm"
-          className="h-8 rounded-full px-3"
+          className="h-9 rounded-full px-4 shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
           disabled={disabled}
           title={disabled ? (disabledSummary ?? undefined) : undefined}
         >
-          <ArrowRightLeft className="h-3.5 w-3.5" />
+          <Rocket className="h-3.5 w-3.5" />
           {actionLabel}
         </Button>
       </DialogTrigger>

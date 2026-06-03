@@ -123,6 +123,7 @@ export async function getApprovalsPageData(input: {
             id: run.database.id,
             type: run.database.type,
             connectionString: run.database.connectionString,
+            capabilities: run.database.capabilities,
           }
         : null,
       status: run.status,
@@ -140,6 +141,7 @@ export async function getApprovalsPageData(input: {
     })),
     {
       executionStateMode: 'run_status',
+      includeFileDetails: true,
     }
   );
 

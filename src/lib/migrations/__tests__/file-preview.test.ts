@@ -1,9 +1,24 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import {
   buildMigrationFilePreviewByRunId,
   type MigrationFilePreviewSnapshot,
   resolveMigrationPendingState,
 } from '@/lib/migrations/file-preview';
+
+const migrationFilesByPath = new Map<
+  string,
+  Array<{
+    name: string;
+    content: string;
+  }>
+>();
+
+mock.module('@/lib/migrations/fetch', () => ({
+  fetchMigrationFilesFromRepoPath: async (_projectId: string, path: string) =>
+    migrationFilesByPath.get(path) ?? [],
+  listRepositoryDirectoryFromRepoPath: async () => [],
+  readRepositoryFileFromRepoPath: async () => null,
+}));
 
 describe('migration file preview pending state', () => {
   it('treats missing previews as unknown', () => {
@@ -89,5 +104,98 @@ describe('migration file preview pending state', () => {
       truncated: false,
       warning: null,
     });
+  });
+
+  it('does not attach details to completed run-status previews', async () => {
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-success-with-details',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle' },
+          status: 'success',
+        },
+      ],
+      { executionStateMode: 'run_status', includeFileDetails: true }
+    );
+
+    expect(previewByRunId.get('run-success-with-details')?.fileDetails).toBeUndefined();
+  });
+
+  it('attaches content details only for pending preview files', async () => {
+    migrationFilesByPath.set('migrations/postgresql', [
+      {
+        name: '001_init.sql',
+        content: 'CREATE TABLE notes (id uuid primary key);',
+      },
+      {
+        name: '002_done.sql',
+        content: 'ALTER TABLE notes ADD COLUMN title text;',
+      },
+    ]);
+
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-sql',
+          projectId: 'project-1',
+          specification: { tool: 'sql', migrationPath: 'migrations/postgresql' },
+          status: 'queued',
+        },
+      ],
+      {
+        executionStateMode: 'run_status',
+        forceRefresh: true,
+        includeFileDetails: true,
+      }
+    );
+    const preview = previewByRunId.get('run-sql');
+
+    expect(preview?.files).toEqual(['001_init.sql', '002_done.sql']);
+    expect(preview?.fileDetails).toEqual([
+      {
+        path: '001_init.sql',
+        content: 'CREATE TABLE notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+      {
+        path: '002_done.sql',
+        content: 'ALTER TABLE notes ADD COLUMN title text;',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+  });
+
+  it('truncates long migration file details for approval previews', async () => {
+    migrationFilesByPath.set('migrations/big', [
+      {
+        name: 'big.sql',
+        content: 'x'.repeat(20_000),
+      },
+    ]);
+
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-big',
+          projectId: 'project-1',
+          specification: { tool: 'atlas', migrationPath: 'migrations/big' },
+          status: 'queued',
+        },
+      ],
+      {
+        executionStateMode: 'run_status',
+        forceRefresh: true,
+        includeFileDetails: true,
+      }
+    );
+    const preview = previewByRunId.get('run-big');
+
+    expect(preview?.fileDetails?.[0]?.path).toBe('big.sql');
+    expect(preview?.fileDetails?.[0]?.language).toBe('sql');
+    expect(preview?.fileDetails?.[0]?.truncated).toBe(true);
+    expect((preview?.fileDetails?.[0]?.content.length ?? 20_000) < 20_000).toBe(true);
   });
 });

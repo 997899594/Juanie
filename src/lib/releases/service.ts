@@ -83,6 +83,7 @@ async function attachReleaseMigrationFilePreviews<
             id: run.database.id,
             type: run.database.type,
             connectionString: run.database.connectionString,
+            capabilities: run.database.capabilities,
           }
         : null,
       status: run.status,
@@ -96,6 +97,7 @@ async function attachReleaseMigrationFilePreviews<
     })),
     {
       executionStateMode: 'run_status',
+      includeFileDetails: true,
     }
   );
 

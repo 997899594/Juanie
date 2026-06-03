@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -63,72 +63,80 @@ export function ReleaseMigrationActions({
       <div className="flex flex-wrap items-center gap-2">
         {canApprove && (
           <Button
-            variant="ghost"
+            variant="default"
             size="sm"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-9 rounded-full px-4 text-xs shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
             onClick={() => handleAction('approve')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
           >
             {pendingAction === 'approve' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-            ) : null}
-            审批通过
+            ) : (
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            )}
+            批准并执行迁移
           </Button>
         )}
         {approvalMissing && (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-9 rounded-full px-4 text-xs"
             disabled
             title="审批确认暂不可用，请刷新页面"
           >
-            审批通过
+            批准并执行迁移
           </Button>
         )}
         {canMarkExternal && (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-9 rounded-full px-4 text-xs"
             onClick={() => handleAction('mark_external_complete')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
           >
             {pendingAction === 'mark_external_complete' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-            ) : null}
+            ) : (
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            )}
             标记完成
           </Button>
         )}
         {canMarkExternal && (
           <Button
-            variant="ghost"
+            variant="destructive"
             size="sm"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-9 rounded-full px-4 text-xs"
             onClick={() => handleAction('mark_external_failed')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
           >
             {pendingAction === 'mark_external_failed' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-            ) : null}
+            ) : (
+              <XCircle className="mr-1 h-3.5 w-3.5" />
+            )}
             标记失败
           </Button>
         )}
         {canRetry && (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="h-8 rounded-full px-3 text-xs"
+            className="h-9 rounded-full px-4 text-xs"
             onClick={() => handleAction('retry')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
           >
             {pendingAction === 'retry' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-            ) : null}
+            ) : (
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+            )}
             重试
           </Button>
         )}

@@ -1,5 +1,8 @@
 import { Badge } from '@/components/ui/badge';
-import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
+import type {
+  MigrationFilePreviewDetail,
+  MigrationFilePreviewSnapshot,
+} from '@/lib/migrations/file-preview';
 import {
   getMigrationApprovalPolicyLabel,
   getMigrationCompatibilityLabel,
@@ -40,6 +43,13 @@ function resolveMigrationPath(value?: string | null, databaseType?: string | nul
   }
 
   return '未设置';
+}
+
+function getCodeLanguageLabel(language: MigrationFilePreviewDetail['language']): string {
+  if (language === 'sql') return 'SQL';
+  if (language === 'typescript') return 'TypeScript';
+  if (language === 'javascript') return 'JavaScript';
+  return 'Text';
 }
 
 export function MigrationSpecDetails({
@@ -125,7 +135,33 @@ export function MigrationSpecDetails({
             {specification.filePreview.executedTotal} · 声明{' '}
             {specification.filePreview.declaredTotal}
           </div>
-          {specification.filePreview.files.length > 0 ? (
+          {specification.filePreview.fileDetails &&
+          specification.filePreview.fileDetails.length > 0 ? (
+            <div className="mt-3 space-y-3">
+              {specification.filePreview.fileDetails.map((file) => (
+                <details
+                  key={file.path}
+                  className="rounded-[14px] bg-[rgba(255,255,255,0.9)] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_8px_20px_rgba(55,53,47,0.03)]"
+                  open={specification.filePreview?.fileDetails?.length === 1}
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs text-foreground">
+                    <span className="min-w-0 break-all font-mono">{file.path}</span>
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      {getCodeLanguageLabel(file.language)}
+                    </span>
+                  </summary>
+                  <pre className="max-h-80 overflow-auto border-t border-border/70 px-3 py-3 text-xs leading-relaxed text-foreground">
+                    <code>{file.content}</code>
+                  </pre>
+                  {file.truncated && (
+                    <div className="border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                      内容较长，已截断展示。
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
+          ) : specification.filePreview.files.length > 0 ? (
             <div className="mt-2 space-y-1">
               {specification.filePreview.files.map((file) => (
                 <div key={file} className="break-all font-mono text-xs text-foreground">

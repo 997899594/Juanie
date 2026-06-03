@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, FolderKanban } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -125,6 +126,14 @@ export default async function InboxPage({
                         {run.errorMessage}
                       </div>
                     )}
+
+                    <div className="mt-4">
+                      <MigrationSpecDetails
+                        specification={run.specification}
+                        databaseType={run.database.type}
+                        compact
+                      />
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 flex-col items-stretch gap-2 xl:min-w-44">
