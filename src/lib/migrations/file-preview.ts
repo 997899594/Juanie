@@ -51,6 +51,8 @@ export interface MigrationFilePreviewSnapshot {
   sourceLabel: string;
   files: string[];
   fileDetails?: MigrationFilePreviewDetail[];
+  historyFiles?: string[];
+  historyFileDetails?: MigrationFilePreviewDetail[];
   total: number;
   declaredTotal: number;
   executedTotal: number;
@@ -295,6 +297,7 @@ function buildPendingSnapshot(input: {
   pendingFiles: string[];
   executedTotal: number;
   warning?: string | null;
+  includeHistoryDetails?: boolean;
 }): MigrationFilePreviewSnapshot {
   const declaredTotal = input.declaredPreview.declaredFiles.length;
   const normalizedPending = normalizeFileList(input.pendingFiles);
@@ -310,6 +313,16 @@ function buildPendingSnapshot(input: {
     sourceLabel: input.declaredPreview.sourceLabel,
     files: pendingPreviewFiles,
     fileDetails,
+    historyFiles: input.includeHistoryDetails
+      ? input.declaredPreview.declaredFiles.slice(0, MAX_PREVIEW_FILES)
+      : undefined,
+    historyFileDetails:
+      input.includeHistoryDetails && input.declaredPreview.declaredFileDetails
+        ? input.declaredPreview.declaredFiles
+            .slice(0, MAX_PREVIEW_FILES)
+            .map((file) => input.declaredPreview.declaredFileDetails?.get(file))
+            .filter((detail): detail is MigrationFilePreviewDetail => Boolean(detail))
+        : undefined,
     total: normalizedPending.length,
     declaredTotal,
     executedTotal: Math.min(Math.max(input.executedTotal, 0), declaredTotal),
@@ -1030,6 +1043,7 @@ async function resolveRuntimeExecutionState(
 function applyExecutionState(input: {
   declaredPreview: DeclaredMigrationPreview;
   executionState: ExecutionStateSnapshot;
+  includeHistoryDetails?: boolean;
 }): MigrationFilePreviewSnapshot {
   const declaredFiles = input.declaredPreview.declaredFiles;
 
@@ -1043,6 +1057,7 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal,
       warning: input.executionState.warning,
+      includeHistoryDetails: input.includeHistoryDetails,
     });
   }
 
@@ -1059,6 +1074,7 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal,
       warning: input.executionState.warning,
+      includeHistoryDetails: input.includeHistoryDetails,
     });
   }
 
@@ -1070,6 +1086,7 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal: input.executionState.desiredSchemaAligned ? declaredFiles.length : 0,
       warning: input.executionState.warning,
+      includeHistoryDetails: input.includeHistoryDetails,
     });
   }
 
@@ -1078,6 +1095,7 @@ function applyExecutionState(input: {
     pendingFiles: declaredFiles,
     executedTotal: 0,
     warning: input.executionState.warning,
+    includeHistoryDetails: input.includeHistoryDetails,
   });
 }
 
@@ -1166,12 +1184,11 @@ export async function buildMigrationFilePreviewByRunId(
     if (!tool || !migrationPath) {
       continue;
     }
-    const includeDetailsForRun =
-      includeFileDetails &&
-      !(
-        executionStateMode === 'run_status' &&
-        (run.status === 'success' || run.status === 'skipped')
-      );
+    const includeDetailsForRun = includeFileDetails;
+    const includeHistoryDetails =
+      includeDetailsForRun &&
+      executionStateMode === 'run_status' &&
+      (run.status === 'success' || run.status === 'skipped');
 
     const cacheKey = createDeclaredPreviewCacheKey({
       projectId: run.projectId,
@@ -1206,6 +1223,7 @@ export async function buildMigrationFilePreviewByRunId(
           executionState: resolveRunStatusExecutionState({ run, declaredPreview }) ?? {
             mode: 'unknown',
           },
+          includeHistoryDetails,
         })
       );
       continue;
@@ -1219,6 +1237,7 @@ export async function buildMigrationFilePreviewByRunId(
           executionState: {
             mode: 'unknown',
           },
+          includeHistoryDetails,
         })
       );
       continue;
@@ -1248,6 +1267,7 @@ export async function buildMigrationFilePreviewByRunId(
             mode: 'names',
             executedNames,
           },
+          includeHistoryDetails,
         })
       );
       continue;
@@ -1265,6 +1285,7 @@ export async function buildMigrationFilePreviewByRunId(
       applyExecutionState({
         declaredPreview,
         executionState,
+        includeHistoryDetails,
       })
     );
   }

@@ -58,6 +58,20 @@ export function MigrationSpecDetails({
   compact = false,
 }: MigrationSpecDetailsProps) {
   const isInternalCommand = usesPlatformInternalCommand(specification.command);
+  const filePreview = specification.filePreview;
+  const visibleFileDetails =
+    filePreview?.fileDetails && filePreview.fileDetails.length > 0
+      ? filePreview.fileDetails
+      : filePreview?.historyFileDetails && filePreview.historyFileDetails.length > 0
+        ? filePreview.historyFileDetails
+        : null;
+  const visibleFiles =
+    filePreview?.files && filePreview.files.length > 0
+      ? filePreview.files
+      : filePreview?.historyFiles && filePreview.historyFiles.length > 0
+        ? filePreview.historyFiles
+        : [];
+  const isHistoryPreview = filePreview ? filePreview.total === 0 && visibleFiles.length > 0 : false;
 
   return (
     <div className="space-y-2">
@@ -124,25 +138,23 @@ export function MigrationSpecDetails({
         </div>
       )}
 
-      {specification.filePreview && (
+      {filePreview && (
         <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>执行预览</span>
-            <span>{specification.filePreview.sourceLabel}</span>
+            <span>{isHistoryPreview ? '历史迁移文件' : '执行预览'}</span>
+            <span>{filePreview.sourceLabel}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            待执行 {specification.filePreview.total} · 已执行{' '}
-            {specification.filePreview.executedTotal} · 声明{' '}
-            {specification.filePreview.declaredTotal}
+            待执行 {filePreview.total} · 已执行 {filePreview.executedTotal} · 声明{' '}
+            {filePreview.declaredTotal}
           </div>
-          {specification.filePreview.fileDetails &&
-          specification.filePreview.fileDetails.length > 0 ? (
+          {visibleFileDetails && visibleFileDetails.length > 0 ? (
             <div className="mt-3 space-y-3">
-              {specification.filePreview.fileDetails.map((file) => (
+              {visibleFileDetails.map((file) => (
                 <details
                   key={file.path}
                   className="rounded-[14px] bg-[rgba(255,255,255,0.9)] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_8px_20px_rgba(55,53,47,0.03)]"
-                  open={specification.filePreview?.fileDetails?.length === 1}
+                  open={visibleFileDetails.length === 1}
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs text-foreground">
                     <span className="min-w-0 break-all font-mono">{file.path}</span>
@@ -161,9 +173,9 @@ export function MigrationSpecDetails({
                 </details>
               ))}
             </div>
-          ) : specification.filePreview.files.length > 0 ? (
+          ) : visibleFiles.length > 0 ? (
             <div className="mt-2 space-y-1">
-              {specification.filePreview.files.map((file) => (
+              {visibleFiles.map((file) => (
                 <div key={file} className="break-all font-mono text-xs text-foreground">
                   {file}
                 </div>
@@ -172,13 +184,13 @@ export function MigrationSpecDetails({
           ) : (
             <div className="mt-2 text-xs text-muted-foreground">没有待执行迁移文件。</div>
           )}
-          {specification.filePreview.truncated && (
+          {filePreview.truncated && (
             <div className="mt-2 text-xs text-muted-foreground">
-              文件较多，仅展示前 {specification.filePreview.files.length} 项。
+              文件较多，仅展示前 {visibleFiles.length} 项。
             </div>
           )}
-          {specification.filePreview.warning && (
-            <div className="mt-2 text-xs text-warning">{specification.filePreview.warning}</div>
+          {filePreview.warning && (
+            <div className="mt-2 text-xs text-warning">{filePreview.warning}</div>
           )}
         </div>
       )}

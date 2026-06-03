@@ -106,20 +106,38 @@ describe('migration file preview pending state', () => {
     });
   });
 
-  it('does not attach details to completed run-status previews', async () => {
+  it('keeps historical details for completed run-status previews', async () => {
+    migrationFilesByPath.set('migrations/history', [
+      {
+        name: '001_init.sql',
+        content: 'CREATE TABLE historical_notes (id uuid primary key);',
+      },
+    ]);
+
     const previewByRunId = await buildMigrationFilePreviewByRunId(
       [
         {
           id: 'run-success-with-details',
           projectId: 'project-1',
-          specification: { tool: 'drizzle' },
+          specification: { tool: 'sql', migrationPath: 'migrations/history' },
           status: 'success',
         },
       ],
-      { executionStateMode: 'run_status', includeFileDetails: true }
+      { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
     );
+    const preview = previewByRunId.get('run-success-with-details');
 
-    expect(previewByRunId.get('run-success-with-details')?.fileDetails).toBeUndefined();
+    expect(preview?.files).toEqual([]);
+    expect(preview?.total).toBe(0);
+    expect(preview?.historyFiles).toEqual(['001_init.sql']);
+    expect(preview?.historyFileDetails).toEqual([
+      {
+        path: '001_init.sql',
+        content: 'CREATE TABLE historical_notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
   });
 
   it('attaches content details only for pending preview files', async () => {
