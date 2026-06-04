@@ -15,6 +15,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { DatabaseCapability } from '@/lib/databases/capabilities';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview-types';
 import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 
 // ============================================
@@ -903,6 +904,7 @@ export const migrationRuns = pgTable(
     appliedCount: integer('appliedCount'),
     logExcerpt: text('logExcerpt'),
     logsUrl: text('logsUrl'),
+    filePreview: jsonb('filePreview').$type<MigrationFilePreviewSnapshot | null>(),
 
     errorCode: varchar('errorCode', { length: 100 }),
     errorMessage: text('errorMessage'),

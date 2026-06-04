@@ -127,6 +127,7 @@ export async function getApprovalsPageData(input: {
           }
         : null,
       status: run.status,
+      filePreview: run.filePreview,
       release: run.release
         ? {
             sourceRef: run.release.sourceRef,

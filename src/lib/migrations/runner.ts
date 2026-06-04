@@ -19,7 +19,10 @@ import {
   executeMigrationsForDatabase,
 } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
-import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
+import {
+  inspectResolvedMigrationSpecPendingState,
+  persistMigrationRunFilePreview,
+} from '@/lib/migrations/file-preview';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { isPlatformManagedMigrationSpec } from '@/lib/migrations/platform-managed';
 import {
@@ -276,7 +279,9 @@ export async function executeMigrationRun(
     sourceRef: options.sourceRef,
     sourceCommitSha: options.sourceCommitSha,
     forceRefresh: true,
+    includeFileDetails: true,
   });
+  await persistMigrationRunFilePreview(runId, pendingInspection.preview);
 
   if (pendingInspection.state === 'none') {
     const finishedAt = new Date();

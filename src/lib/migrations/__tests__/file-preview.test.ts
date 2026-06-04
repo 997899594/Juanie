@@ -140,6 +140,73 @@ describe('migration file preview pending state', () => {
     ]);
   });
 
+  it('uses stored historical drizzle details without re-exporting desired schema', async () => {
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-drizzle-success-with-snapshot',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle' },
+          status: 'success',
+          filePreview: {
+            sourceLabel: 'Desired schema',
+            files: ['desired-schema.sql'],
+            fileDetails: [
+              {
+                path: 'desired-schema.sql',
+                content: 'CREATE TABLE notes (id uuid primary key);',
+                truncated: false,
+                language: 'sql',
+              },
+            ],
+            total: 1,
+            declaredTotal: 1,
+            executedTotal: 0,
+            truncated: false,
+            warning: null,
+          },
+        },
+      ],
+      { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
+    );
+    const preview = previewByRunId.get('run-drizzle-success-with-snapshot');
+
+    expect(preview?.files).toEqual([]);
+    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
+    expect(preview?.historyFileDetails).toEqual([
+      {
+        path: 'desired-schema.sql',
+        content: 'CREATE TABLE notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+  });
+
+  it('does not generate historical drizzle details when no stored snapshot exists', async () => {
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-drizzle-success-without-snapshot',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle' },
+          status: 'success',
+          database: {
+            type: 'postgresql',
+            connectionString: 'postgres://example.invalid/db',
+          },
+        },
+      ],
+      { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
+    );
+    const preview = previewByRunId.get('run-drizzle-success-without-snapshot');
+
+    expect(preview?.files).toEqual([]);
+    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
+    expect(preview?.historyFileDetails).toBeUndefined();
+    expect(preview?.warning).toBe(null);
+  });
+
   it('attaches content details only for pending preview files', async () => {
     migrationFilesByPath.set('migrations/postgresql', [
       {

@@ -72,6 +72,8 @@ export function MigrationSpecDetails({
         ? filePreview.historyFiles
         : [];
   const isHistoryPreview = filePreview ? filePreview.total === 0 && visibleFiles.length > 0 : false;
+  const isHistoryContentMissing =
+    isHistoryPreview && visibleFiles.length > 0 && !visibleFileDetails;
 
   return (
     <div className="space-y-2">
@@ -180,6 +182,9 @@ export function MigrationSpecDetails({
                   {file}
                 </div>
               ))}
+              {isHistoryContentMissing ? (
+                <div className="text-xs text-muted-foreground">历史内容快照未保存。</div>
+              ) : null}
             </div>
           ) : (
             <div className="mt-2 text-xs text-muted-foreground">没有待执行迁移文件。</div>

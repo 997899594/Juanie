@@ -14,6 +14,7 @@ import {
   findActiveMigrationRun,
   getMigrationRunById,
 } from '@/lib/migrations';
+import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
 import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -366,10 +367,19 @@ export async function createMigrationRunForDatabase(input: {
   }
 
   const initialStatus = getInitialStatusForExecutionMode(resolvedSpec.specification.executionMode);
+  const filePreview =
+    initialStatus === 'queued'
+      ? null
+      : (
+          await inspectResolvedMigrationSpecPendingState(resolvedSpec, {
+            includeFileDetails: true,
+          })
+        ).preview;
   const run = await createMigrationRun(resolvedSpec, {
     triggeredBy: 'manual',
     triggeredByUserId: input.userId,
     initialStatus,
+    filePreview,
   });
 
   if (initialStatus === 'queued') {
@@ -555,6 +565,15 @@ export async function executeMigrationRunActionForActor(input: {
 
   const resolvedSpec = buildResolvedSpecFromRun(run);
   const initialStatus = getInitialStatusForExecutionMode(run.specification.executionMode);
+  const filePreview =
+    initialStatus === 'queued'
+      ? null
+      : (
+          await inspectResolvedMigrationSpecPendingState(resolvedSpec, {
+            sourceCommitSha: run.sourceCommitSha,
+            includeFileDetails: true,
+          })
+        ).preview;
   const retryRun = await createMigrationRun(resolvedSpec, {
     releaseId: run.releaseId,
     deploymentId: run.deploymentId,
@@ -563,6 +582,7 @@ export async function executeMigrationRunActionForActor(input: {
     sourceCommitSha: run.sourceCommitSha,
     sourceCommitMessage: run.sourceCommitMessage,
     initialStatus,
+    filePreview,
   });
 
   if (run.releaseId) {

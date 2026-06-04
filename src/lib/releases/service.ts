@@ -87,6 +87,7 @@ async function attachReleaseMigrationFilePreviews<
           }
         : null,
       status: run.status,
+      filePreview: run.filePreview,
       release: {
         sourceRef: release.sourceRef,
         sourceCommitSha: run.sourceCommitSha ?? release.sourceCommitSha,

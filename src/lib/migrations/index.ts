@@ -11,7 +11,10 @@ import {
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
-import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
+import {
+  inspectResolvedMigrationSpecPendingState,
+  type MigrationFilePreviewSnapshot,
+} from '@/lib/migrations/file-preview';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -92,6 +95,7 @@ export async function createMigrationRun(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     initialStatus?: MigrationRunStatus;
+    filePreview?: MigrationFilePreviewSnapshot | null;
   }
 ) {
   const lockKey = `${spec.database.id}:${spec.environment.id}`;
@@ -113,6 +117,7 @@ export async function createMigrationRun(
       status: input.initialStatus ?? 'queued',
       runnerType: spec.specification.executionMode === 'external' ? 'external' : 'schema_runner',
       lockKey,
+      filePreview: input.filePreview ?? null,
     })
     .returning();
 
@@ -166,12 +171,15 @@ export async function resolveAndCreateMigrationRuns(
     await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
     const shouldDeferPendingInspection =
       input.deferPendingInspectionToRunner && spec.specification.executionMode === 'automatic';
+    let filePreview: MigrationFilePreviewSnapshot | null = null;
 
     if (!shouldDeferPendingInspection) {
       const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
         sourceRef: input.sourceRef,
         sourceCommitSha: input.sourceCommitSha,
+        includeFileDetails: true,
       });
+      filePreview = pendingInspection.preview;
 
       if (pendingInspection.state === 'none') {
         continue;
@@ -196,6 +204,7 @@ export async function resolveAndCreateMigrationRuns(
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
       initialStatus,
+      filePreview,
     });
     runs.push(run);
   }
