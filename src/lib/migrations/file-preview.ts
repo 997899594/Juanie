@@ -391,6 +391,38 @@ function buildRunStatusPreviewFromStoredSnapshot(input: {
   };
 }
 
+function shouldRehydrateStoredDesiredSchemaPreview(input: {
+  executionStateMode: BuildPreviewOptions['executionStateMode'];
+  includeFileDetails: boolean;
+  run: MigrationFilePreviewRunLike;
+  storedPreview: MigrationFilePreviewSnapshot;
+  tool: SupportedMigrationTool;
+}): boolean {
+  if (
+    input.executionStateMode !== 'run_status' ||
+    !input.includeFileDetails ||
+    input.tool !== 'drizzle'
+  ) {
+    return false;
+  }
+
+  const status = asMigrationRunStatus(input.run.status);
+  if (status !== 'success' && status !== 'skipped') {
+    return false;
+  }
+
+  const hasDetails =
+    (input.storedPreview.fileDetails?.length ?? 0) > 0 ||
+    (input.storedPreview.historyFileDetails?.length ?? 0) > 0;
+  if (hasDetails) {
+    return false;
+  }
+
+  return (
+    input.storedPreview.sourceLabel === 'Desired schema' && input.storedPreview.declaredTotal > 0
+  );
+}
+
 function buildPendingSnapshot(input: {
   declaredPreview: DeclaredMigrationPreview;
   pendingFiles: string[];
@@ -1176,6 +1208,7 @@ function applyExecutionState(input: {
   }
 
   if (input.executionState.mode === 'desired_schema') {
+    const hasDesiredSchemaDetail = Boolean(input.executionState.desiredSchemaDetail);
     const declaredPreview = input.executionState.desiredSchemaDetail
       ? {
           ...input.declaredPreview,
@@ -1194,7 +1227,7 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal: input.executionState.desiredSchemaAligned ? declaredFiles.length : 0,
       warning: input.executionState.warning,
-      includeHistoryDetails: input.includeHistoryDetails,
+      includeHistoryDetails: input.includeHistoryDetails || hasDesiredSchemaDetail,
     });
   }
 
@@ -1296,14 +1329,25 @@ export async function buildMigrationFilePreviewByRunId(
       executionStateMode === 'run_status'
         ? normalizeStoredMigrationFilePreviewSnapshot(run.filePreview)
         : null;
-    if (storedPreview) {
+    const shouldRehydrateStoredPreview = storedPreview
+      ? shouldRehydrateStoredDesiredSchemaPreview({
+          executionStateMode,
+          includeFileDetails,
+          run,
+          storedPreview,
+          tool,
+        })
+      : false;
+
+    if (storedPreview && !shouldRehydrateStoredPreview) {
       previewByRunId.set(run.id, buildRunStatusPreviewFromStoredSnapshot({ run, storedPreview }));
       continue;
     }
 
     const isHistoricalRun =
       executionStateMode === 'run_status' && (run.status === 'success' || run.status === 'skipped');
-    const includeDetailsForRun = includeFileDetails && tool !== 'drizzle';
+    const includeDetailsForRun =
+      includeFileDetails && (tool !== 'drizzle' || shouldRehydrateStoredPreview);
     const includeHistoryDetails =
       includeFileDetails && executionStateMode === 'run_status' && isHistoricalRun;
 
@@ -1333,16 +1377,18 @@ export async function buildMigrationFilePreviewByRunId(
     }
 
     if (executionStateMode === 'run_status') {
-      previewByRunId.set(
-        run.id,
-        applyExecutionState({
-          declaredPreview,
-          executionState: resolveRunStatusExecutionState({ run, declaredPreview }) ?? {
-            mode: 'unknown',
-          },
-          includeHistoryDetails,
-        })
-      );
+      const preview = applyExecutionState({
+        declaredPreview,
+        executionState: resolveRunStatusExecutionState({ run, declaredPreview }) ?? {
+          mode: 'unknown',
+        },
+        includeHistoryDetails,
+      });
+      previewByRunId.set(run.id, preview);
+
+      if (shouldRehydrateStoredPreview && (preview.historyFileDetails?.length ?? 0) > 0) {
+        await persistMigrationRunFilePreview(run.id, preview).catch(() => undefined);
+      }
       continue;
     }
 

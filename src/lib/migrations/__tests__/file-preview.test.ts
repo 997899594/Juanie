@@ -5,6 +5,7 @@ import {
   resolveMigrationPendingState,
 } from '@/lib/migrations/file-preview';
 
+let drizzleExportCount = 0;
 const migrationFilesByPath = new Map<
   string,
   Array<{
@@ -18,6 +19,26 @@ mock.module('@/lib/migrations/fetch', () => ({
     migrationFilesByPath.get(path) ?? [],
   listRepositoryDirectoryFromRepoPath: async () => [],
   readRepositoryFileFromRepoPath: async () => null,
+}));
+
+mock.module('@/lib/migrations/desired-schema', () => ({
+  exportDesiredSchemaFromRepository: async () => {
+    drizzleExportCount += 1;
+    return {
+      schemaSql: 'CREATE TABLE notes (id uuid primary key);',
+      schemaFileUrl: 'file:///tmp/desired-schema.sql',
+      sourceConfigPath: 'drizzle.config.mjs',
+      cleanup: async () => {},
+    };
+  },
+}));
+
+mock.module('@/lib/migrations/atlas', () => ({
+  diffDatabaseSchemaAgainstDesiredSchema: async () => ({ hasChanges: false, diffSql: '' }),
+  extractAtlasMigrationVersion: (fileName: string) => fileName.match(/^(\d+)/)?.[1] ?? null,
+  getAppliedAtlasVersions: async () => [],
+  isAtlasDatabaseTarget: (database: { type: string }) =>
+    database.type === 'postgresql' || database.type === 'mysql',
 }));
 
 describe('migration file preview pending state', () => {
@@ -184,6 +205,7 @@ describe('migration file preview pending state', () => {
   });
 
   it('does not generate historical drizzle details when no stored snapshot exists', async () => {
+    drizzleExportCount = 0;
     const previewByRunId = await buildMigrationFilePreviewByRunId(
       [
         {
@@ -205,6 +227,85 @@ describe('migration file preview pending state', () => {
     expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
     expect(preview?.historyFileDetails).toBeUndefined();
     expect(preview?.warning).toBe(null);
+    expect(drizzleExportCount).toBe(0);
+  });
+
+  it('keeps desired schema details for aligned live drizzle previews', async () => {
+    drizzleExportCount = 0;
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-drizzle-live-aligned',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle', sourceConfigPath: 'drizzle.config.mjs' },
+          status: 'queued',
+          database: {
+            id: 'database-1',
+            type: 'postgresql',
+            connectionString: 'postgres://example.invalid/db',
+          },
+        },
+      ],
+      { forceRefresh: true, includeFileDetails: true }
+    );
+    const preview = previewByRunId.get('run-drizzle-live-aligned');
+
+    expect(preview?.total).toBe(0);
+    expect(preview?.files).toEqual([]);
+    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
+    expect(preview?.historyFileDetails).toEqual([
+      {
+        path: 'desired-schema.sql',
+        content: 'CREATE TABLE notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+    expect(drizzleExportCount).toBe(1);
+  });
+
+  it('rehydrates stored aligned drizzle previews that were saved without details', async () => {
+    drizzleExportCount = 0;
+
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-drizzle-success-with-empty-snapshot',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle', sourceConfigPath: 'drizzle.config.mjs' },
+          status: 'success',
+          filePreview: {
+            sourceLabel: 'Desired schema',
+            files: [],
+            total: 0,
+            declaredTotal: 1,
+            executedTotal: 1,
+            truncated: false,
+            warning: null,
+          },
+          database: {
+            id: 'database-1',
+            type: 'postgresql',
+            connectionString: 'postgres://example.invalid/db',
+          },
+        },
+      ],
+      { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
+    );
+    const preview = previewByRunId.get('run-drizzle-success-with-empty-snapshot');
+
+    expect(preview?.total).toBe(0);
+    expect(preview?.files).toEqual([]);
+    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
+    expect(preview?.historyFileDetails).toEqual([
+      {
+        path: 'desired-schema.sql',
+        content: 'CREATE TABLE notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+    expect(drizzleExportCount).toBe(1);
   });
 
   it('attaches content details only for pending preview files', async () => {
