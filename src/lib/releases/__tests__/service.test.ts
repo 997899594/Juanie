@@ -224,6 +224,68 @@ describe('release service', () => {
     });
   });
 
+  it('counts copied source delivery artifacts on promoted release details', () => {
+    const result = buildReleaseDetailPageData({
+      projectId: 'proj-1',
+      release: {
+        id: 'rel-production',
+        projectId: 'proj-1',
+        environmentId: 'env-production',
+        createdAt: new Date('2026-03-26T10:00:00.000Z'),
+        updatedAt: new Date('2026-03-26T10:10:00.000Z'),
+        status: 'succeeded',
+        errorMessage: null,
+        sourceRef: 'refs/heads/main',
+        sourceCommitSha: 'abcdef1234567890',
+        sourceRepository: 'demo/repo',
+        sourceRelease: {
+          id: 'rel-staging',
+          summary: 'staging 发布 · abcdef1',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abcdef1234567890',
+          environment: {
+            id: 'env-staging',
+            name: 'staging',
+            isPreview: false,
+            isProduction: false,
+          },
+        },
+        environment: {
+          id: 'env-production',
+          name: 'production',
+          isProduction: true,
+        },
+        artifacts: [
+          {
+            id: 'image-1',
+            kind: 'image',
+            serviceId: 'svc-web',
+            service: { id: 'svc-web', name: 'web' },
+            imageUrl: 'ghcr.io/demo/web:2',
+            imageDigest: null,
+          },
+          {
+            id: 'artifact-1',
+            releaseId: 'rel-production',
+            kind: 'package',
+            name: 'nexusnote',
+            variant: 'bundle',
+            platform: 'linux-amd64',
+            format: 'tgz',
+            uri: 's3://artifacts/nexusnote-bundle.tgz',
+            status: 'succeeded',
+          },
+        ],
+        deployments: [{ id: 'dep-1', status: 'running', serviceId: 'svc-web' }],
+        migrationRuns: [],
+      },
+      previousRelease: null,
+    });
+
+    expect(result?.release.stats.find((stat) => stat.label === '交付物')?.value).toBe(1);
+    expect(result?.release.artifacts.length).toBe(2);
+  });
+
   it('returns null for project scope mismatches', () => {
     const result = buildReleaseDetailPageData({
       projectId: 'proj-1',

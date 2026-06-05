@@ -41,6 +41,21 @@ export function getDeliveryReleaseArtifacts<T extends ReleaseArtifactRecordLike>
   return artifacts.filter((artifact) => !isDeployableReleaseArtifact(artifact));
 }
 
+export function getReleaseArtifactIdentity(artifact: ReleaseArtifactRecordLike): string {
+  if (isDeployableReleaseArtifact(artifact)) {
+    return ['image', artifact.serviceId ?? artifact.service?.id ?? artifact.service?.name ?? '']
+      .filter(Boolean)
+      .join(':');
+  }
+
+  return [
+    getReleaseArtifactKind(artifact),
+    artifact.name ?? '',
+    artifact.variant ?? '',
+    artifact.platform ?? '',
+  ].join(':');
+}
+
 export function getReleaseArtifactDisplayName(artifact: ReleaseArtifactRecordLike): string {
   if (artifact.service?.name) {
     return artifact.service.name;

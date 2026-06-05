@@ -30,7 +30,7 @@ import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
-import { getDeployableReleaseArtifacts } from './artifacts';
+import { getDeliveryReleaseArtifacts, getDeployableReleaseArtifacts } from './artifacts';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
@@ -158,6 +158,18 @@ async function persistRelease(
   }
 
   const artifacts = await resolveReleaseServices(project.id, project.services, requestedServices);
+  const sourceDeliveryArtifacts = meta.sourceReleaseId
+    ? getDeliveryReleaseArtifacts(
+        (
+          await db.query.releases.findFirst({
+            where: and(eq(releases.id, meta.sourceReleaseId), eq(releases.projectId, project.id)),
+            with: {
+              artifacts: true,
+            },
+          })
+        )?.artifacts ?? []
+      )
+    : [];
   const deployableArtifacts = getDeployableReleaseArtifacts(artifacts);
   const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
 
@@ -225,6 +237,27 @@ async function persistRelease(
       status: artifact.status,
       imageUrl: artifact.imageUrl,
       imageDigest: artifact.imageDigest,
+    })),
+    ...sourceDeliveryArtifacts.map((artifact) => ({
+      releaseId: release.id,
+      serviceId: null,
+      kind: artifact.kind,
+      name: artifact.name,
+      variant: artifact.variant,
+      platform: artifact.platform,
+      format: artifact.format,
+      uri: artifact.uri,
+      checksum: artifact.checksum,
+      sizeBytes: artifact.sizeBytes,
+      sbomUri: artifact.sbomUri,
+      provenanceUri: artifact.provenanceUri,
+      status: artifact.status,
+      imageUrl: null,
+      imageDigest: null,
+      sourceServiceId: artifact.sourceServiceId,
+      sourceImageUri: artifact.sourceImageUri,
+      sourceImageDigest: artifact.sourceImageDigest,
+      sourceImagePlatform: artifact.sourceImagePlatform,
     })),
   ]);
 

@@ -96,6 +96,7 @@ export interface ReleaseViewLike {
   previewReviewMetadata?: PreviewReviewMetadata | null;
   artifacts: Array<{
     id?: string;
+    releaseId?: string | null;
     kind?: string | null;
     name?: string | null;
     variant?: string | null;

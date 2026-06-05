@@ -15,6 +15,7 @@ import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
 import {
   getDeliveryReleaseArtifacts,
   getDeployableReleaseArtifacts,
+  getReleaseArtifactIdentity,
   getReleaseArtifactUri,
 } from '@/lib/releases/artifacts';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
@@ -150,25 +151,27 @@ function attachReleaseApprovalTokens<TRelease extends Awaited<ReturnType<typeof 
 async function attachRelatedDeliveryArtifacts<
   TRelease extends Awaited<ReturnType<typeof getReleaseById>>,
 >(release: TRelease) {
-  if (!release?.sourceCommitSha) {
+  if (!release) {
     return release;
   }
 
-  const relatedReleases = await db.query.releases.findMany({
-    where: and(
-      eq(releases.projectId, release.projectId),
-      eq(releases.environmentId, release.environmentId),
-      eq(releases.sourceRef, release.sourceRef),
-      eq(releases.sourceCommitSha, release.sourceCommitSha)
-    ),
-    with: {
-      artifacts: {
+  const relatedReleases = release.sourceCommitSha
+    ? await db.query.releases.findMany({
+        where: and(
+          eq(releases.projectId, release.projectId),
+          eq(releases.environmentId, release.environmentId),
+          eq(releases.sourceRef, release.sourceRef),
+          eq(releases.sourceCommitSha, release.sourceCommitSha)
+        ),
         with: {
-          service: true,
+          artifacts: {
+            with: {
+              service: true,
+            },
+          },
         },
-      },
-    },
-  });
+      })
+    : [];
   const existingArtifactIds = new Set(
     release.artifacts.map((artifact) => artifact.id).filter(Boolean)
   );
@@ -178,13 +181,44 @@ async function attachRelatedDeliveryArtifacts<
     )
   );
 
-  if (relatedDeliveryArtifacts.length === 0) {
+  const sourceDeliveryArtifacts = release.sourceRelease
+    ? await db.query.releases.findFirst({
+        where: and(
+          eq(releases.id, release.sourceRelease.id),
+          eq(releases.projectId, release.projectId)
+        ),
+        with: {
+          artifacts: {
+            with: {
+              service: true,
+            },
+          },
+        },
+      })
+    : null;
+  const existingArtifactKeys = new Set(
+    release.artifacts.map((artifact) => getReleaseArtifactIdentity(artifact))
+  );
+  const fallbackDeliveryArtifacts = [
+    ...getDeliveryReleaseArtifacts(sourceDeliveryArtifacts?.artifacts ?? []),
+    ...relatedDeliveryArtifacts,
+  ].filter((artifact) => {
+    const key = getReleaseArtifactIdentity(artifact);
+    if (existingArtifactKeys.has(key)) {
+      return false;
+    }
+
+    existingArtifactKeys.add(key);
+    return true;
+  });
+
+  if (fallbackDeliveryArtifacts.length === 0) {
     return release;
   }
 
   return {
     ...release,
-    artifacts: [...release.artifacts, ...relatedDeliveryArtifacts],
+    artifacts: [...release.artifacts, ...fallbackDeliveryArtifacts],
   };
 }
 

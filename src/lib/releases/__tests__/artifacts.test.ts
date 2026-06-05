@@ -3,6 +3,7 @@ import {
   getDeliveryReleaseArtifacts,
   getDeployableReleaseArtifacts,
   getReleaseArtifactDisplayName,
+  getReleaseArtifactIdentity,
   getReleaseArtifactKindLabel,
   getReleaseArtifactUri,
   isDeployableReleaseArtifact,
@@ -51,6 +52,17 @@ describe('release artifact helpers', () => {
         platform: 'any',
       })
     ).toBe('kit / viewer-runtime / any');
+  });
+
+  it('builds stable identities for delivery artifacts across releases', () => {
+    expect(
+      getReleaseArtifactIdentity({
+        kind: 'package',
+        name: 'kit',
+        variant: 'viewer-runtime',
+        platform: 'linux-amd64',
+      })
+    ).toBe('package:kit:viewer-runtime:linux-amd64');
   });
 
   it('labels artifact kinds with product-facing delivery language', () => {
