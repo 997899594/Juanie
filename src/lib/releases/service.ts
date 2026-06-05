@@ -18,6 +18,7 @@ import {
   getReleaseArtifactIdentity,
   getReleaseArtifactUri,
 } from '@/lib/releases/artifacts';
+import { buildDeliveryArtifactViewItems } from '@/lib/releases/delivery-artifact-view';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import type { PromotionPlanSnapshot } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -270,6 +271,11 @@ function buildProjectReleaseListItems<
       imageUrl: getReleaseArtifactUri(artifact) ?? '',
       service: artifact.service!,
     })),
+    deliveryArtifacts: buildDeliveryArtifactViewItems({
+      currentReleaseId: release.id,
+      currentArtifacts: release.artifacts,
+      sourceRelease: release.sourceRelease,
+    }),
   }));
 }
 
@@ -352,6 +358,16 @@ export async function getProjectReleaseListData(project: ProjectReleaseContext) 
       artifacts: {
         with: {
           service: true,
+        },
+      },
+      sourceRelease: {
+        with: {
+          artifacts: {
+            with: {
+              service: true,
+            },
+          },
+          environment: true,
         },
       },
       deployments: {

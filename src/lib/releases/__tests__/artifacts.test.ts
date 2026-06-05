@@ -8,6 +8,7 @@ import {
   getReleaseArtifactUri,
   isDeployableReleaseArtifact,
 } from '@/lib/releases/artifacts';
+import { buildDeliveryArtifactViewItems } from '@/lib/releases/delivery-artifact-view';
 
 describe('release artifact helpers', () => {
   it('keeps image artifacts deployable while leaving customer packages out of deployment', () => {
@@ -68,5 +69,86 @@ describe('release artifact helpers', () => {
   it('labels artifact kinds with product-facing delivery language', () => {
     expect(getReleaseArtifactKindLabel({ kind: 'image' })).toBe('部署镜像');
     expect(getReleaseArtifactKindLabel({ kind: 'baremetal' })).toBe('裸机包');
+  });
+
+  it('builds delivery artifact views with source release fallback and dedupe', () => {
+    const artifacts = buildDeliveryArtifactViewItems({
+      currentReleaseId: 'rel-production',
+      currentArtifacts: [
+        {
+          id: 'image-web',
+          releaseId: 'rel-production',
+          kind: 'image',
+          serviceId: 'svc-web',
+          service: { id: 'svc-web', name: 'web' },
+          imageUrl: 'ghcr.io/demo/web:2',
+        },
+        {
+          id: 'package-production',
+          releaseId: 'rel-production',
+          kind: 'package',
+          name: 'nexusnote',
+          variant: 'bundle',
+          platform: 'linux-amd64',
+          format: 'tgz',
+          uri: 's3://artifacts/nexusnote-production.tgz',
+          status: 'succeeded',
+        },
+      ],
+      sourceRelease: {
+        id: 'rel-staging',
+        artifacts: [
+          {
+            id: 'package-staging',
+            releaseId: 'rel-staging',
+            kind: 'package',
+            name: 'nexusnote',
+            variant: 'bundle',
+            platform: 'linux-amd64',
+            format: 'tgz',
+            uri: 's3://artifacts/nexusnote-staging.tgz',
+            status: 'succeeded',
+          },
+          {
+            id: 'cli-staging',
+            releaseId: 'rel-staging',
+            kind: 'package',
+            name: 'nexusnote-cli',
+            variant: 'bundle',
+            platform: 'linux-amd64',
+            format: 'tgz',
+            uri: 's3://artifacts/nexusnote-cli.tgz',
+            status: 'succeeded',
+          },
+        ],
+      },
+    });
+
+    expect(artifacts).toEqual([
+      {
+        id: 'package-production',
+        releaseId: 'rel-production',
+        kind: 'package',
+        name: 'nexusnote',
+        variant: 'bundle',
+        platform: 'linux-amd64',
+        format: 'tgz',
+        uri: 's3://artifacts/nexusnote-production.tgz',
+        status: 'succeeded',
+        sourceImageDigest: undefined,
+      },
+      {
+        id: 'cli-staging',
+        releaseId: 'rel-staging',
+        kind: 'package',
+        name: 'nexusnote-cli',
+        variant: 'bundle',
+        platform: 'linux-amd64',
+        format: 'tgz',
+        uri: 's3://artifacts/nexusnote-cli.tgz',
+        status: 'succeeded',
+        sourceImageDigest: undefined,
+      },
+    ]);
   });
 });

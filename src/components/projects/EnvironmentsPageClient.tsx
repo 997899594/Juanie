@@ -3,6 +3,10 @@ import { Activity, Database, ExternalLink, GitBranch, Globe, Package2 } from 'lu
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  DeliveryArtifactList,
+  type DeliveryArtifactListItem,
+} from '@/components/projects/DeliveryArtifactList';
 import { EnvironmentRollbackAction } from '@/components/projects/EnvironmentRollbackAction';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { PromotionAction } from '@/components/projects/PromotionAction';
@@ -243,6 +247,7 @@ interface EnvironmentRecord {
     syncedAtLabel: string | null;
     summary: string;
   } | null;
+  latestDeliveryArtifacts: DeliveryArtifactListItem[];
   recentActivity: EnvironmentActivityItem[];
   cleanupState: {
     state: 'active' | 'expired_ready' | 'expired_blocked';
@@ -398,6 +403,25 @@ function EnvironmentOverviewPanel({
             </div>
           ))}
         </div>
+      </section>
+
+      <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Package2 className="h-4 w-4" />
+            最新交付物
+          </div>
+          {environment.latestReleaseCard ? (
+            <span className="text-xs text-muted-foreground">
+              {environment.latestReleaseCard.title}
+            </span>
+          ) : null}
+        </div>
+        <DeliveryArtifactList
+          artifacts={environment.latestDeliveryArtifacts}
+          emptyLabel="当前环境暂无客户交付物。"
+          fallbackReleaseId={environment.latestReleaseCard?.id}
+        />
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">

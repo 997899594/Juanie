@@ -60,6 +60,26 @@ export interface ReleaseViewLike {
     summary?: string | null;
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
+    artifacts?: Array<{
+      id?: string;
+      releaseId?: string | null;
+      kind?: string | null;
+      name?: string | null;
+      variant?: string | null;
+      platform?: string | null;
+      format?: string | null;
+      uri?: string | null;
+      status?: string | null;
+      serviceId?: string | null;
+      service?: {
+        id: string;
+        name: string;
+      } | null;
+      imageUrl?: string | null;
+      imageDigest?: string | null;
+      sourceImageDigest?: string | null;
+      sourceImagePlatform?: string | null;
+    }> | null;
     environment?: {
       id: string;
       name?: string | null;

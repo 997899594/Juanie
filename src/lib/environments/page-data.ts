@@ -132,6 +132,13 @@ export async function getProjectEnvironmentListData(input: {
       orderBy: [desc(releases.createdAt)],
       with: {
         environment: true,
+        artifacts: true,
+        sourceRelease: {
+          with: {
+            artifacts: true,
+            environment: true,
+          },
+        },
       },
     }),
     db.query.deployments.findMany({

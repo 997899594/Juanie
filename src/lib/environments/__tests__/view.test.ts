@@ -139,4 +139,54 @@ describe('environment list view', () => {
     expect(environment?.gitTracking?.trackingBranchName).toBe('juanie-env-staging');
     expect(environment?.gitTracking?.shortCommitSha).toBe(null);
   });
+
+  it('surfaces latest delivery artifacts from promoted release sources', () => {
+    const [environment] = decorateEnvironmentList([
+      {
+        id: 'env-production',
+        name: 'production',
+        kind: 'production' as const,
+        latestRelease: {
+          id: 'rel-production',
+          status: 'succeeded',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abcdef1234567890',
+          artifacts: [],
+          sourceRelease: {
+            id: 'rel-staging',
+            sourceRef: 'refs/heads/main',
+            sourceCommitSha: 'abcdef1234567890',
+            artifacts: [
+              {
+                id: 'artifact-staging',
+                releaseId: 'rel-staging',
+                kind: 'package',
+                name: 'nexusnote',
+                variant: 'bundle',
+                platform: 'linux-amd64',
+                format: 'tgz',
+                uri: 's3://artifacts/nexusnote-bundle.tgz',
+                status: 'succeeded',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(environment?.latestDeliveryArtifacts).toEqual([
+      {
+        id: 'artifact-staging',
+        releaseId: 'rel-staging',
+        kind: 'package',
+        name: 'nexusnote',
+        variant: 'bundle',
+        platform: 'linux-amd64',
+        format: 'tgz',
+        uri: 's3://artifacts/nexusnote-bundle.tgz',
+        status: 'succeeded',
+        sourceImageDigest: undefined,
+      },
+    ]);
+  });
 });

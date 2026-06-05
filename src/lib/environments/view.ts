@@ -19,6 +19,11 @@ import {
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
 import { type EnvironmentPolicySnapshot, evaluateEnvironmentPolicy } from '@/lib/policies/delivery';
 import {
+  buildDeliveryArtifactViewItems,
+  type DeliveryArtifactViewItem,
+  type DeliveryArtifactViewSourceArtifact,
+} from '@/lib/releases/delivery-artifact-view';
+import {
   buildEnvironmentTrackingBranchName,
   buildReleaseEnvironmentTagName,
 } from '@/lib/releases/environment-tracking-names';
@@ -69,11 +74,13 @@ interface EnvironmentViewLike {
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
     createdAt?: Date | string | null;
+    artifacts?: DeliveryArtifactViewSourceArtifact[] | null;
     sourceRelease?: {
       id: string;
       summary?: string | null;
       sourceRef?: string | null;
       sourceCommitSha?: string | null;
+      artifacts?: DeliveryArtifactViewSourceArtifact[] | null;
       environment?: {
         id: string;
         name?: string | null;
@@ -133,11 +140,27 @@ export interface EnvironmentListDecorations {
     syncedAtLabel: string | null;
     summary: string;
   } | null;
+  latestDeliveryArtifacts: DeliveryArtifactViewItem[];
   cleanupState: {
     state: 'active' | 'expired_ready' | 'expired_blocked';
     label: string;
     summary: string;
   } | null;
+}
+
+function buildLatestDeliveryArtifacts(
+  environment: EnvironmentViewLike
+): EnvironmentListDecorations['latestDeliveryArtifacts'] {
+  const latestRelease = environment.latestRelease;
+  if (!latestRelease) {
+    return [];
+  }
+
+  return buildDeliveryArtifactViewItems({
+    currentReleaseId: latestRelease.id,
+    currentArtifacts: latestRelease.artifacts,
+    sourceRelease: latestRelease.sourceRelease,
+  });
 }
 
 function buildEnvironmentGitTracking(
@@ -249,6 +272,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
         }
       : null;
     const gitTracking = buildEnvironmentGitTracking(environment, sourceBuild);
+    const latestDeliveryArtifacts = buildLatestDeliveryArtifacts(environment);
     const policy = evaluateEnvironmentPolicy(environment);
     const previewLifecycle = isPreviewEnvironment(environment)
       ? buildPreviewLifecycleSummary({
@@ -338,6 +362,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
       latestReleaseCard,
       sourceBuild,
       gitTracking,
+      latestDeliveryArtifacts,
       cleanupState,
     };
   });
