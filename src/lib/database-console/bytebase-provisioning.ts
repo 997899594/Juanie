@@ -141,6 +141,16 @@ async function parseJson(response: Response): Promise<Record<string, unknown>> {
   return ((await response.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
 }
 
+async function describeBytebaseResponse(response: Response): Promise<string> {
+  const payload = await parseJson(response);
+  const message = payload.message ?? payload.error ?? payload.detail;
+  if (typeof message === 'string' && message.trim()) {
+    return `${response.status}：${message.trim()}`;
+  }
+
+  return String(response.status);
+}
+
 function isPermissionDeniedStatus(status: number): boolean {
   return status === 401 || status === 403;
 }
@@ -272,16 +282,15 @@ class BytebaseProvisioningClient {
     }
 
     if (existing.status !== 404) {
-      throw new Error(`读取 Bytebase project 失败：${existing.status}`);
+      throw new Error(`读取 Bytebase project 失败：${await describeBytebaseResponse(existing)}`);
     }
 
     const created = await this.post(`/v1/projects?projectId=${encodeURIComponent(input.id)}`, {
       title: input.title,
-      key: input.id.slice(0, 20).toUpperCase(),
     });
 
     if (!created.ok) {
-      throw new Error(`创建 Bytebase project 失败：${created.status}`);
+      throw new Error(`创建 Bytebase project 失败：${await describeBytebaseResponse(created)}`);
     }
   }
 
@@ -304,7 +313,9 @@ class BytebaseProvisioningClient {
     }
 
     if (existing.status !== 404) {
-      throw new Error(`读取 Bytebase SSO provider 失败：${existing.status}`);
+      throw new Error(
+        `读取 Bytebase SSO provider 失败：${await describeBytebaseResponse(existing)}`
+      );
     }
 
     const created = await this.post(`/v1/idps?identityProviderId=${idpId}`, {
@@ -333,7 +344,9 @@ class BytebaseProvisioningClient {
         return;
       }
 
-      throw new Error(`创建 Bytebase SSO provider 失败：${created.status}`);
+      throw new Error(
+        `创建 Bytebase SSO provider 失败：${await describeBytebaseResponse(created)}`
+      );
     }
   }
 
@@ -344,7 +357,9 @@ class BytebaseProvisioningClient {
     }
 
     if (existing.status !== 404) {
-      throw new Error(`读取 Bytebase environment 失败：${existing.status}`);
+      throw new Error(
+        `读取 Bytebase environment 失败：${await describeBytebaseResponse(existing)}`
+      );
     }
 
     const created = await this.post(
@@ -355,7 +370,7 @@ class BytebaseProvisioningClient {
     );
 
     if (!created.ok) {
-      throw new Error(`创建 Bytebase environment 失败：${created.status}`);
+      throw new Error(`创建 Bytebase environment 失败：${await describeBytebaseResponse(created)}`);
     }
   }
 
@@ -368,7 +383,7 @@ class BytebaseProvisioningClient {
   }): Promise<void> {
     const existing = await this.get(`/v1/instances/${input.id}`);
     if (!existing.ok && existing.status !== 404) {
-      throw new Error(`读取 Bytebase instance 失败：${existing.status}`);
+      throw new Error(`读取 Bytebase instance 失败：${await describeBytebaseResponse(existing)}`);
     }
 
     if (existing.status === 404) {
@@ -391,13 +406,13 @@ class BytebaseProvisioningClient {
       });
 
       if (!created.ok) {
-        throw new Error(`创建 Bytebase instance 失败：${created.status}`);
+        throw new Error(`创建 Bytebase instance 失败：${await describeBytebaseResponse(created)}`);
       }
     }
 
     const synced = await this.post(`/v1/instances/${input.id}:sync`);
     if (!synced.ok) {
-      throw new Error(`同步 Bytebase instance 失败：${synced.status}`);
+      throw new Error(`同步 Bytebase instance 失败：${await describeBytebaseResponse(synced)}`);
     }
   }
 }

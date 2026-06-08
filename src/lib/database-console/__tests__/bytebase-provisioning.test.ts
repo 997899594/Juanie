@@ -65,6 +65,10 @@ describe('provisionBytebaseDatabaseConsole', () => {
       'instance=instances%2Fjuanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade'
     );
     expect(result.url).toContain('database=app');
+    const createProjectCall = calls.find(
+      (call) => call.method === 'POST' && call.url.includes('/v1/projects?projectId=')
+    );
+    expect(createProjectCall?.body).toEqual({ title: 'nexusnote' });
     expect(calls.map((call) => call.method)).toEqual([
       'POST',
       'GET',
@@ -192,5 +196,68 @@ describe('provisionBytebaseDatabaseConsole', () => {
     expect(result.url).toContain('https://bytebase.juanie.art/sql-editor');
     expect(calls.some((call) => call.url.endsWith('/v1/idps/juanie'))).toBe(true);
     expect(calls.some((call) => call.url.includes('/v1/projects/'))).toBe(true);
+  });
+
+  it('includes Bytebase response details when project creation fails', async () => {
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.includes('/v1/idps/')) {
+        return jsonResponse({}, method === 'GET' ? 404 : 200);
+      }
+
+      if (requestUrl.includes('/v1/projects/') && method === 'GET') {
+        return jsonResponse({}, 404);
+      }
+
+      if (requestUrl.includes('/v1/projects?projectId=')) {
+        return jsonResponse({ message: 'unknown field "key"' }, 400);
+      }
+
+      return jsonResponse({});
+    });
+
+    let error: unknown;
+    try {
+      await provisionBytebaseDatabaseConsole(
+        {
+          project: { id: 'project-1', name: 'nexusnote' },
+          environment: { id: 'env-1', name: 'production' },
+          database: {
+            id: 'database-1',
+            name: 'primary',
+            type: 'postgresql',
+            connectionString:
+              'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
+          },
+        },
+        {
+          enabled: true,
+          workspaceUrl: 'https://bytebase.juanie.art',
+          apiToken: null,
+          serviceAccountEmail: 'service@juanie.art',
+          serviceAccountKey: 'service-key',
+          bootstrapEmail: null,
+          bootstrapPassword: null,
+          bootstrapTitle: 'Juanie Platform',
+          oidcClientId: 'bytebase',
+          oidcClientSecret: 'oidc-secret',
+          oidcIssuer: 'https://juanie.art',
+        },
+        { fetchFn: fetchFn as unknown as typeof fetch }
+      );
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect(error instanceof Error).toBe(true);
+    expect(error instanceof Error ? error.message : String(error)).toBe(
+      '创建 Bytebase project 失败：400：unknown field "key"'
+    );
   });
 });
