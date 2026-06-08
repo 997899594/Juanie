@@ -135,6 +135,10 @@ function expandDatabaseUrlTemplate(
   );
 }
 
+function isBytebaseSupportedDatabaseType(type: string): boolean {
+  return type === 'postgresql' || type === 'mysql';
+}
+
 export function getBytebaseConsoleConfig(
   env: Record<string, string | undefined> = process.env
 ): DatabaseConsoleConfig {
@@ -195,6 +199,10 @@ export function buildBytebaseDatabaseConsoleLink(input: {
   database: DatabaseConsoleDatabaseInput;
 }): DatabaseConsoleLink | null {
   if (!input.config.enabled || !input.config.workspaceUrl || !input.config.sqlEditorUrl) {
+    return null;
+  }
+
+  if (!isBytebaseSupportedDatabaseType(input.database.type)) {
     return null;
   }
 

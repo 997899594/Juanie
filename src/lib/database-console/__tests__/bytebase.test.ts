@@ -58,4 +58,23 @@ describe('Bytebase database console config', () => {
 
     expect(config.enabled).toBe(false);
   });
+
+  it('does not expose Bytebase links for unsupported database types', () => {
+    const config = getBytebaseConsoleConfig({
+      BYTEBASE_ENABLED: 'true',
+      BYTEBASE_URL: 'https://bytebase.juanie.art',
+    });
+
+    expect(
+      buildBytebaseDatabaseConsoleLink({
+        config,
+        project,
+        environment,
+        database: {
+          ...database,
+          type: 'redis',
+        },
+      })
+    ).toBe(null);
+  });
 });

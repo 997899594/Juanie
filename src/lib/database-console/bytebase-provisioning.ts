@@ -141,6 +141,10 @@ async function parseJson(response: Response): Promise<Record<string, unknown>> {
   return ((await response.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
 }
 
+function isPermissionDeniedStatus(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
 class BytebaseProvisioningClient {
   private accessToken: string | null = null;
   private cookie: string | null = null;
@@ -292,6 +296,13 @@ class BytebaseProvisioningClient {
       return;
     }
 
+    if (isPermissionDeniedStatus(existing.status)) {
+      provisioningLogger.warn('Bytebase SSO provider sync skipped because access is denied', {
+        status: existing.status,
+      });
+      return;
+    }
+
     if (existing.status !== 404) {
       throw new Error(`读取 Bytebase SSO provider 失败：${existing.status}`);
     }
@@ -315,6 +326,13 @@ class BytebaseProvisioningClient {
     });
 
     if (!created.ok) {
+      if (isPermissionDeniedStatus(created.status)) {
+        provisioningLogger.warn('Bytebase SSO provider creation skipped because access is denied', {
+          status: created.status,
+        });
+        return;
+      }
+
       throw new Error(`创建 Bytebase SSO provider 失败：${created.status}`);
     }
   }

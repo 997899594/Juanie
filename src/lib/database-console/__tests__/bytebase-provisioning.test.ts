@@ -135,4 +135,62 @@ describe('provisionBytebaseDatabaseConsole', () => {
     expect(calls[0]).toBe('https://bytebase.juanie.art/v1/auth/login');
     expect(calls[1]).toBe('https://bytebase.juanie.art/v1/auth/signup');
   });
+
+  it('does not block console provisioning when SSO provider management is forbidden', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+      calls.push({ url: requestUrl, method });
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.endsWith('/v1/idps/juanie')) {
+        return jsonResponse({ message: 'permission denied' }, 403);
+      }
+
+      if (
+        requestUrl.includes('/v1/projects/') ||
+        requestUrl.includes('/v1/environments/') ||
+        requestUrl.includes('/v1/instances/')
+      ) {
+        return jsonResponse({}, method === 'GET' ? 404 : 200);
+      }
+
+      return jsonResponse({});
+    });
+
+    const result = await provisionBytebaseDatabaseConsole(
+      {
+        project: { id: 'project-1', name: 'nexusnote' },
+        environment: { id: 'env-1', name: 'production' },
+        database: {
+          id: 'database-1',
+          name: 'primary',
+          type: 'postgresql',
+          connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
+        },
+      },
+      {
+        enabled: true,
+        workspaceUrl: 'https://bytebase.juanie.art',
+        apiToken: null,
+        serviceAccountEmail: 'service@juanie.art',
+        serviceAccountKey: 'service-key',
+        bootstrapEmail: null,
+        bootstrapPassword: null,
+        bootstrapTitle: 'Juanie Platform',
+        oidcClientId: 'bytebase',
+        oidcClientSecret: 'oidc-secret',
+        oidcIssuer: 'https://juanie.art',
+      },
+      { fetchFn: fetchFn as unknown as typeof fetch }
+    );
+
+    expect(result.url).toContain('https://bytebase.juanie.art/sql-editor');
+    expect(calls.some((call) => call.url.endsWith('/v1/idps/juanie'))).toBe(true);
+    expect(calls.some((call) => call.url.includes('/v1/projects/'))).toBe(true);
+  });
 });
