@@ -64,7 +64,6 @@ describe('provisionBytebaseDatabaseConsole', () => {
 
       if (
         requestUrl.includes('/v1/projects/') ||
-        requestUrl.includes('/v1/environments/') ||
         requestUrl.includes('/v1/instances/') ||
         requestUrl.includes('/v1/idps/')
       ) {
@@ -90,6 +89,20 @@ describe('provisionBytebaseDatabaseConsole', () => {
     const createInstanceCall = calls.find(
       (call) => call.method === 'POST' && call.url.includes('/v1/instances?instanceId=')
     );
+    expect(
+      createInstanceCall?.body &&
+        typeof createInstanceCall.body === 'object' &&
+        'environment' in createInstanceCall.body
+        ? createInstanceCall.body.environment
+        : null
+    ).toBe('environments/prod');
+    expect(
+      createInstanceCall?.body &&
+        typeof createInstanceCall.body === 'object' &&
+        'activation' in createInstanceCall.body
+        ? createInstanceCall.body.activation
+        : null
+    ).toBe(false);
     expect(
       createInstanceCall?.body &&
         typeof createInstanceCall.body === 'object' &&
@@ -141,8 +154,6 @@ describe('provisionBytebaseDatabaseConsole', () => {
       'POST',
       'GET',
       'POST',
-      'GET',
-      'POST',
       'POST',
       'GET',
       'POST',
@@ -171,7 +182,6 @@ describe('provisionBytebaseDatabaseConsole', () => {
 
       if (
         requestUrl.includes('/v1/projects/') ||
-        requestUrl.includes('/v1/environments/') ||
         requestUrl.includes('/v1/instances/') ||
         requestUrl.includes('/v1/idps/') ||
         requestUrl.includes('/v1/users/')
@@ -214,6 +224,46 @@ describe('provisionBytebaseDatabaseConsole', () => {
     expect(calls[1]).toBe('https://bytebase.juanie.art/v1/auth/signup');
   });
 
+  it('maps non-production Juanie environments to the Bytebase test environment', async () => {
+    const calls: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ url: requestUrl, method, body });
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({ bindings: [] });
+      }
+
+      return jsonResponse({}, method === 'GET' ? 404 : 200);
+    });
+
+    await provisionBytebaseDatabaseConsole(
+      {
+        ...target,
+        environment: { id: 'staging-env-id', name: 'staging', isProduction: false },
+      },
+      config,
+      { fetchFn: fetchFn as unknown as typeof fetch }
+    );
+
+    const createInstanceCall = calls.find(
+      (call) => call.method === 'POST' && call.url.includes('/v1/instances?instanceId=')
+    );
+    expect(
+      createInstanceCall?.body &&
+        typeof createInstanceCall.body === 'object' &&
+        'environment' in createInstanceCall.body
+        ? createInstanceCall.body.environment
+        : null
+    ).toBe('environments/test');
+  });
+
   it('does not block console provisioning when SSO provider management is forbidden', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
@@ -235,7 +285,6 @@ describe('provisionBytebaseDatabaseConsole', () => {
 
       if (
         requestUrl.includes('/v1/projects/') ||
-        requestUrl.includes('/v1/environments/') ||
         requestUrl.includes('/v1/instances/') ||
         requestUrl.includes('/v1/users/')
       ) {

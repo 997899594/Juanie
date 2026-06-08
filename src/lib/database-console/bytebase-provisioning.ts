@@ -23,6 +23,7 @@ export interface BytebaseProvisioningTarget {
   environment: {
     id: string;
     name: string;
+    isProduction?: boolean | null;
   };
   database: {
     id: string;
@@ -136,6 +137,13 @@ function getEngine(type: string): BytebaseEngine {
 
 function normalizeEmail(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? '';
+}
+
+function resolveBytebaseEnvironmentId(
+  environment: BytebaseProvisioningTarget['environment']
+): string {
+  const name = environment.name.trim().toLowerCase();
+  return environment.isProduction || name === 'production' || name === 'prod' ? 'prod' : 'test';
 }
 
 function escapeCelString(value: string): string {
@@ -432,30 +440,6 @@ class BytebaseProvisioningClient {
     }
   }
 
-  async ensureEnvironment(input: { id: string; title: string }): Promise<void> {
-    const existing = await this.get(`/v1/environments/${input.id}`);
-    if (existing.ok) {
-      return;
-    }
-
-    if (existing.status !== 404) {
-      throw new Error(
-        `读取 Bytebase environment 失败：${await describeBytebaseResponse(existing)}`
-      );
-    }
-
-    const created = await this.post(
-      `/v1/environments?environmentId=${encodeURIComponent(input.id)}`,
-      {
-        title: input.title,
-      }
-    );
-
-    if (!created.ok) {
-      throw new Error(`创建 Bytebase environment 失败：${await describeBytebaseResponse(created)}`);
-    }
-  }
-
   async ensureUser(input: { email: string; title: string | null }): Promise<void> {
     const existing = await this.get(`/v1/users/${encodeURIComponent(input.email)}`);
     if (existing.ok) {
@@ -503,8 +487,10 @@ class BytebaseProvisioningClient {
       const created = await this.post(`/v1/instances?instanceId=${encodeURIComponent(input.id)}`, {
         title: input.title,
         engine: input.engine,
+        // Bytebase 3.x keeps environments in the workspace ENVIRONMENT setting.
+        // The REST API accepts the setting id as an environment resource name.
         environment: `environments/${input.environmentId}`,
-        activation: true,
+        activation: false,
         dataSources: [
           {
             id: 'admin',
@@ -618,7 +604,7 @@ export async function provisionBytebaseDatabaseConsole(
   }
 
   const projectId = `juanie-${toBytebaseId(target.project.id, 'project')}`;
-  const environmentId = `juanie-${toBytebaseId(target.environment.id, 'environment')}`;
+  const environmentId = resolveBytebaseEnvironmentId(target.environment);
   const instanceId = `juanie-${toBytebaseId(target.database.id, 'database')}`;
   const databaseName = target.database.databaseName?.trim() || connection.databaseName;
   const client = new BytebaseProvisioningClient(config, options);
@@ -627,10 +613,6 @@ export async function provisionBytebaseDatabaseConsole(
   await client.ensureProject({
     id: projectId,
     title: target.project.name,
-  });
-  await client.ensureEnvironment({
-    id: environmentId,
-    title: `${target.project.name} / ${target.environment.name}`,
   });
   await client.ensureInstance({
     id: instanceId,
