@@ -8,6 +8,35 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const target = {
+  project: { id: '4979986a-1192-476e-9dbd-a96d50a61077', name: 'nexusnote' },
+  environment: { id: '190d3ba0-be6d-4f1c-98dc-a222c70a9308', name: 'production' },
+  database: {
+    id: '219a1b86-a655-4f46-b4bb-4b66f7f59ade',
+    name: 'primary',
+    type: 'postgresql',
+    connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
+  },
+  actor: {
+    email: 'Alice@Juanie.Art',
+    name: 'Alice',
+  },
+};
+
+const config = {
+  enabled: true,
+  workspaceUrl: 'https://bytebase.juanie.art',
+  apiToken: null,
+  serviceAccountEmail: 'service@juanie.art',
+  serviceAccountKey: 'service-key',
+  bootstrapEmail: null,
+  bootstrapPassword: null,
+  bootstrapTitle: 'Juanie Platform',
+  oidcClientId: 'bytebase',
+  oidcClientSecret: 'oidc-secret',
+  oidcIssuer: 'https://juanie.art',
+};
+
 describe('provisionBytebaseDatabaseConsole', () => {
   it('creates the Bytebase context before returning a console URL', async () => {
     const calls: Array<{ url: string; method: string; body: unknown }> = [];
@@ -19,6 +48,18 @@ describe('provisionBytebaseDatabaseConsole', () => {
 
       if (requestUrl.endsWith('/v1/auth/login')) {
         return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.includes('/v1/projects/') && requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({ bindings: [], etag: 'etag-1' });
+      }
+
+      if (requestUrl.includes('/v1/projects/') && requestUrl.endsWith(':setIamPolicy')) {
+        return jsonResponse({});
+      }
+
+      if (requestUrl.includes('/v1/users/alice%40juanie.art')) {
+        return jsonResponse({}, method === 'GET' ? 404 : 200);
       }
 
       if (
@@ -33,32 +74,9 @@ describe('provisionBytebaseDatabaseConsole', () => {
       return jsonResponse({});
     });
 
-    const result = await provisionBytebaseDatabaseConsole(
-      {
-        project: { id: '4979986a-1192-476e-9dbd-a96d50a61077', name: 'nexusnote' },
-        environment: { id: '190d3ba0-be6d-4f1c-98dc-a222c70a9308', name: 'production' },
-        database: {
-          id: '219a1b86-a655-4f46-b4bb-4b66f7f59ade',
-          name: 'primary',
-          type: 'postgresql',
-          connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
-        },
-      },
-      {
-        enabled: true,
-        workspaceUrl: 'https://bytebase.juanie.art',
-        apiToken: null,
-        serviceAccountEmail: 'service@juanie.art',
-        serviceAccountKey: 'service-key',
-        bootstrapEmail: null,
-        bootstrapPassword: null,
-        bootstrapTitle: 'Juanie Platform',
-        oidcClientId: 'bytebase',
-        oidcClientSecret: 'oidc-secret',
-        oidcIssuer: 'https://juanie.art',
-      },
-      { fetchFn: fetchFn as unknown as typeof fetch }
-    );
+    const result = await provisionBytebaseDatabaseConsole(target, config, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
 
     expect(result.url).toContain('https://bytebase.juanie.art/sql-editor');
     expect(result.url).toContain(
@@ -69,6 +87,52 @@ describe('provisionBytebaseDatabaseConsole', () => {
       (call) => call.method === 'POST' && call.url.includes('/v1/projects?projectId=')
     );
     expect(createProjectCall?.body).toEqual({ title: 'nexusnote' });
+    const createInstanceCall = calls.find(
+      (call) => call.method === 'POST' && call.url.includes('/v1/instances?instanceId=')
+    );
+    expect(
+      createInstanceCall?.body &&
+        typeof createInstanceCall.body === 'object' &&
+        'dataSources' in createInstanceCall.body &&
+        Array.isArray(createInstanceCall.body.dataSources)
+        ? createInstanceCall.body.dataSources[0]?.port
+        : null
+    ).toBe('5432');
+    const syncInstanceCall = calls.find(
+      (call) => call.method === 'POST' && call.url.endsWith(':sync')
+    );
+    expect(syncInstanceCall?.body).toEqual({ enableFullSync: false });
+    const createUserCall = calls.find(
+      (call) => call.method === 'POST' && call.url.endsWith('/v1/users')
+    );
+    expect(
+      createUserCall?.body &&
+        typeof createUserCall.body === 'object' &&
+        'email' in createUserCall.body
+        ? createUserCall.body.email
+        : null
+    ).toBe('alice@juanie.art');
+    const setIamPolicyCall = calls.find(
+      (call) => call.method === 'POST' && call.url.endsWith(':setIamPolicy')
+    );
+    expect(setIamPolicyCall?.body).toEqual({
+      policy: {
+        bindings: [
+          {
+            role: 'roles/sqlEditorUser',
+            members: ['user:alice@juanie.art'],
+            condition: {
+              expression:
+                'resource.database == "instances/juanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade/databases/app"',
+              title: 'Juanie SQL Editor access',
+              description: 'Grant SQL Editor access for the selected Juanie database.',
+            },
+          },
+        ],
+        etag: 'etag-1',
+      },
+      etag: 'etag-1',
+    });
     expect(calls.map((call) => call.method)).toEqual([
       'POST',
       'GET',
@@ -79,6 +143,10 @@ describe('provisionBytebaseDatabaseConsole', () => {
       'POST',
       'GET',
       'POST',
+      'POST',
+      'GET',
+      'POST',
+      'GET',
       'POST',
     ]);
   });
@@ -97,11 +165,16 @@ describe('provisionBytebaseDatabaseConsole', () => {
         return jsonResponse({ token: 'bootstrap-token' });
       }
 
+      if (requestUrl.includes('/v1/projects/') && requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({ bindings: [] });
+      }
+
       if (
         requestUrl.includes('/v1/projects/') ||
         requestUrl.includes('/v1/environments/') ||
         requestUrl.includes('/v1/instances/') ||
-        requestUrl.includes('/v1/idps/')
+        requestUrl.includes('/v1/idps/') ||
+        requestUrl.includes('/v1/users/')
       ) {
         return jsonResponse({}, init?.method === 'GET' ? 404 : 200);
       }
@@ -119,6 +192,7 @@ describe('provisionBytebaseDatabaseConsole', () => {
           type: 'postgresql',
           connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
         },
+        actor: target.actor,
       },
       {
         enabled: true,
@@ -155,10 +229,15 @@ describe('provisionBytebaseDatabaseConsole', () => {
         return jsonResponse({ message: 'permission denied' }, 403);
       }
 
+      if (requestUrl.includes('/v1/projects/') && requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({ bindings: [] });
+      }
+
       if (
         requestUrl.includes('/v1/projects/') ||
         requestUrl.includes('/v1/environments/') ||
-        requestUrl.includes('/v1/instances/')
+        requestUrl.includes('/v1/instances/') ||
+        requestUrl.includes('/v1/users/')
       ) {
         return jsonResponse({}, method === 'GET' ? 404 : 200);
       }
@@ -176,6 +255,7 @@ describe('provisionBytebaseDatabaseConsole', () => {
           type: 'postgresql',
           connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
         },
+        actor: target.actor,
       },
       {
         enabled: true,
@@ -235,6 +315,7 @@ describe('provisionBytebaseDatabaseConsole', () => {
             connectionString:
               'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
           },
+          actor: target.actor,
         },
         {
           enabled: true,
@@ -258,6 +339,127 @@ describe('provisionBytebaseDatabaseConsole', () => {
     expect(error instanceof Error).toBe(true);
     expect(error instanceof Error ? error.message : String(error)).toBe(
       '创建 Bytebase project 失败：400：unknown field "key"'
+    );
+  });
+
+  it('adds the actor to an existing SQL Editor IAM binding without widening access', async () => {
+    const calls: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ url: requestUrl, method, body });
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({
+          bindings: [
+            {
+              role: 'roles/sqlEditorUser',
+              members: ['user:bob@juanie.art'],
+              condition: {
+                expression:
+                  'resource.database == "instances/juanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade/databases/app"',
+              },
+            },
+          ],
+        });
+      }
+
+      return jsonResponse({});
+    });
+
+    await provisionBytebaseDatabaseConsole(target, config, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    const setIamPolicyCall = calls.find(
+      (call) => call.method === 'POST' && call.url.endsWith(':setIamPolicy')
+    );
+
+    expect(
+      setIamPolicyCall?.body &&
+        typeof setIamPolicyCall.body === 'object' &&
+        'policy' in setIamPolicyCall.body
+        ? setIamPolicyCall.body.policy
+        : null
+    ).toEqual({
+      bindings: [
+        {
+          role: 'roles/sqlEditorUser',
+          members: ['user:bob@juanie.art', 'user:alice@juanie.art'],
+          condition: {
+            expression:
+              'resource.database == "instances/juanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade/databases/app"',
+          },
+        },
+      ],
+    });
+  });
+
+  it('does not update Bytebase IAM when the actor already has database-scoped SQL Editor access', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+      calls.push({ url: requestUrl, method });
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({
+          bindings: [
+            {
+              role: 'roles/sqlEditorUser',
+              members: ['user:alice@juanie.art'],
+              condition: {
+                expression:
+                  'resource.database == "instances/juanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade/databases/app"',
+              },
+            },
+          ],
+        });
+      }
+
+      return jsonResponse({});
+    });
+
+    await provisionBytebaseDatabaseConsole(target, config, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(calls.some((call) => call.url.endsWith(':setIamPolicy'))).toBe(false);
+  });
+
+  it('fails before provisioning when the actor has no email', async () => {
+    let fetchCallCount = 0;
+    const fetchFn = mock(async () => {
+      fetchCallCount += 1;
+      return jsonResponse({ token: 'token-1' });
+    });
+
+    let error: unknown;
+    try {
+      await provisionBytebaseDatabaseConsole(
+        {
+          ...target,
+          actor: { email: null, name: null },
+        },
+        config,
+        { fetchFn: fetchFn as unknown as typeof fetch }
+      );
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect(fetchCallCount).toBe(0);
+    expect(error instanceof Error ? error.message : String(error)).toBe(
+      '当前用户缺少邮箱，不能配置 Bytebase SQL Editor 权限'
     );
   });
 });

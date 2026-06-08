@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { provisionBytebaseDatabaseConsole } from '@/lib/database-console/bytebase-provisioning';
 import { db } from '@/lib/db';
 import { databases, environments } from '@/lib/db/schema';
+import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
 
 export async function POST(
   _request: Request,
@@ -14,7 +15,11 @@ export async function POST(
   try {
     const { id, dbId } = await params;
     const session = await requireSession();
-    const { project } = await getProjectAccessOrThrow(id, session.user.id);
+    const { project, member } = await getProjectAccessOrThrow(id, session.user.id);
+
+    if (!canReadProjectRuntime(member.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const database = await db.query.databases.findFirst({
       where: and(eq(databases.id, dbId), eq(databases.projectId, id)),
@@ -40,6 +45,10 @@ export async function POST(
       project,
       environment,
       database,
+      actor: {
+        email: session.user.email,
+        name: session.user.name,
+      },
     });
 
     await createAuditLog({

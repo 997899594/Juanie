@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { logger } from '@/lib/logger';
 
 export interface BytebaseProvisioningConfig {
@@ -31,6 +31,10 @@ export interface BytebaseProvisioningTarget {
     connectionString?: string | null;
     databaseName?: string | null;
   };
+  actor: {
+    email?: string | null;
+    name?: string | null;
+  };
 }
 
 export interface BytebaseProvisioningResult {
@@ -47,6 +51,22 @@ interface BytebaseClientOptions {
 }
 
 type BytebaseEngine = 'POSTGRES' | 'MYSQL';
+
+interface BytebaseIamBinding {
+  role?: string;
+  members?: string[];
+  condition?: {
+    expression?: string;
+    title?: string;
+    description?: string;
+    location?: string;
+  };
+}
+
+interface BytebaseIamPolicy {
+  bindings?: BytebaseIamBinding[];
+  etag?: string;
+}
 
 const provisioningLogger = logger.child({ module: 'bytebase-provisioning' });
 
@@ -114,6 +134,18 @@ function getEngine(type: string): BytebaseEngine {
   }
 }
 
+function normalizeEmail(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function escapeCelString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function generateBytebaseUserPassword(): string {
+  return randomBytes(24).toString('base64url');
+}
+
 function parseConnectionString(connectionString: string): {
   host: string;
   port: number;
@@ -139,6 +171,56 @@ function parseConnectionString(connectionString: string): {
 
 async function parseJson(response: Response): Promise<Record<string, unknown>> {
   return ((await response.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+}
+
+async function parseIamPolicy(response: Response): Promise<BytebaseIamPolicy> {
+  const payload = await parseJson(response);
+  return {
+    bindings: Array.isArray(payload.bindings)
+      ? payload.bindings
+          .map((binding): BytebaseIamBinding | null => {
+            if (!binding || typeof binding !== 'object') {
+              return null;
+            }
+
+            const candidate = binding as Record<string, unknown>;
+            return {
+              role: typeof candidate.role === 'string' ? candidate.role : undefined,
+              members: Array.isArray(candidate.members)
+                ? candidate.members.filter((member): member is string => typeof member === 'string')
+                : undefined,
+              condition:
+                candidate.condition &&
+                typeof candidate.condition === 'object' &&
+                !Array.isArray(candidate.condition)
+                  ? {
+                      expression:
+                        typeof (candidate.condition as Record<string, unknown>).expression ===
+                        'string'
+                          ? ((candidate.condition as Record<string, unknown>).expression as string)
+                          : undefined,
+                      title:
+                        typeof (candidate.condition as Record<string, unknown>).title === 'string'
+                          ? ((candidate.condition as Record<string, unknown>).title as string)
+                          : undefined,
+                      description:
+                        typeof (candidate.condition as Record<string, unknown>).description ===
+                        'string'
+                          ? ((candidate.condition as Record<string, unknown>).description as string)
+                          : undefined,
+                      location:
+                        typeof (candidate.condition as Record<string, unknown>).location ===
+                        'string'
+                          ? ((candidate.condition as Record<string, unknown>).location as string)
+                          : undefined,
+                    }
+                  : undefined,
+            };
+          })
+          .filter((binding): binding is BytebaseIamBinding => Boolean(binding))
+      : [],
+    etag: typeof payload.etag === 'string' ? payload.etag : undefined,
+  };
 }
 
 async function describeBytebaseResponse(response: Response): Promise<string> {
@@ -374,6 +456,37 @@ class BytebaseProvisioningClient {
     }
   }
 
+  async ensureUser(input: { email: string; title: string | null }): Promise<void> {
+    const existing = await this.get(`/v1/users/${encodeURIComponent(input.email)}`);
+    if (existing.ok) {
+      return;
+    }
+
+    if (existing.status !== 404) {
+      throw new Error(`读取 Bytebase user 失败：${await describeBytebaseResponse(existing)}`);
+    }
+
+    const created = await this.post('/v1/users', {
+      email: input.email,
+      title: input.title ?? input.email,
+      password: generateBytebaseUserPassword(),
+      state: 'ACTIVE',
+    });
+
+    if (created.ok) {
+      return;
+    }
+
+    if (created.status === 409) {
+      const raced = await this.get(`/v1/users/${encodeURIComponent(input.email)}`);
+      if (raced.ok) {
+        return;
+      }
+    }
+
+    throw new Error(`创建 Bytebase user 失败：${await describeBytebaseResponse(created)}`);
+  }
+
   async ensureInstance(input: {
     id: string;
     title: string;
@@ -397,7 +510,7 @@ class BytebaseProvisioningClient {
             id: 'admin',
             type: 'ADMIN',
             host: input.connection.host,
-            port: input.connection.port,
+            port: String(input.connection.port),
             username: input.connection.username,
             password: input.connection.password,
             database: input.connection.databaseName,
@@ -410,9 +523,64 @@ class BytebaseProvisioningClient {
       }
     }
 
-    const synced = await this.post(`/v1/instances/${input.id}:sync`);
+    const synced = await this.post(`/v1/instances/${input.id}:sync`, { enableFullSync: false });
     if (!synced.ok) {
       throw new Error(`同步 Bytebase instance 失败：${await describeBytebaseResponse(synced)}`);
+    }
+  }
+
+  async ensureSqlEditorAccess(input: {
+    projectId: string;
+    instanceId: string;
+    databaseName: string;
+    email: string;
+  }): Promise<void> {
+    const existing = await this.get(`/v1/projects/${input.projectId}:getIamPolicy`);
+    if (!existing.ok) {
+      throw new Error(
+        `读取 Bytebase project IAM 失败：${await describeBytebaseResponse(existing)}`
+      );
+    }
+
+    const policy = await parseIamPolicy(existing);
+    const member = `user:${input.email}`;
+    const databaseResource = `instances/${input.instanceId}/databases/${input.databaseName}`;
+    const condition = {
+      expression: `resource.database == "${escapeCelString(databaseResource)}"`,
+      title: 'Juanie SQL Editor access',
+      description: 'Grant SQL Editor access for the selected Juanie database.',
+    };
+    const bindings = policy.bindings ?? [];
+    const existingBinding = bindings.find(
+      (binding) =>
+        binding.role === 'roles/sqlEditorUser' &&
+        binding.condition?.expression === condition.expression
+    );
+
+    if (existingBinding) {
+      if (existingBinding.members?.includes(member)) {
+        return;
+      }
+
+      existingBinding.members = Array.from(new Set([...(existingBinding.members ?? []), member]));
+    } else {
+      bindings.push({
+        role: 'roles/sqlEditorUser',
+        members: [member],
+        condition,
+      });
+    }
+
+    const updated = await this.post(`/v1/projects/${input.projectId}:setIamPolicy`, {
+      policy: {
+        bindings,
+        ...(policy.etag ? { etag: policy.etag } : {}),
+      },
+      ...(policy.etag ? { etag: policy.etag } : {}),
+    });
+
+    if (!updated.ok) {
+      throw new Error(`更新 Bytebase project IAM 失败：${await describeBytebaseResponse(updated)}`);
     }
   }
 }
@@ -444,6 +612,11 @@ export async function provisionBytebaseDatabaseConsole(
 
   const engine = getEngine(target.database.type);
   const connection = parseConnectionString(connectionString);
+  const actorEmail = normalizeEmail(target.actor.email);
+  if (!actorEmail) {
+    throw new Error('当前用户缺少邮箱，不能配置 Bytebase SQL Editor 权限');
+  }
+
   const projectId = `juanie-${toBytebaseId(target.project.id, 'project')}`;
   const environmentId = `juanie-${toBytebaseId(target.environment.id, 'environment')}`;
   const instanceId = `juanie-${toBytebaseId(target.database.id, 'database')}`;
@@ -466,6 +639,16 @@ export async function provisionBytebaseDatabaseConsole(
     environmentId,
     connection,
   });
+  await client.ensureUser({
+    email: actorEmail,
+    title: target.actor.name?.trim() || null,
+  });
+  await client.ensureSqlEditorAccess({
+    projectId,
+    instanceId,
+    databaseName,
+    email: actorEmail,
+  });
 
   provisioningLogger.info('Bytebase database console context synced', {
     projectId: target.project.id,
@@ -473,6 +656,7 @@ export async function provisionBytebaseDatabaseConsole(
     databaseId: target.database.id,
     bytebaseProjectId: projectId,
     bytebaseInstanceId: instanceId,
+    actorEmail,
   });
 
   return {
