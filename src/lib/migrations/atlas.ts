@@ -128,6 +128,52 @@ export function getAtlasSchemaDiffExcludePatterns(
   return ['*.atlas_schema_revisions', '*.__drizzle_migrations'];
 }
 
+function normalizePostgresSearchPathEntry(entry: string): string | null {
+  const trimmed = entry.trim();
+  if (!trimmed || trimmed === '$user' || trimmed === '"$user"') {
+    return null;
+  }
+
+  const unquoted =
+    trimmed.startsWith('"') && trimmed.endsWith('"')
+      ? trimmed.slice(1, -1).replaceAll('""', '"')
+      : trimmed;
+
+  return unquoted.trim() || null;
+}
+
+export function getPostgresSchemaNamesFromDatabaseUrl(databaseUrl: string): string[] {
+  let searchPath: string | null = null;
+
+  try {
+    searchPath = new URL(databaseUrl).searchParams.get('search_path');
+  } catch {
+    return ['public'];
+  }
+
+  const schemas =
+    searchPath
+      ?.split(',')
+      .map(normalizePostgresSearchPathEntry)
+      .filter((schema): schema is string => Boolean(schema)) ?? [];
+
+  return schemas.length > 0 ? schemas : ['public'];
+}
+
+export function getAtlasSchemaDiffScopeArgs(
+  databaseType: AtlasDatabaseTarget['type'],
+  databaseUrl: string
+): string[] {
+  if (databaseType !== 'postgresql') {
+    return [];
+  }
+
+  return getPostgresSchemaNamesFromDatabaseUrl(databaseUrl).flatMap((schema) => [
+    '--schema',
+    schema,
+  ]);
+}
+
 export function summarizeAtlasSchemaDiffOutput(diffSql: string): string | null {
   const firstMeaningfulLine = diffSql
     .split('\n')
@@ -161,6 +207,7 @@ async function runAtlasSchemaDiff(input: {
       input.to,
       '--dev-url',
       devDatabase.url,
+      ...getAtlasSchemaDiffScopeArgs(input.database.type, databaseUrl),
       '--format',
       '{{ sql . }}',
       ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [

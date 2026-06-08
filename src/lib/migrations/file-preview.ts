@@ -20,6 +20,7 @@ import {
   readRepositoryFileFromRepoPath,
 } from '@/lib/migrations/fetch';
 import type {
+  MigrationFileExecutionPlan,
   MigrationFilePreviewDetail,
   MigrationFilePreviewSnapshot,
 } from '@/lib/migrations/file-preview-types';
@@ -116,6 +117,8 @@ interface ExecutionStateSnapshot {
   executedNames?: Set<string>;
   executedVersions?: Set<string>;
   desiredSchemaAligned?: boolean;
+  desiredSchemaPlan?: MigrationFileExecutionPlan | null;
+  desiredSchemaPlanDetail?: MigrationFilePreviewDetail | null;
   desiredSchemaDetail?: MigrationFilePreviewDetail | null;
   warning?: string | null;
 }
@@ -330,6 +333,23 @@ function normalizeFilePreviewDetails(value: unknown): MigrationFilePreviewDetail
   return details.length > 0 ? details : undefined;
 }
 
+function normalizeExecutionPlan(value: unknown): MigrationFileExecutionPlan | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const plan = value as Partial<MigrationFileExecutionPlan>;
+  if (typeof plan.path !== 'string' || typeof plan.content !== 'string') {
+    return null;
+  }
+
+  return {
+    path: plan.path,
+    content: plan.content,
+    language: 'sql',
+  };
+}
+
 function normalizeStoredMigrationFilePreviewSnapshot(
   value: unknown
 ): MigrationFilePreviewSnapshot | null {
@@ -348,12 +368,19 @@ function normalizeStoredMigrationFilePreviewSnapshot(
     fileDetails: normalizeFilePreviewDetails(snapshot.fileDetails),
     historyFiles: normalizeStringArray(snapshot.historyFiles),
     historyFileDetails: normalizeFilePreviewDetails(snapshot.historyFileDetails),
+    executionPlan: normalizeExecutionPlan(snapshot.executionPlan),
     total: normalizeNumber(snapshot.total),
     declaredTotal: normalizeNumber(snapshot.declaredTotal),
     executedTotal: normalizeNumber(snapshot.executedTotal),
     truncated: snapshot.truncated === true,
     warning: typeof snapshot.warning === 'string' ? snapshot.warning : null,
   };
+}
+
+export function normalizeMigrationFilePreviewSnapshot(
+  value: unknown
+): MigrationFilePreviewSnapshot | null {
+  return normalizeStoredMigrationFilePreviewSnapshot(value);
 }
 
 function buildRunStatusPreviewFromStoredSnapshot(input: {
@@ -385,6 +412,7 @@ function buildRunStatusPreviewFromStoredSnapshot(input: {
     fileDetails: undefined,
     historyFiles,
     historyFileDetails,
+    executionPlan: null,
     total: 0,
     declaredTotal,
     executedTotal: declaredTotal,
@@ -429,6 +457,7 @@ function buildPendingSnapshot(input: {
   executedTotal: number;
   warning?: string | null;
   includeHistoryDetails?: boolean;
+  executionPlan?: MigrationFileExecutionPlan | null;
 }): MigrationFilePreviewSnapshot {
   const declaredTotal = input.declaredPreview.declaredFiles.length;
   const normalizedPending = normalizeFileList(input.pendingFiles);
@@ -454,6 +483,7 @@ function buildPendingSnapshot(input: {
             .map((file) => input.declaredPreview.declaredFileDetails?.get(file))
             .filter((detail): detail is MigrationFilePreviewDetail => Boolean(detail))
         : undefined,
+    executionPlan: input.executionPlan ?? null,
     total: normalizedPending.length,
     declaredTotal,
     executedTotal: Math.min(Math.max(input.executedTotal, 0), declaredTotal),
@@ -484,6 +514,10 @@ export function resolveMigrationPendingState(
 ): MigrationPendingState {
   if (!preview) {
     return 'unknown';
+  }
+
+  if (preview.executionPlan?.content?.trim()) {
+    return 'pending';
   }
 
   if (isDegradedEmptyPreview(preview)) {
@@ -1077,6 +1111,18 @@ async function resolveRuntimeExecutionState(
         return {
           mode: 'desired_schema',
           desiredSchemaAligned: !diff.hasChanges,
+          desiredSchemaPlan:
+            diff.hasChanges && diff.diffSql.trim()
+              ? {
+                  path: 'atlas-schema-diff.sql',
+                  content: diff.diffSql,
+                  language: 'sql',
+                }
+              : null,
+          desiredSchemaPlanDetail:
+            includeFileDetails && diff.hasChanges
+              ? buildFilePreviewDetail('atlas-schema-diff.sql', diff.diffSql)
+              : null,
           desiredSchemaDetail: includeFileDetails
             ? buildFilePreviewDetail('desired-schema.sql', desiredSchema.schemaSql)
             : null,
@@ -1208,26 +1254,33 @@ function applyExecutionState(input: {
   }
 
   if (input.executionState.mode === 'desired_schema') {
-    const hasDesiredSchemaDetail = Boolean(input.executionState.desiredSchemaDetail);
-    const declaredPreview = input.executionState.desiredSchemaDetail
+    const planDetail = input.executionState.desiredSchemaPlanDetail;
+    const desiredSchemaDetail = input.executionState.desiredSchemaDetail;
+    const declaredPreview = planDetail
       ? {
-          ...input.declaredPreview,
-          declaredFileDetails: new Map([
-            [
-              input.executionState.desiredSchemaDetail.path,
-              input.executionState.desiredSchemaDetail,
-            ],
-          ]),
+          sourceLabel: 'Atlas schema diff',
+          declaredFiles: [planDetail.path],
+          declaredFileDetails: new Map([[planDetail.path, planDetail]]),
+          warning: input.declaredPreview.warning,
         }
-      : input.declaredPreview;
-    const pending = input.executionState.desiredSchemaAligned ? [] : declaredFiles;
+      : desiredSchemaDetail
+        ? {
+            ...input.declaredPreview,
+            declaredFileDetails: new Map([[desiredSchemaDetail.path, desiredSchemaDetail]]),
+          }
+        : input.declaredPreview;
+    const pending = input.executionState.desiredSchemaAligned ? [] : declaredPreview.declaredFiles;
 
     return buildPendingSnapshot({
       declaredPreview,
       pendingFiles: pending,
-      executedTotal: input.executionState.desiredSchemaAligned ? declaredFiles.length : 0,
+      executedTotal: input.executionState.desiredSchemaAligned
+        ? declaredPreview.declaredFiles.length
+        : 0,
       warning: input.executionState.warning,
-      includeHistoryDetails: input.includeHistoryDetails || hasDesiredSchemaDetail,
+      includeHistoryDetails:
+        input.includeHistoryDetails || Boolean(desiredSchemaDetail) || Boolean(planDetail),
+      executionPlan: input.executionState.desiredSchemaPlan,
     });
   }
 

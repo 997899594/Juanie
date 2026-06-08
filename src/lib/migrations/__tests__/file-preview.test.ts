@@ -34,7 +34,10 @@ mock.module('@/lib/migrations/desired-schema', () => ({
 }));
 
 mock.module('@/lib/migrations/atlas', () => ({
-  diffDatabaseSchemaAgainstDesiredSchema: async () => ({ hasChanges: false, diffSql: '' }),
+  diffDatabaseSchemaAgainstDesiredSchema: async () => ({
+    hasChanges: true,
+    diffSql: 'ALTER TABLE notes ADD COLUMN title text;',
+  }),
   extractAtlasMigrationVersion: (fileName: string) => fileName.match(/^(\d+)/)?.[1] ?? null,
   getAppliedAtlasVersions: async () => [],
   isAtlasDatabaseTarget: (database: { type: string }) =>
@@ -88,6 +91,25 @@ describe('migration file preview pending state', () => {
     expect(resolveMigrationPendingState(preview)).toBe('pending');
   });
 
+  it('treats stored execution plans as pending work', () => {
+    const preview: MigrationFilePreviewSnapshot = {
+      sourceLabel: 'Atlas schema diff',
+      files: [],
+      executionPlan: {
+        path: 'atlas-schema-diff.sql',
+        content: 'ALTER TABLE notes ADD COLUMN title text;',
+        language: 'sql',
+      },
+      total: 0,
+      declaredTotal: 0,
+      executedTotal: 0,
+      truncated: false,
+      warning: null,
+    };
+
+    expect(resolveMigrationPendingState(preview)).toBe('pending');
+  });
+
   it('uses persisted run status for read-model drizzle previews', async () => {
     const previewByRunId = await buildMigrationFilePreviewByRunId(
       [
@@ -107,18 +129,23 @@ describe('migration file preview pending state', () => {
       { executionStateMode: 'run_status' }
     );
 
-    expect(previewByRunId.get('run-success')).toEqual({
-      sourceLabel: 'Desired schema',
-      files: [],
-      total: 0,
-      declaredTotal: 1,
-      executedTotal: 1,
-      truncated: false,
-      warning: null,
-    });
-    expect(previewByRunId.get('run-queued')).toEqual({
+    const successPreview = previewByRunId.get('run-success');
+    expect(successPreview?.sourceLabel).toBe('Desired schema');
+    expect(successPreview?.files).toEqual([]);
+    expect(successPreview?.total).toBe(0);
+    expect(successPreview?.declaredTotal).toBe(1);
+    expect(successPreview?.executedTotal).toBe(1);
+    expect(successPreview?.truncated).toBe(false);
+    expect(successPreview?.warning).toBe(null);
+
+    const queuedPreview = previewByRunId.get('run-queued');
+    expect(queuedPreview).toEqual({
       sourceLabel: 'Desired schema',
       files: ['desired-schema.sql'],
+      fileDetails: undefined,
+      historyFiles: undefined,
+      historyFileDetails: undefined,
+      executionPlan: null,
       total: 1,
       declaredTotal: 1,
       executedTotal: 0,
@@ -230,7 +257,7 @@ describe('migration file preview pending state', () => {
     expect(drizzleExportCount).toBe(0);
   });
 
-  it('keeps desired schema details for aligned live drizzle previews', async () => {
+  it('shows Atlas diff SQL instead of full desired schema for live drizzle previews', async () => {
     drizzleExportCount = 0;
     const previewByRunId = await buildMigrationFilePreviewByRunId(
       [
@@ -250,17 +277,22 @@ describe('migration file preview pending state', () => {
     );
     const preview = previewByRunId.get('run-drizzle-live-aligned');
 
-    expect(preview?.total).toBe(0);
-    expect(preview?.files).toEqual([]);
-    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
-    expect(preview?.historyFileDetails).toEqual([
+    expect(preview?.sourceLabel).toBe('Atlas schema diff');
+    expect(preview?.total).toBe(1);
+    expect(preview?.files).toEqual(['atlas-schema-diff.sql']);
+    expect(preview?.fileDetails).toEqual([
       {
-        path: 'desired-schema.sql',
-        content: 'CREATE TABLE notes (id uuid primary key);',
+        path: 'atlas-schema-diff.sql',
+        content: 'ALTER TABLE notes ADD COLUMN title text;',
         truncated: false,
         language: 'sql',
       },
     ]);
+    expect(preview?.executionPlan).toEqual({
+      path: 'atlas-schema-diff.sql',
+      content: 'ALTER TABLE notes ADD COLUMN title text;',
+      language: 'sql',
+    });
     expect(drizzleExportCount).toBe(1);
   });
 

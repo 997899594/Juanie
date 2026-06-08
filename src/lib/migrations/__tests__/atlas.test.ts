@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   getAtlasSchemaDiffExcludePatterns,
+  getAtlasSchemaDiffScopeArgs,
+  getPostgresSchemaNamesFromDatabaseUrl,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
 import {
@@ -60,6 +62,34 @@ describe('atlas migration helpers', () => {
       '*.atlas_schema_revisions',
       '*.__drizzle_migrations',
     ]);
+  });
+
+  it('scopes PostgreSQL schema diff to the application search path', () => {
+    expect(
+      getPostgresSchemaNamesFromDatabaseUrl(
+        'postgresql://postgres:postgres@postgres:5432/app?sslmode=disable'
+      )
+    ).toEqual(['public']);
+
+    expect(
+      getPostgresSchemaNamesFromDatabaseUrl(
+        'postgresql://postgres:postgres@postgres:5432/app?search_path=tenant_a,public'
+      )
+    ).toEqual(['tenant_a', 'public']);
+
+    expect(
+      getPostgresSchemaNamesFromDatabaseUrl(
+        'postgresql://postgres:postgres@postgres:5432/app?search_path=%24user,public'
+      )
+    ).toEqual(['public']);
+
+    expect(
+      getAtlasSchemaDiffScopeArgs(
+        'postgresql',
+        'postgresql://postgres:postgres@postgres:5432/app?search_path=public'
+      )
+    ).toEqual(['--schema', 'public']);
+    expect(getAtlasSchemaDiffScopeArgs('mysql', 'mysql://root:root@mysql:3306/app')).toEqual([]);
   });
 
   it('extracts the first meaningful atlas diff line for user-facing summaries', () => {

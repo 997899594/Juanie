@@ -13,6 +13,7 @@ import {
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
+  type AtlasSchemaApplyPlan,
   applyDesiredSchemaToDatabase,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
@@ -367,9 +368,25 @@ function resolveExecutionDatabaseCapabilities(
   return inferDatabaseCapabilitiesFromText(sources.filter(Boolean).join('\n'), currentCapabilities);
 }
 
+export async function resolveDesiredSchemaApplyPlan(input: {
+  approvedPlanSql?: string | null;
+  createPlan: () => Promise<AtlasSchemaApplyPlan>;
+}): Promise<AtlasSchemaApplyPlan> {
+  const approvedPlanSql = input.approvedPlanSql?.trim();
+  if (approvedPlanSql) {
+    return {
+      hasChanges: true,
+      planSql: approvedPlanSql,
+    };
+  }
+
+  return input.createPlan();
+}
+
 export async function executeDrizzleMigrationsForSpec(
   spec: ResolvedMigrationSpec,
   revision: string,
+  approvedPlanSql?: string | null,
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => Promise<void>
 ): Promise<number> {
   const log = onLog || (async () => {});
@@ -416,9 +433,13 @@ export async function executeDrizzleMigrationsForSpec(
       throw new Error(formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues));
     }
 
-    const plan = await planApplyDesiredSchema({
-      database: executionDatabase,
-      desiredSchemaUrl: artifact.schemaFileUrl,
+    const plan = await resolveDesiredSchemaApplyPlan({
+      approvedPlanSql,
+      createPlan: () =>
+        planApplyDesiredSchema({
+          database: executionDatabase,
+          desiredSchemaUrl: artifact.schemaFileUrl,
+        }),
     });
 
     if (!plan.hasChanges) {
@@ -426,7 +447,12 @@ export async function executeDrizzleMigrationsForSpec(
       return 0;
     }
 
-    await log(`🔄 ${spec.database.name}: Atlas 将应用 desired schema 差异`, 'info');
+    await log(
+      approvedPlanSql?.trim()
+        ? `🔄 ${spec.database.name}: 应用已审批的 Atlas schema diff`
+        : `🔄 ${spec.database.name}: Atlas 将应用 desired schema 差异`,
+      'info'
+    );
 
     await applyDesiredSchemaToDatabase({
       database: executionDatabase,

@@ -99,4 +99,26 @@ module.exports = async ({ db }) => {
     expect(mongoCollectionMock).toHaveBeenCalledWith('audit');
     expect(output).toBe('updated:3');
   });
+
+  it('reuses an approved Atlas diff plan for Drizzle desired schema execution', async () => {
+    const { resolveDesiredSchemaApplyPlan } = await import('@/lib/migrations/executor');
+    let generated = false;
+
+    const plan = await resolveDesiredSchemaApplyPlan({
+      approvedPlanSql: 'ALTER TABLE notes ADD COLUMN approved text;',
+      createPlan: async () => {
+        generated = true;
+        return {
+          hasChanges: true,
+          planSql: 'ALTER TABLE notes ADD COLUMN generated text;',
+        };
+      },
+    });
+
+    expect(generated).toBe(false);
+    expect(plan).toEqual({
+      hasChanges: true,
+      planSql: 'ALTER TABLE notes ADD COLUMN approved text;',
+    });
+  });
 });

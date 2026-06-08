@@ -72,6 +72,11 @@ export function MigrationSpecDetails({
         ? filePreview.historyFiles
         : [];
   const isHistoryPreview = filePreview ? filePreview.total === 0 && visibleFiles.length > 0 : false;
+  const previewTitle = isHistoryPreview
+    ? '历史执行快照'
+    : filePreview?.sourceLabel === 'Atlas schema diff'
+      ? '执行计划'
+      : '执行预览';
   const isHistoryContentMissing =
     isHistoryPreview && visibleFiles.length > 0 && !visibleFileDetails;
 
@@ -143,7 +148,7 @@ export function MigrationSpecDetails({
       {filePreview && (
         <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{isHistoryPreview ? '历史迁移文件' : '执行预览'}</span>
+            <span>{previewTitle}</span>
             <span>{filePreview.sourceLabel}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">

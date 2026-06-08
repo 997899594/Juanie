@@ -21,8 +21,11 @@ import {
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import {
   inspectResolvedMigrationSpecPendingState,
+  normalizeMigrationFilePreviewSnapshot,
   persistMigrationRunFilePreview,
+  resolveMigrationPendingState,
 } from '@/lib/migrations/file-preview';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview-types';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { isPlatformManagedMigrationSpec } from '@/lib/migrations/platform-managed';
 import {
@@ -107,7 +110,8 @@ async function runSqlMigration(
 async function runDrizzleMigration(
   runId: string,
   spec: ResolvedMigrationSpec,
-  options: ExecuteMigrationRunOptions
+  options: ExecuteMigrationRunOptions,
+  filePreview: MigrationFilePreviewSnapshot | null
 ): Promise<void> {
   const revision =
     options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main';
@@ -125,12 +129,21 @@ async function runDrizzleMigration(
     .returning();
 
   const logs: string[] = [];
+  const approvedPlanSql =
+    filePreview?.executionPlan?.path === 'atlas-schema-diff.sql'
+      ? filePreview.executionPlan.content
+      : null;
 
   try {
-    const appliedCount = await executeDrizzleMigrationsForSpec(spec, revision, async (message) => {
-      logs.push(message);
-      await appendMigrationRunLog(runId, message);
-    });
+    const appliedCount = await executeDrizzleMigrationsForSpec(
+      spec,
+      revision,
+      approvedPlanSql,
+      async (message) => {
+        logs.push(message);
+        await appendMigrationRunLog(runId, message);
+      }
+    );
 
     const finishedAt = new Date();
     const startedAt = await getMigrationRunStartedAt(runId);
@@ -263,6 +276,13 @@ export async function executeMigrationRun(
     ),
   });
   const currentRun = activeRuns.find((run) => run.id === runId) ?? null;
+  const approvedFilePreview = options.allowApprovalBypass
+    ? normalizeMigrationFilePreviewSnapshot(currentRun?.filePreview)
+    : null;
+  const hasApprovedExecutionPlan =
+    spec.specification.tool === 'drizzle' &&
+    approvedFilePreview?.executionPlan?.path === 'atlas-schema-diff.sql' &&
+    Boolean(approvedFilePreview.executionPlan.content.trim());
 
   const conflictingRun = activeRuns.find(
     (run) => run.id !== runId && isActiveMigrationRunStatus(run.status)
@@ -275,13 +295,21 @@ export async function executeMigrationRun(
     );
   }
 
-  const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
-    sourceRef: options.sourceRef,
-    sourceCommitSha: options.sourceCommitSha,
-    forceRefresh: true,
-    includeFileDetails: true,
-  });
-  await persistMigrationRunFilePreview(runId, pendingInspection.preview);
+  const pendingInspection = hasApprovedExecutionPlan
+    ? {
+        state: resolveMigrationPendingState(approvedFilePreview),
+        preview: approvedFilePreview,
+      }
+    : await inspectResolvedMigrationSpecPendingState(spec, {
+        sourceRef: options.sourceRef,
+        sourceCommitSha: options.sourceCommitSha,
+        forceRefresh: true,
+        includeFileDetails: true,
+      });
+
+  if (!hasApprovedExecutionPlan) {
+    await persistMigrationRunFilePreview(runId, pendingInspection.preview);
+  }
 
   if (pendingInspection.state === 'none') {
     const finishedAt = new Date();
@@ -395,7 +423,7 @@ export async function executeMigrationRun(
   }
 
   if (spec.specification.tool === 'drizzle') {
-    await runDrizzleMigration(runId, spec, options);
+    await runDrizzleMigration(runId, spec, options, pendingInspection.preview);
     return;
   }
 
