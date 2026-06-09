@@ -83,6 +83,7 @@ ENV HOSTNAME=0.0.0.0
 
 # 复制 Next.js standalone
 COPY --from=builder --chown=1001:1001 /app/.next/standalone ./
+COPY --from=builder --chown=1001:1001 /app/node_modules/ws ./node_modules/ws
 COPY --from=builder --chown=1001:1001 /app/.next/static ./.next/static
 COPY --from=builder --chown=1001:1001 /app/public ./public
 RUN mkdir -p ./.next/cache && chown -R 1001:1001 ./.next/cache
