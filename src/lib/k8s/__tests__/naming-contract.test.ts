@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { buildEnvironmentNamespace } from '@/lib/environments/model';
+import { buildEnvironmentNamespace } from '@/lib/environments/namespace';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 import { buildStableDeploymentName } from '@/lib/releases/traffic';
 

@@ -1,5 +1,4 @@
-import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
-import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
+import type { EnvironmentKindLike } from '@/lib/environments/model';
 
 export interface ReleasePresentationLike {
   summary?: string | null;
@@ -20,6 +19,27 @@ function shortSha(value?: string | null): string | null {
   return value ? value.slice(0, 7) : null;
 }
 
+function extractPrNumberFromRef(ref: string): number | null {
+  const match = ref.match(/^refs\/pull\/(\d+)\/(?:head|merge)$/);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function extractBranchFromRef(ref: string): string | null {
+  if (!ref.startsWith('refs/heads/')) {
+    return null;
+  }
+
+  return ref.slice('refs/heads/'.length);
+}
+
+function isPreviewReleaseEnvironment(environment: EnvironmentKindLike): boolean {
+  if (environment.kind) {
+    return environment.kind === 'preview';
+  }
+
+  return Boolean(environment.isPreview);
+}
+
 export function buildDefaultReleaseSummary(input: {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
@@ -29,7 +49,7 @@ export function buildDefaultReleaseSummary(input: {
   const branch = input.sourceRef ? extractBranchFromRef(input.sourceRef) : null;
   const tag = extractTagFromRef(input.sourceRef);
   const sha = shortSha(input.sourceCommitSha);
-  const isPreview = input.environment ? isPreviewEnvironment(input.environment) : false;
+  const isPreview = input.environment ? isPreviewReleaseEnvironment(input.environment) : false;
 
   let label = '发布';
 

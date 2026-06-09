@@ -15,12 +15,12 @@ import {
 import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
-  buildEnvironmentNamespace,
   inferEnvironmentDeploymentRuntime,
   isPersistentEnvironment,
   isPreviewEnvironment,
   isProductionEnvironment,
 } from '@/lib/environments/model';
+import { buildEnvironmentNamespace } from '@/lib/environments/namespace';
 import { createNamespace, isK8sAvailable, upsertService, waitForNamespaceCreated } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import {

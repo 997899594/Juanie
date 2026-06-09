@@ -13,7 +13,7 @@
     "dev:worker": "tsx watch src/lib/queue/worker.ts",
     "dev:scheduler": "tsx watch src/lib/queue/scheduler.ts",
     "dev:redis": "docker start juanie-redis 2>/dev/null || docker run --name juanie-redis -p 6379:6379 -d redis:7-alpine",
-    "build": "NEXT_TURBOPACK_DISABLED=1 bunx next build",
+    "build": "bunx next build --webpack",
     "start": "bunx next start",
     "start:worker": "bun src/lib/queue/worker.ts",
     "start:scheduler": "bun src/lib/queue/scheduler.ts",

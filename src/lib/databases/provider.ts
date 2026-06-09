@@ -35,7 +35,7 @@ import {
 } from '@/lib/db/connection-url';
 import type { DatabaseRuntime } from '@/lib/db/schema';
 import { databases, environments, projects } from '@/lib/db/schema';
-import { buildEnvironmentNamespace } from '@/lib/environments/model';
+import { buildEnvironmentNamespace } from '@/lib/environments/namespace';
 import {
   createNamespace,
   createService,

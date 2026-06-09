@@ -4,8 +4,6 @@ import type {
   EnvironmentDeploymentStrategy,
   EnvironmentKind,
 } from '@/lib/db/schema';
-import { buildPreviewNamespace } from '@/lib/environments/preview';
-import { buildK8sName, buildProjectNamespaceBase } from '@/lib/k8s/naming';
 
 export interface EnvironmentKindLike {
   kind?: EnvironmentKind | null;
@@ -22,25 +20,8 @@ export interface EnvironmentDeploymentRuntimeLike {
   deploymentStrategy?: EnvironmentDeploymentStrategy | null;
 }
 
-export interface EnvironmentNamespaceLike extends EnvironmentKindLike {
-  name: string;
-}
-
 export interface EnvironmentIdentityLike extends EnvironmentKindLike {
   name?: string | null;
-}
-
-function slugifySegment(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-}
-
-function truncateSegment(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : value.slice(0, maxLength).replace(/-+$/g, '');
 }
 
 export function getEnvironmentKind(environment: EnvironmentKindLike): EnvironmentKind {
@@ -160,26 +141,4 @@ export function pickProductionEnvironment<T extends EnvironmentKindLike>(
   environments: T[]
 ): T | null {
   return environments.find((environment) => isProductionEnvironment(environment)) ?? null;
-}
-
-export function buildEnvironmentNamespace(
-  projectSlug: string,
-  environment: EnvironmentNamespaceLike
-): string {
-  const kind = getEnvironmentKind(environment);
-
-  if (kind === 'preview') {
-    return buildPreviewNamespace(projectSlug, environment.name);
-  }
-
-  if (kind === 'production') {
-    return buildK8sName([buildProjectNamespaceBase(projectSlug), 'prod'], {
-      fallback: 'juanie-prod',
-    });
-  }
-
-  const environmentSlug = truncateSegment(slugifySegment(environment.name) || 'env', 40);
-  return buildK8sName([buildProjectNamespaceBase(projectSlug), environmentSlug], {
-    fallback: 'juanie-env',
-  });
 }
