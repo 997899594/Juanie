@@ -262,6 +262,10 @@ function isPermissionDeniedStatus(status: number): boolean {
   return status === 401 || status === 403;
 }
 
+async function describeBytebaseSsoProviderPermissionError(response: Response): Promise<string> {
+  return `Bytebase SSO provider 未就绪：服务账号没有读取或创建 Juanie OIDC Provider 的权限。请在 Bytebase 配好 id 为 juanie 的 OIDC Provider，或给 BYTEBASE_SERVICE_ACCOUNT_* 对应账号授予 identity provider 管理权限。原始响应：${await describeBytebaseResponse(response)}`;
+}
+
 class BytebaseProvisioningClient {
   private accessToken: string | null = null;
   private cookie: string | null = null;
@@ -413,10 +417,10 @@ class BytebaseProvisioningClient {
     }
 
     if (isPermissionDeniedStatus(existing.status)) {
-      provisioningLogger.warn('Bytebase SSO provider sync skipped because access is denied', {
+      provisioningLogger.error('Bytebase SSO provider sync failed because access is denied', {
         status: existing.status,
       });
-      return;
+      throw new Error(await describeBytebaseSsoProviderPermissionError(existing));
     }
 
     if (existing.status !== 404) {
@@ -445,10 +449,10 @@ class BytebaseProvisioningClient {
 
     if (!created.ok) {
       if (isPermissionDeniedStatus(created.status)) {
-        provisioningLogger.warn('Bytebase SSO provider creation skipped because access is denied', {
+        provisioningLogger.error('Bytebase SSO provider creation failed because access is denied', {
           status: created.status,
         });
-        return;
+        throw new Error(await describeBytebaseSsoProviderPermissionError(created));
       }
 
       throw new Error(

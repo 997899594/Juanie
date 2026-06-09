@@ -306,7 +306,7 @@ describe('provisionBytebaseDatabaseConsole', () => {
     ).toBe(true);
   });
 
-  it('does not block console provisioning when SSO provider management is forbidden', async () => {
+  it('blocks console provisioning when SSO provider management is forbidden', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
       const requestUrl = String(url);
@@ -336,39 +336,46 @@ describe('provisionBytebaseDatabaseConsole', () => {
       return jsonResponse({});
     });
 
-    const result = await provisionBytebaseDatabaseConsole(
-      {
-        project: { id: 'project-1', name: 'nexusnote' },
-        environment: { id: 'env-1', name: 'production' },
-        database: {
-          id: 'database-1',
-          name: 'primary',
-          type: 'postgresql',
-          connectionString: 'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
+    let thrownError: unknown = null;
+    try {
+      await provisionBytebaseDatabaseConsole(
+        {
+          project: { id: 'project-1', name: 'nexusnote' },
+          environment: { id: 'env-1', name: 'production' },
+          database: {
+            id: 'database-1',
+            name: 'primary',
+            type: 'postgresql',
+            connectionString:
+              'postgres://app:secret@primary-rw.namespace.svc.cluster.local:5432/app',
+          },
+          actor: target.actor,
         },
-        actor: target.actor,
-      },
-      {
-        enabled: true,
-        workspaceUrl: 'https://bytebase.juanie.art',
-        apiToken: null,
-        serviceAccountEmail: 'service@juanie.art',
-        serviceAccountKey: 'service-key',
-        bootstrapEmail: null,
-        bootstrapPassword: null,
-        bootstrapTitle: 'Juanie Platform',
-        oidcClientId: 'bytebase',
-        oidcClientSecret: 'oidc-secret',
-        oidcIssuer: 'https://juanie.art',
-      },
-      { fetchFn: fetchFn as unknown as typeof fetch }
-    );
+        {
+          enabled: true,
+          workspaceUrl: 'https://bytebase.juanie.art',
+          apiToken: null,
+          serviceAccountEmail: 'service@juanie.art',
+          serviceAccountKey: 'service-key',
+          bootstrapEmail: null,
+          bootstrapPassword: null,
+          bootstrapTitle: 'Juanie Platform',
+          oidcClientId: 'bytebase',
+          oidcClientSecret: 'oidc-secret',
+          oidcIssuer: 'https://juanie.art',
+        },
+        { fetchFn: fetchFn as unknown as typeof fetch }
+      );
+    } catch (error) {
+      thrownError = error;
+    }
 
-    expect(result.url).toContain('https://bytebase.juanie.art/auth/signin');
-    expect(result.url).toContain('idp=juanie');
-    expect(result.targetUrl).toContain('https://bytebase.juanie.art/sql-editor');
+    expect(thrownError instanceof Error).toBe(true);
+    expect(thrownError instanceof Error ? thrownError.message : '').toContain(
+      'Bytebase SSO provider 未就绪'
+    );
     expect(calls.some((call) => call.url.endsWith('/v1/idps/juanie'))).toBe(true);
-    expect(calls.some((call) => call.url.includes('/v1/projects/'))).toBe(true);
+    expect(calls.some((call) => call.url.includes('/v1/projects/'))).toBe(false);
   });
 
   it('includes Bytebase response details when project creation fails', async () => {
