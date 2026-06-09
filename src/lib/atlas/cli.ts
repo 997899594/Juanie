@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.1.0';
+const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.2.0';
 const ATLAS_DOCKER_IMAGE =
   process.env.ATLAS_DOCKER_IMAGE ?? `arigaio/atlas:${ATLAS_VERSION}-community`;
 

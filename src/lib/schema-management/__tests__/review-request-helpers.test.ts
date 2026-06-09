@@ -35,6 +35,12 @@ describe('schema review request helpers', () => {
       'migrate diff'
     );
     expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.sh']).toContain(
+      'arigaio/atlas:1.2.0-community'
+    );
+    expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.sh']).not.toContain(
+      'arigaio/atlas:latest'
+    );
+    expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.sh']).toContain(
       'apps/api/drizzle.config.ts'
     );
   });

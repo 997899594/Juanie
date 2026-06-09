@@ -65,6 +65,7 @@ export async function POST(
         bytebaseEnvironmentId: result.environmentId,
         bytebaseInstanceId: result.instanceId,
         databaseName: result.databaseName,
+        targetUrl: result.targetUrl,
       },
     });
 

@@ -139,6 +139,7 @@ type SchemaCenterActionKey =
 
 interface DatabaseConsoleOpenResponse {
   url: string;
+  targetUrl?: string;
 }
 
 interface ErrorResponse {

@@ -77,14 +77,14 @@ export function initK8sClient(): void {
       kc.loadFromString(process.env.KUBECONFIG_CONTENT);
       k8sLogger.info('Using KUBECONFIG_CONTENT');
     } else {
-      // Try to load from file or default
+      // Try to load from an explicit local kubeconfig path.
       const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
       if (existsSync(kubeconfigPath)) {
         kc.loadFromFile(kubeconfigPath);
         k8sLogger.info('Using kubeconfig from file', { kubeconfigPath });
       } else {
-        kc.loadFromDefault();
-        k8sLogger.info('Using default kubeconfig');
+        k8sLogger.warn('No kubeconfig file found', { kubeconfigPath });
+        return;
       }
     }
 
@@ -856,14 +856,14 @@ export async function execInPod(
     let output = '';
     let errorOutput = '';
 
-    const stdout = new (require('node:stream').Writable)({
+    const stdout = new Writable({
       write(chunk: Buffer, _encoding: string, callback: () => void) {
         output += chunk.toString();
         callback();
       },
     });
 
-    const stderr = new (require('node:stream').Writable)({
+    const stderr = new Writable({
       write(chunk: Buffer, _encoding: string, callback: () => void) {
         errorOutput += chunk.toString();
         callback();

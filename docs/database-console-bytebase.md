@@ -29,11 +29,12 @@ BYTEBASE_OIDC_CLIENT_ID=bytebase
 BYTEBASE_OIDC_ISSUER=https://juanie.art
 ```
 
-Juanie does not send users to a blank Bytebase workspace. The database card calls Juanie's
-`POST /api/projects/:id/databases/:dbId/console` endpoint first. That endpoint logs in to Bytebase,
-configures the Juanie OIDC provider in Bytebase, creates the matching Bytebase project /
-environment / instance when missing, syncs the instance, then returns a database-scoped SQL editor
-URL.
+Juanie does not send users to a blank Bytebase workspace or a raw Bytebase password form. The
+database card calls Juanie's `POST /api/projects/:id/databases/:dbId/console` endpoint first. That
+endpoint logs in to Bytebase, configures the Juanie OIDC provider in Bytebase, creates the matching
+Bytebase project / environment / instance when missing, syncs the instance, then returns a Bytebase
+SSO sign-in URL. Bytebase redirects through Juanie OIDC and lands back on the database-scoped SQL
+editor URL after the browser session is established.
 
 Juanie exposes the OIDC endpoints Bytebase needs:
 
@@ -76,8 +77,8 @@ Supported template keys:
 `databaseId`, `databaseName`, `databaseLabel`, `databaseType`, `host`, `port`, `namespace`,
 `serviceName`.
 
-If no template is configured, Juanie opens the database-scoped Bytebase SQL editor URL returned by
-the provisioning endpoint.
+If no template is configured, Juanie opens the database-scoped Bytebase SQL editor after the SSO
+handshake completes.
 
 ## Bootstrap
 

@@ -1,5 +1,7 @@
 import { drizzleSchemaConfigCandidates } from '@/lib/migrations/schema-source';
 
+const DEFAULT_ATLAS_IMAGE = 'arigaio/atlas:1.2.0-community';
+
 export interface SchemaRepairRuntimeArtifacts {
   files: Record<string, string>;
   atlasConfigPath: string;
@@ -114,7 +116,7 @@ function buildAtlasScriptContent(
     `# Required env: ATLAS_DEV_URL and${input.tool === 'sql' ? ' ATLAS_SRC_URL' : ''} optional ATLAS_IMAGE`,
     ``,
     ...installLines,
-    `ATLAS_IMAGE="\${ATLAS_IMAGE:-arigaio/atlas:latest}"`,
+    `ATLAS_IMAGE="\${ATLAS_IMAGE:-${DEFAULT_ATLAS_IMAGE}}"`,
     `if command -v atlas >/dev/null 2>&1; then`,
     `  atlas migrate diff "${migrationName}" --env repair --config "file://${atlasConfigPath}"`,
     `else`,

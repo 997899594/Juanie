@@ -45,6 +45,7 @@ export interface BytebaseProvisioningResult {
   instanceId: string;
   databaseName: string;
   url: string;
+  targetUrl: string;
 }
 
 interface BytebaseClientOptions {
@@ -599,6 +600,17 @@ export function buildBytebaseSqlEditorUrl(input: {
   return url.toString();
 }
 
+export function buildBytebaseOidcSignInUrl(input: {
+  workspaceUrl: string;
+  idpId: string;
+  redirectUrl: string;
+}): string {
+  const url = new URL('/auth/signin', input.workspaceUrl);
+  url.searchParams.set('idp', input.idpId);
+  url.searchParams.set('redirect', input.redirectUrl);
+  return url.toString();
+}
+
 export async function provisionBytebaseDatabaseConsole(
   target: BytebaseProvisioningTarget,
   config = getBytebaseProvisioningConfig(),
@@ -658,16 +670,23 @@ export async function provisionBytebaseDatabaseConsole(
     actorEmail,
   });
 
+  const targetUrl = buildBytebaseSqlEditorUrl({
+    workspaceUrl: config.workspaceUrl,
+    instanceId,
+    databaseName,
+  });
+
   return {
     provider: 'bytebase',
     projectId,
     environmentId,
     instanceId,
     databaseName,
-    url: buildBytebaseSqlEditorUrl({
+    url: buildBytebaseOidcSignInUrl({
       workspaceUrl: config.workspaceUrl,
-      instanceId,
-      databaseName,
+      idpId: 'juanie',
+      redirectUrl: targetUrl,
     }),
+    targetUrl,
   };
 }

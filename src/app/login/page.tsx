@@ -1,4 +1,4 @@
-import { Github } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { BrandLockup } from '@/components/layout/brand';
 import { Button } from '@/components/ui/button';
@@ -67,7 +67,7 @@ export default async function LoginPage() {
                     }}
                   >
                     <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
-                      <Github className="h-4 w-4" />
+                      <GitBranch className="h-4 w-4" />
                       使用 GitHub 登录
                     </Button>
                   </form>

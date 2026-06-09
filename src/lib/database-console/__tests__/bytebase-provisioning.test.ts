@@ -77,11 +77,14 @@ describe('provisionBytebaseDatabaseConsole', () => {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
 
-    expect(result.url).toContain('https://bytebase.juanie.art/sql-editor');
-    expect(result.url).toContain(
+    expect(result.url).toContain('https://bytebase.juanie.art/auth/signin');
+    expect(result.url).toContain('idp=juanie');
+    expect(result.url).toContain('redirect=');
+    expect(result.targetUrl).toContain('https://bytebase.juanie.art/sql-editor');
+    expect(result.targetUrl).toContain(
       'instance=instances%2Fjuanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade'
     );
-    expect(result.url).toContain('database=app');
+    expect(result.targetUrl).toContain('database=app');
     const createProjectCall = calls.find(
       (call) => call.method === 'POST' && call.url.includes('/v1/projects?projectId=')
     );
@@ -361,7 +364,9 @@ describe('provisionBytebaseDatabaseConsole', () => {
       { fetchFn: fetchFn as unknown as typeof fetch }
     );
 
-    expect(result.url).toContain('https://bytebase.juanie.art/sql-editor');
+    expect(result.url).toContain('https://bytebase.juanie.art/auth/signin');
+    expect(result.url).toContain('idp=juanie');
+    expect(result.targetUrl).toContain('https://bytebase.juanie.art/sql-editor');
     expect(calls.some((call) => call.url.endsWith('/v1/idps/juanie'))).toBe(true);
     expect(calls.some((call) => call.url.includes('/v1/projects/'))).toBe(true);
   });
