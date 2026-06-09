@@ -3,7 +3,7 @@
 Juanie 的生产运行分两层初始化：
 
 1. `deploy/k8s/scripts/install-k3s.sh` 负责宿主机层：安装 K3s、固定节点 IP、禁用内置入口、配置国内系统镜像源和 pause 镜像。
-2. `deploy/k8s/scripts/init-server.sh` 负责集群基础设施层：安装 cert-manager、Argo Rollouts、Gateway 资源，以及显式启用的可选组件（Argo CD、CloudNativePG、External Secrets、Bytebase）。
+2. `deploy/k8s/scripts/init-server.sh` 负责集群基础设施层：安装 cert-manager、Argo Rollouts、Gateway 资源，以及显式启用的可选组件（Argo CD、CloudNativePG、External Secrets）。
 
 不要把两层混在一个脚本里。K3s 安装会修改 systemd、containerd 和 `/etc/rancher/k3s`；平台 bootstrap 只应该操作一个已经健康的 Kubernetes 集群。
 

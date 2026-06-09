@@ -57,5 +57,5 @@ env:
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: "main"
   JUANIE_PREVIEW_APPLICATIONSET_PATH: "deploy/k8s/charts/preview-scaffold"
   AI_ENABLED: "true"
-  BYTEBASE_ENABLED: "true"
-  BYTEBASE_URL: "https://bytebase.juanie.art"
+  DATABASE_CONSOLE_ENABLED: "true"
+  DATABASE_CONSOLE_READONLY: "true"

@@ -19,22 +19,6 @@ CNPG_ENABLED="${CNPG_ENABLED:-false}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
 EXTERNAL_SECRETS_ENABLED="${EXTERNAL_SECRETS_ENABLED:-false}"
-BYTEBASE_ENABLED="${BYTEBASE_ENABLED:-false}"
-BYTEBASE_NAMESPACE="${BYTEBASE_NAMESPACE:-bytebase}"
-BYTEBASE_HOSTNAME="${BYTEBASE_HOSTNAME:-bytebase.${PLATFORM_DOMAIN}}"
-BYTEBASE_PUBLIC_URL="${BYTEBASE_PUBLIC_URL:-}"
-BYTEBASE_SERVICE_NAME="${BYTEBASE_SERVICE_NAME:-bytebase-entrypoint}"
-BYTEBASE_SERVICE_PORT="${BYTEBASE_SERVICE_PORT:-80}"
-BYTEBASE_REPLICAS="${BYTEBASE_REPLICAS:-0}"
-BYTEBASE_METADATA_DATABASE_URL="${BYTEBASE_METADATA_DATABASE_URL:-}"
-BYTEBASE_METADATA_DATABASE_NAME="${BYTEBASE_METADATA_DATABASE_NAME:-bytebase}"
-BYTEBASE_METADATA_DATABASE_USER="${BYTEBASE_METADATA_DATABASE_USER:-bytebase}"
-BYTEBASE_METADATA_CREDENTIALS_SECRET="${BYTEBASE_METADATA_CREDENTIALS_SECRET:-bytebase-metadata-app}"
-BYTEBASE_METADATA_URL_SECRET="${BYTEBASE_METADATA_URL_SECRET:-bytebase-metadata-pg-url}"
-BYTEBASE_METADATA_URL_SECRET_KEY="${BYTEBASE_METADATA_URL_SECRET_KEY:-url}"
-BYTEBASE_METADATA_WAIT_TIMEOUT="${BYTEBASE_METADATA_WAIT_TIMEOUT:-10m}"
-BYTEBASE_METADATA_BOOTSTRAP_IMAGE="${BYTEBASE_METADATA_BOOTSTRAP_IMAGE:-pgvector/pgvector:pg16}"
-BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME="${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME:-bytebase-metadata-bootstrap}"
 PLATFORM_DATABASE_SERVICE="${PLATFORM_DATABASE_SERVICE:-postgres}"
 PLATFORM_DATABASE_HOST="${PLATFORM_DATABASE_HOST:-${PLATFORM_DATABASE_SERVICE}.${PLATFORM_NAMESPACE}.svc.cluster.local}"
 PLATFORM_DATABASE_PORT="${PLATFORM_DATABASE_PORT:-5432}"
@@ -55,13 +39,6 @@ ARGO_ROLLOUTS_CHART_VERSION="${ARGO_ROLLOUTS_CHART_VERSION:-2.41.0}"
 CNPG_CHART_VERSION="${CNPG_CHART_VERSION:-0.28.2}"
 EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
 DNSPOD_WEBHOOK_CHART_VERSION="${DNSPOD_WEBHOOK_CHART_VERSION:-1.5.2}"
-BYTEBASE_CHART_VERSION="${BYTEBASE_CHART_VERSION:-1.1.3}"
-BYTEBASE_IMAGE_VERSION="${BYTEBASE_IMAGE_VERSION:-3.19.0}"
-BYTEBASE_IMAGE_REGISTRY="${BYTEBASE_IMAGE_REGISTRY:-docker.io}"
-BYTEBASE_IMAGE_REPOSITORY="${BYTEBASE_IMAGE_REPOSITORY:-bytebase/bytebase}"
-BYTEBASE_RESOURCE_CHECK_ENABLED="${BYTEBASE_RESOURCE_CHECK_ENABLED:-true}"
-BYTEBASE_MIN_NODE_MEMORY_MIB="${BYTEBASE_MIN_NODE_MEMORY_MIB:-6144}"
-BYTEBASE_MIN_AVAILABLE_MEMORY_MIB="${BYTEBASE_MIN_AVAILABLE_MEMORY_MIB:-1536}"
 
 CERT_MANAGER_CHART_REF="${CERT_MANAGER_CHART_REF:-jetstack/cert-manager}"
 ARGOCD_CHART_REF="${ARGOCD_CHART_REF:-argo/argo-cd}"
@@ -69,7 +46,6 @@ ARGO_ROLLOUTS_CHART_REF="${ARGO_ROLLOUTS_CHART_REF:-argo/argo-rollouts}"
 CNPG_CHART_REF="${CNPG_CHART_REF:-cnpg/cloudnative-pg}"
 EXTERNAL_SECRETS_CHART_REF="${EXTERNAL_SECRETS_CHART_REF:-external-secrets/external-secrets}"
 DNSPOD_WEBHOOK_CHART_REF="${DNSPOD_WEBHOOK_CHART_REF:-cert-manager-webhook-dnspod/cert-manager-webhook-dnspod}"
-BYTEBASE_CHART_REF="${BYTEBASE_CHART_REF:-bytebase/bytebase}"
 
 BOOTSTRAP_CHART_SOURCE="${BOOTSTRAP_CHART_SOURCE:-repo}"
 BOOTSTRAP_CHART_DIR="${BOOTSTRAP_CHART_DIR:-${ROOT_DIR}/.charts}"
@@ -81,7 +57,6 @@ ARGO_ROLLOUTS_CHART_URL="${ARGO_ROLLOUTS_CHART_URL:-https://github.com/argoproj/
 CNPG_CHART_URL="${CNPG_CHART_URL:-https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v${CNPG_CHART_VERSION}/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
 EXTERNAL_SECRETS_CHART_URL="${EXTERNAL_SECRETS_CHART_URL:-https://github.com/external-secrets/external-secrets/releases/download/helm-chart-${EXTERNAL_SECRETS_CHART_VERSION}/external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz}"
 DNSPOD_WEBHOOK_CHART_URL="${DNSPOD_WEBHOOK_CHART_URL:-https://github.com/imroc/cert-manager-webhook-dnspod/releases/download/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz}"
-BYTEBASE_CHART_URL="${BYTEBASE_CHART_URL:-https://bytebase.github.io/bytebase/bytebase-${BYTEBASE_CHART_VERSION}.tgz}"
 
 CERT_MANAGER_IMAGE_REPOSITORY="${CERT_MANAGER_IMAGE_REPOSITORY:-}"
 CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY="${CERT_MANAGER_WEBHOOK_IMAGE_REPOSITORY:-}"
@@ -241,11 +216,6 @@ resolve_chart_refs() {
       if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
         EXTERNAL_SECRETS_CHART_REF="$(download_chart "external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz" "${EXTERNAL_SECRETS_CHART_URL}")"
       fi
-
-      if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
-        BYTEBASE_CHART_REF="$(download_chart "bytebase-${BYTEBASE_CHART_VERSION}.tgz" "${BYTEBASE_CHART_URL}")"
-      fi
-
       if [[ "$(gateway_https_enabled)" == "true" ]]; then
         DNSPOD_WEBHOOK_CHART_REF="$(download_chart "cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz" "${DNSPOD_WEBHOOK_CHART_URL}")"
       fi
@@ -612,303 +582,6 @@ EOF
   log_info "已同步 Gateway shared-gateway: mode=${GATEWAY_EDGE_MODE}, httpPort=${http_port}, https=${https_enabled}"
 }
 
-bytebase_public_url() {
-  if [[ -n "${BYTEBASE_PUBLIC_URL}" ]]; then
-    printf '%s\n' "${BYTEBASE_PUBLIC_URL%/}"
-    return
-  fi
-
-  if [[ "$(gateway_https_enabled)" == "true" ]]; then
-    printf 'https://%s\n' "${BYTEBASE_HOSTNAME}"
-    return
-  fi
-
-  printf 'http://%s\n' "${BYTEBASE_HOSTNAME}"
-}
-
-apply_bytebase_route() {
-  local section_name
-
-  if [[ "${BYTEBASE_ENABLED}" != "true" ]]; then
-    return
-  fi
-
-  if [[ "$(gateway_https_enabled)" == "true" ]]; then
-    section_name='https-wildcard'
-  else
-    section_name='http-wildcard'
-  fi
-
-  ensure_namespace "${BYTEBASE_NAMESPACE}"
-
-  cat <<EOF | kubectl apply -f - >/dev/null
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: bytebase
-  namespace: ${BYTEBASE_NAMESPACE}
-  labels:
-    app.kubernetes.io/managed-by: juanie-bootstrap
-spec:
-  parentRefs:
-    - name: shared-gateway
-      namespace: ${PLATFORM_NAMESPACE}
-      sectionName: ${section_name}
-  hostnames:
-    - "${BYTEBASE_HOSTNAME}"
-  rules:
-    - backendRefs:
-        - name: ${BYTEBASE_SERVICE_NAME}
-          port: ${BYTEBASE_SERVICE_PORT}
-EOF
-
-  log_info "已同步 Bytebase HTTPRoute: $(bytebase_public_url)"
-}
-
-decode_base64() {
-  if base64 --help 2>&1 | grep -q -- '--decode'; then
-    base64 --decode
-    return
-  fi
-
-  base64 -D
-}
-
-get_secret_value() {
-  local namespace="$1"
-  local secret_name="$2"
-  local key="$3"
-
-  kubectl get secret "${secret_name}" -n "${namespace}" -o "jsonpath={.data.${key}}" | decode_base64
-}
-
-read_meminfo_mib() {
-  local key="$1"
-  awk -v key="${key}:" '$1 == key { printf "%d\n", int($2 / 1024); found = 1 } END { if (!found) exit 1 }' /proc/meminfo
-}
-
-ensure_bytebase_resource_budget() {
-  local total_mib
-  local available_mib
-
-  if ! [[ "${BYTEBASE_REPLICAS}" =~ ^[0-9]+$ ]]; then
-    log_error "BYTEBASE_REPLICAS 必须是非负整数，当前为 ${BYTEBASE_REPLICAS}"
-    exit 1
-  fi
-
-  if (( BYTEBASE_REPLICAS == 0 )); then
-    log_info "Bytebase 以按需模式安装，replicas=0，跳过运行态资源基线检查。"
-    return
-  fi
-
-  if [[ "${BYTEBASE_RESOURCE_CHECK_ENABLED}" != "true" ]]; then
-    log_warn "Bytebase 资源基线检查已关闭。"
-    return
-  fi
-
-  total_mib="$(read_meminfo_mib MemTotal)"
-  available_mib="$(read_meminfo_mib MemAvailable)"
-
-  if (( total_mib < BYTEBASE_MIN_NODE_MEMORY_MIB )); then
-    log_error "当前节点内存 ${total_mib}MiB，不满足 Bytebase 最低 ${BYTEBASE_MIN_NODE_MEMORY_MIB}MiB。"
-    log_error "请扩容节点、使用外部 Bytebase，或显式设置 BYTEBASE_RESOURCE_CHECK_ENABLED=false 后再安装。"
-    exit 1
-  fi
-
-  if (( available_mib < BYTEBASE_MIN_AVAILABLE_MEMORY_MIB )); then
-    log_error "当前可用内存 ${available_mib}MiB，不满足 Bytebase 安装最低 ${BYTEBASE_MIN_AVAILABLE_MEMORY_MIB}MiB。"
-    log_error "请先释放资源、扩容节点，或显式设置 BYTEBASE_RESOURCE_CHECK_ENABLED=false 后再安装。"
-    exit 1
-  fi
-}
-
-ensure_bytebase_metadata_credentials_secret() {
-  if kubectl get secret "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" -n "${BYTEBASE_NAMESPACE}" >/dev/null 2>&1; then
-    log_info "复用 Bytebase metadata DB 凭证 Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CREDENTIALS_SECRET}"
-    return
-  fi
-
-  require_command openssl
-
-  local password
-  password="$(openssl rand -hex 32)"
-
-  kubectl create secret generic "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" \
-    -n "${BYTEBASE_NAMESPACE}" \
-    --from-literal=username="${BYTEBASE_METADATA_DATABASE_USER}" \
-    --from-literal=password="${password}" \
-    --dry-run=client \
-    -o yaml | kubectl apply -f - >/dev/null
-
-  log_info "已创建 Bytebase metadata DB 凭证 Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_CREDENTIALS_SECRET}"
-}
-
-ensure_bytebase_metadata_url_secret() {
-  local database_url="$1"
-
-  kubectl create secret generic "${BYTEBASE_METADATA_URL_SECRET}" \
-    -n "${BYTEBASE_NAMESPACE}" \
-    --from-literal="${BYTEBASE_METADATA_URL_SECRET_KEY}=${database_url}" \
-    --dry-run=client \
-    -o yaml | kubectl apply -f - >/dev/null
-
-  log_info "已同步 Bytebase metadata DB URL Secret: ${BYTEBASE_NAMESPACE}/${BYTEBASE_METADATA_URL_SECRET}"
-}
-
-ensure_bytebase_metadata_bootstrap_secret() {
-  local password="$1"
-  local secret_name="${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}-credentials"
-
-  kubectl create secret generic "${secret_name}" \
-    -n "${PLATFORM_NAMESPACE}" \
-    --from-literal=username="${BYTEBASE_METADATA_DATABASE_USER}" \
-    --from-literal=password="${password}" \
-    --dry-run=client \
-    -o yaml | kubectl apply -f - >/dev/null
-
-  printf '%s\n' "${secret_name}"
-}
-
-wait_for_job() {
-  local namespace="$1"
-  local job_name="$2"
-  local timeout="$3"
-
-  if ! kubectl wait --for=condition=Complete "job/${job_name}" -n "${namespace}" --timeout="${timeout}"; then
-    log_warn "Job ${namespace}/${job_name} 未完成，输出最近日志。"
-    kubectl logs "job/${job_name}" -n "${namespace}" --tail=120 || true
-    return 1
-  fi
-}
-
-ensure_bytebase_control_plane_metadata_database() {
-  local password
-  local database_url
-  local bootstrap_secret
-
-  if [[ "${BYTEBASE_ENABLED}" != "true" ]]; then
-    return
-  fi
-
-  ensure_namespace "${BYTEBASE_NAMESPACE}"
-
-  if [[ -n "${BYTEBASE_METADATA_DATABASE_URL}" ]]; then
-    ensure_bytebase_metadata_url_secret "${BYTEBASE_METADATA_DATABASE_URL}"
-    log_info "Bytebase 使用外部 metadata DB 覆盖配置。"
-    return
-  fi
-
-  ensure_bytebase_metadata_credentials_secret
-  password="$(get_secret_value "${BYTEBASE_NAMESPACE}" "${BYTEBASE_METADATA_CREDENTIALS_SECRET}" password)"
-  bootstrap_secret="$(ensure_bytebase_metadata_bootstrap_secret "${password}")"
-
-  kubectl delete job "${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}" \
-    -n "${PLATFORM_NAMESPACE}" \
-    --ignore-not-found=true \
-    --wait=true >/dev/null
-
-  cat <<EOF | kubectl apply -f - >/dev/null
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}
-  namespace: ${PLATFORM_NAMESPACE}
-  labels:
-    app.kubernetes.io/managed-by: juanie-bootstrap
-    app.kubernetes.io/component: bytebase-metadata
-spec:
-  backoffLimit: 1
-  ttlSecondsAfterFinished: 300
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/component: bytebase-metadata
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: psql
-          image: ${BYTEBASE_METADATA_BOOTSTRAP_IMAGE}
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PGHOST
-              value: "${PLATFORM_DATABASE_HOST}"
-            - name: PGPORT
-              value: "${PLATFORM_DATABASE_PORT}"
-            - name: PGUSER
-              value: "${PLATFORM_DATABASE_USER}"
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ${PLATFORM_DATABASE_PASSWORD_SECRET}
-                  key: ${PLATFORM_DATABASE_PASSWORD_SECRET_KEY}
-            - name: BYTEBASE_DB
-              value: "${BYTEBASE_METADATA_DATABASE_NAME}"
-            - name: BYTEBASE_USER
-              valueFrom:
-                secretKeyRef:
-                  name: ${bootstrap_secret}
-                  key: username
-            - name: BYTEBASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ${bootstrap_secret}
-                  key: password
-          command:
-            - /bin/sh
-            - -ec
-          args:
-            - |
-              psql -v ON_ERROR_STOP=1 \
-                -v dbname="\${BYTEBASE_DB}" \
-                -v dbuser="\${BYTEBASE_USER}" \
-                -v dbpass="\${BYTEBASE_PASSWORD}" <<'SQL'
-              SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'dbuser', :'dbpass')
-              WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'dbuser')\gexec
-
-              SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'dbuser', :'dbpass')\gexec
-
-              SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'dbuser')
-              WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'dbname')\gexec
-
-              ALTER DATABASE :"dbname" OWNER TO :"dbuser";
-              \connect :dbname
-              GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"dbuser";
-              GRANT ALL ON SCHEMA public TO :"dbuser";
-              ALTER SCHEMA public OWNER TO :"dbuser";
-              SQL
-EOF
-
-  if ! wait_for_job "${PLATFORM_NAMESPACE}" "${BYTEBASE_METADATA_BOOTSTRAP_JOB_NAME}" "${BYTEBASE_METADATA_WAIT_TIMEOUT}"; then
-    kubectl delete secret "${bootstrap_secret}" -n "${PLATFORM_NAMESPACE}" --ignore-not-found=true >/dev/null
-    return 1
-  fi
-  kubectl delete secret "${bootstrap_secret}" -n "${PLATFORM_NAMESPACE}" --ignore-not-found=true >/dev/null
-
-  database_url="postgresql://${BYTEBASE_METADATA_DATABASE_USER}:${password}@${PLATFORM_DATABASE_HOST}:${PLATFORM_DATABASE_PORT}/${BYTEBASE_METADATA_DATABASE_NAME}?sslmode=disable"
-  ensure_bytebase_metadata_url_secret "${database_url}"
-  log_info "已准备 Bytebase control-plane metadata DB: ${PLATFORM_DATABASE_HOST}/${BYTEBASE_METADATA_DATABASE_NAME}"
-}
-
-create_bytebase_post_renderer() {
-  local path
-  path="${TMPDIR:-/tmp}/juanie-bytebase-post-renderer-$$"
-
-  cat >"${path}" <<EOF
-#!/usr/bin/env bash
-awk '
-  \$0 == "kind: StatefulSet" { in_statefulset=1; print; next }
-  \$0 == "---" { in_statefulset=0; print; next }
-  in_statefulset && \$0 ~ /^  replicas: [0-9]+$/ {
-    print "  replicas: ${BYTEBASE_REPLICAS}"
-    next
-  }
-  { print }
-'
-EOF
-  chmod +x "${path}"
-  printf '%s\n' "${path}"
-}
-
 ensure_dnspod_secret() {
   if kubectl get secret dnspod-secret -n "${CERT_MANAGER_NAMESPACE}" >/dev/null 2>&1; then
     log_info "检测到现有 dnspod-secret，复用 ${CERT_MANAGER_NAMESPACE}/dnspod-secret"
@@ -1029,10 +702,6 @@ show_summary() {
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
   fi
-  if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
-    summary_namespaces+=("${BYTEBASE_NAMESPACE}")
-  fi
-
   kubectl get ns "${summary_namespaces[@]}" >/dev/null
   kubectl get pods -n "${CERT_MANAGER_NAMESPACE}"
   if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
@@ -1044,12 +713,6 @@ show_summary() {
   fi
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
-  fi
-  if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
-    kubectl get pods -n "${BYTEBASE_NAMESPACE}"
-    log_info "Bytebase URL: $(bytebase_public_url)"
-    log_info "Bytebase replicas: ${BYTEBASE_REPLICAS}。按需启动: deploy/k8s/scripts/bytebase-on-demand.sh start"
-    log_info "需要在 Juanie UI 暴露入口时，再设置 BYTEBASE_ENABLED=true 和 BYTEBASE_URL=$(bytebase_public_url)"
   fi
   kubectl get gateway -n "${PLATFORM_NAMESPACE}" || true
   kubectl get certificate -n "${PLATFORM_NAMESPACE}" || true
@@ -1095,11 +758,6 @@ fi
 
 if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]] && ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
   helm_repo_add external-secrets https://charts.external-secrets.io
-  helm_repo_update_required='true'
-fi
-
-if [[ "${BYTEBASE_ENABLED}" == "true" ]] && ! is_local_chart_ref "${BYTEBASE_CHART_REF}"; then
-  helm_repo_add bytebase https://bytebase.github.io/bytebase
   helm_repo_update_required='true'
 fi
 
@@ -1254,59 +912,9 @@ else
   log_info "CloudNativePG 已关闭，跳过安装。"
 fi
 
-if [[ "${BYTEBASE_ENABLED}" == "true" ]]; then
-  log_section "安装 Bytebase"
-  ensure_bytebase_resource_budget
-  ensure_bytebase_control_plane_metadata_database
-
-  bytebase_args=(
-    --set-string "bytebase.option.external-url=$(bytebase_public_url)"
-    --set-string "bytebase.option.externalPg.existingPgURLSecret=${BYTEBASE_METADATA_URL_SECRET}"
-    --set-string "bytebase.option.externalPg.existingPgURLSecretKey=${BYTEBASE_METADATA_URL_SECRET_KEY}"
-    --set-string "global.azure.images.bytebase.registry=${BYTEBASE_IMAGE_REGISTRY}"
-    --set-string "global.azure.images.bytebase.image=${BYTEBASE_IMAGE_REPOSITORY}"
-    --set-string "global.azure.images.bytebase.tag=${BYTEBASE_IMAGE_VERSION}"
-    --set "bytebase.version=${BYTEBASE_IMAGE_VERSION}"
-  )
-
-  if helm_supports_executable_post_renderer; then
-    bytebase_post_renderer="$(create_bytebase_post_renderer)"
-    helm_upgrade_install \
-      bytebase \
-      "${BYTEBASE_CHART_REF}" \
-      "${BYTEBASE_NAMESPACE}" \
-      "${INFRA_DIR}/bytebase/values.yaml" \
-      "${BYTEBASE_CHART_VERSION}" \
-      "${bytebase_args[@]}" \
-      --post-renderer "${bytebase_post_renderer}"
-    rm -f "${bytebase_post_renderer}"
-  else
-    log_warn "当前 Helm 不支持可执行文件式 post-renderer，改用 no-wait 安装后立即 scale。"
-    helm_upgrade_install_no_wait \
-      bytebase \
-      "${BYTEBASE_CHART_REF}" \
-      "${BYTEBASE_NAMESPACE}" \
-      "${INFRA_DIR}/bytebase/values.yaml" \
-      "${BYTEBASE_CHART_VERSION}" \
-      "${bytebase_args[@]}"
-    kubectl scale statefulset bytebase -n "${BYTEBASE_NAMESPACE}" --replicas="${BYTEBASE_REPLICAS}"
-  fi
-
-  if (( BYTEBASE_REPLICAS > 0 )); then
-    if ! wait_for_statefulset "${BYTEBASE_NAMESPACE}" bytebase; then
-      wait_for_labeled_statefulsets "${BYTEBASE_NAMESPACE}" app.kubernetes.io/instance=bytebase
-    fi
-  else
-    log_info "Bytebase 已安装为按需模式，StatefulSet replicas=0。"
-  fi
-else
-  log_info "Bytebase 数据库控制台已关闭，跳过安装。"
-fi
-
 log_section "应用平台网关与证书资源"
 apply_rendered_manifest "${INFRA_DIR}/gateway/namespace.yaml"
 apply_gateway_manifest
-apply_bytebase_route
 
 if [[ "$(gateway_https_enabled)" == "true" ]]; then
   apply_rendered_manifest "${INFRA_DIR}/gateway/certificate.yaml"

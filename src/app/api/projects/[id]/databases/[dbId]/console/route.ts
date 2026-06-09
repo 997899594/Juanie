@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { createAuditLog } from '@/lib/audit';
-import { provisionBytebaseDatabaseConsole } from '@/lib/database-console/bytebase-provisioning';
+import { openDbGateDatabaseConsole } from '@/lib/database-console/dbgate-session';
 import { db } from '@/lib/db';
 import { databases, environments } from '@/lib/db/schema';
 import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
@@ -41,7 +41,7 @@ export async function POST(
       return NextResponse.json({ error: 'Environment not found' }, { status: 404 });
     }
 
-    const result = await provisionBytebaseDatabaseConsole({
+    const result = await openDbGateDatabaseConsole({
       project,
       environment,
       database,
@@ -61,11 +61,9 @@ export async function POST(
         projectId: project.id,
         environmentId: environment.id,
         provider: result.provider,
-        bytebaseProjectId: result.projectId,
-        bytebaseEnvironmentId: result.environmentId,
-        bytebaseInstanceId: result.instanceId,
-        databaseName: result.databaseName,
-        targetUrl: result.targetUrl,
+        deploymentName: result.deploymentName,
+        serviceName: result.serviceName,
+        readonly: result.readonly,
       },
     });
 

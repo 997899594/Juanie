@@ -1,6 +1,0 @@
-# Bytebase is optional and installed as an on-demand workbench by bootstrap.
-# Metadata is stored in the existing Juanie control-plane PostgreSQL database
-# through a dedicated database/user, and the connection is passed through a
-# Kubernetes Secret. The official chart currently hard-codes StatefulSet
-# replicas, so init-server.sh uses a Helm post-renderer to set the desired
-# replica count, defaulting to 0.

@@ -1,8 +1,8 @@
 import { desc, eq } from 'drizzle-orm';
 import {
-  buildBytebaseDatabaseConsoleLink,
-  getBytebaseConsoleConfig,
-} from '@/lib/database-console/bytebase';
+  buildDbGateDatabaseConsoleLink,
+  getDbGateConsoleConfig,
+} from '@/lib/database-console/dbgate';
 import { db } from '@/lib/db';
 import {
   auditLogs,
@@ -58,7 +58,7 @@ export async function getProjectEnvironmentListData(input: {
   role: TeamRole;
 }) {
   const projectId = input.project.id;
-  const databaseConsoleConfig = getBytebaseConsoleConfig();
+  const databaseConsoleConfig = getDbGateConsoleConfig();
   const databaseConsoleProject = {
     id: input.project.id,
     name: input.project.slug,
@@ -258,7 +258,7 @@ export async function getProjectEnvironmentListData(input: {
                 : null,
           }
         : null,
-      console: buildBytebaseDatabaseConsoleLink({
+      console: buildDbGateDatabaseConsoleLink({
         config: databaseConsoleConfig,
         project: databaseConsoleProject,
         environment: {

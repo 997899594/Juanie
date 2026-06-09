@@ -75,11 +75,9 @@ interface SchemaCenterDatabaseRecord {
   } | null;
   console: {
     enabled: true;
-    provider: 'bytebase';
+    provider: 'dbgate';
     label: string;
-    workspaceUrl: string;
-    sqlEditorUrl: string;
-    databaseUrl: string;
+    consoleUrl: string;
     accessModeLabel: string;
     summary: string;
     changeManagementSummary: string;
@@ -119,10 +117,8 @@ interface SchemaCenterData {
   };
   databaseConsole: {
     enabled: boolean;
-    provider: 'bytebase';
+    provider: 'dbgate';
     label: string;
-    workspaceUrl: string | null;
-    sqlEditorUrl: string | null;
     accessModeLabel: string;
     summary: string;
     changeManagementSummary: string;
@@ -139,7 +135,6 @@ type SchemaCenterActionKey =
 
 interface DatabaseConsoleOpenResponse {
   url: string;
-  targetUrl?: string;
 }
 
 interface ErrorResponse {

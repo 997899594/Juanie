@@ -24,7 +24,7 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | 部署 | `src/lib/queue/deployment.ts` 执行 workload，`src/lib/releases/orchestration.ts` 续推 release |
 | 数据库供应 | `src/lib/databases/provisioning.ts` 是供应与环境变量注入唯一入口 |
 | Schema 门禁 | `src/lib/schema-safety/index.ts` 是 API 层入口，内部落到 `schema-management` 与 `releases/schema-gate` |
-| 数据库工作台 | `src/lib/database-console/bytebase.ts` 只生成 Bytebase 控制台入口，不参与发布、迁移或 Schema Gate 判定 |
+| 数据库工作台 | `src/lib/database-console/dbgate.ts` 与 `src/lib/database-console/dbgate-session.ts` 生成 DbGate 单库工作台，不参与发布、迁移或 Schema Gate 判定 |
 | 运行时同步 | `src/lib/env-sync.ts` 合并并同步环境变量到 Kubernetes |
 
 ## 平台依赖
@@ -38,7 +38,7 @@ Juanie 采用 Bun-first，但不是 Bun-only：
 | TLS / 证书 | cert-manager |
 | 外部密钥能力 | External Secrets Operator（可选，默认不安装） |
 | Schema diff / control-plane migration | Atlas |
-| 数据库可视化工作台 | Bytebase Community（可选，按需启动，只读优先，不接管发布治理） |
+| 数据库可视化工作台 | DbGate Community（按库启动，只读优先，不接管发布治理） |
 | 后台队列 | BullMQ + Redis |
 
 ## 平台自身发布
@@ -62,8 +62,7 @@ Argo CD 自身默认不安装；只有明确启用 ApplicationSet 预览脚手�
 | TLS | chart 默认通过 `NODE_EXTRA_CA_CERTS` 信任 ServiceAccount CA；不默认注入 `NODE_TLS_REJECT_UNAUTHORIZED=0`，只有显式打开 `worker/scheduler.insecureSkipTlsVerify` 才会渲染 |
 | RBAC | 高风险能力集中在 `rbac.*` 开关，`pods/exec` 默认关闭 |
 | 平台临时执行 | 服务探活、schema-runner、迁移派发、预览库克隆统一走 `PlatformOperationJob`；平台账号只需要 `batch/jobs` 创建/删除和 `pods/log` 读取，不开放 `pods/create` |
-| 数据库控制台 | Bytebase 默认只作为查询与排障入口；生产 DDL/DML 不从控制台直接放行，仍回到 Juanie 发布、提升或 Schema Repair 流程 |
-| Bytebase 元数据库 | bootstrap 默认在 Juanie 控制面 PostgreSQL 中创建独立 `bytebase` database/user；子应用数据库只作为 Bytebase workbench target，不作为 Bytebase 自身存储 |
+| 数据库控制台 | DbGate 默认只作为查询与排障入口；生产 DDL/DML 不从控制台直接放行，仍回到 Juanie 发布、提升或 Schema Repair 流程 |
 | Trace | release id 派生稳定 W3C trace id，release/deployment/migration 队列 job 透传同一个 `traceId` 和 `traceparent` |
 
 ## 后续重构边界

@@ -160,11 +160,9 @@ interface EnvironmentRecord {
     } | null;
     console: {
       enabled: true;
-      provider: 'bytebase';
+      provider: 'dbgate';
       label: string;
-      workspaceUrl: string;
-      sqlEditorUrl: string;
-      databaseUrl: string;
+      consoleUrl: string;
       accessModeLabel: string;
       summary: string;
       changeManagementSummary: string;

@@ -1,9 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
 import {
-  buildBytebaseDatabaseConsoleLink,
   buildDatabaseConsoleOverview,
-  getBytebaseConsoleConfig,
-} from '@/lib/database-console/bytebase';
+  buildDbGateDatabaseConsoleLink,
+  getDbGateConsoleConfig,
+} from '@/lib/database-console/dbgate';
 import { getDatabaseInsights } from '@/lib/databases/insights';
 import { db } from '@/lib/db';
 import { environments, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
@@ -22,7 +22,7 @@ export async function getProjectSchemaCenterData(input: {
   selectedEnvId?: string | null;
 }) {
   const projectId = input.project.id;
-  const databaseConsoleConfig = getBytebaseConsoleConfig();
+  const databaseConsoleConfig = getDbGateConsoleConfig();
 
   const [environmentList, latestRepairPlansResult, latestAtlasRuns] = await Promise.all([
     db.query.environments.findMany({
@@ -125,7 +125,7 @@ export async function getProjectSchemaCenterData(input: {
                       : null,
                 }
               : null,
-            console: buildBytebaseDatabaseConsoleLink({
+            console: buildDbGateDatabaseConsoleLink({
               config: databaseConsoleConfig,
               project: input.project,
               environment,

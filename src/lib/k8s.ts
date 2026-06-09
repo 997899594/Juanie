@@ -307,10 +307,13 @@ export async function cleanupStuckTerminatingPods(
   return stuckPods.map((pod) => pod.metadata?.name ?? '').filter(Boolean);
 }
 
-export async function getDeployments(namespace: string): Promise<k8s.V1Deployment[]> {
+export async function getDeployments(
+  namespace: string,
+  labelSelector?: string
+): Promise<k8s.V1Deployment[]> {
   const { apps } = getK8sClient();
 
-  const response = await apps.listNamespacedDeployment({ namespace });
+  const response = await apps.listNamespacedDeployment({ namespace, labelSelector });
   return response.items;
 }
 

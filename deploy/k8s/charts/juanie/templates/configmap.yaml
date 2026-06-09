@@ -61,13 +61,20 @@ data:
   ARTIFACT_STORAGE_BUCKET: {{ .Values.env.ARTIFACT_STORAGE_BUCKET | default "" | quote }}
   ARTIFACT_STORAGE_FORCE_PATH_STYLE: {{ .Values.env.ARTIFACT_STORAGE_FORCE_PATH_STYLE | default "false" | quote }}
   ARTIFACT_DOWNLOAD_TTL_SECONDS: {{ .Values.env.ARTIFACT_DOWNLOAD_TTL_SECONDS | default "300" | quote }}
-  BYTEBASE_ENABLED: {{ .Values.env.BYTEBASE_ENABLED | default "false" | quote }}
-  BYTEBASE_URL: {{ .Values.env.BYTEBASE_URL | default "" | quote }}
-  BYTEBASE_SQL_EDITOR_PATH: {{ .Values.env.BYTEBASE_SQL_EDITOR_PATH | default "/sql-editor" | quote }}
-  BYTEBASE_ACCESS_MODE_LABEL: {{ .Values.env.BYTEBASE_ACCESS_MODE_LABEL | default "只读优先" | quote }}
-  BYTEBASE_SUMMARY: {{ .Values.env.BYTEBASE_SUMMARY | default "用于查询、排障和浏览结构；发布迁移仍走 Juanie + Atlas 主链" | quote }}
-  BYTEBASE_CHANGE_MANAGEMENT_SUMMARY: {{ .Values.env.BYTEBASE_CHANGE_MANAGEMENT_SUMMARY | default "DDL/DML 不在控制台直接放行，结构变更回到发布、提升或修复流程" | quote }}
-  BYTEBASE_DATABASE_URL_TEMPLATE: {{ .Values.env.BYTEBASE_DATABASE_URL_TEMPLATE | default "" | quote }}
+  DATABASE_CONSOLE_ENABLED: {{ .Values.env.DATABASE_CONSOLE_ENABLED | default "true" | quote }}
+  DATABASE_CONSOLE_LABEL: {{ .Values.env.DATABASE_CONSOLE_LABEL | default "DbGate" | quote }}
+  DATABASE_CONSOLE_ACCESS_MODE_LABEL: {{ .Values.env.DATABASE_CONSOLE_ACCESS_MODE_LABEL | default "只读优先" | quote }}
+  DATABASE_CONSOLE_SUMMARY: {{ .Values.env.DATABASE_CONSOLE_SUMMARY | default "用于浏览表结构、预览数据和临时查询；迁移仍走 Juanie + Atlas 主链" | quote }}
+  DATABASE_CONSOLE_CHANGE_MANAGEMENT_SUMMARY: {{ .Values.env.DATABASE_CONSOLE_CHANGE_MANAGEMENT_SUMMARY | default "默认以只读工作台打开，结构变更回到发布、提升或修复流程" | quote }}
+  DATABASE_CONSOLE_READONLY: {{ .Values.env.DATABASE_CONSOLE_READONLY | default "true" | quote }}
+  DBGATE_NAMESPACE: {{ .Values.env.DBGATE_NAMESPACE | default .Values.namespace | quote }}
+  DBGATE_IMAGE: {{ .Values.env.DBGATE_IMAGE | default "dbgate/dbgate:7.2.0" | quote }}
+  DBGATE_CPU_REQUEST: {{ .Values.env.DBGATE_CPU_REQUEST | default "50m" | quote }}
+  DBGATE_CPU_LIMIT: {{ .Values.env.DBGATE_CPU_LIMIT | default "500m" | quote }}
+  DBGATE_MEMORY_REQUEST: {{ .Values.env.DBGATE_MEMORY_REQUEST | default "128Mi" | quote }}
+  DBGATE_MEMORY_LIMIT: {{ .Values.env.DBGATE_MEMORY_LIMIT | default "512Mi" | quote }}
+  DBGATE_IDLE_TTL_MINUTES: {{ .Values.env.DBGATE_IDLE_TTL_MINUTES | default "60" | quote }}
+  DBGATE_CONSOLE_CLEANUP_SCHEDULE: {{ .Values.env.DBGATE_CONSOLE_CLEANUP_SCHEDULE | default "*/15 * * * *" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.runtime.repository | quote }}
   SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.runtime.tag | quote }}

@@ -57,21 +57,24 @@ export interface Env {
   AI_MODEL_PRO?: string;
   AI_MODEL_TOOL?: string;
 
-  // Database console / Bytebase
-  BYTEBASE_ENABLED?: 'true' | 'false';
-  BYTEBASE_URL?: string;
-  BYTEBASE_PUBLIC_URL?: string;
-  BYTEBASE_API_TOKEN?: string;
-  BYTEBASE_SERVICE_ACCOUNT_EMAIL?: string;
-  BYTEBASE_SERVICE_ACCOUNT_KEY?: string;
-  BYTEBASE_BOOTSTRAP_EMAIL?: string;
-  BYTEBASE_BOOTSTRAP_PASSWORD?: string;
-  BYTEBASE_BOOTSTRAP_TITLE?: string;
-  BYTEBASE_OIDC_CLIENT_ID?: string;
-  BYTEBASE_OIDC_CLIENT_SECRET?: string;
-  BYTEBASE_OIDC_ISSUER?: string;
-  OIDC_TOKEN_SECRET?: string;
-  OIDC_JWT_PRIVATE_KEY?: string;
+  // Database console / DbGate
+  DATABASE_CONSOLE_ENABLED?: 'true' | 'false';
+  DATABASE_CONSOLE_LABEL?: string;
+  DATABASE_CONSOLE_ACCESS_MODE_LABEL?: string;
+  DATABASE_CONSOLE_SUMMARY?: string;
+  DATABASE_CONSOLE_CHANGE_MANAGEMENT_SUMMARY?: string;
+  DATABASE_CONSOLE_READONLY?: 'true' | 'false';
+  DBGATE_ENABLED?: 'true' | 'false';
+  DBGATE_NAMESPACE?: string;
+  DBGATE_IMAGE?: string;
+  DBGATE_READONLY?: 'true' | 'false';
+  DBGATE_CPU_REQUEST?: string;
+  DBGATE_CPU_LIMIT?: string;
+  DBGATE_MEMORY_REQUEST?: string;
+  DBGATE_MEMORY_LIMIT?: string;
+  DBGATE_IDLE_TTL_MINUTES?: string;
+  DBGATE_CONSOLE_CLEANUP_SCHEDULE?: string;
+  ENABLE_DBGATE_CONSOLE_CLEANUP?: 'true' | 'false';
 }
 
 declare global {
