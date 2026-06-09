@@ -264,6 +264,45 @@ describe('provisionBytebaseDatabaseConsole', () => {
     ).toBe('environments/test');
   });
 
+  it('creates a Bytebase instance when Bytebase reports missing instances as 500', async () => {
+    const calls: Array<{ url: string; method: string; body: unknown }> = [];
+    const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ url: requestUrl, method, body });
+
+      if (requestUrl.endsWith('/v1/auth/login')) {
+        return jsonResponse({ token: 'token-1' });
+      }
+
+      if (method === 'GET' && requestUrl.includes('/v1/instances/')) {
+        return jsonResponse(
+          {
+            code: 13,
+            message:
+              'failed to populate raw resources instance "instances/juanie-219a1b86-a655-4f46-b4bb-4b66f7f59ade" not found',
+          },
+          500
+        );
+      }
+
+      if (requestUrl.endsWith(':getIamPolicy')) {
+        return jsonResponse({ bindings: [] });
+      }
+
+      return jsonResponse({}, method === 'GET' ? 404 : 200);
+    });
+
+    await provisionBytebaseDatabaseConsole(target, config, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(
+      calls.some((call) => call.method === 'POST' && call.url.includes('/v1/instances?instanceId='))
+    ).toBe(true);
+  });
+
   it('does not block console provisioning when SSO provider management is forbidden', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const fetchFn = mock(async (url: string | URL | Request, init?: RequestInit) => {

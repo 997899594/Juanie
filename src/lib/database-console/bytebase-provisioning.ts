@@ -241,6 +241,22 @@ async function describeBytebaseResponse(response: Response): Promise<string> {
   return String(response.status);
 }
 
+async function isBytebaseNotFoundResponse(response: Response, resource: string): Promise<boolean> {
+  if (response.status === 404) {
+    return true;
+  }
+
+  if (response.status !== 500) {
+    return false;
+  }
+
+  const payload = await parseJson(response.clone());
+  const message = payload.message ?? payload.error ?? payload.detail;
+  return (
+    typeof message === 'string' && message.includes(`${resource} `) && message.includes('not found')
+  );
+}
+
 function isPermissionDeniedStatus(status: number): boolean {
   return status === 401 || status === 403;
 }
@@ -479,11 +495,12 @@ class BytebaseProvisioningClient {
     connection: ReturnType<typeof parseConnectionString>;
   }): Promise<void> {
     const existing = await this.get(`/v1/instances/${input.id}`);
-    if (!existing.ok && existing.status !== 404) {
+    const missing = !existing.ok && (await isBytebaseNotFoundResponse(existing, 'instance'));
+    if (!existing.ok && !missing) {
       throw new Error(`读取 Bytebase instance 失败：${await describeBytebaseResponse(existing)}`);
     }
 
-    if (existing.status === 404) {
+    if (missing) {
       const created = await this.post(`/v1/instances?instanceId=${encodeURIComponent(input.id)}`, {
         title: input.title,
         engine: input.engine,
