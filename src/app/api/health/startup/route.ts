@@ -1,4 +1,4 @@
-import { getStartupResponse } from '@/lib/health/responses';
+import { getStartupResponse } from '@/lib/health/probes';
 
 export async function GET() {
   return getStartupResponse();

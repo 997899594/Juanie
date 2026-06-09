@@ -21,10 +21,18 @@ const nonRuntimeTraceExcludes = [
   './Dockerfile',
 ];
 
+const serverRuntimeTraceIncludes = [
+  // @kubernetes/client-node loads isomorphic-ws at runtime; keep its websocket runtime in standalone images.
+  './node_modules/ws/**/*',
+];
+
 const nextConfig: NextConfig = {
   // 生产环境 standalone 输出 (用于 Docker)
   output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
   serverExternalPackages: ['@kubernetes/client-node'],
+  outputFileTracingIncludes: {
+    '/**': serverRuntimeTraceIncludes,
+  },
   outputFileTracingExcludes: {
     '/**': nonRuntimeTraceExcludes,
   },
