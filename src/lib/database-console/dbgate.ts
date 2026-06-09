@@ -93,8 +93,8 @@ function normalizeResource(value: string | undefined, fallback: string): string 
   return value?.trim() || fallback;
 }
 
-function isDbGateSupportedDatabaseType(type: string): boolean {
-  return type === 'postgresql' || type === 'mysql' || type === 'mongodb' || type === 'redis';
+export function isDbGateSupportedDatabaseType(type: string): boolean {
+  return type === 'postgresql' || type === 'mysql' || type === 'mongodb';
 }
 
 function getDbGateEngine(type: string): string {
@@ -105,8 +105,6 @@ function getDbGateEngine(type: string): string {
       return 'mysql';
     case 'mongodb':
       return 'mongo';
-    case 'redis':
-      return 'redis';
     default:
       return type;
   }

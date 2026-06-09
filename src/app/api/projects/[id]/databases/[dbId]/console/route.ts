@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { createAuditLog } from '@/lib/audit';
+import { isDbGateSupportedDatabaseType } from '@/lib/database-console/dbgate';
 import { openDbGateDatabaseConsole } from '@/lib/database-console/dbgate-session';
 import { db } from '@/lib/db';
 import { databases, environments } from '@/lib/db/schema';
@@ -31,6 +32,10 @@ export async function POST(
 
     if (!database.environmentId) {
       return NextResponse.json({ error: 'Database has no environment' }, { status: 409 });
+    }
+
+    if (!isDbGateSupportedDatabaseType(database.type)) {
+      return NextResponse.json({ error: '当前数据库类型不支持 DbGate 控制台' }, { status: 400 });
     }
 
     const environment = await db.query.environments.findFirst({

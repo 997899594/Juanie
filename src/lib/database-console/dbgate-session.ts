@@ -4,6 +4,7 @@ import {
   buildDbGateConsoleUrl,
   type DatabaseConsoleConfig,
   getDbGateConsoleConfig,
+  isDbGateSupportedDatabaseType,
 } from '@/lib/database-console/dbgate';
 import {
   deleteDeployment,
@@ -13,6 +14,7 @@ import {
   getK8sClient,
   upsertSecret,
   upsertService,
+  waitForDeploymentReady,
 } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 
@@ -48,7 +50,7 @@ export interface DbGateConsoleResult {
 }
 
 interface ParsedConnection {
-  engine: 'postgres' | 'mysql' | 'mongo' | 'redis';
+  engine: 'postgres' | 'mysql' | 'mongo';
   server: string;
   port: number;
   user: string;
@@ -93,8 +95,6 @@ function getEngine(type: string): ParsedConnection['engine'] {
       return 'mysql';
     case 'mongodb':
       return 'mongo';
-    case 'redis':
-      return 'redis';
     default:
       throw new Error('当前数据库类型不支持 DbGate 控制台');
   }
@@ -108,8 +108,6 @@ function getDbGateEnginePlugin(engine: ParsedConnection['engine']): string {
       return 'mysql@dbgate-plugin-mysql';
     case 'mongo':
       return 'mongo@dbgate-plugin-mongo';
-    case 'redis':
-      return 'redis@dbgate-plugin-redis';
   }
 }
 
@@ -120,8 +118,7 @@ function parseConnectionString(input: {
 }): ParsedConnection {
   const url = new URL(input.connectionString);
   const engine = getEngine(input.type);
-  const defaultPort =
-    engine === 'mysql' ? 3306 : engine === 'mongo' ? 27017 : engine === 'redis' ? 6379 : 5432;
+  const defaultPort = engine === 'mysql' ? 3306 : engine === 'mongo' ? 27017 : 5432;
   const databaseFromPath = decodeURIComponent(url.pathname.replace(/^\/+/, '')).trim();
   const database = input.databaseName?.trim() || databaseFromPath;
 
@@ -400,6 +397,10 @@ export async function openDbGateDatabaseConsole(
   }
 
   const connectionString = target.database.connectionString?.trim();
+  if (!isDbGateSupportedDatabaseType(target.database.type)) {
+    throw new Error('当前数据库类型不支持 DbGate 控制台');
+  }
+
   if (!connectionString) {
     throw new Error('当前数据库缺少连接串，不能创建控制台上下文');
   }
@@ -455,6 +456,12 @@ export async function openDbGateDatabaseConsole(
     port: 80,
     targetPort: 'http',
     selector: { 'juanie.io/console': baseName },
+  });
+  await waitForDeploymentReady({
+    namespace: config.namespace,
+    name: baseName,
+    timeoutMs: 90_000,
+    pollMs: 2_000,
   });
 
   logger_.info('DbGate database console opened', {

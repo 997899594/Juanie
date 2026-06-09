@@ -2,7 +2,10 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import { getDbGateConsoleConfig } from '@/lib/database-console/dbgate';
+import {
+  getDbGateConsoleConfig,
+  isDbGateSupportedDatabaseType,
+} from '@/lib/database-console/dbgate';
 import { buildDbGateConsoleResourceNames } from '@/lib/database-console/dbgate-session';
 import { db } from '@/lib/db';
 import { databases, environments } from '@/lib/db/schema';
@@ -30,6 +33,13 @@ const RESPONSE_PRIVATE_HEADERS = new Set([
   'content-security-policy',
   'set-cookie',
 ]);
+
+function isNetworkFetchFailure(error: unknown): boolean {
+  return (
+    error instanceof TypeError &&
+    (error.message === 'fetch failed' || error.message.includes('fetch failed'))
+  );
+}
 
 function buildProxyPath(pathSegments: string[] | undefined, requestUrl: string): string {
   const suffix = pathSegments?.length ? `/${pathSegments.map(encodeURIComponent).join('/')}` : '/';
@@ -106,6 +116,10 @@ export async function proxyDbGateRequest(
       return NextResponse.json({ error: 'DbGate 控制台未启用' }, { status: 404 });
     }
 
+    if (!isDbGateSupportedDatabaseType(loaded.database.type)) {
+      return NextResponse.json({ error: '当前数据库类型不支持 DbGate 控制台' }, { status: 400 });
+    }
+
     const targetUrl = `http://${baseName}.${config.namespace}.svc.cluster.local${buildProxyPath(
       params.path,
       request.url
@@ -126,6 +140,13 @@ export async function proxyDbGateRequest(
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (isNetworkFetchFailure(error)) {
+      return NextResponse.json(
+        { error: 'DbGate 控制台仍在启动或已被空闲回收，请重新打开控制台。' },
+        { status: 503 }
+      );
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error';

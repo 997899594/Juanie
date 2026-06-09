@@ -63,6 +63,16 @@ describe('DbGate database console config', () => {
         database: { ...database, type: 'sqlite' },
       })
     ).toBe(null);
+    expect(
+      buildDbGateDatabaseConsoleLink({
+        config: getDbGateConsoleConfig({
+          DATABASE_CONSOLE_ENABLED: 'true',
+        }),
+        project,
+        environment,
+        database: { ...database, type: 'redis' },
+      })
+    ).toBe(null);
   });
 });
 
