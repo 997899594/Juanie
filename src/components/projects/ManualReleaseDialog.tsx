@@ -25,7 +25,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { createManualRelease, fetchManualReleasePlan } from '@/lib/releases/client-actions';
+import {
+  createManualRelease,
+  fetchManualReleasePlan,
+  ReleaseClientActionError,
+} from '@/lib/releases/client-actions';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -262,11 +266,22 @@ export function ManualReleaseDialog({
       setOpen(false);
       toast.success('手动发布已创建');
       await onCreated?.();
-      if (data?.id) {
+      if (data?.releasePath) {
+        router.push(data.releasePath);
+        router.refresh();
+      } else if (data?.id) {
         router.push(buildReleaseDetailPath(projectId, environmentId, data.id));
         router.refresh();
       }
     } catch (submitError) {
+      if (submitError instanceof ReleaseClientActionError && submitError.releasePath) {
+        setOpen(false);
+        toast.error(submitError.message);
+        router.push(submitError.releasePath);
+        router.refresh();
+        return;
+      }
+
       toast.error(submitError instanceof Error ? submitError.message : '创建手动发布失败');
     } finally {
       setSubmitting(false);

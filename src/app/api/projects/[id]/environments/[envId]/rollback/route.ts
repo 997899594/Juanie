@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { environments, projects } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
+import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildEnvironmentRollbackPlan } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
@@ -52,7 +53,7 @@ export async function GET(
     }
 
     if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -155,7 +156,7 @@ export async function POST(
       error instanceof ReleaseSchemaGateBlockedError ||
       error instanceof PreviewDatabaseGuardBlockedError
     ) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

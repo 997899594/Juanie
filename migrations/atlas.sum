@@ -1,4 +1,4 @@
-h1:/k1PTMqws7mZaJmM+fXWnFQVdPEtTlK6/HZGIh6bUWg=
+h1:jArpp4dV3p3JGd9AVa9yOdW9bLTzGICwU28zjcV2Y08=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -20,3 +20,4 @@ h1:/k1PTMqws7mZaJmM+fXWnFQVdPEtTlK6/HZGIh6bUWg=
 20260509120000_feishu_delivery_identity.sql h1:hLUWlc1G4jJS6V0xUD/52uCQgd1ve3bKvvSzoaaXm1c=
 20260528110000_image_derived_delivery_artifacts.sql h1:vk1oxm18Om1yy/QV+LkzIeXwchqdpQxUkEPVP+dtM44=
 20260604122000_migration_run_file_preview.sql h1:m9bTpU4gMHoJROnyEC/lrV1IhY0Rt6r1fK9RqBVyzBo=
+20260610143000_release_admission_status.sql h1:z1W0CXUcTFnk+55ILppMListYFqVAb3TN5/XRwDChdI=

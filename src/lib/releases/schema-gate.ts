@@ -52,6 +52,12 @@ export interface ReleaseSchemaGateSnapshot {
 export class ReleaseSchemaGateBlockedError extends Error {
   constructor(
     readonly snapshot: ReleaseSchemaGateSnapshot,
+    readonly release?: {
+      id: string;
+      projectId: string;
+      environmentId: string;
+      releasePath?: string | null;
+    } | null,
     message = snapshot.blockingReason ?? 'Release blocked by schema state'
   ) {
     super(message);

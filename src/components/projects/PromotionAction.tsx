@@ -7,7 +7,11 @@ import { toast } from 'sonner';
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
-import { createPromotionRelease, fetchPromotionPlan } from '@/lib/releases/client-actions';
+import {
+  createPromotionRelease,
+  fetchPromotionPlan,
+  ReleaseClientActionError,
+} from '@/lib/releases/client-actions';
 import type { ReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { ProjectPromotionPlanView } from '@/lib/releases/service';
@@ -369,6 +373,13 @@ export function PromotionAction({
 
       router.refresh();
     } catch (error) {
+      if (error instanceof ReleaseClientActionError && error.releasePath) {
+        toast.error(error.message);
+        setDialogOpen(false);
+        router.push(error.releasePath);
+        return;
+      }
+
       toast.error(error instanceof Error ? error.message : '创建提升发布失败');
     } finally {
       setPromoting(false);

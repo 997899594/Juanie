@@ -205,6 +205,10 @@ build:
       echo "$RELEASE_RESPONSE"
 
       if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
+        RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
+        if [ -n "$RELEASE_PATH" ]; then
+          echo "Release detail: https://juanie.art${RELEASE_PATH}"
+        fi
         echo "Juanie release request failed with HTTP ${RELEASE_STATUS}"
         exit 1
       fi

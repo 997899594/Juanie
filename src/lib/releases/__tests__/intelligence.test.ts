@@ -74,6 +74,20 @@ describe('release intelligence', () => {
     ).toBe('镜像不存在');
   });
 
+  it('classifies admission failures as high-risk release issues', () => {
+    const snapshot = getReleaseIntelligenceSnapshot({
+      status: 'admission_failed',
+      errorMessage: '存在 1 个数据库 schema 门禁未满足',
+      deployments: [],
+      migrationRuns: [],
+    });
+
+    expect(snapshot.riskLevel).toBe('high');
+    expect(snapshot.failureSummary).toBe('存在 1 个数据库 schema 门禁未满足');
+    expect(snapshot.issueCode).toBe('admission_failed');
+    expect(snapshot.actionLabel).toBe('查看准入原因');
+  });
+
   it('falls back to deployment or migration failure summaries', () => {
     expect(
       getReleaseFailureSummary({

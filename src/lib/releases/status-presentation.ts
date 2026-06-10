@@ -7,6 +7,8 @@ export interface ReleaseStatusDecoration {
 export type ReleaseTimelineTone = 'danger' | 'warning' | 'info' | 'success' | 'neutral';
 
 export const releaseStatusDecorations: Record<string, ReleaseStatusDecoration> = {
+  admission_running: { color: 'info', pulse: true, label: '准入检查' },
+  admission_failed: { color: 'error', pulse: false, label: '准入失败' },
   queued: { color: 'neutral', pulse: false, label: '排队中' },
   planning: { color: 'info', pulse: true, label: '规划中' },
   migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
@@ -77,7 +79,12 @@ export function getTimelineTone(
   kind: 'release' | 'migration' | 'deployment' | 'preview' | 'rollout'
 ): ReleaseTimelineTone {
   if (kind === 'preview') return 'success';
-  if (status === 'failed' || status === 'migration_pre_failed' || status === 'verification_failed')
+  if (
+    status === 'failed' ||
+    status === 'admission_failed' ||
+    status === 'migration_pre_failed' ||
+    status === 'verification_failed'
+  )
     return 'danger';
   if (
     status === 'awaiting_approval' ||
@@ -88,6 +95,7 @@ export function getTimelineTone(
     return 'warning';
   if (
     status === 'running' ||
+    status === 'admission_running' ||
     status === 'planning' ||
     status === 'deploying' ||
     status === 'verifying'

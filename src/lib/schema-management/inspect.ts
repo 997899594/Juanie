@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
+import {
+  ensureDeclaredDatabaseCapabilities,
+  formatDatabaseCapabilityIssues,
+} from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import {
   databaseMigrations,
@@ -210,6 +214,14 @@ async function inspectDrizzleDesiredSchema(
     return {
       status: 'blocked',
       reason: `暂不支持在 ${spec.database.type} 上检查 Drizzle desired schema`,
+    };
+  }
+
+  const capabilityCheck = await ensureDeclaredDatabaseCapabilities(spec.database);
+  if (!capabilityCheck.satisfied) {
+    return {
+      status: 'blocked',
+      reason: formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues),
     };
   }
 

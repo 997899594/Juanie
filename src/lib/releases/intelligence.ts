@@ -6,6 +6,7 @@ import {
 
 export type ReleaseRiskLevel = 'low' | 'medium' | 'high';
 export type ReleaseIssueCode =
+  | 'admission_failed'
   | 'approval_blocked'
   | 'external_completion_blocked'
   | 'migration_failed'
@@ -110,6 +111,12 @@ const releaseIssueConfig: Record<
     nextActionLabel: string;
   }
 > = {
+  admission_failed: {
+    kind: 'release',
+    label: '准入失败',
+    summary: '发布未通过准入检查，通常是 schema 或数据库能力门禁未满足',
+    nextActionLabel: '查看准入原因',
+  },
   approval_blocked: {
     kind: 'approval',
     label: '审批阻塞',
@@ -250,6 +257,10 @@ export function getReleaseFailureSummary(release: ReleaseLike): string | null {
     return '发布校验失败';
   }
 
+  if (release.status === 'admission_failed') {
+    return release.errorMessage ?? '发布准入失败';
+  }
+
   if (release.status === 'migration_pre_failed') {
     return '前置迁移失败';
   }
@@ -273,6 +284,10 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
 
   if (release.status === 'awaiting_approval') {
     return 'approval_blocked';
+  }
+
+  if (release.status === 'admission_failed') {
+    return 'admission_failed';
   }
 
   if (release.status === 'awaiting_external_completion') {
@@ -595,7 +610,11 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
     reasons.push('发布处于降级状态');
   }
 
-  if (['migration_pre_failed', 'failed', 'verification_failed'].includes(release.status)) {
+  if (
+    ['admission_failed', 'migration_pre_failed', 'failed', 'verification_failed'].includes(
+      release.status
+    )
+  ) {
     riskLevel = 'high';
   }
 

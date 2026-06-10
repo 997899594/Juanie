@@ -254,6 +254,29 @@ export async function reconcileDeclaredDatabaseCapabilities(
   return reconcileDatabaseCapabilities(database, database.capabilities);
 }
 
+export function getDatabaseCapabilityEnsureMode(
+  database: Pick<DatabaseCapabilityTarget, 'provisionType'>
+): 'verify' | 'reconcile' {
+  return database.provisionType === 'external' ? 'verify' : 'reconcile';
+}
+
+export async function ensureDeclaredDatabaseCapabilities(
+  database: DatabaseCapabilityTarget
+): Promise<DatabaseCapabilityCheckResult> {
+  return ensureDatabaseCapabilities(database, database.capabilities);
+}
+
+export async function ensureDatabaseCapabilities(
+  database: DatabaseCapabilityTarget,
+  requestedCapabilities: readonly string[] | null | undefined
+): Promise<DatabaseCapabilityCheckResult> {
+  if (getDatabaseCapabilityEnsureMode(database) === 'verify') {
+    return verifyDatabaseCapabilities(database, requestedCapabilities);
+  }
+
+  return reconcileDatabaseCapabilities(database, requestedCapabilities);
+}
+
 export async function reconcileDatabaseCapabilities(
   database: DatabaseCapabilityTarget,
   requestedCapabilities: readonly string[] | null | undefined
@@ -303,7 +326,17 @@ export async function reconcileDatabaseCapabilities(
     await client.end();
   }
 
-  return verifyDeclaredDatabaseCapabilities(database);
+  return verifyDatabaseCapabilities(database, capabilities);
+}
+
+export async function verifyDatabaseCapabilities(
+  database: DatabaseCapabilityTarget,
+  requestedCapabilities: readonly string[] | null | undefined
+): Promise<DatabaseCapabilityCheckResult> {
+  return verifyDeclaredDatabaseCapabilities({
+    ...database,
+    capabilities: requestedCapabilities,
+  });
 }
 
 export function formatDatabaseCapabilityIssues(

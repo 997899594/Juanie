@@ -18,6 +18,8 @@ function formatTimelineTimestamp(value?: Date | string | null): string | null {
 
 function getReleaseTimelineTitle(status: string): string {
   const titles: Record<string, string> = {
+    admission_running: '发布准入检查',
+    admission_failed: '发布准入失败',
     queued: '发布排队',
     planning: '规划发布',
     migration_pre_running: '前置迁移中',

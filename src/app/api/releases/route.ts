@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { PreviewCloneUnsupportedError } from '@/lib/databases/platform-support';
 import { createRepositoryRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
+import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
@@ -51,6 +52,11 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const admissionFailure =
+      error instanceof ReleaseSchemaGateBlockedError ||
+      error instanceof PreviewDatabaseGuardBlockedError
+        ? getAdmissionFailureResponsePayload(error)
+        : null;
     const status =
       error instanceof ReleaseSchemaGateBlockedError ||
       error instanceof PreviewDatabaseGuardBlockedError ||
@@ -64,6 +70,9 @@ export async function POST(request: Request) {
       {
         error: 'Failed to create release',
         details: message,
+        release: admissionFailure?.release ?? null,
+        releaseId: admissionFailure?.releaseId,
+        releasePath: admissionFailure?.releasePath,
       },
       { status }
     );

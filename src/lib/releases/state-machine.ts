@@ -6,6 +6,7 @@ import type {
 } from '@/lib/db/schema';
 
 export const activeReleaseStatuses = [
+  'admission_running',
   'queued',
   'planning',
   'migration_pre_running',
@@ -18,6 +19,7 @@ export const activeReleaseStatuses = [
 export type ActiveReleaseStatus = (typeof activeReleaseStatuses)[number];
 
 export const releaseStatusesRequiringFailureReconciliation = [
+  'admission_running',
   'queued',
   'planning',
   'migration_pre_running',
@@ -28,6 +30,7 @@ export const releaseStatusesRequiringFailureReconciliation = [
 ] as const satisfies ReleaseStatus[];
 
 export const supersedableReleaseStatuses = [
+  'admission_running',
   'queued',
   'planning',
   'awaiting_approval',

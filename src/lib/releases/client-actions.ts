@@ -3,13 +3,40 @@ import type { PromotionPlanSnapshot, ReleasePlanningSnapshot } from '@/lib/relea
 
 interface ApiErrorResponse {
   error?: string;
+  releaseId?: string;
+  releasePath?: string | null;
+  release?: {
+    id?: string;
+    releasePath?: string | null;
+  } | null;
+}
+
+export class ReleaseClientActionError extends Error {
+  readonly releaseId?: string;
+  readonly releasePath?: string | null;
+
+  constructor(
+    message: string,
+    options?: {
+      releaseId?: string;
+      releasePath?: string | null;
+    }
+  ) {
+    super(message);
+    this.name = 'ReleaseClientActionError';
+    this.releaseId = options?.releaseId;
+    this.releasePath = options?.releasePath;
+  }
 }
 
 async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
   const data = (await response.json().catch(() => null)) as (T & ApiErrorResponse) | null;
 
   if (!response.ok) {
-    throw new Error(data?.error || fallbackMessage);
+    throw new ReleaseClientActionError(data?.error || fallbackMessage, {
+      releaseId: data?.releaseId ?? data?.release?.id,
+      releasePath: data?.releasePath ?? data?.release?.releasePath ?? null,
+    });
   }
 
   return (data ?? {}) as T;
@@ -188,7 +215,7 @@ export async function createManualRelease(input: {
   sourceCommitSha?: string | null;
   summary?: string | null;
   services: ReleaseServiceInput[];
-}): Promise<{ id?: string }> {
+}): Promise<{ id?: string; releasePath?: string | null }> {
   const response = await fetch(`/api/projects/${input.projectId}/deployments`, {
     method: 'POST',
     headers: {
@@ -204,7 +231,10 @@ export async function createManualRelease(input: {
     }),
   });
 
-  return parseJsonResponse<{ id?: string }>(response, '创建手动发布失败');
+  return parseJsonResponse<{ id?: string; releasePath?: string | null }>(
+    response,
+    '创建手动发布失败'
+  );
 }
 
 export async function fetchEnvironmentRollbackPlan(input: {

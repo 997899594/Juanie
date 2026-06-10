@@ -305,6 +305,10 @@ jobs:
           echo "$release_response"
 
           if [ "$release_status" -lt 200 ] || [ "$release_status" -ge 300 ]; then
+            release_path="$(printf '%s' "$release_response" | jq -r '.release.releasePath // empty')"
+            if [ -n "$release_path" ]; then
+              echo "Release detail: https://juanie.art${release_path}"
+            fi
             echo "Juanie release request failed with HTTP ${release_status}"
             exit 1
           fi

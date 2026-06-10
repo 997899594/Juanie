@@ -80,6 +80,7 @@ export function isReleaseAttentionCandidate(input: {
     input.approvalRunsCount > 0 ||
     input.failedMigrationRunsCount > 0 ||
     [
+      'admission_failed',
       'awaiting_external_completion',
       'migration_pre_failed',
       'failed',
@@ -111,7 +112,9 @@ export function matchesReleaseRiskFilter(
 
   return (
     input.failedMigrationRunsCount > 0 ||
-    ['failed', 'migration_pre_failed', 'verification_failed'].includes(input.status)
+    ['admission_failed', 'failed', 'migration_pre_failed', 'verification_failed'].includes(
+      input.status
+    )
   );
 }
 

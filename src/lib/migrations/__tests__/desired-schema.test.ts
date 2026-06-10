@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  addPostgresCapabilityExtensionsToSchemaSql,
   resolveDrizzleExportOptionsFromConfig,
   validateDesiredSchemaSqlOutput,
 } from '@/lib/migrations/desired-schema';
@@ -42,30 +41,11 @@ CREATE TABLE "users" (
     ).toContain('CREATE TABLE "users"');
   });
 
-  it('prepends declared postgres capability extensions to desired schema sql', () => {
+  it('keeps database capabilities outside desired schema sql', () => {
     expect(
-      addPostgresCapabilityExtensionsToSchemaSql('CREATE TABLE chunks (embedding vector(1536));', [
-        'vector',
-        'pg_trgm',
-      ])
-    ).toBe(
-      'CREATE EXTENSION IF NOT EXISTS "pg_trgm";\n' +
-        'CREATE EXTENSION IF NOT EXISTS "vector";\n\n' +
-        'CREATE TABLE chunks (embedding vector(1536));'
-    );
-  });
-
-  it('infers postgres capability extensions from desired schema sql', () => {
-    expect(
-      addPostgresCapabilityExtensionsToSchemaSql(
-        'CREATE TABLE chunks (embedding vector(1536));\nCREATE INDEX chunks_trgm_idx ON chunks USING gin (content gin_trgm_ops);',
-        []
+      validateDesiredSchemaSqlOutput(
+        'CREATE TABLE chunks (embedding vector(1536));\nCREATE INDEX chunks_trgm_idx ON chunks USING gin (content gin_trgm_ops);'
       )
-    ).toBe(
-      'CREATE EXTENSION IF NOT EXISTS "pg_trgm";\n' +
-        'CREATE EXTENSION IF NOT EXISTS "vector";\n\n' +
-        'CREATE TABLE chunks (embedding vector(1536));\n' +
-        'CREATE INDEX chunks_trgm_idx ON chunks USING gin (content gin_trgm_ops);'
-    );
+    ).not.toContain('CREATE EXTENSION');
   });
 });

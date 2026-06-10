@@ -5,10 +5,10 @@ import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
 import { AtlasCommandError, runAtlasCommand } from '@/lib/atlas/cli';
 import {
+  ensureDatabaseCapabilities,
   formatDatabaseCapabilityIssues,
   inferDatabaseCapabilitiesFromText,
   normalizeDatabaseCapabilities,
-  reconcileDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
@@ -425,7 +425,7 @@ export async function executeDrizzleMigrationsForSpec(
       );
     }
 
-    const capabilityCheck = await reconcileDatabaseCapabilities(
+    const capabilityCheck = await ensureDatabaseCapabilities(
       executionDatabase,
       resolvedCapabilities
     );

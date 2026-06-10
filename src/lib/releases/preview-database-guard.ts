@@ -24,7 +24,13 @@ export interface PreviewDatabaseGuardSnapshot {
 export class PreviewDatabaseGuardBlockedError extends Error {
   constructor(
     readonly snapshot: PreviewDatabaseGuardSnapshot,
-    message = snapshot.blockingReason ?? 'Release blocked by preview database strategy'
+    message = snapshot.blockingReason ?? 'Release blocked by preview database strategy',
+    readonly release?: {
+      id: string;
+      projectId: string;
+      environmentId: string;
+      releasePath?: string | null;
+    } | null
   ) {
     super(message);
     this.name = 'PreviewDatabaseGuardBlockedError';

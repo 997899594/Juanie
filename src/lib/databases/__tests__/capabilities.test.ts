@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { inferDatabaseCapabilitiesFromText } from '@/lib/databases/capabilities';
+import {
+  getDatabaseCapabilityEnsureMode,
+  inferDatabaseCapabilitiesFromText,
+} from '@/lib/databases/capabilities';
 
 describe('database capabilities', () => {
   it('infers vector capability from migration content', () => {
@@ -24,5 +27,11 @@ describe('database capabilities', () => {
         ['vector']
       )
     ).toEqual(['pg_trgm', 'vector']);
+  });
+
+  it('does not mutate external databases when ensuring capabilities', () => {
+    expect(getDatabaseCapabilityEnsureMode({ provisionType: 'external' })).toBe('verify');
+    expect(getDatabaseCapabilityEnsureMode({ provisionType: 'shared' })).toBe('reconcile');
+    expect(getDatabaseCapabilityEnsureMode({ provisionType: null })).toBe('reconcile');
   });
 });

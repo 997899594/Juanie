@@ -21,6 +21,7 @@ import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
 import { getProjectSourceRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
+import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
@@ -100,7 +101,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -227,11 +228,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     if (error instanceof PreviewDatabaseGuardBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     if (error instanceof ReleaseAdmissionError) {

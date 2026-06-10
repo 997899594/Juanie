@@ -58,6 +58,8 @@ export const projectStatuses = [
 export type ProjectStatus = (typeof projectStatuses)[number];
 
 export const releaseStatuses = [
+  'admission_running',
+  'admission_failed',
   'queued',
   'planning',
   'migration_pre_running',

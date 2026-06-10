@@ -13,6 +13,7 @@ import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
+import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -65,7 +66,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -215,7 +216,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       error instanceof ReleaseSchemaGateBlockedError ||
       error instanceof PreviewDatabaseGuardBlockedError
     ) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

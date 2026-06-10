@@ -169,6 +169,8 @@ const retryableDuplicatePromotionStatuses = [
 
 function getReleaseStatusLabel(status: ReleaseStatus): string {
   const labels: Record<ReleaseStatus, string> = {
+    admission_running: '准入检查',
+    admission_failed: '准入失败',
     queued: '排队中',
     planning: '规划中',
     migration_pre_running: '前置迁移中',

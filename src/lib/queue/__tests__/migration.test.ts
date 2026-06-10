@@ -79,9 +79,11 @@ describe('migration queue failure reconciliation', () => {
 
 describe('release queue failure reconciliation', () => {
   it('only reconciles unexpected queue failures for active release phases', () => {
+    expect(shouldReconcileUnexpectedReleaseJobFailure('admission_running')).toBe(true);
     expect(shouldReconcileUnexpectedReleaseJobFailure('queued')).toBe(true);
     expect(shouldReconcileUnexpectedReleaseJobFailure('migration_pre_running')).toBe(true);
     expect(shouldReconcileUnexpectedReleaseJobFailure('deploying')).toBe(true);
+    expect(shouldReconcileUnexpectedReleaseJobFailure('admission_failed')).toBe(false);
     expect(shouldReconcileUnexpectedReleaseJobFailure('awaiting_approval')).toBe(false);
     expect(shouldReconcileUnexpectedReleaseJobFailure('succeeded')).toBe(false);
     expect(shouldReconcileUnexpectedReleaseJobFailure('failed')).toBe(false);

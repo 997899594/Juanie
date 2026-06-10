@@ -1,19 +1,42 @@
 interface ErrorResponse {
   error?: string;
+  releaseId?: string;
+  releasePath?: string | null;
+  release?: {
+    id?: string;
+    releasePath?: string | null;
+  } | null;
+}
+
+export class EnvironmentClientActionError extends Error {
+  readonly releaseId?: string;
+  readonly releasePath?: string | null;
+
+  constructor(
+    message: string,
+    options?: {
+      releaseId?: string;
+      releasePath?: string | null;
+    }
+  ) {
+    super(message);
+    this.name = 'EnvironmentClientActionError';
+    this.releaseId = options?.releaseId;
+    this.releasePath = options?.releasePath;
+  }
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as T | ErrorResponse | null;
 
   if (!response.ok) {
+    const errorPayload = payload && typeof payload === 'object' ? (payload as ErrorResponse) : null;
     const message =
-      payload &&
-      typeof payload === 'object' &&
-      'error' in payload &&
-      typeof payload.error === 'string'
-        ? payload.error
-        : '请求失败';
-    throw new Error(message);
+      errorPayload && typeof errorPayload.error === 'string' ? errorPayload.error : '请求失败';
+    throw new EnvironmentClientActionError(message, {
+      releaseId: errorPayload?.releaseId ?? errorPayload?.release?.id,
+      releasePath: errorPayload?.releasePath ?? errorPayload?.release?.releasePath ?? null,
+    });
   }
 
   return payload as T;

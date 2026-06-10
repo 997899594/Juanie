@@ -5,10 +5,6 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { hasExecutable } from '@/lib/atlas/cli';
 import {
-  getPostgresCapabilityExtensions,
-  inferDatabaseCapabilitiesFromText,
-} from '@/lib/databases/capabilities';
-import {
   drizzleSchemaConfigCandidates,
   resolveSpecificationSource,
   type SchemaSource,
@@ -116,23 +112,6 @@ export function validateDesiredSchemaSqlOutput(output: string): string {
   }
 
   return schemaSql;
-}
-
-export function addPostgresCapabilityExtensionsToSchemaSql(
-  schemaSql: string,
-  capabilities: readonly string[] | null | undefined
-): string {
-  const requiredCapabilities = inferDatabaseCapabilitiesFromText(schemaSql, capabilities);
-  const extensions = getPostgresCapabilityExtensions(requiredCapabilities);
-  if (extensions.length === 0) {
-    return schemaSql;
-  }
-
-  const prelude = extensions
-    .map((extension) => `CREATE EXTENSION IF NOT EXISTS "${extension}";`)
-    .join('\n');
-
-  return `${prelude}\n\n${schemaSql}`;
 }
 
 function normalizeDrizzleSchemaConfigValue(value: unknown): string {
@@ -354,11 +333,7 @@ async function exportDrizzleDesiredSchema(input: {
     cwd: input.workspace.repoDir,
     env,
   });
-  const exportedSchemaSql = validateDesiredSchemaSqlOutput(stdout);
-  const schemaSql =
-    exportOptions.dialect === 'postgresql'
-      ? addPostgresCapabilityExtensionsToSchemaSql(exportedSchemaSql, input.capabilities)
-      : exportedSchemaSql;
+  const schemaSql = validateDesiredSchemaSqlOutput(stdout);
 
   const schemaDir = path.join(input.workspace.tempRoot, '.juanie', 'desired-schema');
   const schemaFilePath = path.join(schemaDir, 'schema.sql');

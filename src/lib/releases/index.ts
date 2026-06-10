@@ -21,10 +21,12 @@ import { addReleaseJob } from '@/lib/queue';
 import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
 import {
   inspectPreviewDatabaseGuardForRelease,
   PreviewDatabaseGuardBlockedError,
+  previewDatabaseGuardMessage,
 } from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
@@ -69,6 +71,13 @@ export interface CreateProjectReleaseInput {
   triggeredByUserId?: string | null;
   summary?: string | null;
   entryPoint?: ReleaseEntryPoint;
+}
+
+export interface PersistedAdmissionRelease {
+  id: string;
+  projectId: string;
+  environmentId: string;
+  releasePath: string;
 }
 
 export function resolveEnvironment(
@@ -173,6 +182,49 @@ async function persistRelease(
   const deployableArtifacts = getDeployableReleaseArtifacts(artifacts);
   const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
 
+  const [release] = await db
+    .insert(releases)
+    .values({
+      projectId: project.id,
+      environmentId: environment.id,
+      sourceRepository: meta.sourceRepository,
+      sourceRef: meta.sourceRef,
+      sourceCommitSha: meta.sourceCommitSha ?? null,
+      configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
+      sourceReleaseId: meta.sourceReleaseId ?? null,
+      status: 'admission_running',
+      triggeredBy: meta.triggeredBy ?? 'api',
+      triggeredByUserId: meta.triggeredByUserId ?? null,
+      summary:
+        meta.summary ??
+        buildDefaultReleaseSummary({
+          sourceRef: meta.sourceRef,
+          sourceCommitSha: meta.sourceCommitSha ?? null,
+          environment,
+        }),
+    })
+    .returning();
+
+  const releasePath = buildReleaseDetailPath(project.id, environment.id, release.id);
+  const admissionRelease = {
+    id: release.id,
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+    releasePath,
+  } satisfies PersistedAdmissionRelease;
+
+  const failAdmission = async (errorMessage: string) => {
+    await db
+      .update(releases)
+      .set({
+        status: 'admission_failed',
+        errorMessage,
+        updatedAt: new Date(),
+      })
+      .where(eq(releases.id, release.id));
+    await publishReleaseRealtimeSnapshot(release.id);
+  };
+
   const previewDatabaseGuard =
     deployableServiceIds.length > 0
       ? await inspectPreviewDatabaseGuardForRelease({
@@ -186,7 +238,8 @@ async function persistRelease(
       : { canCreate: true as const };
 
   if (!previewDatabaseGuard.canCreate) {
-    throw new PreviewDatabaseGuardBlockedError(previewDatabaseGuard);
+    await failAdmission(previewDatabaseGuard.blockingReason ?? previewDatabaseGuardMessage);
+    throw new PreviewDatabaseGuardBlockedError(previewDatabaseGuard, undefined, admissionRelease);
   }
 
   const schemaGate =
@@ -201,65 +254,58 @@ async function persistRelease(
       : { canCreate: true as const };
 
   if (!schemaGate.canCreate) {
-    throw new ReleaseSchemaGateBlockedError(schemaGate);
+    await failAdmission(schemaGate.blockingReason ?? 'Release blocked by schema state');
+    throw new ReleaseSchemaGateBlockedError(schemaGate, admissionRelease);
   }
 
-  const [release] = await db
-    .insert(releases)
-    .values({
-      projectId: project.id,
-      environmentId: environment.id,
-      sourceRepository: meta.sourceRepository,
-      sourceRef: meta.sourceRef,
-      sourceCommitSha: meta.sourceCommitSha ?? null,
-      configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
-      sourceReleaseId: meta.sourceReleaseId ?? null,
-      status: 'queued',
-      triggeredBy: meta.triggeredBy ?? 'api',
-      triggeredByUserId: meta.triggeredByUserId ?? null,
-      summary:
-        meta.summary ??
-        buildDefaultReleaseSummary({
-          sourceRef: meta.sourceRef,
-          sourceCommitSha: meta.sourceCommitSha ?? null,
-          environment,
-        }),
-    })
-    .returning();
+  try {
+    await db.insert(releaseArtifacts).values([
+      ...artifacts.map((artifact) => ({
+        releaseId: release.id,
+        serviceId: artifact.service.id,
+        kind: artifact.kind,
+        name: artifact.name,
+        uri: artifact.uri,
+        status: artifact.status,
+        imageUrl: artifact.imageUrl,
+        imageDigest: artifact.imageDigest,
+      })),
+      ...sourceDeliveryArtifacts.map((artifact) => ({
+        releaseId: release.id,
+        serviceId: null,
+        kind: artifact.kind,
+        name: artifact.name,
+        variant: artifact.variant,
+        platform: artifact.platform,
+        format: artifact.format,
+        uri: artifact.uri,
+        checksum: artifact.checksum,
+        sizeBytes: artifact.sizeBytes,
+        sbomUri: artifact.sbomUri,
+        provenanceUri: artifact.provenanceUri,
+        status: artifact.status,
+        imageUrl: null,
+        imageDigest: null,
+        sourceServiceId: artifact.sourceServiceId,
+        sourceImageUri: artifact.sourceImageUri,
+        sourceImageDigest: artifact.sourceImageDigest,
+        sourceImagePlatform: artifact.sourceImagePlatform,
+      })),
+    ]);
 
-  await db.insert(releaseArtifacts).values([
-    ...artifacts.map((artifact) => ({
-      releaseId: release.id,
-      serviceId: artifact.service.id,
-      kind: artifact.kind,
-      name: artifact.name,
-      uri: artifact.uri,
-      status: artifact.status,
-      imageUrl: artifact.imageUrl,
-      imageDigest: artifact.imageDigest,
-    })),
-    ...sourceDeliveryArtifacts.map((artifact) => ({
-      releaseId: release.id,
-      serviceId: null,
-      kind: artifact.kind,
-      name: artifact.name,
-      variant: artifact.variant,
-      platform: artifact.platform,
-      format: artifact.format,
-      uri: artifact.uri,
-      checksum: artifact.checksum,
-      sizeBytes: artifact.sizeBytes,
-      sbomUri: artifact.sbomUri,
-      provenanceUri: artifact.provenanceUri,
-      status: artifact.status,
-      imageUrl: null,
-      imageDigest: null,
-      sourceServiceId: artifact.sourceServiceId,
-      sourceImageUri: artifact.sourceImageUri,
-      sourceImageDigest: artifact.sourceImageDigest,
-      sourceImagePlatform: artifact.sourceImagePlatform,
-    })),
-  ]);
+    await db
+      .update(releases)
+      .set({
+        status: 'queued',
+        errorMessage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(releases.id, release.id));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await failAdmission(message);
+    throw error;
+  }
 
   if (environment.previewBuildStatus) {
     await clearEnvironmentSourceBuildState(environment.id);

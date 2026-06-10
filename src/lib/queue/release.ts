@@ -1,6 +1,9 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
-import { assertDeclaredDatabaseCapabilities } from '@/lib/databases/capabilities';
+import {
+  ensureDeclaredDatabaseCapabilities,
+  formatDatabaseCapabilityIssues,
+} from '@/lib/databases/capabilities';
 import { assertDeclaredDatabaseRuntimeAccess } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
@@ -101,7 +104,10 @@ export async function processRelease(job: Job<ReleaseJobData>) {
 
     for (const database of environmentDatabases) {
       await assertDeclaredDatabaseRuntimeAccess(database);
-      await assertDeclaredDatabaseCapabilities(database);
+      const capabilityCheck = await ensureDeclaredDatabaseCapabilities(database);
+      if (!capabilityCheck.satisfied) {
+        throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
+      }
     }
 
     await updateReleaseStatus(release.id, 'planning');

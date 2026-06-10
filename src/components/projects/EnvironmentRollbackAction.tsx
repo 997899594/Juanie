@@ -28,6 +28,7 @@ import {
   type EnvironmentRollbackCandidateResponse,
   type EnvironmentRollbackPlanResponse,
   fetchEnvironmentRollbackPlan,
+  ReleaseClientActionError,
 } from '@/lib/releases/client-actions';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
@@ -155,6 +156,13 @@ export function EnvironmentRollbackAction({
 
       router.refresh();
     } catch (submitError) {
+      if (submitError instanceof ReleaseClientActionError && submitError.releasePath) {
+        setOpen(false);
+        toast.error(submitError.message);
+        router.push(submitError.releasePath);
+        return;
+      }
+
       setError(submitError instanceof Error ? submitError.message : '创建回滚失败');
     } finally {
       setSubmitting(false);

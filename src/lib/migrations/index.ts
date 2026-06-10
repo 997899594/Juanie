@@ -1,8 +1,8 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
+  ensureDatabaseCapabilities,
   formatDatabaseCapabilityIssues,
   inferDatabaseCapabilitiesFromText,
-  reconcileDatabaseCapabilities,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import {
@@ -66,7 +66,7 @@ async function reconcileRequiredCapabilitiesForSpec(
     return;
   }
 
-  const result = await reconcileDatabaseCapabilities(spec.database, requiredCapabilities);
+  const result = await ensureDatabaseCapabilities(spec.database, requiredCapabilities);
   if (!result.satisfied) {
     throw new Error(formatDatabaseCapabilityIssues(spec.database, result.issues));
   }

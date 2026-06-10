@@ -9,7 +9,10 @@ import {
   type PreviewEnvironmentDialogInput,
 } from '@/components/projects/PreviewEnvironmentDialog';
 import { Button } from '@/components/ui/button';
-import { createPreviewEnvironment } from '@/lib/environments/client-actions';
+import {
+  createPreviewEnvironment,
+  EnvironmentClientActionError,
+} from '@/lib/environments/client-actions';
 import type { EnvironmentPageGovernanceSnapshot } from '@/lib/environments/governance-view';
 
 interface ProjectPreviewEnvironmentLauncherProps {
@@ -60,6 +63,13 @@ export function ProjectPreviewEnvironmentLauncher({
       );
       router.push(data.releasePath ?? `/projects/${projectId}/environments/${data.id}`);
     } catch (error) {
+      if (error instanceof EnvironmentClientActionError && error.releasePath) {
+        setOpen(false);
+        toast.error(error.message);
+        router.push(error.releasePath);
+        return;
+      }
+
       throw error instanceof Error ? error : new Error('创建预览环境失败');
     } finally {
       setLoading(false);
