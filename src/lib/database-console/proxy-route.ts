@@ -41,10 +41,18 @@ function isNetworkFetchFailure(error: unknown): boolean {
   );
 }
 
-function buildProxyPath(pathSegments: string[] | undefined, requestUrl: string): string {
-  const suffix = pathSegments?.length ? `/${pathSegments.map(encodeURIComponent).join('/')}` : '/';
-  const search = new URL(requestUrl).search;
-  return `${suffix}${search}`;
+export function buildDbGateUpstreamPath(input: {
+  projectId: string;
+  databaseId: string;
+  pathSegments?: string[];
+  requestUrl: string;
+}): string {
+  const basePath = `/api/projects/${input.projectId}/databases/${input.databaseId}/console/proxy`;
+  const suffix = input.pathSegments?.length
+    ? `/${input.pathSegments.map(encodeURIComponent).join('/')}`
+    : '/';
+  const search = new URL(input.requestUrl).search;
+  return `${basePath}${suffix}${search}`;
 }
 
 function copyRequestHeaders(headers: Headers): Headers {
@@ -120,9 +128,13 @@ export async function proxyDbGateRequest(
       return NextResponse.json({ error: '当前数据库类型不支持 DbGate 控制台' }, { status: 400 });
     }
 
-    const targetUrl = `http://${baseName}.${config.namespace}.svc.cluster.local${buildProxyPath(
-      params.path,
-      request.url
+    const targetUrl = `http://${baseName}.${config.namespace}.svc.cluster.local${buildDbGateUpstreamPath(
+      {
+        projectId: params.id,
+        databaseId: params.dbId,
+        pathSegments: params.path,
+        requestUrl: request.url,
+      }
     )}`;
     const response = await fetch(targetUrl, {
       method: request.method,

@@ -87,6 +87,11 @@ function toK8sName(value: string, fallback: string): string {
   return normalized || fallback;
 }
 
+function normalizeHttpPath(value: string): string {
+  const normalized = value.trim() || '/';
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
 function getEngine(type: string): ParsedConnection['engine'] {
   switch (type) {
     case 'postgresql':
@@ -164,6 +169,7 @@ export function buildDbGateDeployment(input: {
   webRoot: string;
   resources: DatabaseConsoleConfig['resources'];
 }): k8s.V1Deployment {
+  const webRoot = normalizeHttpPath(input.webRoot);
   const labels = {
     'app.kubernetes.io/name': 'dbgate',
     'app.kubernetes.io/managed-by': 'juanie',
@@ -213,7 +219,7 @@ export function buildDbGateDeployment(input: {
               ],
               env: [
                 { name: 'SKIP_ALL_AUTH', value: 'true' },
-                { name: 'WEB_ROOT', value: input.webRoot },
+                { name: 'WEB_ROOT', value: webRoot },
                 { name: 'CONNECTIONS', value: 'juanie' },
                 { name: 'LABEL_juanie', value: 'Juanie Database' },
                 { name: 'SINGLE_CONNECTION', value: 'juanie' },
@@ -248,14 +254,14 @@ export function buildDbGateDeployment(input: {
                 },
               ],
               readinessProbe: {
-                httpGet: { path: '/', port: 'http' },
+                httpGet: { path: webRoot, port: 'http' },
                 initialDelaySeconds: 5,
                 periodSeconds: 10,
                 timeoutSeconds: 3,
                 failureThreshold: 6,
               },
               livenessProbe: {
-                httpGet: { path: '/', port: 'http' },
+                httpGet: { path: webRoot, port: 'http' },
                 initialDelaySeconds: 20,
                 periodSeconds: 20,
                 timeoutSeconds: 3,

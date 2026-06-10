@@ -6,6 +6,7 @@ import {
   getDbGateConsoleConfig,
 } from '@/lib/database-console/dbgate';
 import { buildDbGateDeployment } from '@/lib/database-console/dbgate-session';
+import { buildDbGateUpstreamPath } from '@/lib/database-console/proxy-route';
 
 const project = { id: 'project-1', name: 'nexusnote' };
 const environment = { id: 'env-1', name: 'production' };
@@ -111,6 +112,12 @@ describe('DbGate database console session', () => {
           item.value === '/api/projects/project-1/databases/db-1/console/proxy/'
       )
     ).toBe(true);
+    expect(deployment.spec?.template.spec?.containers[0]?.readinessProbe?.httpGet?.path).toBe(
+      '/api/projects/project-1/databases/db-1/console/proxy/'
+    );
+    expect(deployment.spec?.template.spec?.containers[0]?.livenessProbe?.httpGet?.path).toBe(
+      '/api/projects/project-1/databases/db-1/console/proxy/'
+    );
     expect(
       env.some(
         (item) =>
@@ -127,5 +134,29 @@ describe('DbGate database console session', () => {
           item.valueFrom.secretKeyRef.key === 'enginePlugin'
       )
     ).toBe(true);
+  });
+});
+
+describe('DbGate database console proxy', () => {
+  it('keeps the public proxy prefix when forwarding to a WEB_ROOT-scoped DbGate', () => {
+    expect(
+      buildDbGateUpstreamPath({
+        projectId: project.id,
+        databaseId: database.id,
+        requestUrl: 'https://juanie.art/api/projects/project-1/databases/db-1/console/proxy/',
+      })
+    ).toBe('/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/');
+
+    expect(
+      buildDbGateUpstreamPath({
+        projectId: project.id,
+        databaseId: database.id,
+        pathSegments: ['assets', 'main.js'],
+        requestUrl:
+          'https://juanie.art/api/projects/project-1/databases/db-1/console/proxy/assets/main.js?v=1',
+      })
+    ).toBe(
+      '/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/assets/main.js?v=1'
+    );
   });
 });
