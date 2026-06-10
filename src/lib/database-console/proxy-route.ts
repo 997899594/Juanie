@@ -55,6 +55,31 @@ export function buildDbGateUpstreamPath(input: {
   return `${basePath}${suffix}${search}`;
 }
 
+export function buildDbGateProxyCanonicalRedirectUrl(input: {
+  requestUrl: string;
+  projectId: string;
+  databaseId: string;
+  pathSegments?: string[];
+}): string | null {
+  if (input.pathSegments?.length) {
+    return null;
+  }
+
+  const url = new URL(input.requestUrl);
+  const canonicalPath = `/api/projects/${input.projectId}/databases/${input.databaseId}/console/proxy/`;
+  if (url.pathname === canonicalPath) {
+    return null;
+  }
+
+  const slashlessPath = canonicalPath.slice(0, -1);
+  if (url.pathname !== slashlessPath) {
+    return null;
+  }
+
+  url.pathname = canonicalPath;
+  return url.toString();
+}
+
 function copyRequestHeaders(headers: Headers): Headers {
   const nextHeaders = new Headers();
   for (const [key, value] of headers.entries()) {
@@ -126,6 +151,16 @@ export async function proxyDbGateRequest(
 
     if (!isDbGateSupportedDatabaseType(loaded.database.type)) {
       return NextResponse.json({ error: '当前数据库类型不支持 DbGate 控制台' }, { status: 400 });
+    }
+
+    const canonicalRedirectUrl = buildDbGateProxyCanonicalRedirectUrl({
+      requestUrl: request.url,
+      projectId: params.id,
+      databaseId: params.dbId,
+      pathSegments: params.path,
+    });
+    if (canonicalRedirectUrl) {
+      return NextResponse.redirect(canonicalRedirectUrl, 308);
     }
 
     const targetUrl = `http://${baseName}.${config.namespace}.svc.cluster.local${buildDbGateUpstreamPath(

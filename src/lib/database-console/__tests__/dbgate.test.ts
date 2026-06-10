@@ -6,7 +6,10 @@ import {
   getDbGateConsoleConfig,
 } from '@/lib/database-console/dbgate';
 import { buildDbGateDeployment } from '@/lib/database-console/dbgate-session';
-import { buildDbGateUpstreamPath } from '@/lib/database-console/proxy-route';
+import {
+  buildDbGateProxyCanonicalRedirectUrl,
+  buildDbGateUpstreamPath,
+} from '@/lib/database-console/proxy-route';
 
 const project = { id: 'project-1', name: 'nexusnote' };
 const environment = { id: 'env-1', name: 'production' };
@@ -138,6 +141,29 @@ describe('DbGate database console session', () => {
 });
 
 describe('DbGate database console proxy', () => {
+  it('redirects the slashless proxy root so relative DbGate assets stay under proxy', () => {
+    expect(
+      buildDbGateProxyCanonicalRedirectUrl({
+        projectId: project.id,
+        databaseId: database.id,
+        requestUrl:
+          'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy',
+      })
+    ).toBe(
+      'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/'
+    );
+
+    expect(
+      buildDbGateProxyCanonicalRedirectUrl({
+        projectId: project.id,
+        databaseId: database.id,
+        requestUrl:
+          'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/build/bundle.js',
+        pathSegments: ['build', 'bundle.js'],
+      })
+    ).toBe(null);
+  });
+
   it('keeps the public proxy prefix when forwarding to a WEB_ROOT-scoped DbGate', () => {
     expect(
       buildDbGateUpstreamPath({
