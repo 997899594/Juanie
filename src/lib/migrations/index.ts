@@ -11,10 +11,7 @@ import {
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
-import {
-  inspectResolvedMigrationSpecPendingState,
-  type MigrationFilePreviewSnapshot,
-} from '@/lib/migrations/file-preview';
+import { type MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -23,6 +20,7 @@ import {
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationPath } from './path';
+import { hasPotentialSchemaChanges } from './pre-flight-check';
 import { resolveMigrationSpecifications } from './resolver';
 import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
@@ -137,7 +135,7 @@ export async function resolveAndRunMigrations(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    deferPendingInspectionToRunner?: boolean;
+    previousSourceCommitSha?: string | null;
   }
 ) {
   const runs = await resolveAndCreateMigrationRuns(projectId, environmentId, phase, input);
@@ -157,7 +155,7 @@ export async function resolveAndCreateMigrationRuns(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    deferPendingInspectionToRunner?: boolean;
+    previousSourceCommitSha?: string | null;
   }
 ) {
   const specs = await resolveMigrationSpecifications(projectId, environmentId, phase, {
@@ -169,25 +167,33 @@ export async function resolveAndCreateMigrationRuns(
 
   for (const spec of specs) {
     await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
-    const shouldDeferPendingInspection =
-      input.deferPendingInspectionToRunner && spec.specification.executionMode === 'automatic';
-    let filePreview: MigrationFilePreviewSnapshot | null = null;
-
-    if (!shouldDeferPendingInspection) {
-      const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
-        sourceRef: input.sourceRef,
-        sourceCommitSha: input.sourceCommitSha,
-        includeFileDetails: true,
-      });
-      filePreview = pendingInspection.preview;
-
-      if (pendingInspection.state === 'none') {
-        continue;
-      }
+    // Fast pre-flight check: skip migration run when schema source files
+    // have not changed since the previous release.
+    const revision = input.sourceCommitSha ?? input.sourceRef ?? spec.environment.branch ?? 'main';
+    if (revision === input.previousSourceCommitSha) {
+      continue;
     }
 
-    let initialStatus: MigrationRunStatus = 'queued';
+    const filePreview: MigrationFilePreviewSnapshot | null = null;
 
+    try {
+      const hasChanges = await hasPotentialSchemaChanges(
+        spec,
+        revision,
+        input.previousSourceCommitSha ?? null
+      );
+
+      if (!hasChanges) {
+        // No schema source files changed between releases.
+        // Database migrations table will catch any drift on next actual change.
+        continue;
+      }
+    } catch {
+      // Pre-flight check failed — fall through to create migration run.
+      // The worker will perform a full inspection.
+    }
+
+    let initialStatus: MigrationRunStatus | undefined;
     if (phase !== 'manual') {
       if (spec.specification.executionMode === 'manual_platform') {
         initialStatus = 'awaiting_approval';

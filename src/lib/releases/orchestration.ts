@@ -15,6 +15,7 @@ import {
   publishReleaseRealtimeSnapshot,
   publishReleaseRealtimeSnapshots,
 } from '@/lib/realtime/releases';
+import { getPreviousReleaseByScope } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
@@ -223,6 +224,12 @@ export async function startReleaseMigrationPhase(
     phase,
   });
 
+  const previousRelease = await getPreviousReleaseByScope({
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+    createdAt: release.createdAt ?? new Date(),
+  });
+
   const createdRuns = await resolveAndCreateMigrationRuns(
     release.projectId,
     release.environmentId,
@@ -234,10 +241,10 @@ export async function startReleaseMigrationPhase(
       sourceRef: release.sourceRef,
       sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
       sourceCommitMessage: release.summary,
+      previousSourceCommitSha: previousRelease?.sourceCommitSha ?? null,
       serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
         (artifact) => artifact.serviceId!
       ),
-      deferPendingInspectionToRunner: true,
     }
   );
 
