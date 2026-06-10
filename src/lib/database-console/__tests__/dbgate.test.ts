@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildDatabaseConsoleOverview,
+  buildDbGateConsoleHostname,
   buildDbGateConsoleUrl,
   buildDbGateDatabaseConsoleLink,
   getDbGateConsoleConfig,
+  parseDbGateConsoleHostname,
 } from '@/lib/database-console/dbgate';
-import { buildDbGateDeployment } from '@/lib/database-console/dbgate-session';
 import {
-  buildDbGateProxyCanonicalRedirectUrl,
-  buildDbGateUpstreamPath,
-} from '@/lib/database-console/proxy-route';
+  buildDbGateConsoleResourceNames,
+  buildDbGateDeployment,
+} from '@/lib/database-console/dbgate-session';
+import {
+  createDbGateConsoleToken,
+  verifyDbGateConsoleToken,
+} from '@/lib/database-console/host-auth';
 
 const project = { id: 'project-1', name: 'nexusnote' };
 const environment = { id: 'env-1', name: 'production' };
@@ -25,21 +30,46 @@ const database = {
 };
 
 describe('DbGate database console config', () => {
-  it('builds Juanie-authenticated proxy URLs per database', () => {
+  it('builds dedicated host URLs per database', () => {
     const config = getDbGateConsoleConfig({
       DATABASE_CONSOLE_ENABLED: 'true',
+      DBGATE_HOSTNAME_BASE_DOMAIN: 'juanie.art',
     });
 
     const link = buildDbGateDatabaseConsoleLink({ config, project, environment, database });
 
     expect(link?.provider).toBe('dbgate');
+    expect(config.routeNamespace).toBe('juanie');
+    expect(config.gatewayServiceName).toBe('juanie-web');
     expect(link?.consoleUrl).toBe(
-      `/api/projects/${project.id}/databases/${database.id}/console/proxy/`
+      'https://dbgate-cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07.juanie.art/'
     );
     expect(link?.context.engine).toBe('postgres');
-    expect(buildDbGateConsoleUrl({ projectId: project.id, databaseId: database.id })).toBe(
-      `/api/projects/${project.id}/databases/${database.id}/console/proxy/`
-    );
+    expect(
+      buildDbGateConsoleUrl({
+        databaseId: database.id,
+        baseDomain: 'juanie.art',
+        token: 'session-token',
+      })
+    ).toBe('https://dbgate-cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07.juanie.art/?token=session-token');
+  });
+
+  it('parses database console hosts without treating normal app hosts as consoles', () => {
+    expect(
+      parseDbGateConsoleHostname({
+        hostname: 'dbgate-cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07.juanie.art',
+        baseDomain: 'juanie.art',
+      })
+    ).toEqual({ databaseSlug: 'cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07' });
+    expect(
+      parseDbGateConsoleHostname({
+        hostname: 'nexusnote-uclhhb.juanie.art',
+        baseDomain: 'juanie.art',
+      })
+    ).toBe(null);
+    expect(
+      buildDbGateConsoleHostname({ databaseId: database.id, baseDomain: '.juanie.art.' })
+    ).toBe('dbgate-cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07.juanie.art');
   });
 
   it('builds overview metadata without exposing raw workspace URLs', () => {
@@ -81,7 +111,19 @@ describe('DbGate database console config', () => {
 });
 
 describe('DbGate database console session', () => {
-  it('renders a read-only single-database DbGate deployment', () => {
+  it('keeps generated Kubernetes resource names within DNS label limits', () => {
+    const names = buildDbGateConsoleResourceNames(
+      'cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07-extra-extra-extra-extra'
+    );
+
+    expect(names.baseName.length <= 52).toBe(true);
+    expect(names.secretName.length <= 63).toBe(true);
+    expect(names.routeName.length <= 63).toBe(true);
+    expect(names.secretName.endsWith('-connection')).toBe(true);
+    expect(names.routeName.endsWith('-route')).toBe(true);
+  });
+
+  it('renders a read-only single-database DbGate deployment at root', () => {
     const deployment = buildDbGateDeployment({
       name: 'dbgate-cf13',
       namespace: 'juanie',
@@ -90,7 +132,6 @@ describe('DbGate database console session', () => {
       lastOpenedAt: new Date('2026-06-09T10:00:00.000Z'),
       image: 'dbgate/dbgate:7.2.0',
       readonly: true,
-      webRoot: '/api/projects/project-1/databases/db-1/console/proxy/',
       resources: {
         cpuRequest: '50m',
         cpuLimit: '500m',
@@ -108,19 +149,9 @@ describe('DbGate database console session', () => {
       true
     );
     expect(env.some((item) => item.name === 'READONLY_juanie' && item.value === 'true')).toBe(true);
-    expect(
-      env.some(
-        (item) =>
-          item.name === 'WEB_ROOT' &&
-          item.value === '/api/projects/project-1/databases/db-1/console/proxy/'
-      )
-    ).toBe(true);
-    expect(deployment.spec?.template.spec?.containers[0]?.readinessProbe?.httpGet?.path).toBe(
-      '/api/projects/project-1/databases/db-1/console/proxy/'
-    );
-    expect(deployment.spec?.template.spec?.containers[0]?.livenessProbe?.httpGet?.path).toBe(
-      '/api/projects/project-1/databases/db-1/console/proxy/'
-    );
+    expect(env.some((item) => item.value?.includes('/api/projects/'))).toBe(false);
+    expect(deployment.spec?.template.spec?.containers[0]?.readinessProbe?.httpGet?.path).toBe('/');
+    expect(deployment.spec?.template.spec?.containers[0]?.livenessProbe?.httpGet?.path).toBe('/');
     expect(
       env.some(
         (item) =>
@@ -140,49 +171,40 @@ describe('DbGate database console session', () => {
   });
 });
 
-describe('DbGate database console proxy', () => {
-  it('redirects the slashless proxy root so relative DbGate assets stay under proxy', () => {
-    expect(
-      buildDbGateProxyCanonicalRedirectUrl({
-        projectId: project.id,
-        databaseId: database.id,
-        requestUrl:
-          'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy',
-      })
-    ).toBe(
-      'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/'
-    );
+describe('DbGate database console auth', () => {
+  it('signs short-lived console sessions for the matching database host', () => {
+    process.env.NEXTAUTH_SECRET = 'test-secret';
+    const token = createDbGateConsoleToken({
+      projectId: project.id,
+      environmentId: environment.id,
+      databaseId: database.id,
+      databaseSlug: 'cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07',
+      actorEmail: 'dev@example.com',
+      actorName: 'Dev',
+      expiresAt: new Date('2026-06-09T11:00:00.000Z'),
+    });
 
+    const verified = verifyDbGateConsoleToken({
+      token,
+      databaseSlug: 'cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07',
+      now: new Date('2026-06-09T10:00:00.000Z'),
+    });
+
+    expect(verified?.databaseId).toBe(database.id);
+    expect(verified?.projectId).toBe(project.id);
     expect(
-      buildDbGateProxyCanonicalRedirectUrl({
-        projectId: project.id,
-        databaseId: database.id,
-        requestUrl:
-          'https://juanie.art/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/build/bundle.js',
-        pathSegments: ['build', 'bundle.js'],
+      verifyDbGateConsoleToken({
+        token,
+        databaseSlug: 'other-database',
+        now: new Date('2026-06-09T10:00:00.000Z'),
       })
     ).toBe(null);
-  });
-
-  it('keeps the public proxy prefix when forwarding to a WEB_ROOT-scoped DbGate', () => {
     expect(
-      buildDbGateUpstreamPath({
-        projectId: project.id,
-        databaseId: database.id,
-        requestUrl: 'https://juanie.art/api/projects/project-1/databases/db-1/console/proxy/',
+      verifyDbGateConsoleToken({
+        token,
+        databaseSlug: 'cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07',
+        now: new Date('2026-06-09T12:00:00.000Z'),
       })
-    ).toBe('/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/');
-
-    expect(
-      buildDbGateUpstreamPath({
-        projectId: project.id,
-        databaseId: database.id,
-        pathSegments: ['assets', 'main.js'],
-        requestUrl:
-          'https://juanie.art/api/projects/project-1/databases/db-1/console/proxy/assets/main.js?v=1',
-      })
-    ).toBe(
-      '/api/projects/project-1/databases/cf13f5b4-5bc7-4c7d-ae5e-d926f38dbe07/console/proxy/assets/main.js?v=1'
-    );
+    ).toBe(null);
   });
 });

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { parseDbGateConsoleHostname } from '@/lib/database-console/dbgate';
 
 function normalizeHostname(value: string | null): string | null {
   const hostname = value?.split(',')[0]?.trim().toLowerCase();
@@ -11,6 +12,23 @@ function normalizeHostname(value: string | null): string | null {
 
 function getPlatformBaseDomain(): string {
   return process.env.JUANIE_BASE_DOMAIN?.trim().toLowerCase() || 'juanie.art';
+}
+
+function getDatabaseConsoleBaseDomain(): string {
+  return (
+    process.env.DBGATE_HOSTNAME_BASE_DOMAIN?.trim().toLowerCase() ||
+    process.env.JUANIE_BASE_DOMAIN?.trim().toLowerCase() ||
+    'juanie.art'
+  );
+}
+
+function isDatabaseConsoleHost(hostname: string): boolean {
+  return Boolean(
+    parseDbGateConsoleHostname({
+      hostname,
+      baseDomain: getDatabaseConsoleBaseDomain(),
+    })
+  );
 }
 
 function isManagedApplicationHost(hostname: string): boolean {
@@ -30,6 +48,15 @@ function shouldBypass(pathname: string): boolean {
 
 export function proxy(request: NextRequest) {
   const hostname = normalizeHostname(request.headers.get('host'));
+
+  if (hostname && isDatabaseConsoleHost(hostname)) {
+    const url = request.nextUrl.clone();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-juanie-dbgate-path', request.nextUrl.pathname);
+    requestHeaders.set('x-juanie-dbgate-search', request.nextUrl.search);
+    url.pathname = `/api/database-console/host-proxy${request.nextUrl.pathname}`;
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
 
   if (!hostname || !isManagedApplicationHost(hostname) || shouldBypass(request.nextUrl.pathname)) {
     return NextResponse.next();

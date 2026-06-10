@@ -1,12 +1,18 @@
 import { createHash } from 'node:crypto';
 import * as k8s from '@kubernetes/client-node';
 import {
+  buildDbGateConsoleHostname,
+  buildDbGateConsoleSlug,
   buildDbGateConsoleUrl,
   type DatabaseConsoleConfig,
   getDbGateConsoleConfig,
   isDbGateSupportedDatabaseType,
 } from '@/lib/database-console/dbgate';
+import { createDbGateConsoleToken } from '@/lib/database-console/host-auth';
+import { getGatewayRouteConfig } from '@/lib/gateway/config';
 import {
+  createCiliumHTTPRoute,
+  deleteCiliumHTTPRoute,
   deleteDeployment,
   deleteSecret,
   deleteService,
@@ -45,6 +51,7 @@ export interface DbGateConsoleResult {
   databaseId: string;
   serviceName: string;
   deploymentName: string;
+  hostname: string;
   url: string;
   readonly: boolean;
 }
@@ -73,23 +80,6 @@ function stableHash(values: Record<string, string>): string {
     .join('\n');
 
   return createHash('sha256').update(payload).digest('hex').slice(0, 16);
-}
-
-function toK8sName(value: string, fallback: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 52)
-    .replace(/-+$/g, '');
-
-  return normalized || fallback;
-}
-
-function normalizeHttpPath(value: string): string {
-  const normalized = value.trim() || '/';
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 function getEngine(type: string): ParsedConnection['engine'] {
@@ -148,13 +138,15 @@ function parseConnectionString(input: {
 export function buildDbGateConsoleResourceNames(databaseId: string): {
   baseName: string;
   secretName: string;
+  routeName: string;
 } {
-  const suffix = toK8sName(databaseId, 'database');
+  const suffix = buildDbGateConsoleSlug(databaseId).slice(0, 45).replace(/-+$/g, '') || 'database';
   const baseName = `dbgate-${suffix}`;
 
   return {
     baseName,
     secretName: `${baseName}-connection`,
+    routeName: `${baseName}-route`,
   };
 }
 
@@ -166,10 +158,8 @@ export function buildDbGateDeployment(input: {
   lastOpenedAt: Date;
   image: string;
   readonly: boolean;
-  webRoot: string;
   resources: DatabaseConsoleConfig['resources'];
 }): k8s.V1Deployment {
-  const webRoot = normalizeHttpPath(input.webRoot);
   const labels = {
     'app.kubernetes.io/name': 'dbgate',
     'app.kubernetes.io/managed-by': 'juanie',
@@ -219,7 +209,6 @@ export function buildDbGateDeployment(input: {
               ],
               env: [
                 { name: 'SKIP_ALL_AUTH', value: 'true' },
-                { name: 'WEB_ROOT', value: webRoot },
                 { name: 'CONNECTIONS', value: 'juanie' },
                 { name: 'LABEL_juanie', value: 'Juanie Database' },
                 { name: 'SINGLE_CONNECTION', value: 'juanie' },
@@ -254,14 +243,14 @@ export function buildDbGateDeployment(input: {
                 },
               ],
               readinessProbe: {
-                httpGet: { path: webRoot, port: 'http' },
+                httpGet: { path: '/', port: 'http' },
                 initialDelaySeconds: 5,
                 periodSeconds: 10,
                 timeoutSeconds: 3,
                 failureThreshold: 6,
               },
               livenessProbe: {
-                httpGet: { path: webRoot, port: 'http' },
+                httpGet: { path: '/', port: 'http' },
                 initialDelaySeconds: 20,
                 periodSeconds: 20,
                 timeoutSeconds: 3,
@@ -333,7 +322,9 @@ export async function cleanupIdleDbGateDatabaseConsoles(
     }
 
     const secretName = `${name}-connection`;
+    const routeName = `${name}-route`;
     await Promise.all([
+      deleteCiliumHTTPRoute(config.routeNamespace, routeName),
       deleteDeployment(config.namespace, name),
       deleteService(config.namespace, name),
       deleteSecret(config.namespace, secretName),
@@ -394,6 +385,29 @@ async function upsertDeployment(input: {
   }
 }
 
+async function upsertDbGateHTTPRoute(input: {
+  namespace: string;
+  routeName: string;
+  hostname: string;
+  serviceName: string;
+}): Promise<void> {
+  const gateway = getGatewayRouteConfig();
+  const spec = {
+    name: input.routeName,
+    namespace: input.namespace,
+    gatewayName: gateway.name,
+    gatewayNamespace: gateway.namespace,
+    sectionName: gateway.wildcardSectionName,
+    hostnames: [input.hostname],
+    serviceName: input.serviceName,
+    servicePort: 80,
+    path: '/',
+  };
+
+  await deleteCiliumHTTPRoute(input.namespace, input.routeName).catch(() => undefined);
+  await createCiliumHTTPRoute(spec);
+}
+
 export async function openDbGateDatabaseConsole(
   target: DbGateConsoleTarget,
   config = getDbGateConsoleConfig()
@@ -416,11 +430,25 @@ export async function openDbGateDatabaseConsole(
     connectionString,
     databaseName: target.database.databaseName,
   });
-  const { baseName, secretName } = buildDbGateConsoleResourceNames(target.database.id);
+  const { baseName, secretName, routeName } = buildDbGateConsoleResourceNames(target.database.id);
   const openedAt = new Date();
-  const url = buildDbGateConsoleUrl({
-    projectId: target.project.id,
+  const hostname = buildDbGateConsoleHostname({
     databaseId: target.database.id,
+    baseDomain: config.hostnameBaseDomain,
+  });
+  const token = createDbGateConsoleToken({
+    projectId: target.project.id,
+    environmentId: target.environment.id,
+    databaseId: target.database.id,
+    databaseSlug: buildDbGateConsoleSlug(target.database.id),
+    actorEmail: target.actor.email ?? null,
+    actorName: target.actor.name ?? null,
+    expiresAt: new Date(openedAt.getTime() + config.tokenTtlSeconds * 1000),
+  });
+  const url = buildDbGateConsoleUrl({
+    databaseId: target.database.id,
+    baseDomain: config.hostnameBaseDomain,
+    token,
   });
   const secretData = {
     engine: parsed.engine,
@@ -431,15 +459,11 @@ export async function openDbGateDatabaseConsole(
     password: parsed.password,
     database: parsed.database,
   };
-  const webRoot = buildDbGateConsoleUrl({
-    projectId: target.project.id,
-    databaseId: target.database.id,
-  });
   const connectionHash = stableHash({
     ...secretData,
     image: config.image,
     readonly: String(config.readonly),
-    webRoot,
+    hostname,
   });
 
   await upsertSecret(config.namespace, secretName, secretData);
@@ -454,7 +478,6 @@ export async function openDbGateDatabaseConsole(
       lastOpenedAt: openedAt,
       image: config.image,
       readonly: config.readonly,
-      webRoot,
       resources: config.resources,
     }),
   });
@@ -462,6 +485,12 @@ export async function openDbGateDatabaseConsole(
     port: 80,
     targetPort: 'http',
     selector: { 'juanie.io/console': baseName },
+  });
+  await upsertDbGateHTTPRoute({
+    namespace: config.routeNamespace,
+    routeName,
+    hostname,
+    serviceName: config.gatewayServiceName,
   });
   await waitForDeploymentReady({
     namespace: config.namespace,
@@ -476,6 +505,7 @@ export async function openDbGateDatabaseConsole(
     databaseId: target.database.id,
     deploymentName: baseName,
     serviceName: baseName,
+    hostname,
     readonly: config.readonly,
   });
 
@@ -484,6 +514,7 @@ export async function openDbGateDatabaseConsole(
     databaseId: target.database.id,
     serviceName: baseName,
     deploymentName: baseName,
+    hostname,
     url,
     readonly: config.readonly,
   };

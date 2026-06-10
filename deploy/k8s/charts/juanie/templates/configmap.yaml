@@ -67,7 +67,11 @@ data:
   DATABASE_CONSOLE_SUMMARY: {{ .Values.env.DATABASE_CONSOLE_SUMMARY | default "用于浏览表结构、预览数据和临时查询；迁移仍走 Juanie + Atlas 主链" | quote }}
   DATABASE_CONSOLE_CHANGE_MANAGEMENT_SUMMARY: {{ .Values.env.DATABASE_CONSOLE_CHANGE_MANAGEMENT_SUMMARY | default "默认以只读工作台打开，结构变更回到发布、提升或修复流程" | quote }}
   DATABASE_CONSOLE_READONLY: {{ .Values.env.DATABASE_CONSOLE_READONLY | default "true" | quote }}
+  DATABASE_CONSOLE_ROUTE_NAMESPACE: {{ .Values.env.DATABASE_CONSOLE_ROUTE_NAMESPACE | default .Values.namespace | quote }}
+  DATABASE_CONSOLE_GATEWAY_SERVICE_NAME: {{ .Values.env.DATABASE_CONSOLE_GATEWAY_SERVICE_NAME | default (printf "%s-web" .Chart.Name) | quote }}
+  DATABASE_CONSOLE_TOKEN_TTL_SECONDS: {{ .Values.env.DATABASE_CONSOLE_TOKEN_TTL_SECONDS | default "3600" | quote }}
   DBGATE_NAMESPACE: {{ .Values.env.DBGATE_NAMESPACE | default .Values.namespace | quote }}
+  DBGATE_HOSTNAME_BASE_DOMAIN: {{ .Values.env.DBGATE_HOSTNAME_BASE_DOMAIN | default (.Values.env.JUANIE_BASE_DOMAIN | default "juanie.art") | quote }}
   DBGATE_IMAGE: {{ .Values.env.DBGATE_IMAGE | default "dbgate/dbgate:7.2.0" | quote }}
   DBGATE_CPU_REQUEST: {{ .Values.env.DBGATE_CPU_REQUEST | default "50m" | quote }}
   DBGATE_CPU_LIMIT: {{ .Values.env.DBGATE_CPU_LIMIT | default "500m" | quote }}

@@ -17,7 +17,8 @@ Juanie does not expose a shared DbGate instance. When a user opens a database co
 2. loads the selected database connection from the control plane;
 3. writes the target connection into a Kubernetes Secret;
 4. reconciles a single-database DbGate Deployment and ClusterIP Service;
-5. returns a Juanie-authenticated proxy URL for that database.
+5. reconciles a Gateway API `HTTPRoute` for a dedicated console hostname;
+6. returns a short-lived Juanie-signed console URL for that database.
 
 The generated DbGate workspace runs with `SINGLE_CONNECTION`, `SINGLE_DATABASE`, and read-only mode
 by default. Database schema changes still go through releases, promotion, repair plans, and Atlas.
@@ -27,29 +28,36 @@ by default. Database schema changes still go through releases, promotion, repair
 ```bash
 DATABASE_CONSOLE_ENABLED=true
 DATABASE_CONSOLE_READONLY=true
+DATABASE_CONSOLE_ROUTE_NAMESPACE=juanie
+DATABASE_CONSOLE_GATEWAY_SERVICE_NAME=juanie-web
+DATABASE_CONSOLE_TOKEN_TTL_SECONDS=3600
+DBGATE_HOSTNAME_BASE_DOMAIN=juanie.art
 DBGATE_IMAGE=dbgate/dbgate:7.2.0
 DBGATE_IDLE_TTL_MINUTES=60
 DBGATE_CONSOLE_CLEANUP_SCHEDULE=*/15 * * * *
 ```
 
-The browser entry stays under Juanie:
+The browser entry is a dedicated database console hostname:
 
 ```text
-/api/projects/<project-id>/databases/<database-id>/console/proxy/
+https://dbgate-<database-id>.juanie.art/?token=<signed-session>
 ```
 
-DbGate itself is only exposed as a Kubernetes `ClusterIP` service. It is not routed directly through
-Gateway API.
+Gateway API routes that hostname to the Juanie web service. Juanie validates the signed token,
+stores a host-only HTTP-only cookie, strips the token from the browser URL, then proxies root-path
+DbGate requests to the internal `ClusterIP` service. DbGate itself is not routed directly to the
+public gateway.
 
 DbGate workspaces are lightweight and lazy-created. Juanie records the last open timestamp on the
-Deployment metadata and the scheduler removes idle DbGate Deployment, Service, and Secret resources
-after `DBGATE_IDLE_TTL_MINUTES` minutes. Reopening the console recreates the workspace from the
-stored database connection context.
+Deployment metadata and the scheduler removes idle DbGate Deployment, Service, Secret, and HTTPRoute
+resources after `DBGATE_IDLE_TTL_MINUTES` minutes. Reopening the console recreates the workspace from
+the stored database connection context.
 
 ## Security Baseline
 
-- DbGate is not used as the source of authorization. Juanie owns authentication and project access.
+- DbGate is not used as the source of authorization. Juanie owns authentication, project access, and
+  signed console sessions.
 - Target connection strings are stored in Kubernetes Secrets, not in browser URLs.
-- DbGate uses `SKIP_ALL_AUTH=true` only behind the Juanie server-side proxy.
+- DbGate uses `SKIP_ALL_AUTH=true` only behind the Juanie host-level server-side gateway.
 - `DATABASE_CONSOLE_READONLY=true` is the default.
 - DDL/DML governance stays in Atlas-backed release and repair flows.

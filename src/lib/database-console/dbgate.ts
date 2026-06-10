@@ -6,6 +6,10 @@ export interface DatabaseConsoleConfig {
   label: string;
   image: string;
   namespace: string;
+  routeNamespace: string;
+  hostnameBaseDomain: string;
+  gatewayServiceName: string;
+  tokenTtlSeconds: number;
   accessModeLabel: string;
   summary: string;
   changeManagementSummary: string;
@@ -69,6 +73,8 @@ interface DatabaseConsoleDatabaseInput {
 
 const DEFAULT_PROVIDER = 'dbgate';
 const DEFAULT_IMAGE = 'dbgate/dbgate:7.2.0';
+const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60;
+export const DBGATE_CONSOLE_HOST_PREFIX = 'dbgate-';
 const DEFAULT_ACCESS_MODE_LABEL = '只读优先';
 const DEFAULT_SUMMARY = '用于浏览表结构、预览数据和临时查询；迁移仍走 Juanie + Atlas 主链';
 const DEFAULT_CHANGE_MANAGEMENT_SUMMARY = '默认以只读工作台打开，结构变更回到发布、提升或修复流程';
@@ -89,8 +95,91 @@ function normalizeNamespace(value: string | undefined): string {
   return value?.trim() || process.env.JUANIE_NAMESPACE?.trim() || 'juanie';
 }
 
+function normalizeBaseDomain(value: string | undefined): string {
+  return (
+    value
+      ?.trim()
+      .replace(/^\.+|\.+$/g, '')
+      .toLowerCase() || 'juanie.art'
+  );
+}
+
 function normalizeResource(value: string | undefined, fallback: string): string {
   return value?.trim() || fallback;
+}
+
+function normalizeTokenTtlSeconds(value: string | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_TOKEN_TTL_SECONDS;
+  }
+
+  return Math.floor(parsed);
+}
+
+export function buildDbGateConsoleSlug(databaseId: string): string {
+  const normalized = databaseId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 52)
+    .replace(/-+$/g, '');
+
+  return normalized || 'database';
+}
+
+export function buildDbGateConsoleHostname(input: {
+  databaseId: string;
+  baseDomain: string;
+}): string {
+  return `${DBGATE_CONSOLE_HOST_PREFIX}${buildDbGateConsoleSlug(input.databaseId)}.${normalizeBaseDomain(
+    input.baseDomain
+  )}`;
+}
+
+export function buildDbGateConsoleUrl(input: {
+  databaseId: string;
+  baseDomain: string;
+  token?: string;
+}): string {
+  const url = new URL(
+    `https://${buildDbGateConsoleHostname({
+      databaseId: input.databaseId,
+      baseDomain: input.baseDomain,
+    })}/`
+  );
+
+  if (input.token) {
+    url.searchParams.set('token', input.token);
+  }
+
+  return url.toString();
+}
+
+export function parseDbGateConsoleHostname(input: {
+  hostname: string;
+  baseDomain: string;
+}): { databaseSlug: string } | null {
+  const hostname = input.hostname.trim().toLowerCase().replace(/\.$/, '');
+  const baseDomain = normalizeBaseDomain(input.baseDomain);
+  const suffix = `.${baseDomain}`;
+
+  if (!hostname.endsWith(suffix)) {
+    return null;
+  }
+
+  const subdomain = hostname.slice(0, -suffix.length);
+  if (!subdomain.startsWith(DBGATE_CONSOLE_HOST_PREFIX)) {
+    return null;
+  }
+
+  const databaseSlug = subdomain.slice(DBGATE_CONSOLE_HOST_PREFIX.length);
+  if (!databaseSlug) {
+    return null;
+  }
+
+  return { databaseSlug };
 }
 
 export function isDbGateSupportedDatabaseType(type: string): boolean {
@@ -122,6 +211,16 @@ export function getDbGateConsoleConfig(
     label: env.DATABASE_CONSOLE_LABEL?.trim() || 'DbGate',
     image: normalizeImage(env.DBGATE_IMAGE),
     namespace: normalizeNamespace(env.DBGATE_NAMESPACE),
+    routeNamespace:
+      env.DATABASE_CONSOLE_ROUTE_NAMESPACE?.trim() ||
+      env.JUANIE_NAMESPACE?.trim() ||
+      process.env.JUANIE_NAMESPACE?.trim() ||
+      normalizeNamespace(env.DBGATE_NAMESPACE),
+    hostnameBaseDomain: normalizeBaseDomain(
+      env.DBGATE_HOSTNAME_BASE_DOMAIN || env.JUANIE_BASE_DOMAIN
+    ),
+    gatewayServiceName: env.DATABASE_CONSOLE_GATEWAY_SERVICE_NAME?.trim() || 'juanie-web',
+    tokenTtlSeconds: normalizeTokenTtlSeconds(env.DATABASE_CONSOLE_TOKEN_TTL_SECONDS),
     accessModeLabel: env.DATABASE_CONSOLE_ACCESS_MODE_LABEL?.trim() || DEFAULT_ACCESS_MODE_LABEL,
     summary: env.DATABASE_CONSOLE_SUMMARY?.trim() || DEFAULT_SUMMARY,
     changeManagementSummary:
@@ -167,7 +266,10 @@ export function buildDbGateDatabaseConsoleLink(input: {
     enabled: true,
     provider: input.config.provider,
     label: input.config.label,
-    consoleUrl: buildDbGateConsoleProxyUrl(input.project.id, input.database.id),
+    consoleUrl: buildDbGateConsoleUrl({
+      databaseId: input.database.id,
+      baseDomain: input.config.hostnameBaseDomain,
+    }),
     accessModeLabel: input.config.accessModeLabel,
     summary: input.config.summary,
     changeManagementSummary: input.config.changeManagementSummary,
@@ -181,12 +283,4 @@ export function buildDbGateDatabaseConsoleLink(input: {
       databaseName: input.database.databaseName ?? null,
     },
   };
-}
-
-export function buildDbGateConsoleUrl(input: { projectId: string; databaseId: string }): string {
-  return buildDbGateConsoleProxyUrl(input.projectId, input.databaseId);
-}
-
-export function buildDbGateConsoleProxyUrl(projectId: string, databaseId: string): string {
-  return `/api/projects/${projectId}/databases/${databaseId}/console/proxy/`;
 }
