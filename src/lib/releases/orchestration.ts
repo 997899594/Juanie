@@ -237,6 +237,7 @@ export async function startReleaseMigrationPhase(
       serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
         (artifact) => artifact.serviceId!
       ),
+      deferPendingInspectionToRunner: true,
     }
   );
 
