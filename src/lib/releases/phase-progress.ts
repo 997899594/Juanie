@@ -66,11 +66,16 @@ export function resolveMigrationPhaseNextAction(
     };
   }
 
-  if (ordered.length === 0 || ordered.every((run) => run.status === 'success')) {
+  const terminalCompletionStates: MigrationRunStatus[] = ['success', 'skipped'];
+
+  if (
+    ordered.length === 0 ||
+    ordered.every((run) => terminalCompletionStates.includes(run.status))
+  ) {
     return { kind: 'completed' };
   }
 
-  const blocked = ordered.find((run) => run.status !== 'success');
+  const blocked = ordered.find((run) => !terminalCompletionStates.includes(run.status));
   if (blocked) {
     return {
       kind: 'blocked',

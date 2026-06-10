@@ -143,8 +143,6 @@ describe('migration file preview pending state', () => {
       sourceLabel: 'Desired schema',
       files: ['desired-schema.sql'],
       fileDetails: undefined,
-      historyFiles: undefined,
-      historyFileDetails: undefined,
       executionPlan: null,
       total: 1,
       declaredTotal: 1,
@@ -177,15 +175,8 @@ describe('migration file preview pending state', () => {
 
     expect(preview?.files).toEqual([]);
     expect(preview?.total).toBe(0);
-    expect(preview?.historyFiles).toEqual(['001_init.sql']);
-    expect(preview?.historyFileDetails).toEqual([
-      {
-        path: '001_init.sql',
-        content: 'CREATE TABLE historical_notes (id uuid primary key);',
-        truncated: false,
-        language: 'sql',
-      },
-    ]);
+    expect(preview?.declaredTotal).toBe(1);
+    expect(preview?.executedTotal).toBe(1);
   });
 
   it('uses stored historical drizzle details without re-exporting desired schema', async () => {
@@ -220,15 +211,9 @@ describe('migration file preview pending state', () => {
     const preview = previewByRunId.get('run-drizzle-success-with-snapshot');
 
     expect(preview?.files).toEqual([]);
-    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
-    expect(preview?.historyFileDetails).toEqual([
-      {
-        path: 'desired-schema.sql',
-        content: 'CREATE TABLE notes (id uuid primary key);',
-        truncated: false,
-        language: 'sql',
-      },
-    ]);
+    expect(preview?.total).toBe(0);
+    expect(preview?.declaredTotal).toBe(1);
+    expect(preview?.executedTotal).toBe(1);
   });
 
   it('does not generate historical drizzle details when no stored snapshot exists', async () => {
@@ -251,8 +236,9 @@ describe('migration file preview pending state', () => {
     const preview = previewByRunId.get('run-drizzle-success-without-snapshot');
 
     expect(preview?.files).toEqual([]);
-    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
-    expect(preview?.historyFileDetails).toBeUndefined();
+    expect(preview?.total).toBe(0);
+    expect(preview?.declaredTotal).toBe(1);
+    expect(preview?.executedTotal).toBe(1);
     expect(preview?.warning).toBe(null);
     expect(drizzleExportCount).toBe(0);
   });
@@ -328,15 +314,9 @@ describe('migration file preview pending state', () => {
 
     expect(preview?.total).toBe(0);
     expect(preview?.files).toEqual([]);
-    expect(preview?.historyFiles).toEqual(['desired-schema.sql']);
-    expect(preview?.historyFileDetails).toEqual([
-      {
-        path: 'desired-schema.sql',
-        content: 'CREATE TABLE notes (id uuid primary key);',
-        truncated: false,
-        language: 'sql',
-      },
-    ]);
+    expect(preview?.total).toBe(0);
+    expect(preview?.declaredTotal).toBe(1);
+    expect(preview?.executedTotal).toBe(1);
     expect(drizzleExportCount).toBe(1);
   });
 

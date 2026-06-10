@@ -74,7 +74,7 @@ async function runSqlMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'success',
+        status: 'skipped',
         output: logs.join('\n'),
         finishedAt,
       })
@@ -83,7 +83,7 @@ async function runSqlMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'success',
+        status: 'skipped',
         appliedCount: summary.appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
@@ -150,7 +150,7 @@ async function runDrizzleMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'success',
+        status: 'skipped',
         output: logs.join('\n'),
         finishedAt,
       })
@@ -159,7 +159,7 @@ async function runDrizzleMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'success',
+        status: 'skipped',
         appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
@@ -215,7 +215,7 @@ async function runAtlasMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'success',
+        status: 'skipped',
         output: logs.join('\n'),
         finishedAt,
       })
@@ -224,7 +224,7 @@ async function runAtlasMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'success',
+        status: 'skipped',
         appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
@@ -307,7 +307,7 @@ export async function executeMigrationRun(
         includeFileDetails: true,
       });
 
-  if (!hasApprovedExecutionPlan) {
+  if (!hasApprovedExecutionPlan && pendingInspection.state !== 'none') {
     await persistMigrationRunFilePreview(runId, pendingInspection.preview);
   }
 
@@ -315,11 +315,11 @@ export async function executeMigrationRun(
     const finishedAt = new Date();
     const startedAt = currentRun?.startedAt ?? finishedAt;
 
-    await appendMigrationRunLog(runId, '未检测到待执行的 schema 变更，迁移已直接完成。');
+    await appendMigrationRunLog(runId, '未检测到待执行的 schema 变更，迁移已跳过。');
     await db
       .update(migrationRuns)
       .set({
-        status: 'success',
+        status: 'skipped',
         startedAt,
         finishedAt,
         durationMs: Math.max(finishedAt.getTime() - startedAt.getTime(), 0),

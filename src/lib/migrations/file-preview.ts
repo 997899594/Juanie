@@ -366,8 +366,7 @@ function normalizeStoredMigrationFilePreviewSnapshot(
     sourceLabel: snapshot.sourceLabel,
     files: normalizeStringArray(snapshot.files),
     fileDetails: normalizeFilePreviewDetails(snapshot.fileDetails),
-    historyFiles: normalizeStringArray(snapshot.historyFiles),
-    historyFileDetails: normalizeFilePreviewDetails(snapshot.historyFileDetails),
+
     executionPlan: normalizeExecutionPlan(snapshot.executionPlan),
     total: normalizeNumber(snapshot.total),
     declaredTotal: normalizeNumber(snapshot.declaredTotal),
@@ -392,26 +391,15 @@ function buildRunStatusPreviewFromStoredSnapshot(input: {
     return input.storedPreview;
   }
 
-  const historyFiles =
-    input.storedPreview.historyFiles && input.storedPreview.historyFiles.length > 0
-      ? input.storedPreview.historyFiles
-      : input.storedPreview.files;
-  const historyFileDetails =
-    input.storedPreview.historyFileDetails && input.storedPreview.historyFileDetails.length > 0
-      ? input.storedPreview.historyFileDetails
-      : input.storedPreview.fileDetails;
   const declaredTotal = Math.max(
     input.storedPreview.declaredTotal,
-    input.storedPreview.executedTotal,
-    historyFiles.length
+    input.storedPreview.executedTotal
   );
 
   return {
     ...input.storedPreview,
     files: [],
     fileDetails: undefined,
-    historyFiles,
-    historyFileDetails,
     executionPlan: null,
     total: 0,
     declaredTotal,
@@ -439,9 +427,7 @@ function shouldRehydrateStoredDesiredSchemaPreview(input: {
     return false;
   }
 
-  const hasDetails =
-    (input.storedPreview.fileDetails?.length ?? 0) > 0 ||
-    (input.storedPreview.historyFileDetails?.length ?? 0) > 0;
+  const hasDetails = (input.storedPreview.fileDetails?.length ?? 0) > 0;
   if (hasDetails) {
     return false;
   }
@@ -456,7 +442,6 @@ function buildPendingSnapshot(input: {
   pendingFiles: string[];
   executedTotal: number;
   warning?: string | null;
-  includeHistoryDetails?: boolean;
   executionPlan?: MigrationFileExecutionPlan | null;
 }): MigrationFilePreviewSnapshot {
   const declaredTotal = input.declaredPreview.declaredFiles.length;
@@ -473,16 +458,6 @@ function buildPendingSnapshot(input: {
     sourceLabel: input.declaredPreview.sourceLabel,
     files: pendingPreviewFiles,
     fileDetails,
-    historyFiles: input.includeHistoryDetails
-      ? input.declaredPreview.declaredFiles.slice(0, MAX_PREVIEW_FILES)
-      : undefined,
-    historyFileDetails:
-      input.includeHistoryDetails && input.declaredPreview.declaredFileDetails
-        ? input.declaredPreview.declaredFiles
-            .slice(0, MAX_PREVIEW_FILES)
-            .map((file) => input.declaredPreview.declaredFileDetails?.get(file))
-            .filter((detail): detail is MigrationFilePreviewDetail => Boolean(detail))
-        : undefined,
     executionPlan: input.executionPlan ?? null,
     total: normalizedPending.length,
     declaredTotal,
@@ -1218,7 +1193,6 @@ async function resolveRuntimeExecutionState(
 function applyExecutionState(input: {
   declaredPreview: DeclaredMigrationPreview;
   executionState: ExecutionStateSnapshot;
-  includeHistoryDetails?: boolean;
 }): MigrationFilePreviewSnapshot {
   const declaredFiles = input.declaredPreview.declaredFiles;
 
@@ -1232,7 +1206,6 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal,
       warning: input.executionState.warning,
-      includeHistoryDetails: input.includeHistoryDetails,
     });
   }
 
@@ -1249,7 +1222,6 @@ function applyExecutionState(input: {
       pendingFiles: pending,
       executedTotal,
       warning: input.executionState.warning,
-      includeHistoryDetails: input.includeHistoryDetails,
     });
   }
 
@@ -1278,8 +1250,7 @@ function applyExecutionState(input: {
         ? declaredPreview.declaredFiles.length
         : 0,
       warning: input.executionState.warning,
-      includeHistoryDetails:
-        input.includeHistoryDetails || Boolean(desiredSchemaDetail) || Boolean(planDetail),
+
       executionPlan: input.executionState.desiredSchemaPlan,
     });
   }
@@ -1289,7 +1260,6 @@ function applyExecutionState(input: {
     pendingFiles: declaredFiles,
     executedTotal: 0,
     warning: input.executionState.warning,
-    includeHistoryDetails: input.includeHistoryDetails,
   });
 }
 
@@ -1397,12 +1367,8 @@ export async function buildMigrationFilePreviewByRunId(
       continue;
     }
 
-    const isHistoricalRun =
-      executionStateMode === 'run_status' && (run.status === 'success' || run.status === 'skipped');
     const includeDetailsForRun =
       includeFileDetails && (tool !== 'drizzle' || shouldRehydrateStoredPreview);
-    const includeHistoryDetails =
-      includeFileDetails && executionStateMode === 'run_status' && isHistoricalRun;
 
     const cacheKey = createDeclaredPreviewCacheKey({
       projectId: run.projectId,
@@ -1435,13 +1401,9 @@ export async function buildMigrationFilePreviewByRunId(
         executionState: resolveRunStatusExecutionState({ run, declaredPreview }) ?? {
           mode: 'unknown',
         },
-        includeHistoryDetails,
       });
       previewByRunId.set(run.id, preview);
 
-      if (shouldRehydrateStoredPreview && (preview.historyFileDetails?.length ?? 0) > 0) {
-        await persistMigrationRunFilePreview(run.id, preview).catch(() => undefined);
-      }
       continue;
     }
 
@@ -1453,7 +1415,6 @@ export async function buildMigrationFilePreviewByRunId(
           executionState: {
             mode: 'unknown',
           },
-          includeHistoryDetails,
         })
       );
       continue;
@@ -1483,7 +1444,6 @@ export async function buildMigrationFilePreviewByRunId(
             mode: 'names',
             executedNames,
           },
-          includeHistoryDetails,
         })
       );
       continue;
@@ -1501,7 +1461,6 @@ export async function buildMigrationFilePreviewByRunId(
       applyExecutionState({
         declaredPreview,
         executionState,
-        includeHistoryDetails,
       })
     );
   }

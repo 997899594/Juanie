@@ -59,26 +59,13 @@ export function MigrationSpecDetails({
 }: MigrationSpecDetailsProps) {
   const isInternalCommand = usesPlatformInternalCommand(specification.command);
   const filePreview = specification.filePreview;
-  const visibleFileDetails =
-    filePreview?.fileDetails && filePreview.fileDetails.length > 0
-      ? filePreview.fileDetails
-      : filePreview?.historyFileDetails && filePreview.historyFileDetails.length > 0
-        ? filePreview.historyFileDetails
-        : null;
-  const visibleFiles =
-    filePreview?.files && filePreview.files.length > 0
-      ? filePreview.files
-      : filePreview?.historyFiles && filePreview.historyFiles.length > 0
-        ? filePreview.historyFiles
-        : [];
-  const isHistoryPreview = filePreview ? filePreview.total === 0 && visibleFiles.length > 0 : false;
-  const previewTitle = isHistoryPreview
-    ? '历史执行快照'
-    : filePreview?.sourceLabel === 'Atlas schema diff'
+  const pendingFileCount = filePreview?.total ?? 0;
+  const hasPendingChanges = pendingFileCount > 0;
+  const previewTitle = hasPendingChanges
+    ? filePreview?.sourceLabel === 'Atlas schema diff'
       ? '执行计划'
-      : '执行预览';
-  const isHistoryContentMissing =
-    isHistoryPreview && visibleFiles.length > 0 && !visibleFileDetails;
+      : '执行预览'
+    : '已对齐';
 
   return (
     <div className="space-y-2">
@@ -155,13 +142,34 @@ export function MigrationSpecDetails({
             待执行 {filePreview.total} · 已执行 {filePreview.executedTotal} · 声明{' '}
             {filePreview.declaredTotal}
           </div>
-          {visibleFileDetails && visibleFileDetails.length > 0 ? (
+          {hasPendingChanges && filePreview?.executionPlan?.content ? (
+            <div className="mt-3">
+              <details
+                className="rounded-[14px] bg-[rgba(255,255,255,0.9)] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_8px_20px_rgba(55,53,47,0.03)]"
+                open
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs text-foreground">
+                  <span className="min-w-0 break-all font-mono">
+                    {filePreview.executionPlan.path}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                    SQL
+                  </span>
+                </summary>
+                <pre className="max-h-80 overflow-auto border-t border-border/70 px-3 py-3 text-xs leading-relaxed text-foreground">
+                  <code>{filePreview.executionPlan.content}</code>
+                </pre>
+              </details>
+            </div>
+          ) : hasPendingChanges &&
+            filePreview?.fileDetails &&
+            filePreview.fileDetails.length > 0 ? (
             <div className="mt-3 space-y-3">
-              {visibleFileDetails.map((file) => (
+              {filePreview.fileDetails.map((file) => (
                 <details
                   key={file.path}
                   className="rounded-[14px] bg-[rgba(255,255,255,0.9)] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_8px_20px_rgba(55,53,47,0.03)]"
-                  open={visibleFileDetails.length === 1}
+                  open={filePreview.fileDetails!.length === 1}
                 >
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs text-foreground">
                     <span className="min-w-0 break-all font-mono">{file.path}</span>
@@ -180,23 +188,24 @@ export function MigrationSpecDetails({
                 </details>
               ))}
             </div>
-          ) : visibleFiles.length > 0 ? (
+          ) : hasPendingChanges && filePreview?.files && filePreview.files.length > 0 ? (
             <div className="mt-2 space-y-1">
-              {visibleFiles.map((file) => (
+              {filePreview.files.map((file) => (
                 <div key={file} className="break-all font-mono text-xs text-foreground">
                   {file}
                 </div>
               ))}
-              {isHistoryContentMissing ? (
-                <div className="text-xs text-muted-foreground">历史内容快照未保存。</div>
-              ) : null}
             </div>
           ) : (
-            <div className="mt-2 text-xs text-muted-foreground">没有待执行迁移文件。</div>
-          )}
-          {filePreview.truncated && (
             <div className="mt-2 text-xs text-muted-foreground">
-              文件较多，仅展示前 {visibleFiles.length} 项。
+              {filePreview?.total === 0 && filePreview?.declaredTotal > 0
+                ? '数据库已与期望 schema 对齐，无需迁移。'
+                : '没有待执行迁移文件。'}
+            </div>
+          )}
+          {hasPendingChanges && filePreview.truncated && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              文件较多，仅展示前 {filePreview.files.length} 项。
             </div>
           )}
           {filePreview.warning && (

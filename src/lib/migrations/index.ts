@@ -137,7 +137,6 @@ export async function resolveAndRunMigrations(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    deferPendingInspectionToRunner?: boolean;
   }
 ) {
   const runs = await resolveAndCreateMigrationRuns(projectId, environmentId, phase, input);
@@ -157,7 +156,6 @@ export async function resolveAndCreateMigrationRuns(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    deferPendingInspectionToRunner?: boolean;
   }
 ) {
   const specs = await resolveMigrationSpecifications(projectId, environmentId, phase, {
@@ -169,23 +167,18 @@ export async function resolveAndCreateMigrationRuns(
 
   for (const spec of specs) {
     await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
-    const shouldDeferPendingInspection =
-      input.deferPendingInspectionToRunner && spec.specification.executionMode === 'automatic';
     let filePreview: MigrationFilePreviewSnapshot | null = null;
 
-    if (!shouldDeferPendingInspection) {
-      const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
-        sourceRef: input.sourceRef,
-        sourceCommitSha: input.sourceCommitSha,
-        includeFileDetails: true,
-      });
-      filePreview = pendingInspection.preview;
+    const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
+      sourceRef: input.sourceRef,
+      sourceCommitSha: input.sourceCommitSha,
+      includeFileDetails: true,
+    });
+    filePreview = pendingInspection.preview;
 
-      if (pendingInspection.state === 'none') {
-        continue;
-      }
+    if (pendingInspection.state === 'none') {
+      continue;
     }
-
     let initialStatus: MigrationRunStatus = 'queued';
 
     if (phase !== 'manual') {
