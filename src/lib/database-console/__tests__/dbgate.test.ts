@@ -15,6 +15,7 @@ import {
   createDbGateConsoleToken,
   verifyDbGateConsoleToken,
 } from '@/lib/database-console/host-auth';
+import { buildRelativeRedirectWithoutToken } from '@/lib/database-console/host-proxy';
 
 const project = { id: 'project-1', name: 'nexusnote' };
 const environment = { id: 'env-1', name: 'production' };
@@ -206,5 +207,22 @@ describe('DbGate database console auth', () => {
         now: new Date('2026-06-09T12:00:00.000Z'),
       })
     ).toBe(null);
+  });
+});
+
+describe('DbGate database console host gateway', () => {
+  it('strips token redirects as relative locations without leaking the internal Next origin', () => {
+    expect(
+      buildRelativeRedirectWithoutToken({
+        path: '/',
+        search: '?token=signed-session&theme=dark',
+      })
+    ).toBe('/?theme=dark');
+    expect(
+      buildRelativeRedirectWithoutToken({
+        path: '/build/app.js',
+        search: '?token=signed-session',
+      })
+    ).toBe('/build/app.js');
   });
 });

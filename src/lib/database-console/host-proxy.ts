@@ -66,13 +66,6 @@ function copyResponseHeaders(headers: Headers): Headers {
   return nextHeaders;
 }
 
-function buildRedirectWithoutToken(request: Request): NextResponse {
-  const url = new URL(request.url);
-  url.pathname = getExternalPath(request);
-  url.searchParams.delete('token');
-  return NextResponse.redirect(url, 303);
-}
-
 function getExternalPath(request: Request): string {
   const value = request.headers.get('x-juanie-dbgate-path');
   if (value?.startsWith('/')) {
@@ -99,6 +92,26 @@ function getExternalSearch(request: Request): string {
   }
 
   return new URL(request.url).search;
+}
+
+export function buildRelativeRedirectWithoutToken(input: { path: string; search: string }): string {
+  const url = new URL(input.path, 'https://dbgate.invalid');
+  url.search = input.search;
+  url.searchParams.delete('token');
+
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function buildRedirectWithoutToken(request: Request): NextResponse {
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      Location: buildRelativeRedirectWithoutToken({
+        path: getExternalPath(request),
+        search: getExternalSearch(request),
+      }),
+    },
+  });
 }
 
 function buildUpstreamUrl(input: {
