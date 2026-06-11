@@ -126,7 +126,7 @@ function getSchemaAttentionSummary(database: SchemaAttentionDatabaseLike): strin
 
   switch (status) {
     case 'pending_migrations':
-      return '数据库账本落后于仓库迁移，按正常发布或迁移流程补齐。';
+      return '数据库落后于仓库声明；创建或提升下一次发布时会执行对应迁移。';
     case 'aligned_untracked':
       return '数据库结构已接近期望状态，但迁移账本缺失，需要确认后补齐账本。';
     case 'drifted':
@@ -145,7 +145,7 @@ function getSchemaAttentionSummary(database: SchemaAttentionDatabaseLike): strin
 function getSchemaAttentionActionLabel(status: SchemaAttentionStatus): string {
   switch (status) {
     case 'pending_migrations':
-      return '查看待迁移';
+      return '去发布';
     case 'blocked':
       return '查看检查失败';
     case 'drifted':

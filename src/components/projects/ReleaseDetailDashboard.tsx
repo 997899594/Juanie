@@ -3,11 +3,9 @@ import Link from 'next/link';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
-  ReleaseDiffSection,
   ReleaseExecutionSections,
-  ReleaseNarrativeSection,
+  ReleaseOverviewDetails,
   ReleaseResultSection,
-  ReleaseTimelineSection,
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
 import type { TeamRole } from '@/lib/db/schema';
@@ -70,16 +68,12 @@ export function ReleaseDetailDashboard({
         release={release}
       />
 
-      <ReleaseNarrativeSection release={release} />
-
-      <ReleaseDiffSection
+      <ReleaseOverviewDetails
         projectId={projectId}
         sourceReleaseLink={sourceReleaseLink}
         previousReleaseLink={previousReleaseLink}
         release={release}
       />
-
-      <ReleaseTimelineSection release={release} />
     </EnvironmentPageFrame>
   );
 }
