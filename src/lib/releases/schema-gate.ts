@@ -345,6 +345,7 @@ export async function getStoredReleaseSchemaGate(input: {
               databaseId: database.id,
               sourceRef: input.sourceRef,
               sourceCommitSha: input.sourceCommitSha,
+              updateCurrentState: false,
             }),
           }))
       )

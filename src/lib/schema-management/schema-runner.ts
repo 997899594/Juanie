@@ -27,6 +27,7 @@ async function runSchemaInspectMode(): Promise<void> {
   const databaseId = process.env.SCHEMA_INSPECT_DATABASE_ID;
   const sourceRef = process.env.SCHEMA_INSPECT_SOURCE_REF ?? null;
   const sourceCommitSha = process.env.SCHEMA_INSPECT_SOURCE_COMMIT_SHA ?? null;
+  const updateCurrentState = process.env.SCHEMA_INSPECT_UPDATE_CURRENT_STATE !== 'false';
 
   if (!projectId || !databaseId) {
     throw new Error('SCHEMA_INSPECT_PROJECT_ID and SCHEMA_INSPECT_DATABASE_ID are required');
@@ -37,6 +38,7 @@ async function runSchemaInspectMode(): Promise<void> {
     databaseId,
     sourceRef,
     sourceCommitSha,
+    updateCurrentState,
   });
 }
 

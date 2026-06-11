@@ -79,6 +79,7 @@ interface EnvironmentSchemaInspectionInput {
   databaseId: string;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
+  updateCurrentState?: boolean;
 }
 
 export interface EnvironmentSchemaInspectionRequestSnapshot {
@@ -90,6 +91,13 @@ export interface EnvironmentSchemaInspectionRequestSnapshot {
 interface InspectionDatabaseTarget {
   id: string;
   environmentId: string | null;
+  environmentBranch: string | null;
+}
+
+interface EffectiveSchemaInspectionSource {
+  sourceRef: string | null;
+  sourceCommitSha: string | null;
+  revision: string;
 }
 
 function getUnknownResolution(): MigrationResolutionInfo {
@@ -113,6 +121,27 @@ function buildChecksum(entries: string[]): string | null {
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {
   return resolveProjectRepositoryDefaultBranch(projectId, branch);
+}
+
+function normalizeInspectionRevision(value?: string | null): string | null {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
+async function resolveEffectiveSchemaInspectionSource(
+  input: EnvironmentSchemaInspectionInput,
+  database: InspectionDatabaseTarget
+): Promise<EffectiveSchemaInspectionSource> {
+  const sourceCommitSha = normalizeInspectionRevision(input.sourceCommitSha);
+  const sourceRef =
+    normalizeInspectionRevision(input.sourceRef) ??
+    (await getProjectDefaultRef(input.projectId, database.environmentBranch));
+
+  return {
+    sourceRef,
+    sourceCommitSha,
+    revision: sourceCommitSha ?? sourceRef,
+  };
 }
 
 function pickResolvedSpecForDatabase(
@@ -417,22 +446,6 @@ async function inspectAtlasSchemaDiff(
   }
 }
 
-function normalizeInspectionRevision(value?: string | null): string | null {
-  const normalized = value?.trim();
-  return normalized && normalized.length > 0 ? normalized : null;
-}
-
-async function resolveSchemaInspectionRevision(
-  spec: ResolvedMigrationSpec,
-  input: EnvironmentSchemaInspectionInput
-): Promise<string> {
-  return (
-    normalizeInspectionRevision(input.sourceCommitSha) ??
-    normalizeInspectionRevision(input.sourceRef) ??
-    (await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch))
-  );
-}
-
 async function upsertEnvironmentSchemaState(input: {
   projectId: string;
   environmentId: string;
@@ -447,6 +460,7 @@ async function upsertEnvironmentSchemaState(input: {
   summary: string;
   errorCode?: string | null;
   errorMessage?: string | null;
+  updateCurrentState?: boolean;
 }): Promise<EnvironmentSchemaStateSnapshot> {
   const now = new Date();
   const sourceRef = input.sourceRef ?? null;
@@ -493,18 +507,7 @@ async function upsertEnvironmentSchemaState(input: {
   };
 
   const [state] = await db.transaction(async (tx) => {
-    const [currentState] = await tx
-      .insert(environmentSchemaStates)
-      .values(stateValues)
-      .onConflictDoUpdate({
-        target: [environmentSchemaStates.databaseId],
-        set: {
-          ...stateValues,
-        },
-      })
-      .returning();
-
-    await tx
+    const [revisionState] = await tx
       .insert(environmentSchemaStateRevisions)
       .values(revisionValues)
       .onConflictDoUpdate({
@@ -515,7 +518,23 @@ async function upsertEnvironmentSchemaState(input: {
         set: {
           ...revisionValues,
         },
-      });
+      })
+      .returning();
+
+    if (input.updateCurrentState === false) {
+      return [toEnvironmentSchemaStateSnapshot(revisionState)];
+    }
+
+    const [currentState] = await tx
+      .insert(environmentSchemaStates)
+      .values(stateValues)
+      .onConflictDoUpdate({
+        target: [environmentSchemaStates.databaseId],
+        set: {
+          ...stateValues,
+        },
+      })
+      .returning();
 
     return [currentState];
   });
@@ -613,6 +632,7 @@ async function loadInspectionDatabase(
   return {
     id: database.id,
     environmentId: database.environmentId,
+    environmentBranch: database.environment.branch,
   };
 }
 
@@ -621,6 +641,8 @@ async function buildSchemaInspectionFailureState(
   database: InspectionDatabaseTarget,
   message: string
 ): Promise<EnvironmentSchemaStateSnapshot> {
+  const source = await resolveEffectiveSchemaInspectionSource(input, database);
+
   return upsertEnvironmentSchemaState({
     projectId: input.projectId,
     environmentId: database.environmentId as string,
@@ -628,17 +650,23 @@ async function buildSchemaInspectionFailureState(
     status: 'blocked',
     expectedEntries: [],
     actualEntries: [],
-    sourceRef: input.sourceRef ?? null,
-    sourceCommitSha: input.sourceCommitSha ?? null,
+    sourceRef: source.sourceRef,
+    sourceCommitSha: source.sourceCommitSha,
     hasLedger: false,
     hasUserTables: false,
     summary: `检查失败: ${message}`,
     errorCode: 'SCHEMA_STATE_INSPECTION_FAILED',
     errorMessage: message,
+    updateCurrentState: input.updateCurrentState,
   });
 }
 
-function buildSchemaInspectJobName(input: EnvironmentSchemaInspectionInput): string {
+function buildSchemaInspectJobName(input: {
+  projectId: string;
+  databaseId: string;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
+}): string {
   const digest = crypto
     .createHash('sha1')
     .update(
@@ -652,9 +680,19 @@ function buildSchemaInspectJobName(input: EnvironmentSchemaInspectionInput): str
   return `schema-inspect-${input.databaseId.slice(0, 8)}-${digest}`;
 }
 
-function buildSchemaInspectRunnerInput(input: EnvironmentSchemaInspectionInput) {
+async function buildSchemaInspectRunnerInput(
+  input: EnvironmentSchemaInspectionInput,
+  database: InspectionDatabaseTarget
+) {
+  const source = await resolveEffectiveSchemaInspectionSource(input, database);
+
   return {
-    jobName: buildSchemaInspectJobName(input),
+    jobName: buildSchemaInspectJobName({
+      projectId: input.projectId,
+      databaseId: input.databaseId,
+      sourceRef: source.sourceRef,
+      sourceCommitSha: source.sourceCommitSha,
+    }),
     mode: 'inspect' as const,
     labels: {
       'juanie.dev/schema-inspect': 'true',
@@ -669,22 +707,26 @@ function buildSchemaInspectRunnerInput(input: EnvironmentSchemaInspectionInput) 
         name: 'SCHEMA_INSPECT_DATABASE_ID',
         value: input.databaseId,
       },
-      ...(input.sourceRef
+      ...(source.sourceRef
         ? [
             {
               name: 'SCHEMA_INSPECT_SOURCE_REF',
-              value: input.sourceRef,
+              value: source.sourceRef,
             },
           ]
         : []),
-      ...(input.sourceCommitSha
+      ...(source.sourceCommitSha
         ? [
             {
               name: 'SCHEMA_INSPECT_SOURCE_COMMIT_SHA',
-              value: input.sourceCommitSha,
+              value: source.sourceCommitSha,
             },
           ]
         : []),
+      {
+        name: 'SCHEMA_INSPECT_UPDATE_CURRENT_STATE',
+        value: input.updateCurrentState === false ? 'false' : 'true',
+      },
     ],
     waitForRedis: false,
   };
@@ -719,10 +761,12 @@ async function waitForFreshSchemaState(
 }
 
 async function inspectEnvironmentSchemaStateInRunner(
-  input: EnvironmentSchemaInspectionInput
+  input: EnvironmentSchemaInspectionInput,
+  database: InspectionDatabaseTarget
 ): Promise<EnvironmentSchemaStateSnapshot> {
   const startedAt = new Date();
-  const runnerInput = buildSchemaInspectRunnerInput(input);
+  const source = await resolveEffectiveSchemaInspectionSource(input, database);
+  const runnerInput = await buildSchemaInspectRunnerInput(input, database);
 
   await runSchemaRunnerJobAndWait({
     jobName: runnerInput.jobName,
@@ -732,7 +776,15 @@ async function inspectEnvironmentSchemaStateInRunner(
     waitForRedis: runnerInput.waitForRedis,
   });
 
-  const state = await waitForFreshSchemaState(input, startedAt);
+  const state = await waitForFreshSchemaState(
+    {
+      projectId: input.projectId,
+      databaseId: input.databaseId,
+      sourceRef: source.sourceRef,
+      sourceCommitSha: source.sourceCommitSha,
+    },
+    startedAt
+  );
   if (!state?.lastInspectedAt || state.lastInspectedAt.getTime() < startedAt.getTime() - 1_000) {
     throw new Error('Schema runner 未写入最新 schema 检查结果');
   }
@@ -744,9 +796,10 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
   input: EnvironmentSchemaInspectionInput,
   database: InspectionDatabaseTarget
 ): Promise<EnvironmentSchemaStateSnapshot> {
+  const source = await resolveEffectiveSchemaInspectionSource(input, database);
   const resolvedSpec = await resolveSchemaInspectionSpec(input.projectId, input.databaseId, {
-    sourceRef: input.sourceRef,
-    sourceCommitSha: input.sourceCommitSha,
+    sourceRef: source.sourceRef,
+    sourceCommitSha: source.sourceCommitSha,
   });
 
   if (!resolvedSpec) {
@@ -757,18 +810,19 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       status: 'unmanaged',
       expectedEntries: [],
       actualEntries: [],
-      sourceRef: input.sourceRef ?? null,
-      sourceCommitSha: input.sourceCommitSha ?? null,
+      sourceRef: source.sourceRef,
+      sourceCommitSha: source.sourceCommitSha,
       hasLedger: false,
       hasUserTables: false,
       summary: '仓库中没有匹配当前数据库的迁移配置',
       errorCode: null,
       errorMessage: null,
+      updateCurrentState: input.updateCurrentState,
     });
   }
 
   try {
-    const inspectionRevision = await resolveSchemaInspectionRevision(resolvedSpec, input);
+    const inspectionRevision = source.revision;
 
     if (resolvedSpec.specification.tool === 'drizzle') {
       const desiredSchemaInspection = await inspectDrizzleDesiredSchema(
@@ -785,13 +839,14 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
           status: 'blocked',
           expectedEntries: [],
           actualEntries: [],
-          sourceRef: input.sourceRef ?? null,
-          sourceCommitSha: input.sourceCommitSha ?? null,
+          sourceRef: source.sourceRef,
+          sourceCommitSha: source.sourceCommitSha,
           hasLedger: false,
           hasUserTables: false,
           summary: reason,
           errorCode: 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED',
           errorMessage: reason,
+          updateCurrentState: input.updateCurrentState,
         });
       }
 
@@ -811,13 +866,14 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: inspected.status,
         expectedEntries: desiredSchemaInspection.snapshot.expectedEntries,
         actualEntries: desiredSchemaInspection.snapshot.actualEntries,
-        sourceRef: input.sourceRef ?? null,
-        sourceCommitSha: input.sourceCommitSha ?? null,
+        sourceRef: source.sourceRef,
+        sourceCommitSha: source.sourceCommitSha,
         hasLedger: inspected.hasLedger,
         hasUserTables: inspected.hasUserTables,
         summary: inspected.summary,
         errorCode: inspected.status === 'blocked' ? 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED' : null,
         errorMessage: inspected.status === 'blocked' ? inspected.summary : null,
+        updateCurrentState: input.updateCurrentState,
       });
     }
 
@@ -840,13 +896,14 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: 'blocked',
         expectedEntries: [],
         actualEntries: [],
-        sourceRef: input.sourceRef ?? null,
-        sourceCommitSha: input.sourceCommitSha ?? null,
+        sourceRef: source.sourceRef,
+        sourceCommitSha: source.sourceCommitSha,
         hasLedger: false,
         hasUserTables: false,
         summary: reason,
         errorCode: 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED',
         errorMessage: reason,
+        updateCurrentState: input.updateCurrentState,
       });
     }
 
@@ -860,13 +917,14 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: 'blocked',
         expectedEntries: ledgerInspection.snapshot.expectedEntries,
         actualEntries: ledgerInspection.snapshot.actualEntries,
-        sourceRef: input.sourceRef ?? null,
-        sourceCommitSha: input.sourceCommitSha ?? null,
+        sourceRef: source.sourceRef,
+        sourceCommitSha: source.sourceCommitSha,
         hasLedger: ledgerInspection.snapshot.actualEntries.length > 0,
         hasUserTables: ledgerInspection.snapshot.hasUserTables,
         summary: reason,
         errorCode: 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED',
         errorMessage: reason,
+        updateCurrentState: input.updateCurrentState,
       });
     }
 
@@ -886,13 +944,14 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       status: inspected.status,
       expectedEntries: ledgerInspection.snapshot.expectedEntries,
       actualEntries: ledgerInspection.snapshot.actualEntries,
-      sourceRef: input.sourceRef ?? null,
-      sourceCommitSha: input.sourceCommitSha ?? null,
+      sourceRef: source.sourceRef,
+      sourceCommitSha: source.sourceCommitSha,
       hasLedger: inspected.hasLedger,
       hasUserTables: inspected.hasUserTables,
       summary: inspected.summary,
       errorCode: inspected.status === 'blocked' ? 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED' : null,
       errorMessage: inspected.status === 'blocked' ? inspected.summary : null,
+      updateCurrentState: input.updateCurrentState,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -917,7 +976,7 @@ export async function inspectEnvironmentSchemaState(
   }
 
   try {
-    return await inspectEnvironmentSchemaStateInRunner(input);
+    return await inspectEnvironmentSchemaStateInRunner(input, database);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return buildSchemaInspectionFailureState(input, database, message);
@@ -927,10 +986,11 @@ export async function inspectEnvironmentSchemaState(
 export async function requestEnvironmentSchemaStateInspection(
   input: EnvironmentSchemaInspectionInput
 ): Promise<EnvironmentSchemaInspectionRequestSnapshot> {
-  await loadInspectionDatabase(input);
+  const database = await loadInspectionDatabase(input);
+  const source = await resolveEffectiveSchemaInspectionSource(input, database);
   const currentState = await getEnvironmentSchemaStateRevision(input.projectId, input.databaseId, {
-    sourceRef: input.sourceRef,
-    sourceCommitSha: input.sourceCommitSha,
+    sourceRef: source.sourceRef,
+    sourceCommitSha: source.sourceCommitSha,
   });
 
   if (!canUseSchemaRunnerJobs() || process.env.JUANIE_SCHEMA_INSPECT_FORCE_LOCAL === 'true') {
@@ -942,7 +1002,7 @@ export async function requestEnvironmentSchemaStateInspection(
   }
 
   try {
-    const runnerInput = buildSchemaInspectRunnerInput(input);
+    const runnerInput = await buildSchemaInspectRunnerInput(input, database);
     const started = await startSchemaRunnerJob({
       jobName: runnerInput.jobName,
       mode: runnerInput.mode,
