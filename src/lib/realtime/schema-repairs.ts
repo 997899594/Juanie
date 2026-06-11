@@ -1,5 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
@@ -75,6 +76,7 @@ export async function loadSchemaRepairRealtimeRecord(input: {
       where: and(eq(databases.id, input.databaseId), eq(databases.projectId, input.projectId)),
       columns: {
         id: true,
+        type: true,
         projectId: true,
         environmentId: true,
       },
@@ -122,7 +124,7 @@ export async function loadSchemaRepairRealtimeRecord(input: {
     }),
   ]);
 
-  if (!database?.environmentId) {
+  if (!database?.environmentId || !isSchemaManagedDatabaseType(database.type)) {
     return null;
   }
 
@@ -171,6 +173,7 @@ export async function loadProjectSchemaRepairRealtimeRecords(input: {
       where: buildDatabaseWhere(input.projectId, input.environmentId),
       columns: {
         id: true,
+        type: true,
         projectId: true,
         environmentId: true,
       },
@@ -230,7 +233,9 @@ export async function loadProjectSchemaRepairRealtimeRecords(input: {
   }
 
   return projectDatabases
-    .filter((database) => Boolean(database.environmentId))
+    .filter(
+      (database) => Boolean(database.environmentId) && isSchemaManagedDatabaseType(database.type)
+    )
     .map((database) => {
       const latestPlan = latestPlanByDatabaseId.get(database.id) ?? null;
       const latestAtlasRun = latestAtlasRunByDatabaseId.get(database.id) ?? null;

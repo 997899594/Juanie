@@ -1,3 +1,4 @@
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
 import type { EnvironmentKindLike } from '@/lib/environments/model';
 import {
@@ -82,6 +83,10 @@ export interface SchemaAttentionItem {
 function resolveSchemaAttentionStatus(
   database: SchemaAttentionDatabaseLike
 ): SchemaAttentionStatus | null {
+  if (!isSchemaManagedDatabaseType(database.type)) {
+    return null;
+  }
+
   const status = database.schemaState?.status ?? 'missing';
   if (status === 'aligned') {
     return null;

@@ -1,3 +1,4 @@
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   type EnvironmentSchemaInspectionRequestSnapshot,
@@ -236,6 +237,10 @@ async function resolveReleaseSchemaGateDatabases(input: {
   const databases = new Map<string, { id: string; name: string }>();
 
   for (const spec of [...preDeploySpecs, ...postDeploySpecs]) {
+    if (!isSchemaManagedDatabaseType(spec.database.type)) {
+      continue;
+    }
+
     databases.set(spec.database.id, {
       id: spec.database.id,
       name: spec.database.name,

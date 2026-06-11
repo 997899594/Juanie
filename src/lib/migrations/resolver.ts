@@ -1,6 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { parseJuanieConfig } from '@/lib/config/parser';
-import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
+import {
+  isSchemaManagedDatabaseType,
+  supportsDatabaseAutomatedMigrations,
+} from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, environments, migrationSpecifications, services } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
@@ -108,7 +111,10 @@ export function resolveDatabaseForBinding(
   serviceId: string,
   databaseList: Array<typeof databases.$inferSelect>
 ) {
-  const baseCandidates = databaseList.filter(
+  const schemaManagedDatabaseList = databaseList.filter((candidate) =>
+    isSchemaManagedDatabaseType(candidate.type)
+  );
+  const baseCandidates = schemaManagedDatabaseList.filter(
     (candidate) =>
       candidate.serviceId === serviceId ||
       candidate.serviceId === null ||
@@ -374,13 +380,15 @@ export async function syncMigrationSpecificationsFromRepo(
     },
   });
 
-  return specList.map((specification) => ({
-    specification,
-    service: specification.service,
-    database: specification.database,
-    environment: specification.environment,
-    resolution: resolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
-  }));
+  return specList
+    .filter((specification) => isSchemaManagedDatabaseType(specification.database.type))
+    .map((specification) => ({
+      specification,
+      service: specification.service,
+      database: specification.database,
+      environment: specification.environment,
+      resolution: resolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
+    }));
 }
 
 export async function resolveMigrationSpecifications(
@@ -418,11 +426,13 @@ export async function resolveMigrationSpecifications(
     },
   });
 
-  return specList.map((specification) => ({
-    specification,
-    service: specification.service,
-    database: specification.database,
-    environment: specification.environment,
-    resolution: syncedResolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
-  }));
+  return specList
+    .filter((specification) => isSchemaManagedDatabaseType(specification.database.type))
+    .map((specification) => ({
+      specification,
+      service: specification.service,
+      database: specification.database,
+      environment: specification.environment,
+      resolution: syncedResolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
+    }));
 }

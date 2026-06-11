@@ -5,6 +5,7 @@ import {
   getDbGateConsoleConfig,
 } from '@/lib/database-console/dbgate';
 import { getDatabaseInsights } from '@/lib/databases/insights';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { environments, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
@@ -85,18 +86,27 @@ export async function getProjectSchemaCenterData(input: {
       databases: await Promise.all(
         environment.databases.map(async (database) => {
           const { connectionString: _connectionString, ...safeDatabase } = database;
-          const latestRepairPlan = latestRepairPlans.get(database.id) ?? null;
-          const latestAtlasRun = latestAtlasRunByDatabase.get(database.id) ?? null;
+          const schemaManagement = {
+            enabled: isSchemaManagedDatabaseType(database.type),
+          };
+          const latestRepairPlan = schemaManagement.enabled
+            ? (latestRepairPlans.get(database.id) ?? null)
+            : null;
+          const latestAtlasRun = schemaManagement.enabled
+            ? (latestAtlasRunByDatabase.get(database.id) ?? null)
+            : null;
 
           return {
             ...safeDatabase,
+            schemaManagement,
             insights: await getDatabaseInsights(database),
-            schemaState: database.schemaState
-              ? {
-                  ...database.schemaState,
-                  statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
-                }
-              : null,
+            schemaState:
+              schemaManagement.enabled && database.schemaState
+                ? {
+                    ...database.schemaState,
+                    statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
+                  }
+                : null,
             latestRepairPlan,
             latestAtlasRun: latestAtlasRun
               ? {
@@ -142,12 +152,15 @@ export async function getProjectSchemaCenterData(input: {
     : null;
   const visibleEnvironments = selectedEnvironment ? [selectedEnvironment] : environmentsWithSchema;
   const allDatabases = visibleEnvironments.flatMap((environment) => environment.databases);
-  const blockingCount = allDatabases.filter((database) =>
+  const schemaManagedDatabases = allDatabases.filter(
+    (database) => database.schemaManagement.enabled
+  );
+  const blockingCount = schemaManagedDatabases.filter((database) =>
     ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
       database.schemaState?.status ?? 'unmanaged'
     )
   ).length;
-  const pendingCount = allDatabases.filter(
+  const pendingCount = schemaManagedDatabases.filter(
     (database) => database.schemaState?.status === 'pending_migrations'
   ).length;
 
@@ -159,6 +172,7 @@ export async function getProjectSchemaCenterData(input: {
     selectedEnvId: selectedEnvironment?.id ?? null,
     summary: {
       databaseCount: allDatabases.length,
+      schemaManagedCount: schemaManagedDatabases.length,
       blockingCount,
       pendingCount,
     },

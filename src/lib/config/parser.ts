@@ -3,6 +3,7 @@ import { databaseCapabilities } from '@/lib/databases/capabilities';
 import {
   getDatabaseSelectionValidationIssues,
   getDefaultDatabaseProvisionType,
+  isSchemaManagedDatabaseType,
   platformDatabaseProvisionTypes,
   supportsDatabaseAutomatedMigrations,
 } from '@/lib/databases/platform-support';
@@ -328,6 +329,12 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
     }
 
     for (const binding of service.databases ?? []) {
+      if (binding.type && !isSchemaManagedDatabaseType(binding.type)) {
+        errors.push(
+          `Service "${service.name}" 的数据库迁移绑定声明了 ${binding.type}，但 ${binding.type} 是运行时资源，不参与 Juanie schema 管理`
+        );
+      }
+
       if (
         binding.schema.executionMode !== 'external' &&
         binding.type &&
@@ -362,6 +369,12 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
           `Service "${service.name}" references unknown database binding "${binding.binding}"`
         );
         continue;
+      }
+
+      if (!isSchemaManagedDatabaseType(database.type)) {
+        errors.push(
+          `Service "${service.name}" 绑定的数据库 "${database.name}" (${database.type}) 是运行时资源，不参与 Juanie schema 管理`
+        );
       }
 
       if (

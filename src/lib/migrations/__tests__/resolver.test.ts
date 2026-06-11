@@ -94,6 +94,29 @@ describe('migration resolver binding selection', () => {
     expect(resolved?.resolution.strategy).toBe('implicit_primary');
   });
 
+  it('does not resolve schema bindings to runtime-only databases', () => {
+    const resolved = resolveDatabaseForBinding(
+      {
+        schema: {
+          source: 'atlas',
+          executionMode: 'automatic',
+        },
+      },
+      'svc_worker',
+      [
+        {
+          id: 'db_redis',
+          serviceId: 'svc_worker',
+          name: 'redis',
+          type: 'redis',
+          role: 'cache',
+        },
+      ] as Array<typeof databases.$inferSelect>
+    );
+
+    expect(resolved).toBe(null);
+  });
+
   it('prefers database-level bindings over service-level schema shorthand', () => {
     const configs = getServiceBindingConfigs({
       schema: {

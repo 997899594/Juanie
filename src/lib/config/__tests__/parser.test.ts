@@ -107,6 +107,29 @@ databases:
     );
   });
 
+  it('rejects schema bindings on redis runtime resources', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: worker
+    type: worker
+    run:
+      command: npm start
+    databases:
+      - binding: redis
+        schema:
+          source: atlas
+          executionMode: external
+databases:
+  - name: redis
+    type: redis
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors).toContain(
+      'Service "worker" 绑定的数据库 "redis" (redis) 是运行时资源，不参与 Juanie schema 管理'
+    );
+  });
+
   it('rejects manual platform-managed sql migrations on mongodb databases', () => {
     const parsed = parseJuanieConfig(`
 services:

@@ -19,6 +19,16 @@ describe('schema state healing', () => {
     expect(
       isRetryableBlockedSchemaState({
         status: 'blocked',
+        databaseType: 'redis',
+        lastInspectedAt: new Date('2026-04-24T04:00:00.000Z'),
+        now: new Date('2026-04-24T04:20:00.000Z'),
+        staleMinutes: 10,
+      })
+    ).toBe(false);
+
+    expect(
+      isRetryableBlockedSchemaState({
+        status: 'blocked',
         databaseType: 'mongodb',
         lastInspectedAt: new Date('2026-04-24T04:00:00.000Z'),
         now: new Date('2026-04-24T04:20:00.000Z'),

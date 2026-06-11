@@ -88,4 +88,30 @@ describe('home service', () => {
       '/projects/proj-1/environments/env-1/schema'
     );
   });
+
+  it('does not count runtime-only databases as schema attention', () => {
+    const result = buildHomePageData({
+      userName: 'Find',
+      userTeams: [{ teamId: 'team-1', role: 'owner' }],
+      userProjects: [{ id: 'proj-1', teamId: 'team-1', name: 'demo', status: 'active' }],
+      attentionRuns: [],
+      schemaDatabases: [
+        {
+          id: 'db-redis',
+          projectId: 'proj-1',
+          name: 'redis',
+          type: 'redis',
+          project: { id: 'proj-1', name: 'demo' },
+          environment: { id: 'env-1', name: 'staging' },
+          schemaState: {
+            status: 'unmanaged',
+            lastInspectedAt: '2026-06-11T08:44:00.000Z',
+          },
+        },
+      ],
+    });
+
+    expect(result.stats[2]?.value).toBe(0);
+    expect(result.schemaItems).toEqual([]);
+  });
 });

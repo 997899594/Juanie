@@ -121,4 +121,29 @@ describe('inbox service', () => {
     expect(result.attentionRuns).toEqual([]);
     expect(result.schemaItems).toEqual([]);
   });
+
+  it('does not surface runtime-only databases as schema attention', () => {
+    const result = buildInboxPageData({
+      filterState: 'all',
+      migrationRuns: [],
+      schemaDatabases: [
+        {
+          id: 'db-redis',
+          projectId: 'proj-1',
+          name: 'redis',
+          type: 'redis',
+          project: { id: 'proj-1', name: 'demo' },
+          environment: { id: 'env-1', name: 'staging' },
+          schemaState: {
+            status: 'unmanaged',
+            summary: '仓库中没有匹配当前数据库的迁移配置',
+            lastInspectedAt: '2026-06-11T08:44:00.000Z',
+          },
+        },
+      ],
+    });
+
+    expect(result.stats[0]?.value).toBe(0);
+    expect(result.schemaItems).toEqual([]);
+  });
 });

@@ -10,6 +10,7 @@ interface DatabasePlatformSupportDescriptor {
   defaultProvisionType: PlatformDatabaseProvisionType;
   supportsCapabilities: boolean;
   supportsAutomatedMigrations: boolean;
+  supportsSchemaManagement: boolean;
   previewCloneProvisionTypes: readonly PlatformDatabaseProvisionType[];
 }
 
@@ -44,6 +45,7 @@ const databasePlatformSupport: Record<PlatformDatabaseType, DatabasePlatformSupp
     defaultProvisionType: 'shared',
     supportsCapabilities: true,
     supportsAutomatedMigrations: true,
+    supportsSchemaManagement: true,
     previewCloneProvisionTypes: ['shared', 'standalone'],
   },
   mysql: {
@@ -52,6 +54,7 @@ const databasePlatformSupport: Record<PlatformDatabaseType, DatabasePlatformSupp
     defaultProvisionType: 'standalone',
     supportsCapabilities: false,
     supportsAutomatedMigrations: true,
+    supportsSchemaManagement: true,
     previewCloneProvisionTypes: [],
   },
   redis: {
@@ -60,6 +63,7 @@ const databasePlatformSupport: Record<PlatformDatabaseType, DatabasePlatformSupp
     defaultProvisionType: 'shared',
     supportsCapabilities: false,
     supportsAutomatedMigrations: false,
+    supportsSchemaManagement: false,
     previewCloneProvisionTypes: [],
   },
   mongodb: {
@@ -68,6 +72,7 @@ const databasePlatformSupport: Record<PlatformDatabaseType, DatabasePlatformSupp
     defaultProvisionType: 'external',
     supportsCapabilities: false,
     supportsAutomatedMigrations: false,
+    supportsSchemaManagement: false,
     previewCloneProvisionTypes: [],
   },
 };
@@ -148,6 +153,16 @@ export function supportsDatabaseCapabilities(type: PlatformDatabaseType): boolea
 
 export function supportsDatabaseAutomatedMigrations(type: PlatformDatabaseType): boolean {
   return databasePlatformSupport[type].supportsAutomatedMigrations;
+}
+
+export function supportsDatabaseSchemaManagement(type: PlatformDatabaseType): boolean {
+  return databasePlatformSupport[type].supportsSchemaManagement;
+}
+
+export function isSchemaManagedDatabaseType(
+  type: string | null | undefined
+): type is PlatformDatabaseType {
+  return Boolean(type && isPlatformDatabaseType(type) && supportsDatabaseSchemaManagement(type));
 }
 
 export function supportsDatabasePreviewClone(input: {

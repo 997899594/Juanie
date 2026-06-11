@@ -1,5 +1,6 @@
 import { Cron } from 'croner';
 import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { environmentSchemaStates, environments } from '@/lib/db/schema';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
@@ -85,7 +86,7 @@ export function isRetryableBlockedSchemaState(input: {
     return false;
   }
 
-  if (!['postgresql', 'mysql'].includes(input.databaseType)) {
+  if (!isSchemaManagedDatabaseType(input.databaseType)) {
     return false;
   }
 
@@ -282,16 +283,18 @@ async function loadAutoRetryEnvironmentContext(
           }
         : null,
     },
-    schemaStates: schemaStates.map((state) => ({
-      databaseId: state.databaseId,
-      databaseName: state.database?.name ?? state.databaseId,
-      databaseType: state.database?.type ?? null,
-      status: state.status,
-      summary: state.summary,
-      hasLedger: state.hasLedger,
-      hasUserTables: state.hasUserTables,
-      lastInspectedAt: state.lastInspectedAt,
-    })),
+    schemaStates: schemaStates
+      .filter((state) => isSchemaManagedDatabaseType(state.database?.type))
+      .map((state) => ({
+        databaseId: state.databaseId,
+        databaseName: state.database?.name ?? state.databaseId,
+        databaseType: state.database?.type ?? null,
+        status: state.status,
+        summary: state.summary,
+        hasLedger: state.hasLedger,
+        hasUserTables: state.hasUserTables,
+        lastInspectedAt: state.lastInspectedAt,
+      })),
   };
 }
 
@@ -395,7 +398,7 @@ export async function healStaleBlockedSchemaStates(options?: {
 
   for (const environmentId of candidateEnvironmentIds) {
     const context = await loadAutoRetryEnvironmentContext(environmentId);
-    if (!context || context.project.status !== 'active') {
+    if (context?.project.status !== 'active') {
       continue;
     }
 
@@ -440,7 +443,7 @@ export async function healStaleBlockedSchemaStates(options?: {
       }
 
       const refreshedContext = await loadAutoRetryEnvironmentContext(environmentId);
-      if (!refreshedContext || refreshedContext.project.status !== 'active') {
+      if (refreshedContext?.project.status !== 'active') {
         continue;
       }
 

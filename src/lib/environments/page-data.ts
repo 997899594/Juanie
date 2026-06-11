@@ -3,6 +3,7 @@ import {
   buildDbGateDatabaseConsoleLink,
   getDbGateConsoleConfig,
 } from '@/lib/database-console/dbgate';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import {
   auditLogs,
@@ -225,17 +226,24 @@ export async function getProjectEnvironmentListData(input: {
   const decorateDatabaseRecord = (
     database: (typeof environmentList)[number]['databases'][number]
   ) => {
-    const run = latestAtlasRunByDatabase.get(database.id);
+    const schemaManagement = {
+      enabled: isSchemaManagedDatabaseType(database.type),
+    };
+    const run = schemaManagement.enabled ? latestAtlasRunByDatabase.get(database.id) : null;
 
     return {
       ...database,
-      schemaState: database.schemaState
-        ? {
-            ...database.schemaState,
-            statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
-          }
+      schemaManagement,
+      schemaState:
+        schemaManagement.enabled && database.schemaState
+          ? {
+              ...database.schemaState,
+              statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
+            }
+          : null,
+      latestRepairPlan: schemaManagement.enabled
+        ? (latestRepairPlans.get(database.id) ?? null)
         : null,
-      latestRepairPlan: latestRepairPlans.get(database.id) ?? null,
       latestAtlasRun: run
         ? {
             ...run,

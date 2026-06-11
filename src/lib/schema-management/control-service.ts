@@ -1,5 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { getProjectAccessOrThrow } from '@/lib/api/access';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, schemaRepairPlans } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -42,6 +43,8 @@ export interface PresentedEnvironmentSchemaState extends EnvironmentSchemaStateS
 interface SchemaDatabaseContext {
   database: {
     id: string;
+    name: string;
+    type: string;
     projectId: string;
     environment: {
       id: string;
@@ -78,6 +81,8 @@ async function getSchemaDatabaseContext(input: {
     where: and(eq(databases.id, input.databaseId), eq(databases.projectId, input.projectId)),
     columns: {
       id: true,
+      name: true,
+      type: true,
       projectId: true,
     },
     with: {
@@ -96,6 +101,13 @@ async function getSchemaDatabaseContext(input: {
 
   if (!database) {
     throw new SchemaSafetyActionError(404, '数据库不存在');
+  }
+
+  if (!isSchemaManagedDatabaseType(database.type)) {
+    throw new SchemaSafetyActionError(
+      422,
+      `${database.name} 是 ${database.type} 运行时资源，不参与 schema 管理`
+    );
   }
 
   if (input.requireManage !== false) {

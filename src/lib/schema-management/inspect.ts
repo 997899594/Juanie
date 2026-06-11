@@ -4,6 +4,7 @@ import {
   ensureDeclaredDatabaseCapabilities,
   formatDatabaseCapabilityIssues,
 } from '@/lib/databases/capabilities';
+import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import {
   databaseMigrations,
@@ -90,6 +91,8 @@ export interface EnvironmentSchemaInspectionRequestSnapshot {
 
 interface InspectionDatabaseTarget {
   id: string;
+  name: string;
+  type: string;
   environmentId: string | null;
   environmentBranch: string | null;
 }
@@ -629,8 +632,14 @@ async function loadInspectionDatabase(
     throw new Error('Database has no environment binding');
   }
 
+  if (!isSchemaManagedDatabaseType(database.type)) {
+    throw new Error(`${database.type} 不参与 schema 管理`);
+  }
+
   return {
     id: database.id,
+    name: database.name,
+    type: database.type,
     environmentId: database.environmentId,
     environmentBranch: database.environment.branch,
   };

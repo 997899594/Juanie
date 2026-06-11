@@ -45,6 +45,9 @@ interface SchemaCenterDatabaseRecord {
   type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   status: string | null;
   sourceDatabaseId: string | null;
+  schemaManagement: {
+    enabled: boolean;
+  };
   insights: {
     available: boolean;
     status: 'ready' | 'unsupported' | 'not_configured' | 'unavailable';
@@ -127,6 +130,7 @@ interface SchemaCenterData {
   environments: SchemaCenterEnvironmentRecord[];
   summary: {
     databaseCount: number;
+    schemaManagedCount: number;
     blockingCount: number;
     pendingCount: number;
   };
@@ -179,6 +183,7 @@ interface SchemaCenterDatabaseViewModel {
   migrationFiles: Array<{ file: string; content: string }>;
   supportFiles: Array<{ file: string; content: string }>;
   changedFileStats: Array<{ file: string; added: number; removed: number }>;
+  isSchemaManaged: boolean;
   canGenerateSuggestion: boolean;
   canConfirmRepair: boolean;
   canDiscardSuggestion: boolean;
@@ -281,9 +286,10 @@ function getRiskLevelClass(value: DatabaseSchemaRepairPlan['riskLevel'] | null |
 function createDatabaseViewModel(
   database: SchemaCenterDatabaseRecord
 ): SchemaCenterDatabaseViewModel {
-  const state = database.schemaState;
-  const repairPlan = database.latestRepairPlan;
-  const latestAtlasRun = database.latestAtlasRun;
+  const isSchemaManaged = database.schemaManagement.enabled;
+  const state = isSchemaManaged ? database.schemaState : null;
+  const repairPlan = isSchemaManaged ? database.latestRepairPlan : null;
+  const latestAtlasRun = isSchemaManaged ? database.latestAtlasRun : null;
   const repairPresentation = repairPlan
     ? getSchemaRepairPlanPresentation(repairPlan, {
         hasGeneratedDiff: Boolean(latestAtlasRun?.diffSummary),
@@ -326,6 +332,7 @@ function createDatabaseViewModel(
     })) ??
     [];
   const canGenerateSuggestion =
+    isSchemaManaged &&
     !!state &&
     ['drifted', 'unmanaged', 'blocked'].includes(state.status) &&
     (!repairPlan || ['draft', 'failed', 'superseded'].includes(repairPlan.status));
@@ -349,6 +356,9 @@ function createDatabaseViewModel(
     canDiscardSuggestion ||
     Boolean(repairPlan?.reviewUrl);
   const primarySummary =
+    (!isSchemaManaged
+      ? `${database.type} 是运行时资源，不参与 schema 检查、迁移预检或接管。`
+      : null) ??
     stateSummary ??
     latestAtlasRun?.errorMessage ??
     repairSummary ??
@@ -369,6 +379,7 @@ function createDatabaseViewModel(
     migrationFiles,
     supportFiles,
     changedFileStats,
+    isSchemaManaged,
     canGenerateSuggestion,
     canConfirmRepair,
     canDiscardSuggestion,
@@ -490,26 +501,28 @@ function DatabaseActionBar({
         </Button>
       ) : null}
 
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={actionsDisabled}
-        onClick={() =>
-          runAction(
-            database.id,
-            'inspect',
-            () => inspectDatabaseSchemaState(projectId, database.id),
-            '已更新'
-          )
-        }
-      >
-        {isPendingAction(database.id, 'inspect') ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Search className="h-3.5 w-3.5" />
-        )}
-        检查
-      </Button>
+      {view.isSchemaManaged ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={actionsDisabled}
+          onClick={() =>
+            runAction(
+              database.id,
+              'inspect',
+              () => inspectDatabaseSchemaState(projectId, database.id),
+              '已更新'
+            )
+          }
+        >
+          {isPendingAction(database.id, 'inspect') ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+          检查
+        </Button>
+      ) : null}
 
       {state?.status === 'aligned_untracked' ? (
         <Button
@@ -642,7 +655,7 @@ function DatabaseStatusPanel({ view }: { view: SchemaCenterDatabaseViewModel }) 
         <div className="rounded-[14px] bg-background/65 px-3 py-3">
           <div className="text-xs text-muted-foreground">账本</div>
           <div className="mt-1 text-lg font-semibold text-foreground">
-            {state?.hasLedger ? '有' : '—'}
+            {view.isSchemaManaged ? (state?.hasLedger ? '有' : '—') : '不适用'}
           </div>
         </div>
       </div>
@@ -653,7 +666,8 @@ function DatabaseStatusPanel({ view }: { view: SchemaCenterDatabaseViewModel }) 
           view.inspectedAtLabel ? `上次检查 ${view.inspectedAtLabel}` : null,
         ]
           .filter(Boolean)
-          .join(' · ') || '尚未检查。'}
+          .join(' · ') ||
+          (view.isSchemaManaged ? '尚未检查。' : '运行时资源，不参与 schema 管理。')}
       </div>
     </section>
   );
@@ -661,6 +675,10 @@ function DatabaseStatusPanel({ view }: { view: SchemaCenterDatabaseViewModel }) 
 
 function DatabaseRepairPanel({ view }: { view: SchemaCenterDatabaseViewModel }) {
   const { repairPlan } = view;
+
+  if (!view.isSchemaManaged) {
+    return null;
+  }
 
   if (!repairPlan && !view.hasManualAction) {
     return (
@@ -721,6 +739,10 @@ function DatabaseRepairPanel({ view }: { view: SchemaCenterDatabaseViewModel }) 
 
 function DatabaseMigrationFilesPanel({ view }: { view: SchemaCenterDatabaseViewModel }) {
   const { latestAtlasRun } = view;
+
+  if (!view.isSchemaManaged) {
+    return null;
+  }
 
   return (
     <section className="console-surface rounded-[14px] px-4 py-4">
@@ -818,6 +840,10 @@ function DatabaseRunRecordPanel({ view }: { view: SchemaCenterDatabaseViewModel 
   const { latestAtlasRun, repairPlan } = view;
   const log = latestAtlasRun?.log ?? repairPlan?.atlasExecutionLog ?? null;
 
+  if (!view.isSchemaManaged) {
+    return null;
+  }
+
   return (
     <section className="console-surface rounded-[14px] px-4 py-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -904,7 +930,7 @@ function DatabaseCard({
             />
             <Badge variant="secondary">{database.type}</Badge>
             <Badge variant="secondary" className={getSchemaStateBadgeClass(state?.status)}>
-              {state?.statusLabel ?? '未检查'}
+              {view.isSchemaManaged ? (state?.statusLabel ?? '未检查') : '运行时'}
             </Badge>
             {repairPlan ? (
               <Badge variant="secondary">{view.repairPresentation?.badgeLabel ?? '处理中'}</Badge>
@@ -934,15 +960,22 @@ function DatabaseCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]">
+      <div
+        className={cn(
+          'mt-4 grid gap-3',
+          view.isSchemaManaged ? 'xl:grid-cols-[0.9fr_1.1fr]' : 'xl:grid-cols-1'
+        )}
+      >
         <div className="space-y-3">
           <DatabaseStatusPanel view={view} />
           <DatabaseRepairPanel view={view} />
         </div>
-        <div className="space-y-3">
-          <DatabaseMigrationFilesPanel view={view} />
-          <DatabaseRunRecordPanel view={view} />
-        </div>
+        {view.isSchemaManaged ? (
+          <div className="space-y-3">
+            <DatabaseMigrationFilesPanel view={view} />
+            <DatabaseRunRecordPanel view={view} />
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -1077,7 +1110,8 @@ export function SchemaCenterClient({
           <div>
             <div className="text-sm font-semibold">数据库状态</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              共 {data.summary.databaseCount} 个数据库，{data.summary.blockingCount} 个阻塞，
+              共 {data.summary.databaseCount} 个数据库，{data.summary.schemaManagedCount} 个进入
+              schema 管理，{data.summary.blockingCount} 个阻塞，
               {data.summary.pendingCount} 个待迁移。
             </div>
           </div>
@@ -1109,10 +1143,15 @@ export function SchemaCenterClient({
       <div className="space-y-4">
         {data.environments.map((environment) => {
           const databaseViews = environment.databases.map(createDatabaseViewModel);
-          const environmentBlockingCount = databaseViews.filter((view) =>
-            ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
-              view.state?.status ?? 'unmanaged'
-            )
+          const environmentSchemaManagedCount = databaseViews.filter(
+            (view) => view.isSchemaManaged
+          ).length;
+          const environmentBlockingCount = databaseViews.filter(
+            (view) =>
+              view.isSchemaManaged &&
+              ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
+                view.state?.status ?? 'unmanaged'
+              )
           ).length;
           const environmentMigrationCount = databaseViews.reduce(
             (count, view) => count + view.migrationFiles.length,
@@ -1131,6 +1170,9 @@ export function SchemaCenterClient({
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <Badge variant="secondary">{environment.databases.length} 个数据库</Badge>
+                    <Badge variant="secondary">
+                      {environmentSchemaManagedCount} 个 schema 管理
+                    </Badge>
                     <Badge
                       variant="secondary"
                       className={environmentBlockingCount > 0 ? 'text-destructive' : undefined}
