@@ -46,6 +46,63 @@ function isNetworkFetchFailure(error: unknown): boolean {
   );
 }
 
+function wantsHtmlError(request: Request): boolean {
+  const accept = request.headers.get('accept')?.toLowerCase() ?? '';
+  return accept.includes('text/html') && !accept.includes('application/json');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildConsoleErrorResponse(input: {
+  request: Request;
+  status: number;
+  title: string;
+  message: string;
+}): Response {
+  if (!wantsHtmlError(input.request)) {
+    return NextResponse.json({ error: input.message }, { status: input.status });
+  }
+
+  const body = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(input.title)}</title>
+    <style>
+      :root { color-scheme: light; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f3ee; color: #1f2933; }
+      main { width: min(520px, calc(100vw - 32px)); border: 1px solid #e4ded5; border-radius: 24px; background: #fffaf3; padding: 28px; box-shadow: 0 24px 80px rgba(31, 41, 51, 0.12); }
+      h1 { margin: 0; font-size: 20px; line-height: 1.35; }
+      p { margin: 12px 0 0; color: #5c6670; line-height: 1.7; }
+      a { display: inline-flex; margin-top: 20px; color: #8a4b22; font-weight: 700; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(input.title)}</h1>
+      <p>${escapeHtml(input.message)}</p>
+      <a href="https://${escapeHtml(getDbGateConsoleConfig().hostnameBaseDomain)}/">返回 Juanie 后重新打开控制台</a>
+    </main>
+  </body>
+</html>`;
+
+  return new Response(body, {
+    status: input.status,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  });
+}
+
 function copyRequestHeaders(headers: Headers): Headers {
   const nextHeaders = new Headers();
   for (const [key, value] of headers.entries()) {
@@ -135,7 +192,12 @@ export async function proxyDbGateConsoleHostRequest(request: Request): Promise<R
   const config = getDbGateConsoleConfig();
 
   if (!config.enabled) {
-    return NextResponse.json({ error: 'DbGate 控制台未启用' }, { status: 404 });
+    return buildConsoleErrorResponse({
+      request,
+      status: 404,
+      title: '数据库控制台未启用',
+      message: 'DbGate 控制台未启用。',
+    });
   }
 
   const hostname = normalizeHostname(request.headers.get('host'));
@@ -144,7 +206,12 @@ export async function proxyDbGateConsoleHostRequest(request: Request): Promise<R
     : null;
 
   if (!parsedHost) {
-    return NextResponse.json({ error: 'Unknown database console host' }, { status: 404 });
+    return buildConsoleErrorResponse({
+      request,
+      status: 404,
+      title: '数据库控制台地址无效',
+      message: 'Unknown database console host',
+    });
   }
 
   const requestUrl = new URL(request.url);
@@ -172,7 +239,12 @@ export async function proxyDbGateConsoleHostRequest(request: Request): Promise<R
   });
 
   if (!cookiePayload) {
-    return NextResponse.json({ error: 'Database console session expired' }, { status: 401 });
+    return buildConsoleErrorResponse({
+      request,
+      status: 401,
+      title: '数据库控制台会话已过期',
+      message: '请回到 Juanie 数据库页面，重新点击“控制台”打开新的临时会话。',
+    });
   }
 
   if (queryToken) {
@@ -203,13 +275,20 @@ export async function proxyDbGateConsoleHostRequest(request: Request): Promise<R
     });
   } catch (error) {
     if (isNetworkFetchFailure(error)) {
-      return NextResponse.json(
-        { error: 'DbGate 控制台仍在启动或已被空闲回收，请重新打开控制台。' },
-        { status: 503 }
-      );
+      return buildConsoleErrorResponse({
+        request,
+        status: 503,
+        title: '数据库控制台暂不可达',
+        message: 'DbGate 控制台仍在启动或已被空闲回收，请回到 Juanie 重新打开控制台。',
+      });
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return buildConsoleErrorResponse({
+      request,
+      status: 500,
+      title: '数据库控制台打开失败',
+      message,
+    });
   }
 }
