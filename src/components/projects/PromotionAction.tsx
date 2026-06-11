@@ -14,6 +14,10 @@ import {
 } from '@/lib/releases/client-actions';
 import type { ReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
+import {
+  isPromotionPlanWaitingOnlyOnSchemaInspection,
+  markPromotionPlanSchemaRefreshQueued,
+} from '@/lib/releases/promotion-plan-state';
 import type { ProjectPromotionPlanView } from '@/lib/releases/service';
 
 interface PromotionActionProps {
@@ -59,6 +63,17 @@ function mergePromotionPlanItems(
         getPromotionPlanKey(currentPlan.flowId) === nextKey ? nextPlan : currentPlan
       )
     : [...currentPlans, nextPlan];
+}
+
+function markPromotionPlanItemSchemaRefreshQueued(
+  currentPlans: ProjectPromotionPlanView[],
+  key: string
+): ProjectPromotionPlanView[] {
+  return currentPlans.map((plan) =>
+    getPromotionPlanKey(plan.flowId) === key
+      ? (markPromotionPlanSchemaRefreshQueued(plan) ?? plan)
+      : plan
+  );
 }
 
 function hasActiveSchemaRefresh(plan: Pick<ProjectPromotionPlanView, 'plan'> | null): boolean {
@@ -123,6 +138,15 @@ export function PromotionAction({
   const loadingPlan = dialogOpen && planLoadingKey === selectedPlanKey;
   const refreshingPlan = dialogOpen && planRefreshingKey === selectedPlanKey;
   const selectedPlanError = planError?.key === selectedPlanKey ? planError.message : null;
+  const selectedPlanWaitingOnlyOnSchema =
+    isPromotionPlanWaitingOnlyOnSchemaInspection(selectedPlan);
+  const selectedPlanSchemaRefreshPending =
+    selectedPlanWaitingOnlyOnSchema && (refreshingPlan || hasActiveSchemaRefresh(selectedPlan));
+  const presentedPromotionPlans = activePromotionPlans.map((plan) =>
+    getPromotionPlanKey(plan.flowId) === selectedPlanKey && selectedPlanSchemaRefreshPending
+      ? (markPromotionPlanSchemaRefreshQueued(plan) ?? plan)
+      : plan
+  );
   const canManageTarget = selectedPlan?.targetEnvironment
     ? governance.promotion.manageableTargetIds.includes(selectedPlan.targetEnvironment.id)
     : false;
@@ -133,8 +157,8 @@ export function PromotionAction({
     canManageTarget &&
     !loadingPlan &&
     !selectedPlanError &&
-    (selectedPlan.plan.canCreate ?? true) &&
-    !selectedPlan.plan.blockingReason;
+    (((selectedPlan.plan.canCreate ?? true) && !selectedPlan.plan.blockingReason) ||
+      selectedPlanSchemaRefreshPending);
   const buttonTitle = !selectedPlan?.targetEnvironment
     ? '当前环境没有下游提升链路'
     : selectedPlan.isAlreadyPromoted
@@ -174,6 +198,12 @@ export function PromotionAction({
         setPlanError(null);
       } else if (input.refreshingKey) {
         setPlanRefreshingKey(input.key);
+      }
+
+      if (input.refreshSchema) {
+        setPromotionPlans((currentPlans) =>
+          markPromotionPlanItemSchemaRefreshQueued(currentPlans, input.key)
+        );
       }
 
       return fetchPromotionPlan({
@@ -362,7 +392,10 @@ export function PromotionAction({
       return;
     }
 
-    if (!(selectedPlan.plan.canCreate ?? true) || selectedPlan.plan.blockingReason) {
+    if (
+      (!(selectedPlan.plan.canCreate ?? true) || selectedPlan.plan.blockingReason) &&
+      !selectedPlanSchemaRefreshPending
+    ) {
       toast.error(
         selectedPlan.plan.blockingReason ?? selectedPlan.plan.summary ?? '提升预检未通过'
       );
@@ -450,7 +483,7 @@ export function PromotionAction({
       <ReleasePromoteDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        promotionPlans={activePromotionPlans}
+        promotionPlans={presentedPromotionPlans}
         selectedFlowId={selectedFlowId}
         onSelectedFlowIdChange={setSelectedFlowId}
         canPromote={canPromote}
