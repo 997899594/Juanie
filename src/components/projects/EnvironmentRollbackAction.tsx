@@ -11,6 +11,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -276,22 +277,17 @@ export function EnvironmentRollbackAction({
           </DialogBody>
 
           <DialogFooter chrome>
-            <Button
-              variant="ghost"
-              className="w-full rounded-full sm:w-auto"
-              onClick={() => setOpen(false)}
-            >
+            <DialogFooterAction variant="ghost" onClick={() => setOpen(false)}>
               关闭
-            </Button>
-            <Button
-              className="w-full rounded-full sm:w-auto"
+            </DialogFooterAction>
+            <DialogFooterAction
               onClick={handleRollback}
               disabled={
                 submitting || loadingPlan || !selectedReleaseId || !planningPanel?.canSubmit
               }
             >
               {submitting ? '创建中...' : '确认回滚'}
-            </Button>
+            </DialogFooterAction>
           </DialogFooter>
         </DialogContent>
       </Dialog>

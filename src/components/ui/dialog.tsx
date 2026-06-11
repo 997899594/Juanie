@@ -4,6 +4,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { Button, type ButtonProps } from './button';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -114,6 +115,18 @@ const DialogFooter = ({ className, chrome = false, ...props }: DialogChromeProps
 );
 DialogFooter.displayName = 'DialogFooter';
 
+const DialogFooterAction = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, ...props }, ref) => (
+    <Button
+      ref={ref}
+      variant={variant}
+      className={cn('w-full rounded-full sm:w-auto', className)}
+      {...props}
+    />
+  )
+);
+DialogFooterAction.displayName = 'DialogFooterAction';
+
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -145,6 +158,7 @@ export {
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogOverlay,
   DialogPortal,

@@ -7,6 +7,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -306,20 +307,15 @@ export function ReleasePromoteDialog({
         </DialogBody>
 
         <DialogFooter chrome>
-          <Button
-            variant="ghost"
-            className="w-full rounded-full sm:w-auto"
-            onClick={() => onOpenChange(false)}
-          >
+          <DialogFooterAction variant="ghost" onClick={() => onOpenChange(false)}>
             关闭
-          </Button>
-          <Button
-            className="w-full rounded-full sm:w-auto"
+          </DialogFooterAction>
+          <DialogFooterAction
             onClick={onPromote}
             disabled={promoting || loadingPlan || !canPromote}
           >
             {promoting ? '创建发布...' : loadingPlan ? '预检中...' : confirmLabel}
-          </Button>
+          </DialogFooterAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>

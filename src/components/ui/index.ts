@@ -7,6 +7,7 @@ export * from './dropdown-menu';
 export * from './form';
 export * from './input';
 export * from './label';
+export * from './page-header';
 export * from './page-shell';
 export * from './priority-deck';
 export * from './section-nav';

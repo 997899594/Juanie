@@ -13,13 +13,13 @@ import {
   Search,
   SquareTerminal,
 } from 'lucide-react';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PageBackAction } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import {
@@ -1096,11 +1096,11 @@ export function SchemaCenterClient({
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {focusedEnvironment ? (
-            <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
-              <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
-                环境
-              </Link>
-            </Button>
+            <PageBackAction
+              label="返回环境"
+              href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}
+              size="sm"
+            />
           ) : null}
         </div>
       }

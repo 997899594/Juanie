@@ -4,7 +4,7 @@ import { Loader2, RefreshCw, ShieldAlert, ShieldCheck, Star, Trash2 } from 'luci
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import {
   fetchTeamIntegrationsSnapshot,
   revokeTeamIntegration,
@@ -80,19 +80,20 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
       <PageHeader
         title="集成"
         actions={
-          <Button
+          <PageHeaderAction
+            label="刷新"
             variant="ghost"
-            className="h-9 rounded-full px-4"
+            size="sm"
+            icon={
+              refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )
+            }
             onClick={refreshData}
             disabled={refreshing}
-          >
-            {refreshing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            刷新
-          </Button>
+          />
         }
       />
 

@@ -1,9 +1,8 @@
-import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CreateProjectForm } from '@/components/projects/create-project-form';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageBackAction, PageHeader } from '@/components/ui/page-header';
 import { PagePanel, PageShell } from '@/components/ui/page-shell';
 import { auth } from '@/lib/auth';
 import { getCreateProjectPageData } from '@/lib/projects/create-page-service';
@@ -20,17 +19,7 @@ export default async function NewProjectPage() {
   if (pageData.teamScopes.length === 0) {
     return (
       <PageShell size="form">
-        <PageHeader
-          title="新建项目"
-          actions={
-            <Button asChild variant="ghost" className="h-9 rounded-full px-4">
-              <Link href="/projects">
-                <ArrowLeft className="h-4 w-4" />
-                返回
-              </Link>
-            </Button>
-          }
-        />
+        <PageHeader title="新建项目" actions={<PageBackAction href="/projects" />} />
 
         <PagePanel className="flex min-h-72 flex-col items-center justify-center px-8 text-center">
           <h2 className="text-lg font-medium">没有可用团队</h2>
@@ -44,17 +33,7 @@ export default async function NewProjectPage() {
 
   return (
     <PageShell size="content">
-      <PageHeader
-        title="新建项目"
-        actions={
-          <Button asChild variant="ghost" className="h-9 rounded-full px-4">
-            <Link href="/projects">
-              <ArrowLeft className="h-4 w-4" />
-              返回
-            </Link>
-          </Button>
-        }
-      />
+      <PageHeader title="新建项目" actions={<PageBackAction href="/projects" />} />
 
       <PagePanel>
         <CreateProjectForm teamScopes={pageData.teamScopes} templates={pageData.templates} />

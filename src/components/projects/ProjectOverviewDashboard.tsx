@@ -1,5 +1,4 @@
 import { ExternalLink, GitBranch, Settings2, Users } from 'lucide-react';
-import Link from 'next/link';
 import {
   ProjectAttentionQueue,
   ProjectEnvironmentIndex,
@@ -7,8 +6,7 @@ import {
   ProjectRecentReleaseSnapshot,
   ProjectRuntimeSnapshot,
 } from '@/components/projects/ProjectOverviewSections';
-import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 
@@ -44,12 +42,12 @@ export function ProjectOverviewDashboard({
         description={overview.description ?? undefined}
         meta={overview.headerDescription}
         actions={
-          <Button asChild variant="ghost">
-            <Link href={`/projects/${projectId}/settings`}>
-              <Settings2 className="h-4 w-4" />
-              项目设置
-            </Link>
-          </Button>
+          <PageHeaderAction
+            label="项目设置"
+            href={`/projects/${projectId}/settings`}
+            icon={<Settings2 className="h-4 w-4" />}
+            variant="ghost"
+          />
         }
       />
 

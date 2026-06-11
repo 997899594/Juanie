@@ -2,9 +2,8 @@ import { Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 import { auth } from '@/lib/auth';
 import { getTeamsListPageData } from '@/lib/teams/list-service';
@@ -24,12 +23,11 @@ export default async function TeamsPage() {
       <PageHeader
         title="团队"
         actions={
-          <Button asChild className="h-9 rounded-full px-4">
-            <Link href="/teams/new">
-              <Plus className="h-4 w-4" />
-              新建团队
-            </Link>
-          </Button>
+          <PageHeaderAction
+            label="新建团队"
+            href="/teams/new"
+            icon={<Plus className="h-4 w-4" />}
+          />
         }
       />
 

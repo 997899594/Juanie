@@ -9,6 +9,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -176,20 +177,15 @@ export function DeploymentRolloutAction({
         </DialogBody>
 
         <DialogFooter chrome>
-          <Button
-            variant="ghost"
-            className="w-full rounded-full sm:w-auto"
-            onClick={() => setOpen(false)}
-          >
+          <DialogFooterAction variant="ghost" onClick={() => setOpen(false)}>
             关闭
-          </Button>
-          <Button
-            className="w-full rounded-full sm:w-auto"
+          </DialogFooterAction>
+          <DialogFooterAction
             onClick={handleFinalize}
             disabled={submitting || loadingPlan || !plan?.plan.canFinalize}
           >
             {submitting ? '处理中...' : actionLabel}
-          </Button>
+          </DialogFooterAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>

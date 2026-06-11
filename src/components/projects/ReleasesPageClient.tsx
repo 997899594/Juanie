@@ -8,6 +8,7 @@ import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
 import { Button } from '@/components/ui/button';
+import { PageBackAction } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
@@ -116,11 +117,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             }}
           />
           {selectedEnvironment ? (
-            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-              <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}>
-                返回环境
-              </Link>
-            </Button>
+            <PageBackAction
+              label="返回环境"
+              href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}
+              size="sm"
+            />
           ) : null}
         </div>
       }

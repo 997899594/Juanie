@@ -1,5 +1,3 @@
-import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
@@ -7,7 +5,7 @@ import {
   ReleaseOverviewDetails,
   ReleaseResultSection,
 } from '@/components/projects/ReleaseDetailSections';
-import { Button } from '@/components/ui/button';
+import { PageBackAction } from '@/components/ui/page-header';
 import type { TeamRole } from '@/lib/db/schema';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -50,12 +48,7 @@ export function ReleaseDetailDashboard({
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-            <Link href={releasesHref}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              返回发布
-            </Link>
-          </Button>
+          <PageBackAction label="返回发布" href={releasesHref} />
         </div>
       }
     >

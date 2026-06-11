@@ -1,7 +1,6 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -16,7 +15,7 @@ import {
   FormSection,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 
 interface UserSettingsClientProps {
   initialData: {
@@ -97,12 +96,13 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         title="设置"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="ghost" className="h-9 rounded-full px-4">
-              <Link href="/settings/integrations">集成</Link>
-            </Button>
-            <Button variant="ghost" className="h-9 rounded-full px-4" onClick={handleSignOut}>
-              退出登录
-            </Button>
+            <PageHeaderAction
+              label="集成"
+              href="/settings/integrations"
+              variant="ghost"
+              size="sm"
+            />
+            <PageHeaderAction label="退出登录" variant="ghost" size="sm" onClick={handleSignOut} />
           </div>
         }
       />

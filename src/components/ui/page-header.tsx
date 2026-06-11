@@ -1,13 +1,16 @@
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { forwardRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { Button } from './button';
+import { Button, type ButtonProps } from './button';
 
 interface PageHeaderProps {
   title: string;
   description?: string;
-  actions?: React.ReactNode;
+  actions?: ReactNode;
   className?: string;
   eyebrow?: string;
-  meta?: React.ReactNode;
+  meta?: ReactNode;
 }
 
 export function PageHeader({
@@ -48,28 +51,30 @@ export function PageHeader({
   );
 }
 
-interface PageHeaderActionProps {
+interface PageHeaderActionProps
+  extends Omit<ButtonProps, 'asChild' | 'children' | 'size' | 'variant'> {
   label: string;
-  onClick?: () => void;
   href?: string;
-  icon?: React.ReactNode;
-  variant?: 'default' | 'outline' | 'ghost' | 'destructive';
+  icon?: ReactNode;
+  variant?: 'default' | 'outline' | 'ghost' | 'secondary' | 'destructive';
+  size?: 'sm' | 'default';
 }
 
-export function PageHeaderAction({
-  label,
-  onClick,
-  href,
-  icon,
-  variant = 'default',
-}: PageHeaderActionProps) {
-  return (
-    <Button onClick={onClick} variant={variant} className="h-10 rounded-full px-4" asChild={!!href}>
+export const PageHeaderAction = forwardRef<HTMLButtonElement, PageHeaderActionProps>(
+  ({ label, href, icon, variant = 'default', size = 'default', className, ...props }, ref) => (
+    <Button
+      ref={ref}
+      variant={variant}
+      size={size}
+      className={cn('rounded-full', size === 'sm' ? 'h-9 px-4 text-sm' : 'h-10 px-4', className)}
+      asChild={!!href}
+      {...props}
+    >
       {href ? (
-        <a href={href}>
+        <Link href={href}>
           {icon}
           {label}
-        </a>
+        </Link>
       ) : (
         <>
           {icon}
@@ -77,5 +82,28 @@ export function PageHeaderAction({
         </>
       )}
     </Button>
+  )
+);
+PageHeaderAction.displayName = 'PageHeaderAction';
+
+export function PageBackAction({
+  label = '返回',
+  href,
+  size = 'default',
+  className,
+  ...props
+}: Omit<PageHeaderActionProps, 'label' | 'icon' | 'variant'> & {
+  label?: string;
+}) {
+  return (
+    <PageHeaderAction
+      label={label}
+      href={href}
+      icon={<ArrowLeft className="h-4 w-4" />}
+      variant="ghost"
+      size={size}
+      className={className}
+      {...props}
+    />
   );
 }

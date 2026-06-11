@@ -1,7 +1,6 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -15,7 +14,7 @@ import {
   FormSection,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageBackAction, PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 
 const createTeamSchema = z.object({
@@ -85,17 +84,7 @@ export default function NewTeamPage() {
 
   return (
     <PageShell size="narrow">
-      <PageHeader
-        title="新建团队"
-        actions={
-          <Button asChild variant="ghost" className="h-9 rounded-full px-4">
-            <Link href="/teams">
-              <ArrowLeft className="h-4 w-4" />
-              返回
-            </Link>
-          </Button>
-        }
-      />
+      <PageHeader title="新建团队" actions={<PageBackAction href="/teams" />} />
 
       <form
         onSubmit={(e) => {

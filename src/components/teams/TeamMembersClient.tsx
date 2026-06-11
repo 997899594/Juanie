@@ -22,6 +22,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -29,7 +30,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { FormField, FormLabel, FormMessage, FormSection } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -268,14 +269,13 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
               }}
             >
               <DialogTrigger asChild>
-                <Button
+                <PageHeaderAction
+                  label="邀请链接"
                   variant="ghost"
-                  className="h-9 rounded-full px-4"
+                  size="sm"
+                  icon={<Link className="h-4 w-4" />}
                   disabled={!canInviteByLink}
-                >
-                  <Link className="h-4 w-4" />
-                  邀请链接
-                </Button>
+                />
               </DialogTrigger>
               <DialogContent size="compact" layout="form">
                 <DialogHeader chrome>
@@ -304,19 +304,17 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   </FormSection>
                 </DialogBody>
                 <DialogFooter chrome>
-                  <Button
+                  <DialogFooterAction
                     type="button"
                     variant="ghost"
-                    className="w-full rounded-full sm:w-auto"
                     onClick={() => setIsLinkDialogOpen(false)}
                   >
                     取消
-                  </Button>
+                  </DialogFooterAction>
                   <linkForm.Subscribe selector={(state) => ({ isSubmitting: state.isSubmitting })}>
                     {({ isSubmitting }) => (
-                      <Button
+                      <DialogFooterAction
                         type="button"
-                        className="w-full rounded-full sm:w-auto"
                         onClick={() => {
                           void linkForm.handleSubmit().catch((error: unknown) => {
                             toast.error(
@@ -327,7 +325,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? '处理中...' : '生成并复制'}
-                      </Button>
+                      </DialogFooterAction>
                     )}
                   </linkForm.Subscribe>
                 </DialogFooter>
@@ -336,10 +334,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogTrigger asChild>
-                <Button className="h-9 rounded-full px-4" disabled={!canInviteByEmail}>
-                  <Plus className="h-4 w-4" />
-                  邀请成员
-                </Button>
+                <PageHeaderAction
+                  label="邀请成员"
+                  size="sm"
+                  icon={<Plus className="h-4 w-4" />}
+                  disabled={!canInviteByEmail}
+                />
               </DialogTrigger>
               <DialogContent size="form" layout="form">
                 <form
@@ -412,14 +412,13 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                     </FormSection>
                   </DialogBody>
                   <DialogFooter chrome>
-                    <Button
+                    <DialogFooterAction
                       type="button"
                       variant="ghost"
-                      className="w-full rounded-full sm:w-auto"
                       onClick={() => setIsOpen(false)}
                     >
                       取消
-                    </Button>
+                    </DialogFooterAction>
                     <inviteForm.Subscribe
                       selector={(state) => ({
                         canSubmit: state.canSubmit,
@@ -427,13 +426,9 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                       })}
                     >
                       {({ canSubmit, isSubmitting }) => (
-                        <Button
-                          type="submit"
-                          className="w-full rounded-full sm:w-auto"
-                          disabled={!canSubmit}
-                        >
+                        <DialogFooterAction type="submit" disabled={!canSubmit}>
                           {isSubmitting ? '邀请中...' : '发送邀请'}
-                        </Button>
+                        </DialogFooterAction>
                       )}
                     </inviteForm.Subscribe>
                   </DialogFooter>

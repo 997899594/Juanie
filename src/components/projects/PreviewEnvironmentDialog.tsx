@@ -2,12 +2,12 @@
 
 import { useForm } from '@tanstack/react-form';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -205,23 +205,14 @@ export function PreviewEnvironmentDialog({
           </DialogBody>
 
           <DialogFooter chrome>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full rounded-full sm:w-auto"
-              onClick={() => onOpenChange(false)}
-            >
+            <DialogFooterAction type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               取消
-            </Button>
+            </DialogFooterAction>
             <form.Subscribe selector={(state) => ({ isSubmitting: state.isSubmitting })}>
               {({ isSubmitting }) => (
-                <Button
-                  type="submit"
-                  className="w-full rounded-full sm:w-auto"
-                  disabled={loading || disabled || isSubmitting}
-                >
+                <DialogFooterAction type="submit" disabled={loading || disabled || isSubmitting}>
                   {loading || isSubmitting ? '启动中...' : '启动预览环境'}
-                </Button>
+                </DialogFooterAction>
               )}
             </form.Subscribe>
           </DialogFooter>

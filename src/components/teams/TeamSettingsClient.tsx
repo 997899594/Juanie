@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 import {
   Select,
@@ -121,14 +121,14 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         title="设置"
         actions={
           overview.canEdit ? (
-            <Button
+            <PageHeaderAction
+              label="保存"
               type="submit"
               form="team-settings-form"
-              className="h-9 px-4"
+              size="sm"
+              icon={saving ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined}
               disabled={saving || name === team.name}
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}
-            </Button>
+            />
           ) : null
         }
       />

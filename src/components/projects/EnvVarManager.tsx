@@ -32,6 +32,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -370,14 +371,9 @@ function EnvVarDialog({
           </DialogBody>
 
           <DialogFooter chrome>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full rounded-full sm:w-auto"
-              onClick={() => setOpen(false)}
-            >
+            <DialogFooterAction type="button" variant="ghost" onClick={() => setOpen(false)}>
               取消
-            </Button>
+            </DialogFooterAction>
             <form.Subscribe
               selector={(state) => ({
                 canSubmit: state.canSubmit,
@@ -390,9 +386,8 @@ function EnvVarDialog({
 
                 return (
                   <>
-                    <Button
+                    <DialogFooterAction
                       type="submit"
-                      className="w-full rounded-full sm:w-auto"
                       disabled={!canSubmit || disabled || isSubmitting}
                     >
                       {submittingSave ? (
@@ -401,11 +396,10 @@ function EnvVarDialog({
                         <Check className="h-4 w-4" />
                       )}
                       {isEdit ? '仅更新' : '仅添加'}
-                    </Button>
-                    <Button
+                    </DialogFooterAction>
+                    <DialogFooterAction
                       type="button"
                       variant="outline"
-                      className="w-full rounded-full sm:w-auto"
                       disabled={!canSubmit || disabled || isSubmitting}
                       onClick={() => submitWithRestart(true)}
                     >
@@ -415,7 +409,7 @@ function EnvVarDialog({
                         <RotateCw className="h-4 w-4" />
                       )}
                       {isEdit ? '更新并重启' : '添加并重启'}
-                    </Button>
+                    </DialogFooterAction>
                   </>
                 );
               }}

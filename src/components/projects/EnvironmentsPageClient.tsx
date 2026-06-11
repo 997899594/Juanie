@@ -13,7 +13,7 @@ import { PromotionAction } from '@/components/projects/PromotionAction';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageBackAction, PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import {
@@ -351,16 +351,16 @@ function EnvironmentOverviewPanel({
               {promotionAction}
               {rollbackAction}
               {runtimeAction}
-              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-                <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
-                  变量
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-                <Link href={`/projects/${projectId}/environments/${environment.id}/schema`}>
-                  数据库
-                </Link>
-              </Button>
+              <EnvironmentPanelAction
+                href={`/projects/${projectId}/environments/${environment.id}/variables`}
+              >
+                变量
+              </EnvironmentPanelAction>
+              <EnvironmentPanelAction
+                href={`/projects/${projectId}/environments/${environment.id}/schema`}
+              >
+                数据库
+              </EnvironmentPanelAction>
             </div>
             {environment.primaryDomainUrl ? (
               <a
@@ -497,6 +497,14 @@ function EnvironmentOverviewPanel({
         </div>
       </section>
     </div>
+  );
+}
+
+function EnvironmentPanelAction({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+      <Link href={href}>{children}</Link>
+    </Button>
   );
 }
 
@@ -668,11 +676,7 @@ export function EnvironmentsPageClient({
       <PageShell size="section">
         <PageHeader
           title="环境"
-          actions={
-            <Button asChild variant="ghost" className="h-10 rounded-full px-5">
-              <Link href={`/projects/${projectId}`}>返回项目总览</Link>
-            </Button>
-          }
+          actions={<PageBackAction label="返回项目总览" href={`/projects/${projectId}`} />}
         />
         <EmptyState icon={<Globe className="h-12 w-12" />} title="环境不存在" />
       </PageShell>
@@ -688,9 +692,7 @@ export function EnvironmentsPageClient({
         description={focusedEnvironmentMeta}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="ghost" className="h-10 rounded-full px-5">
-              <Link href={`/projects/${projectId}`}>返回项目总览</Link>
-            </Button>
+            <PageBackAction label="返回项目总览" href={`/projects/${projectId}`} />
           </div>
         }
       />

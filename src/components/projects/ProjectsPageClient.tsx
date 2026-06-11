@@ -3,9 +3,8 @@
 import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import { PagePanel, PageShell } from '@/components/ui/page-shell';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import type { ProjectListCard, ProjectListStat } from '@/lib/projects/list-view';
@@ -50,12 +49,11 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
       <PageHeader
         title="项目"
         actions={
-          <Button asChild className="h-9 rounded-full px-4">
-            <Link href="/projects/new">
-              <Plus className="h-4 w-4" />
-              新建项目
-            </Link>
-          </Button>
+          <PageHeaderAction
+            label="新建项目"
+            href="/projects/new"
+            icon={<Plus className="h-4 w-4" />}
+          />
         }
       />
 

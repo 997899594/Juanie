@@ -10,6 +10,7 @@ import {
   DialogBody,
   DialogContent,
   DialogFooter,
+  DialogFooterAction,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -444,15 +445,10 @@ export function ManualReleaseDialog({
         </DialogBody>
 
         <DialogFooter chrome>
-          <Button
-            variant="ghost"
-            className="w-full rounded-full sm:w-auto"
-            onClick={() => setOpen(false)}
-          >
+          <DialogFooterAction variant="ghost" onClick={() => setOpen(false)}>
             关闭
-          </Button>
-          <Button
-            className="w-full rounded-full sm:w-auto"
+          </DialogFooterAction>
+          <DialogFooterAction
             onClick={handleCreate}
             disabled={
               submitting ||
@@ -463,7 +459,7 @@ export function ManualReleaseDialog({
             }
           >
             {submitting ? '创建中...' : '确认创建'}
-          </Button>
+          </DialogFooterAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>
