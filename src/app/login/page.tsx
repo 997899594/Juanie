@@ -41,7 +41,7 @@ export default async function LoginPage() {
             <div className="space-y-3">
               {process.env.NODE_ENV === 'development' ? (
                 <form action={devSignIn}>
-                  <Button type="submit" className="h-11 w-full rounded-xl">
+                  <Button type="submit" className="h-11 w-full">
                     以开发用户登录
                   </Button>
                 </form>
@@ -54,7 +54,7 @@ export default async function LoginPage() {
                         await signIn('feishu', { redirectTo: '/' });
                       }}
                     >
-                      <Button type="submit" className="h-11 w-full rounded-xl">
+                      <Button type="submit" className="h-11 w-full">
                         使用飞书登录
                       </Button>
                     </form>
@@ -66,7 +66,7 @@ export default async function LoginPage() {
                       await signIn('github', { redirectTo: '/' });
                     }}
                   >
-                    <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
+                    <Button type="submit" variant="secondary" className="h-11 w-full">
                       <GitBranch className="h-4 w-4" />
                       使用 GitHub 登录
                     </Button>
@@ -78,7 +78,7 @@ export default async function LoginPage() {
                       await signIn('gitlab', { redirectTo: '/' });
                     }}
                   >
-                    <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
+                    <Button type="submit" variant="secondary" className="h-11 w-full">
                       使用 GitLab 登录
                     </Button>
                   </form>

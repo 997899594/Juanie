@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
 import {
   FormDescription,
   FormField,
@@ -13,6 +12,7 @@ import {
   FormMessage,
   FormSection,
 } from '@/components/ui/form';
+import { FormActionBar, FormActionButton } from '@/components/ui/form-actions';
 import { Input } from '@/components/ui/input';
 import { PageBackAction, PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
@@ -157,11 +157,11 @@ export default function NewTeamPage() {
             </form.Field>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <FormActionBar>
             <Link href="/teams">
-              <Button type="button" variant="ghost" className="h-9 rounded-full px-4">
+              <FormActionButton type="button" variant="ghost">
                 取消
-              </Button>
+              </FormActionButton>
             </Link>
             <form.Subscribe
               selector={(state) => ({
@@ -170,12 +170,12 @@ export default function NewTeamPage() {
               })}
             >
               {({ canSubmit, isSubmitting }) => (
-                <Button type="submit" className="h-9 rounded-full px-4" disabled={!canSubmit}>
+                <FormActionButton type="submit" disabled={!canSubmit}>
                   {isSubmitting ? '创建中...' : '创建团队'}
-                </Button>
+                </FormActionButton>
               )}
             </form.Subscribe>
-          </div>
+          </FormActionBar>
         </FormSection>
       </form>
     </PageShell>

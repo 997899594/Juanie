@@ -255,7 +255,7 @@ export function ProjectInitializingClient({
               </Button>
             ) : null}
             <Link href="/projects/new">
-              <Button variant="ghost" className="rounded-full px-4">
+              <Button variant="ghost" className="px-4">
                 返回创建页
               </Button>
             </Link>

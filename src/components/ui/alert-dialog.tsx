@@ -111,10 +111,39 @@ const AlertDialogCancel = React.forwardRef<
 ));
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName;
 
+const AlertDialogCancelAction = React.forwardRef<
+  React.ComponentRef<typeof AlertDialogPrimitive.Cancel>,
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
+>(({ className, ...props }, ref) => (
+  <AlertDialogCancel
+    ref={ref}
+    className={cn('w-full rounded-full sm:w-auto', className)}
+    {...props}
+  />
+));
+AlertDialogCancelAction.displayName = 'AlertDialogCancelAction';
+
+const AlertDialogConfirmAction = React.forwardRef<
+  React.ComponentRef<typeof AlertDialogPrimitive.Action>,
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
+>(({ className, ...props }, ref) => (
+  <AlertDialogAction
+    ref={ref}
+    className={cn(
+      'w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto',
+      className
+    )}
+    {...props}
+  />
+));
+AlertDialogConfirmAction.displayName = 'AlertDialogConfirmAction';
+
 export {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
+  AlertDialogCancelAction,
+  AlertDialogConfirmAction,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,

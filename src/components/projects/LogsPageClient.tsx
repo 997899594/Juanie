@@ -224,11 +224,11 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             >
               {follow ? '自动跟随中' : '开启跟随'}
             </Button>
-            <Button variant="ghost" size="sm" className="rounded-full" onClick={startStream}>
+            <Button variant="ghost" size="sm" onClick={startStream}>
               <RefreshCw className="h-3.5 w-3.5" />
               重连
             </Button>
-            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setLines([])}>
+            <Button variant="ghost" size="sm" onClick={() => setLines([])}>
               <X className="h-3.5 w-3.5" />
               清空
             </Button>

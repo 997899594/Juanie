@@ -61,7 +61,7 @@ export function AppErrorState({
               <div className="mt-4 grid gap-3">
                 {primaryAction ? (
                   primaryAction.href ? (
-                    <Button asChild className="h-11 justify-start rounded-xl px-4">
+                    <Button asChild className="h-11 justify-start px-4">
                       <Link href={primaryAction.href}>
                         <RotateCcw className="h-4 w-4" />
                         {primaryAction.label}
@@ -70,7 +70,7 @@ export function AppErrorState({
                   ) : (
                     <Button
                       type="button"
-                      className="h-11 justify-start rounded-xl px-4"
+                      className="h-11 justify-start px-4"
                       onClick={primaryAction.onClick}
                     >
                       <RotateCcw className="h-4 w-4" />
@@ -78,7 +78,7 @@ export function AppErrorState({
                     </Button>
                   )
                 ) : null}
-                <Button asChild variant="secondary" className="h-11 justify-start rounded-xl px-4">
+                <Button asChild variant="secondary" className="h-11 justify-start px-4">
                   <Link href={secondaryAction.href}>
                     {secondaryAction.href === '/' ? (
                       <Home className="h-4 w-4" />

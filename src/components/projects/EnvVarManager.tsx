@@ -17,8 +17,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogCancelAction,
+  AlertDialogConfirmAction,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -537,15 +537,8 @@ function EnvVarRow({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="w-full rounded-full sm:w-auto">
-                  取消
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-                >
-                  删除
-                </AlertDialogAction>
+                <AlertDialogCancelAction>取消</AlertDialogCancelAction>
+                <AlertDialogConfirmAction onClick={handleDelete}>删除</AlertDialogConfirmAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -696,7 +689,6 @@ export function EnvVarManager({
             <Button
               size="sm"
               variant="default"
-              className="rounded-full"
               disabled={!canManage}
               title={!canManage ? (disabledSummary ?? undefined) : undefined}
             >

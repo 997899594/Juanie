@@ -99,7 +99,7 @@ export function PromotionAction({
   promotionPlans: initialPromotionPlans,
   governance,
   sourceEnvironmentId = null,
-  className = 'h-9 rounded-full px-4',
+  className = 'h-9 px-4',
   compact = false,
 }: PromotionActionProps) {
   const router = useRouter();

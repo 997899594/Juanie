@@ -82,7 +82,7 @@ export function ProjectPreviewEnvironmentLauncher({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-8 rounded-full px-3"
+        className="h-8 px-3"
         disabled={!governance.createPreview.allowed}
         title={governance.createPreview.summary}
         onClick={() => setOpen(true)}

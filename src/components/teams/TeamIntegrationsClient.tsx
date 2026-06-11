@@ -139,7 +139,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
                       {!binding.isDefault ? (
                         <Button
                           variant="ghost"
-                          className="h-8 rounded-full px-3"
+                          className="h-8 px-3"
                           onClick={() => handleSetDefault(binding.id)}
                           disabled={isPending}
                         >
@@ -153,7 +153,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
                       ) : null}
                       <Button
                         variant="ghost"
-                        className="h-8 rounded-full px-3 text-destructive hover:text-destructive"
+                        className="h-8 px-3 text-destructive hover:text-destructive"
                         onClick={() => handleRevoke(binding.id)}
                         disabled={isPending}
                       >

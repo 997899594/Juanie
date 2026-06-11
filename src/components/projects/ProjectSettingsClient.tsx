@@ -6,8 +6,8 @@ import { useState } from 'react';
 import { ProjectGovernancePanel } from '@/components/projects/ProjectGovernancePanel';
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogCancelAction,
+  AlertDialogConfirmAction,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -544,16 +544,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel className="w-full rounded-full sm:w-auto">
-                            取消
-                          </AlertDialogCancel>
-                          <AlertDialogAction
+                          <AlertDialogCancelAction>取消</AlertDialogCancelAction>
+                          <AlertDialogConfirmAction
                             onClick={handleDelete}
                             disabled={isDeleting || deleting}
-                            className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                           >
                             {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
-                          </AlertDialogAction>
+                          </AlertDialogConfirmAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>

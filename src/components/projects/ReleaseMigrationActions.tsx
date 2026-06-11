@@ -65,7 +65,7 @@ export function ReleaseMigrationActions({
           <Button
             variant="default"
             size="sm"
-            className="h-9 rounded-full px-4 text-xs shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
+            className="h-9 px-4 text-xs shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
             onClick={() => handleAction('approve')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -82,7 +82,7 @@ export function ReleaseMigrationActions({
           <Button
             variant="secondary"
             size="sm"
-            className="h-9 rounded-full px-4 text-xs"
+            className="h-9 px-4 text-xs"
             disabled
             title="审批确认暂不可用，请刷新页面"
           >
@@ -93,7 +93,7 @@ export function ReleaseMigrationActions({
           <Button
             variant="secondary"
             size="sm"
-            className="h-9 rounded-full px-4 text-xs"
+            className="h-9 px-4 text-xs"
             onClick={() => handleAction('mark_external_complete')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -110,7 +110,7 @@ export function ReleaseMigrationActions({
           <Button
             variant="destructive"
             size="sm"
-            className="h-9 rounded-full px-4 text-xs"
+            className="h-9 px-4 text-xs"
             onClick={() => handleAction('mark_external_failed')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -127,7 +127,7 @@ export function ReleaseMigrationActions({
           <Button
             variant="secondary"
             size="sm"
-            className="h-9 rounded-full px-4 text-xs"
+            className="h-9 px-4 text-xs"
             onClick={() => handleAction('retry')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}

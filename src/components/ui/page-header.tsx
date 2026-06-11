@@ -66,7 +66,7 @@ export const PageHeaderAction = forwardRef<HTMLButtonElement, PageHeaderActionPr
       ref={ref}
       variant={variant}
       size={size}
-      className={cn('rounded-full', size === 'sm' ? 'h-9 px-4 text-sm' : 'h-10 px-4', className)}
+      className={cn(size === 'sm' ? 'h-9 px-4 text-sm' : 'h-10 px-4', className)}
       asChild={!!href}
       {...props}
     >

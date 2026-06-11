@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { TeamGovernancePanel } from '@/components/teams/TeamGovernancePanel';
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogCancelAction,
+  AlertDialogConfirmAction,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -576,13 +576,10 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
             <AlertDialogDescription>将移除该成员的团队访问权限。</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="w-full rounded-full sm:w-auto">取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveMember}
-              className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-            >
+            <AlertDialogCancelAction>取消</AlertDialogCancelAction>
+            <AlertDialogConfirmAction onClick={handleRemoveMember}>
               确认移除
-            </AlertDialogAction>
+            </AlertDialogConfirmAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

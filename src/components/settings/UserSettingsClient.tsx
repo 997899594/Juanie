@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   FormDescription,
   FormField,
@@ -14,6 +13,7 @@ import {
   FormMessage,
   FormSection,
 } from '@/components/ui/form';
+import { FormActionButton } from '@/components/ui/form-actions';
 import { Input } from '@/components/ui/input';
 import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 
@@ -180,9 +180,9 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                   })}
                 >
                   {({ canSubmit, isSubmitting }) => (
-                    <Button type="submit" className="h-9 px-4" disabled={!canSubmit}>
+                    <FormActionButton type="submit" disabled={!canSubmit}>
                       {isSubmitting ? '保存中...' : '保存'}
-                    </Button>
+                    </FormActionButton>
                   )}
                 </form.Subscribe>
               </div>

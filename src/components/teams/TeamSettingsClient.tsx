@@ -6,8 +6,8 @@ import { useState } from 'react';
 import { TeamGovernancePanel } from '@/components/teams/TeamGovernancePanel';
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
+  AlertDialogCancelAction,
+  AlertDialogConfirmAction,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -364,16 +364,10 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   <AlertDialogDescription>关联项目会一起删除。</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="w-full rounded-full sm:w-auto">
-                    取消
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-                  >
+                  <AlertDialogCancelAction>取消</AlertDialogCancelAction>
+                  <AlertDialogConfirmAction onClick={handleDelete} disabled={deleting}>
                     {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : '删除团队'}
-                  </AlertDialogAction>
+                  </AlertDialogConfirmAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

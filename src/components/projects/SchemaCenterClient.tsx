@@ -615,7 +615,7 @@ function DatabaseActionBar({
       ) : null}
 
       {repairPlan?.reviewUrl ? (
-        <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
+        <Button asChild variant="ghost" size="sm" className="px-3">
           <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
             打开 PR
             <ExternalLink className="h-3.5 w-3.5" />

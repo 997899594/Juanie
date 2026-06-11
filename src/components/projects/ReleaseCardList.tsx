@@ -128,7 +128,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                       <span>{formatPlatformTimeContext(release.createdAt) ?? '—'}</span>
                     </div>
                     <div className="flex w-full items-center gap-2 sm:w-auto">
-                      <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
+                      <Button asChild variant="ghost" size="sm" className="px-3">
                         <Link
                           href={buildReleaseDetailPath(
                             projectId,

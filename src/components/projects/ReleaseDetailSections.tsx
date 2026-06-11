@@ -710,7 +710,7 @@ export function ReleaseOverviewDetails({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-semibold text-foreground">版本差异</div>
               {previousReleaseLink ? (
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+                <Button asChild variant="ghost" size="sm" className="h-8 px-3">
                   <Link
                     href={buildReleaseDetailPath(
                       projectId,
@@ -914,7 +914,7 @@ function DeliveryArtifactCard({
         </div>
       ) : isExternalArtifactReference(reference) ? (
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button asChild variant="ghost" size="sm" className="rounded-full">
+          <Button asChild variant="ghost" size="sm">
             <a href={reference} target="_blank" rel="noreferrer">
               <Download className="h-3.5 w-3.5" />
               下载

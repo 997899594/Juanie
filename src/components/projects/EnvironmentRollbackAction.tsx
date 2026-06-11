@@ -180,7 +180,7 @@ export function EnvironmentRollbackAction({
       <Button
         variant="ghost"
         size="sm"
-        className="h-9 rounded-full px-4"
+        className="h-9 px-4"
         disabled={disabled || loadingPlan}
         title={disabled ? (unavailableReason ?? undefined) : undefined}
         onClick={handleOpenRollback}

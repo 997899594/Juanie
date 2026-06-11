@@ -400,7 +400,7 @@ function EnvironmentOverviewPanel({
         <div className={shellClassName}>
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-semibold">数据库</div>
-            <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+            <Button asChild variant="ghost" size="sm" className="h-8 px-3">
               <Link href={`/projects/${projectId}/environments/${environment.id}/schema`}>
                 查看
               </Link>
@@ -454,7 +454,7 @@ function EnvironmentOverviewPanel({
       <section className={shellClassName}>
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold">最近活动</div>
-          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+          <Button asChild variant="ghost" size="sm" className="h-8 px-3">
             <Link href={deliveryHref}>发布记录</Link>
           </Button>
         </div>
@@ -502,7 +502,7 @@ function EnvironmentOverviewPanel({
 
 function EnvironmentPanelAction({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+    <Button asChild variant="ghost" size="sm" className="h-9 px-4">
       <Link href={href}>{children}</Link>
     </Button>
   );
@@ -662,7 +662,7 @@ export function EnvironmentsPageClient({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-9 rounded-full px-4"
+        className="h-9 px-4"
         disabled={runtimeActionId === environment.id}
         onClick={() => handleRuntimeControl(environment, action)}
       >

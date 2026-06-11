@@ -108,7 +108,7 @@ export function DeploymentRolloutAction({
         <Button
           variant="default"
           size="sm"
-          className="h-9 rounded-full px-4 shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
+          className="h-9 px-4 shadow-[0_8px_22px_rgba(55,53,47,0.12)]"
           disabled={disabled}
           title={disabled ? (disabledSummary ?? undefined) : undefined}
         >

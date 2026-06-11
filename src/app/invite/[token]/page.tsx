@@ -57,7 +57,7 @@ export default async function InvitePage({ params }: Props) {
                       await signIn('feishu', { redirectTo: callbackUrl });
                     }}
                   >
-                    <Button type="submit" className="h-11 w-full rounded-xl">
+                    <Button type="submit" className="h-11 w-full">
                       使用飞书继续
                     </Button>
                   </form>
@@ -68,7 +68,7 @@ export default async function InvitePage({ params }: Props) {
                     await signIn('github', { redirectTo: callbackUrl });
                   }}
                 >
-                  <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
+                  <Button type="submit" variant="secondary" className="h-11 w-full">
                     使用 GitHub 继续
                   </Button>
                 </form>
@@ -78,7 +78,7 @@ export default async function InvitePage({ params }: Props) {
                     await signIn('gitlab', { redirectTo: callbackUrl });
                   }}
                 >
-                  <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
+                  <Button type="submit" variant="secondary" className="h-11 w-full">
                     使用 GitLab 继续
                   </Button>
                 </form>
