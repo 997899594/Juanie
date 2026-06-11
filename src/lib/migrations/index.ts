@@ -1,8 +1,6 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
-  ensureDatabaseCapabilities,
   formatDatabaseCapabilityIssues,
-  inferDatabaseCapabilitiesFromText,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import {
@@ -11,10 +9,7 @@ import {
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
-import {
-  inspectResolvedMigrationSpecPendingState,
-  type MigrationFilePreviewSnapshot,
-} from '@/lib/migrations/file-preview';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -27,50 +22,6 @@ import { resolveMigrationSpecifications } from './resolver';
 import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
 export { resolveMigrationSpecifications } from './resolver';
-
-async function inferRequiredCapabilitiesForSpec(
-  spec: ResolvedMigrationSpec,
-  ref?: string | null
-): Promise<ReturnType<typeof inferDatabaseCapabilitiesFromText>> {
-  if (
-    spec.database.type !== 'postgresql' ||
-    (spec.specification.tool !== 'sql' && spec.specification.tool !== 'atlas')
-  ) {
-    return [];
-  }
-
-  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  if (!migrationPath) {
-    return [];
-  }
-
-  const files = await fetchMigrationFilesFromRepoPath(
-    spec.specification.projectId,
-    migrationPath,
-    ref ?? spec.environment.branch ?? 'main'
-  );
-
-  return inferDatabaseCapabilitiesFromText(
-    files.map((file) => file.content).join('\n'),
-    spec.database.capabilities
-  );
-}
-
-async function reconcileRequiredCapabilitiesForSpec(
-  spec: ResolvedMigrationSpec,
-  ref?: string | null
-): Promise<void> {
-  const requiredCapabilities = await inferRequiredCapabilitiesForSpec(spec, ref);
-
-  if (requiredCapabilities.length === 0) {
-    return;
-  }
-
-  const result = await ensureDatabaseCapabilities(spec.database, requiredCapabilities);
-  if (!result.satisfied) {
-    throw new Error(formatDatabaseCapabilityIssues(spec.database, result.issues));
-  }
-}
 
 function buildPlanEnvVars(spec: ResolvedMigrationSpec): string[] {
   const envVars: string[] = [];
@@ -166,20 +117,6 @@ export async function resolveAndCreateMigrationRuns(
   const runs = [];
 
   for (const spec of specs) {
-    await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
-
-    const pendingInspection = await inspectResolvedMigrationSpecPendingState(spec, {
-      sourceRef: input.sourceRef,
-      sourceCommitSha: input.sourceCommitSha,
-      includeFileDetails: true,
-    });
-
-    if (pendingInspection.state === 'none') {
-      continue;
-    }
-
-    const filePreview: MigrationFilePreviewSnapshot | null = pendingInspection.preview;
-
     let initialStatus: MigrationRunStatus | undefined;
     if (phase !== 'manual') {
       if (spec.specification.executionMode === 'manual_platform') {
@@ -197,7 +134,7 @@ export async function resolveAndCreateMigrationRuns(
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
       initialStatus,
-      filePreview,
+      filePreview: null,
     });
     runs.push(run);
   }

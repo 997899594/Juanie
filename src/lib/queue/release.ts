@@ -1,13 +1,7 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
-import {
-  ensureDeclaredDatabaseCapabilities,
-  formatDatabaseCapabilityIssues,
-} from '@/lib/databases/capabilities';
-import { assertDeclaredDatabaseRuntimeAccess } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
-import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { logger } from '@/lib/logger';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
@@ -20,7 +14,6 @@ import {
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
 import { releaseStatusesRequiringFailureReconciliation } from '@/lib/releases/state-machine';
-import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields } from '@/lib/trace/context';
 import type { ReleaseJobData } from './index';
 
@@ -90,26 +83,6 @@ export async function processRelease(job: Job<ReleaseJobData>) {
         terminal: true,
         artifactOnly: true,
       };
-    }
-
-    await syncProjectDatabaseRuntimeContractsFromRepo({
-      projectId: release.projectId,
-      sourceRef: release.sourceRef,
-      sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
-      strict: true,
-    });
-
-    const environmentDatabases = await getDatabasesForEnvironment({
-      projectId: release.projectId,
-      environmentId: release.environmentId,
-    });
-
-    for (const database of environmentDatabases) {
-      await assertDeclaredDatabaseRuntimeAccess(database);
-      const capabilityCheck = await ensureDeclaredDatabaseCapabilities(database);
-      if (!capabilityCheck.satisfied) {
-        throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
-      }
     }
 
     await updateReleaseStatus(release.id, 'planning');

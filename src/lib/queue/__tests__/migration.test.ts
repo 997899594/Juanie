@@ -10,6 +10,7 @@ import {
   shouldFailStaleSchemaRunnerRun,
 } from '@/lib/queue/migration-state-healing';
 import { shouldReconcileUnexpectedReleaseJobFailure } from '@/lib/queue/release';
+import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
 
 describe('migration queue failure reconciliation', () => {
   it('recycles finished BullMQ migration jobs so approved runs can be queued again', () => {
@@ -87,5 +88,17 @@ describe('release queue failure reconciliation', () => {
     expect(shouldReconcileUnexpectedReleaseJobFailure('awaiting_approval')).toBe(false);
     expect(shouldReconcileUnexpectedReleaseJobFailure('succeeded')).toBe(false);
     expect(shouldReconcileUnexpectedReleaseJobFailure('failed')).toBe(false);
+  });
+
+  it('treats skipped no-op migration runs as completed release phase work', () => {
+    expect(
+      resolveMigrationPhaseNextAction([
+        {
+          id: 'run-noop',
+          status: 'skipped',
+          createdAt: new Date('2026-04-24T08:00:00.000Z'),
+        },
+      ])
+    ).toEqual({ kind: 'completed' });
   });
 });

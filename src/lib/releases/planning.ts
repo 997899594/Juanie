@@ -21,7 +21,6 @@ import {
   resolvePromotionFlows,
 } from '@/lib/environments/promotion';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
-import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import {
   type EnvironmentPolicySnapshot,
   evaluateEnvironmentPolicy,
@@ -595,25 +594,6 @@ export async function buildProjectReleasePlan(input: {
       sourceCommitSha: input.sourceCommitSha,
     }),
   ]);
-  const effectiveMigrationSpecs = await Promise.all(
-    [...preDeploySpecs, ...postDeploySpecs].map(async (spec) => ({
-      spec,
-      pendingInspection: await inspectResolvedMigrationSpecPendingState(spec, {
-        sourceRef: input.sourceRef,
-        sourceCommitSha: input.sourceCommitSha,
-      }),
-    }))
-  );
-  const unknownInspectionCount = effectiveMigrationSpecs.filter(
-    ({ pendingInspection }) => pendingInspection.state === 'unknown'
-  ).length;
-  const unknownInspectionWarning =
-    unknownInspectionCount > 0
-      ? `有 ${unknownInspectionCount} 个迁移策略暂时无法确认是否存在 schema 变更，系统将按保守策略继续执行或审批。`
-      : null;
-  const filteredMigrationSpecs = effectiveMigrationSpecs
-    .filter(({ pendingInspection }) => pendingInspection.state !== 'none')
-    .map(({ spec }) => spec);
   const schemaGate =
     input.schemaGateMode === 'stored'
       ? await getStoredReleaseSchemaGate({
@@ -635,8 +615,7 @@ export async function buildProjectReleasePlan(input: {
   return summarizeReleasePlan({
     environment,
     services: plannedServices,
-    migrationSpecs: filteredMigrationSpecs,
-    migrationWarnings: unknownInspectionWarning ? [unknownInspectionWarning] : [],
+    migrationSpecs: [...preDeploySpecs, ...postDeploySpecs],
     schemaGate,
   });
 }

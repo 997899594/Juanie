@@ -12,7 +12,7 @@ import {
   verifyDeclaredDatabaseRuntimeAccess,
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
-import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
+import { type MigrationRunStatus, migrationRunItems, migrationRuns } from '@/lib/db/schema';
 import {
   executeAtlasMigrationsForSpec,
   executeDrizzleMigrationsForSpec,
@@ -37,6 +37,10 @@ import {
 } from '@/lib/migrations/run-state';
 import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
 import type { ExecuteMigrationRunOptions, ResolvedMigrationSpec } from './types';
+
+export function getMigrationCompletionStatus(appliedCount: number): MigrationRunStatus {
+  return appliedCount > 0 ? 'success' : 'skipped';
+}
 
 async function runSqlMigration(
   runId: string,
@@ -74,7 +78,7 @@ async function runSqlMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(summary.appliedCount),
         output: logs.join('\n'),
         finishedAt,
       })
@@ -83,7 +87,7 @@ async function runSqlMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(summary.appliedCount),
         appliedCount: summary.appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
@@ -150,7 +154,7 @@ async function runDrizzleMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(appliedCount),
         output: logs.join('\n'),
         finishedAt,
       })
@@ -159,7 +163,7 @@ async function runDrizzleMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(appliedCount),
         appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
@@ -215,7 +219,7 @@ async function runAtlasMigration(
     await db
       .update(migrationRunItems)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(appliedCount),
         output: logs.join('\n'),
         finishedAt,
       })
@@ -224,7 +228,7 @@ async function runAtlasMigration(
     await db
       .update(migrationRuns)
       .set({
-        status: 'skipped',
+        status: getMigrationCompletionStatus(appliedCount),
         appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
