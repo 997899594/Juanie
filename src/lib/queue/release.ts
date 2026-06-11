@@ -25,6 +25,8 @@ import { buildTraceLogFields } from '@/lib/trace/context';
 import type { ReleaseJobData } from './index';
 
 const releaseWorkerLogger = logger.child({ component: 'release-worker' });
+const releaseWorkerLockDurationMs = 300_000;
+const releaseWorkerLockRenewTimeMs = 60_000;
 
 export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
   return (releaseStatusesRequiringFailureReconciliation as readonly string[]).includes(status);
@@ -111,7 +113,6 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     }
 
     await updateReleaseStatus(release.id, 'planning');
-    await updateReleaseStatus(release.id, 'migration_pre_running');
     const phaseResult = await startReleaseMigrationPhase(release, 'preDeploy');
 
     if (phaseResult.kind === 'completed') {
@@ -168,6 +169,8 @@ export function createReleaseWorker() {
     connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
     }),
+    lockDuration: releaseWorkerLockDurationMs,
+    lockRenewTime: releaseWorkerLockRenewTimeMs,
     concurrency: 5,
   });
 }

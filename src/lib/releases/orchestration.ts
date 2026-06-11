@@ -15,7 +15,6 @@ import {
   publishReleaseRealtimeSnapshot,
   publishReleaseRealtimeSnapshots,
 } from '@/lib/realtime/releases';
-import { getPreviousReleaseByScope } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
@@ -23,6 +22,7 @@ import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import {
   getObservedDeploymentTerminalStatus,
+  getReleaseRunningStatusForMigrationPhase,
   type ObservedDeploymentTerminalStatus,
   postDeploymentReleaseStatuses,
   resolveReleaseDeploymentResolution,
@@ -224,12 +224,6 @@ export async function startReleaseMigrationPhase(
     phase,
   });
 
-  const previousRelease = await getPreviousReleaseByScope({
-    projectId: release.projectId,
-    environmentId: release.environmentId,
-    createdAt: release.createdAt ?? new Date(),
-  });
-
   const createdRuns = await resolveAndCreateMigrationRuns(
     release.projectId,
     release.environmentId,
@@ -241,12 +235,20 @@ export async function startReleaseMigrationPhase(
       sourceRef: release.sourceRef,
       sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
       sourceCommitMessage: release.summary,
-      previousSourceCommitSha: previousRelease?.sourceCommitSha ?? null,
       serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
         (artifact) => artifact.serviceId!
       ),
     }
   );
+
+  if (createdRuns.length === 0) {
+    return { kind: 'completed' };
+  }
+
+  const runningStatus = getReleaseRunningStatusForMigrationPhase(phase);
+  if (runningStatus && release.status !== runningStatus) {
+    await updateReleaseStatus(release.id, runningStatus);
+  }
 
   const phaseResult = await driveReleaseMigrationPhaseForward(release, phase, createdRuns);
 
@@ -364,7 +366,6 @@ export async function continueReleaseAfterDeployments(releaseId: string) {
   }
 
   await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[0]);
-  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[1]);
 
   const phaseResult = await startReleaseMigrationPhase(release, 'postDeploy');
   if (phaseResult.kind === 'completed') {

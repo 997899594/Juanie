@@ -119,7 +119,6 @@ interface ExecutionStateSnapshot {
   desiredSchemaAligned?: boolean;
   desiredSchemaPlan?: MigrationFileExecutionPlan | null;
   desiredSchemaPlanDetail?: MigrationFilePreviewDetail | null;
-  desiredSchemaDetail?: MigrationFilePreviewDetail | null;
   warning?: string | null;
 }
 
@@ -365,7 +364,10 @@ function normalizeStoredMigrationFilePreviewSnapshot(
   return {
     sourceLabel: snapshot.sourceLabel,
     files: normalizeStringArray(snapshot.files),
-    fileDetails: normalizeFilePreviewDetails(snapshot.fileDetails),
+    fileDetails:
+      snapshot.sourceLabel === 'Desired schema'
+        ? undefined
+        : normalizeFilePreviewDetails(snapshot.fileDetails),
 
     executionPlan: normalizeExecutionPlan(snapshot.executionPlan),
     total: normalizeNumber(snapshot.total),
@@ -405,36 +407,6 @@ function buildRunStatusPreviewFromStoredSnapshot(input: {
     declaredTotal,
     executedTotal: declaredTotal,
   };
-}
-
-function shouldRehydrateStoredDesiredSchemaPreview(input: {
-  executionStateMode: BuildPreviewOptions['executionStateMode'];
-  includeFileDetails: boolean;
-  run: MigrationFilePreviewRunLike;
-  storedPreview: MigrationFilePreviewSnapshot;
-  tool: SupportedMigrationTool;
-}): boolean {
-  if (
-    input.executionStateMode !== 'run_status' ||
-    !input.includeFileDetails ||
-    input.tool !== 'drizzle'
-  ) {
-    return false;
-  }
-
-  const status = asMigrationRunStatus(input.run.status);
-  if (status !== 'success' && status !== 'skipped') {
-    return false;
-  }
-
-  const hasDetails = (input.storedPreview.fileDetails?.length ?? 0) > 0;
-  if (hasDetails) {
-    return false;
-  }
-
-  return (
-    input.storedPreview.sourceLabel === 'Desired schema' && input.storedPreview.declaredTotal > 0
-  );
 }
 
 function buildPendingSnapshot(input: {
@@ -676,84 +648,8 @@ async function resolveSqlDeclaredPreview(
   );
 }
 
-async function resolveDrizzleDeclaredPreview(
-  run: MigrationFilePreviewRunLike,
-  revision: string,
-  includeFileDetails: boolean
-): Promise<DeclaredMigrationPreview> {
-  if (!includeFileDetails) {
-    return buildDeclaredPreview('Desired schema', ['desired-schema.sql']);
-  }
-
-  const databaseTarget = {
-    type: run.database?.type ?? 'redis',
-    connectionString: normalizeRefValue(run.database?.connectionString),
-    host: null,
-    port: null,
-    databaseName: null,
-    username: null,
-    password: null,
-    capabilities: run.database?.capabilities ?? null,
-  };
-
-  if (!isAtlasDatabaseTarget(databaseTarget)) {
-    return buildDeclaredPreview(
-      'Desired schema',
-      ['desired-schema.sql'],
-      '当前仅支持 PostgreSQL / MySQL 的 desired schema 内容预览。'
-    );
-  }
-
-  if (!databaseTarget.connectionString) {
-    return buildDeclaredPreview(
-      'Desired schema',
-      ['desired-schema.sql'],
-      '数据库连接串缺失，无法导出 desired schema 内容预览。'
-    );
-  }
-
-  const exportPromise = exportDesiredSchemaFromRepository({
-    projectId: run.projectId,
-    source: 'drizzle',
-    revision,
-    sourceConfigPath: run.specification?.sourceConfigPath ?? null,
-    connectionString: databaseTarget.connectionString,
-    capabilities: databaseTarget.capabilities,
-  });
-
-  let desiredSchemaWarning: string | null = null;
-  const desiredSchema = await withTimeout(exportPromise, '导出 Drizzle desired schema').catch(
-    (error): null => {
-      if (error instanceof PreviewTimeoutError) {
-        void exportPromise.then((artifact) => artifact.cleanup()).catch(() => undefined);
-      }
-
-      desiredSchemaWarning =
-        error instanceof PreviewTimeoutError
-          ? `${error.operation}超时，已降级为仅显示 desired schema 文件名。`
-          : error instanceof Error
-            ? error.message
-            : String(error);
-
-      return null;
-    }
-  );
-
-  if (!desiredSchema) {
-    return buildDeclaredPreview(
-      'Desired schema',
-      ['desired-schema.sql'],
-      desiredSchemaWarning ?? '导出 Drizzle desired schema 失败，已降级为仅显示文件名。'
-    );
-  }
-
-  try {
-    return buildDeclaredPreview('Desired schema', ['desired-schema.sql'], null, [
-      { path: 'desired-schema.sql', content: desiredSchema.schemaSql },
-    ]);
-  } finally {
-    await desiredSchema.cleanup();
-  }
+function resolveDrizzleDeclaredPreview(): DeclaredMigrationPreview {
+  return buildDeclaredPreview('Desired schema', ['desired-schema.sql']);
 }
 
 async function resolvePrismaDeclaredPreview(
@@ -878,7 +774,7 @@ async function resolveDeclaredPreviewForRun(
     return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
   }
   if (tool === 'drizzle') {
-    return resolveDrizzleDeclaredPreview(run, revision, includeFileDetails);
+    return resolveDrizzleDeclaredPreview();
   }
   if (tool === 'prisma') {
     return resolvePrismaDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
@@ -1098,9 +994,6 @@ async function resolveRuntimeExecutionState(
             includeFileDetails && diff.hasChanges
               ? buildFilePreviewDetail('atlas-schema-diff.sql', diff.diffSql)
               : null,
-          desiredSchemaDetail: includeFileDetails
-            ? buildFilePreviewDetail('desired-schema.sql', desiredSchema.schemaSql)
-            : null,
           warning: null,
         };
       } finally {
@@ -1226,21 +1119,16 @@ function applyExecutionState(input: {
   }
 
   if (input.executionState.mode === 'desired_schema') {
+    const plan = input.executionState.desiredSchemaPlan;
     const planDetail = input.executionState.desiredSchemaPlanDetail;
-    const desiredSchemaDetail = input.executionState.desiredSchemaDetail;
-    const declaredPreview = planDetail
+    const declaredPreview = plan
       ? {
           sourceLabel: 'Atlas schema diff',
-          declaredFiles: [planDetail.path],
-          declaredFileDetails: new Map([[planDetail.path, planDetail]]),
+          declaredFiles: [plan.path],
+          declaredFileDetails: planDetail ? new Map([[planDetail.path, planDetail]]) : undefined,
           warning: input.declaredPreview.warning,
         }
-      : desiredSchemaDetail
-        ? {
-            ...input.declaredPreview,
-            declaredFileDetails: new Map([[desiredSchemaDetail.path, desiredSchemaDetail]]),
-          }
-        : input.declaredPreview;
+      : input.declaredPreview;
     const pending = input.executionState.desiredSchemaAligned ? [] : declaredPreview.declaredFiles;
 
     return buildPendingSnapshot({
@@ -1352,23 +1240,13 @@ export async function buildMigrationFilePreviewByRunId(
       executionStateMode === 'run_status'
         ? normalizeStoredMigrationFilePreviewSnapshot(run.filePreview)
         : null;
-    const shouldRehydrateStoredPreview = storedPreview
-      ? shouldRehydrateStoredDesiredSchemaPreview({
-          executionStateMode,
-          includeFileDetails,
-          run,
-          storedPreview,
-          tool,
-        })
-      : false;
 
-    if (storedPreview && !shouldRehydrateStoredPreview) {
+    if (storedPreview) {
       previewByRunId.set(run.id, buildRunStatusPreviewFromStoredSnapshot({ run, storedPreview }));
       continue;
     }
 
-    const includeDetailsForRun =
-      includeFileDetails && (tool !== 'drizzle' || shouldRehydrateStoredPreview);
+    const includeDetailsForRun = includeFileDetails && tool !== 'drizzle';
 
     const cacheKey = createDeclaredPreviewCacheKey({
       projectId: run.projectId,

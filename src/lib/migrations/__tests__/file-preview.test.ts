@@ -282,7 +282,7 @@ describe('migration file preview pending state', () => {
     expect(drizzleExportCount).toBe(1);
   });
 
-  it('rehydrates stored aligned drizzle previews that were saved without details', async () => {
+  it('does not rehydrate aligned drizzle previews into full desired schema details', async () => {
     drizzleExportCount = 0;
 
     const previewByRunId = await buildMigrationFilePreviewByRunId(
@@ -317,7 +317,8 @@ describe('migration file preview pending state', () => {
     expect(preview?.total).toBe(0);
     expect(preview?.declaredTotal).toBe(1);
     expect(preview?.executedTotal).toBe(1);
-    expect(drizzleExportCount).toBe(1);
+    expect(preview?.fileDetails).toBeUndefined();
+    expect(drizzleExportCount).toBe(0);
   });
 
   it('attaches content details only for pending preview files', async () => {
