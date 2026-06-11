@@ -66,6 +66,10 @@ function hasActiveSchemaRefresh(plan: Pick<ProjectPromotionPlanView, 'plan'> | n
   return Boolean(refresh && refresh.queuedCount + refresh.runningCount > 0);
 }
 
+function hasMissingSchemaInspection(plan: Pick<ProjectPromotionPlanView, 'plan'> | null): boolean {
+  return (plan?.plan.schema.refresh?.missingCount ?? 0) > 0;
+}
+
 function isManageablePromotionPlan(
   plan: ProjectPromotionPlanView,
   manageableTargetIds: string[]
@@ -85,7 +89,6 @@ export function PromotionAction({
 }: PromotionActionProps) {
   const router = useRouter();
   const [promoting, setPromoting] = useState(false);
-  const [preflighting, setPreflighting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [promotionPlans, setPromotionPlans] = useState(initialPromotionPlans);
   const [planLoadingKey, setPlanLoadingKey] = useState<string | null>(null);
@@ -98,6 +101,7 @@ export function PromotionAction({
   const schemaRefreshFollowUpTimerRef = useRef<number | null>(null);
   const planRequestSeqRef = useRef(0);
   const latestPlanRequestSeqByKeyRef = useRef(new Map<string, number>());
+  const lastDialogRefreshKeyRef = useRef<string | null>(null);
   const refreshPromotionPlanRef = useRef<((input: PromotionPlanRefreshInput) => void) | null>(null);
   const dialogOpenRef = useRef(dialogOpen);
   const activePromotionPlans = sourceEnvironmentId
@@ -119,7 +123,6 @@ export function PromotionAction({
   const loadingPlan = dialogOpen && planLoadingKey === selectedPlanKey;
   const refreshingPlan = dialogOpen && planRefreshingKey === selectedPlanKey;
   const selectedPlanError = planError?.key === selectedPlanKey ? planError.message : null;
-  const selectedPlanSchemaRefreshActive = hasActiveSchemaRefresh(selectedPlan);
   const canManageTarget = selectedPlan?.targetEnvironment
     ? governance.promotion.manageableTargetIds.includes(selectedPlan.targetEnvironment.id)
     : false;
@@ -129,31 +132,25 @@ export function PromotionAction({
     !selectedPlan.isAlreadyPromoted &&
     canManageTarget &&
     !loadingPlan &&
-    !refreshingPlan &&
     !selectedPlanError &&
-    !selectedPlanSchemaRefreshActive &&
-    !preflighting &&
     (selectedPlan.plan.canCreate ?? true) &&
     !selectedPlan.plan.blockingReason;
-  const buttonTitle =
-    !selectedPlan || !selectedPlan.targetEnvironment
-      ? '当前环境没有下游提升链路'
-      : selectedPlan.isAlreadyPromoted
-        ? (selectedPlan.plan.blockingReason ?? `已提升到 ${selectedPlan.targetEnvironment.name}`)
-        : !canManageTarget
-          ? governance.promotion.summary
-          : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
-  const buttonLabel = preflighting
-    ? '确认最新版本...'
-    : promoting
-      ? '创建发布...'
-      : selectedPlan?.isAlreadyPromoted && selectedPlan.targetEnvironment?.name
-        ? `已提升到 ${selectedPlan.targetEnvironment.name}`
-        : selectedPlan?.targetEnvironment?.name
-          ? `提升到 ${selectedPlan.targetEnvironment.name}`
-          : compact
-            ? '提升'
-            : '提升到下游';
+  const buttonTitle = !selectedPlan?.targetEnvironment
+    ? '当前环境没有下游提升链路'
+    : selectedPlan.isAlreadyPromoted
+      ? (selectedPlan.plan.blockingReason ?? `已提升到 ${selectedPlan.targetEnvironment.name}`)
+      : !canManageTarget
+        ? governance.promotion.summary
+        : (selectedPlan.plan.blockingReason ?? `提升到 ${selectedPlan.targetEnvironment.name}`);
+  const buttonLabel = promoting
+    ? '创建发布...'
+    : selectedPlan?.isAlreadyPromoted && selectedPlan.targetEnvironment?.name
+      ? `已提升到 ${selectedPlan.targetEnvironment.name}`
+      : selectedPlan?.targetEnvironment?.name
+        ? `提升到 ${selectedPlan.targetEnvironment.name}`
+        : compact
+          ? '提升'
+          : '提升到下游';
 
   useEffect(() => {
     dialogOpenRef.current = dialogOpen;
@@ -213,10 +210,15 @@ export function PromotionAction({
             return;
           }
 
-          setPlanError({
-            key: input.key,
-            message: error instanceof Error ? error.message : input.errorMessage,
-          });
+          const message = error instanceof Error ? error.message : input.errorMessage;
+          if (input.loadingKey) {
+            setPlanError({
+              key: input.key,
+              message,
+            });
+          } else {
+            toast.error(message);
+          }
         })
         .finally(() => {
           setPlanLoadingKey((currentKey) => (currentKey === input.key ? null : currentKey));
@@ -224,6 +226,24 @@ export function PromotionAction({
         });
     },
     [clearSchemaRefreshFollowUpTimer, projectId]
+  );
+
+  const refreshSelectedPromotionPlan = useCallback(
+    (input?: { refreshSchema?: boolean; loadingKey?: boolean; refreshingKey?: boolean }) => {
+      if (!selectedPlan) {
+        return;
+      }
+
+      refreshPromotionPlan({
+        key: selectedPlanKey,
+        flowId: selectedFlowId,
+        refreshSchema: input?.refreshSchema,
+        loadingKey: input?.loadingKey,
+        refreshingKey: input?.refreshingKey,
+        errorMessage: input?.refreshSchema ? '刷新 Schema 预检失败' : '同步最新提升预检失败',
+      });
+    },
+    [refreshPromotionPlan, selectedFlowId, selectedPlan, selectedPlanKey]
   );
 
   useEffect(() => {
@@ -237,6 +257,7 @@ export function PromotionAction({
     setPlanError(null);
     clearSchemaRefreshFollowUpTimer();
     latestPlanRequestSeqByKeyRef.current.clear();
+    lastDialogRefreshKeyRef.current = null;
   }, [clearSchemaRefreshFollowUpTimer, initialPromotionPlans]);
 
   useEffect(() => {
@@ -273,12 +294,32 @@ export function PromotionAction({
   useEffect(() => {
     if (!dialogOpen) {
       clearSchemaRefreshFollowUpTimer();
+      lastDialogRefreshKeyRef.current = null;
     }
 
     return () => {
       clearSchemaRefreshFollowUpTimer();
     };
   }, [clearSchemaRefreshFollowUpTimer, dialogOpen]);
+
+  useEffect(() => {
+    if (!dialogOpen || !selectedPlan) {
+      return;
+    }
+
+    if (lastDialogRefreshKeyRef.current === selectedPlanKey) {
+      return;
+    }
+
+    lastDialogRefreshKeyRef.current = selectedPlanKey;
+    refreshPromotionPlan({
+      key: selectedPlanKey,
+      flowId: selectedFlowId,
+      refreshSchema: true,
+      refreshingKey: true,
+      errorMessage: '刷新 Schema 预检失败',
+    });
+  }, [dialogOpen, refreshPromotionPlan, selectedFlowId, selectedPlan, selectedPlanKey]);
 
   useSchemaRepairs({
     projectId,
@@ -310,40 +351,31 @@ export function PromotionAction({
   });
 
   const handlePromote = async () => {
-    if (promoting || preflighting) return;
-    if (loadingPlan || refreshingPlan || selectedPlanSchemaRefreshActive) {
-      toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');
+    if (promoting) return;
+    if (loadingPlan) {
+      toast.error('提升预检仍在加载，请稍后再创建');
       return;
     }
 
-    setPreflighting(true);
-
-    try {
-      const latestPlan = await fetchPromotionPlan({
-        projectId,
-        flowId: selectedFlowId,
-      });
-      setPromotionPlans((currentPlans) => mergePromotionPlanItems(currentPlans, latestPlan));
-
-      if (hasActiveSchemaRefresh(latestPlan)) {
-        toast.error('Schema 预检仍在刷新，请等结果稳定后再创建');
-        return;
-      }
-
-      if (!(latestPlan.plan.canCreate ?? true) || latestPlan.plan.blockingReason) {
-        toast.error(latestPlan.plan.blockingReason ?? latestPlan.plan.summary ?? '提升预检未通过');
-        return;
-      }
-
-      if (!latestPlan.sourceRelease) {
-        toast.error(`${latestPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可提升的最新成功发布`);
-        return;
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '确认提升预检失败');
+    if (!selectedPlan) {
+      toast.error('没有可用的提升链路');
       return;
-    } finally {
-      setPreflighting(false);
+    }
+
+    if (!(selectedPlan.plan.canCreate ?? true) || selectedPlan.plan.blockingReason) {
+      toast.error(
+        selectedPlan.plan.blockingReason ?? selectedPlan.plan.summary ?? '提升预检未通过'
+      );
+      return;
+    }
+
+    if (!selectedPlan.sourceRelease) {
+      toast.error(`${selectedPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可提升的最新成功发布`);
+      return;
+    }
+
+    if (hasActiveSchemaRefresh(selectedPlan) || hasMissingSchemaInspection(selectedPlan)) {
+      toast.info('已创建后由发布准入继续等待 Schema 检查结果');
     }
 
     setPromoting(true);
@@ -390,6 +422,13 @@ export function PromotionAction({
     return null;
   }
 
+  const handleRefreshSchema = () => {
+    refreshSelectedPromotionPlan({
+      refreshSchema: true,
+      refreshingKey: true,
+    });
+  };
+
   return (
     <>
       <Button
@@ -419,7 +458,7 @@ export function PromotionAction({
         loadingPlan={loadingPlan}
         refreshingPlan={refreshingPlan}
         planError={selectedPlanError}
-        preflighting={preflighting}
+        onRefreshSchema={handleRefreshSchema}
         onPromote={handlePromote}
       />
     </>

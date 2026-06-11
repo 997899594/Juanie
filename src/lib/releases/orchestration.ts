@@ -154,14 +154,18 @@ export async function runReleaseAdmission(
     requestRefresh: true,
   });
 
+  if (isReleaseSchemaGateWaitingForRefresh(schemaGate)) {
+    const reason =
+      schemaGate.blockingReason ??
+      schemaGate.summary ??
+      '数据库 schema 检查正在刷新，发布准入会在检查完成后继续';
+    await updateReleaseStatus(release.id, 'admission_running', reason);
+    await persistReleaseRecapSafely(release.id);
+    return { kind: 'pending_schema_refresh', reason };
+  }
+
   if (!schemaGate.canCreate) {
     const reason = schemaGate.blockingReason ?? 'Release blocked by schema state';
-    if (isReleaseSchemaGateWaitingForRefresh(schemaGate)) {
-      await updateReleaseStatus(release.id, 'admission_running', reason);
-      await persistReleaseRecapSafely(release.id);
-      return { kind: 'pending_schema_refresh', reason };
-    }
-
     await updateReleaseStatus(release.id, 'admission_failed', reason);
     await persistReleaseRecapSafely(release.id);
     return { kind: 'blocked', reason };

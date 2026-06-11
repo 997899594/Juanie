@@ -19,6 +19,7 @@ export interface ReleaseSchemaGateState {
     | 'aligned_untracked'
     | 'drifted'
     | 'unmanaged'
+    | 'unknown'
     | 'blocked';
   statusLabel: string;
   summary: string | null;
@@ -78,6 +79,12 @@ function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): Platform
         label: 'Schema 未纳管',
         tone: 'danger',
       };
+    case 'unknown':
+      return {
+        key: 'schema:unknown',
+        label: 'Schema 待检查',
+        tone: 'neutral',
+      };
     case 'blocked':
       return {
         key: 'schema:blocked',
@@ -94,6 +101,13 @@ export function isReleaseSchemaStateBlocking(state: ReleaseSchemaGateState): boo
     return false;
   }
 
+  if (
+    state.status === 'unknown' &&
+    (state.refreshStatus === 'queued' || state.refreshStatus === 'running')
+  ) {
+    return false;
+  }
+
   if (state.status !== 'unmanaged') {
     return true;
   }
@@ -102,12 +116,8 @@ export function isReleaseSchemaStateBlocking(state: ReleaseSchemaGateState): boo
 }
 
 export function isReleaseSchemaGateWaitingForRefresh(
-  snapshot: Pick<ReleaseSchemaGateSnapshot, 'canCreate' | 'refresh'>
+  snapshot: Pick<ReleaseSchemaGateSnapshot, 'refresh'>
 ): boolean {
-  if (snapshot.canCreate) {
-    return false;
-  }
-
   const refresh = snapshot.refresh;
   return Boolean(refresh && refresh.queuedCount + refresh.runningCount > 0);
 }
@@ -183,8 +193,13 @@ export function buildReleaseSchemaGateSnapshot(
   );
   const hasUnavailableRefreshState =
     refreshSnapshot.unavailableCount + refreshSnapshot.failedCount > 0;
-  const hasPendingMissingBlockedState = blockingStates.some(
-    (state) => state.freshness === 'missing' && state.refreshStatus !== 'failed'
+  const hasIdleMissingState = blockingStates.some(
+    (state) => state.freshness === 'missing' && (state.refreshStatus ?? 'idle') === 'idle'
+  );
+  const hasPendingMissingState = states.some(
+    (state) =>
+      state.freshness === 'missing' &&
+      (state.refreshStatus === 'queued' || state.refreshStatus === 'running')
   );
 
   return {
@@ -195,19 +210,25 @@ export function buildReleaseSchemaGateSnapshot(
       blockingStates.length > 0
         ? hasUnavailableRefreshState
           ? '数据库 schema 检查不可用，请查看环境数据库诊断'
-          : hasRefreshBlockedState || hasPendingMissingBlockedState
+          : hasRefreshBlockedState
             ? '数据库 schema 检查尚未完成，请稍后重试'
-            : `存在 ${blockingStates.length} 个数据库 schema 门禁未满足`
+            : hasIdleMissingState
+              ? '数据库 schema 尚未检查，请刷新检查后再创建发布'
+              : `存在 ${blockingStates.length} 个数据库 schema 门禁未满足`
         : null,
     summary: firstBlockingState?.summary ?? null,
     nextActionLabel:
       blockingStates.length > 0
         ? hasUnavailableRefreshState
           ? '查看数据库诊断'
-          : hasRefreshBlockedState || hasPendingMissingBlockedState
+          : hasRefreshBlockedState
             ? '等待 Schema 检查完成'
-            : '先在环境页处理数据库纳管'
-        : null,
+            : hasIdleMissingState
+              ? '刷新 Schema 检查'
+              : '先在环境页处理数据库纳管'
+        : hasPendingMissingState
+          ? '等待 Schema 检查完成'
+          : null,
     customSignals,
     states,
     refresh: refreshSnapshot,
@@ -288,8 +309,14 @@ function buildMissingReleaseSchemaGateState(input: {
   return {
     databaseId: input.database.id,
     databaseName: input.database.name,
-    status: 'blocked',
-    statusLabel: getEnvironmentSchemaStateLabel('blocked'),
+    status:
+      input.refreshStatus === 'failed' || input.refreshStatus === 'unavailable'
+        ? 'blocked'
+        : 'unknown',
+    statusLabel:
+      input.refreshStatus === 'failed' || input.refreshStatus === 'unavailable'
+        ? getEnvironmentSchemaStateLabel('blocked')
+        : '待检查',
     summary: input.requestedRefresh
       ? '尚未有当前版本的 schema 检查结果，已请求后台刷新。'
       : '尚未有当前版本的 schema 检查结果。',

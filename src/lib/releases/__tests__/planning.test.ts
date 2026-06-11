@@ -309,6 +309,58 @@ describe('release planning', () => {
     ).toBe(true);
   });
 
+  it('allows promotion planning while schema inspection is refreshing', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: true, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [],
+      schemaGate: {
+        canCreate: true,
+        checkedCount: 1,
+        blockingCount: 0,
+        blockingReason: null,
+        summary: null,
+        nextActionLabel: '等待 Schema 检查完成',
+        customSignals: [
+          {
+            key: 'schema:refreshing',
+            label: 'Schema 刷新中',
+            tone: 'neutral',
+          },
+        ],
+        states: [
+          {
+            databaseId: 'db-1',
+            databaseName: 'postgresql',
+            status: 'unknown',
+            statusLabel: '待检查',
+            summary: '尚未有当前版本的 schema 检查结果，已请求后台刷新。',
+            freshness: 'missing',
+            refreshStatus: 'queued',
+          },
+        ],
+        refresh: {
+          requested: true,
+          queuedCount: 1,
+          runningCount: 0,
+          unavailableCount: 0,
+          failedCount: 0,
+          missingCount: 1,
+        },
+      },
+    });
+    const panel = buildReleasePlanningPanel({ plan });
+
+    expect(plan.canCreate).toBe(true);
+    expect(plan.blockingReason).toBe(null);
+    expect(plan.schema.blockingCount).toBe(0);
+    expect(plan.summary).not.toContain('schema');
+    expect(panel.canSubmit).toBe(true);
+    expect(panel.nextActionLabel).toBe('等待 Schema 检查完成');
+    expect(panel.chips.some((chip) => chip.key === 'schema:refreshing')).toBe(true);
+    expect(panel.chips.some((chip) => chip.key === 'schema-blocked')).toBe(false);
+  });
+
   it('blocks inherited preview databases from running branch migrations', () => {
     const plan = summarizeReleasePlan({
       environment: {

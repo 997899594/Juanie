@@ -1,5 +1,6 @@
 'use client';
 
+import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function ArtifactDownloadButton({ releaseId, artifactId }: ArtifactDownlo
       disabled={isDownloading}
       onClick={handleDownload}
     >
+      <Download className="h-3.5 w-3.5" />
       {isDownloading ? '准备中' : '下载'}
     </Button>
   );

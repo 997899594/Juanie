@@ -77,10 +77,10 @@ interface ReleasePromoteDialogProps {
   onSelectedFlowIdChange: (flowId: string | null) => void;
   canPromote: boolean;
   promoting: boolean;
-  preflighting?: boolean;
   loadingPlan?: boolean;
   refreshingPlan?: boolean;
   planError?: string | null;
+  onRefreshSchema?: () => void;
   onPromote: () => void;
 }
 
@@ -92,10 +92,10 @@ export function ReleasePromoteDialog({
   onSelectedFlowIdChange,
   canPromote,
   promoting,
-  preflighting = false,
   loadingPlan = false,
   refreshingPlan = false,
   planError = null,
+  onRefreshSchema,
   onPromote,
 }: ReleasePromoteDialogProps) {
   const selectedPlan =
@@ -113,6 +113,7 @@ export function ReleasePromoteDialog({
   const schemaRefreshChipVisible = promotePanel?.chips.some(
     (chip) => chip.key === 'schema:refreshing'
   );
+  const schemaHasMissingResults = (schemaRefresh?.missingCount ?? 0) > 0;
   const confirmLabel = selectedPlan?.plan.releasePolicy.requiresApproval
     ? '创建并进入审批'
     : '确认提升';
@@ -225,10 +226,29 @@ export function ReleasePromoteDialog({
                       summaryClassName="rounded-[20px]"
                     />
 
-                    {schemaRefresh?.missingCount ? (
-                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
-                        还有 {schemaRefresh.missingCount}{' '}
-                        个数据库尚无持久检查结果；后台检查完成后会自动更新。
+                    {schemaHasMissingResults ? (
+                      <div
+                        className={cn(
+                          dialogSubtleClassName,
+                          'flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between'
+                        )}
+                      >
+                        <span>
+                          还有 {schemaRefresh?.missingCount}{' '}
+                          个数据库尚无当前版本检查结果；可先创建发布，准入会继续等待检查。
+                        </span>
+                        {onRefreshSchema ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="shrink-0 rounded-full"
+                            onClick={onRefreshSchema}
+                            disabled={schemaRefreshActive || refreshingPlan || loadingPlan}
+                          >
+                            {schemaRefreshActive || refreshingPlan ? '刷新中' : '刷新检查'}
+                          </Button>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -296,15 +316,9 @@ export function ReleasePromoteDialog({
           <Button
             className="w-full rounded-full sm:w-auto"
             onClick={onPromote}
-            disabled={preflighting || promoting || loadingPlan || !canPromote}
+            disabled={promoting || loadingPlan || !canPromote}
           >
-            {preflighting
-              ? '确认最新版本...'
-              : promoting
-                ? '创建发布...'
-                : loadingPlan
-                  ? '预检中...'
-                  : confirmLabel}
+            {promoting ? '创建发布...' : loadingPlan ? '预检中...' : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -92,14 +92,14 @@ describe('release schema gate', () => {
     ).toBe('ref:refs/heads/main');
   });
 
-  it('blocks release creation while current revision schema inspection is missing', () => {
+  it('allows release creation while current revision schema inspection is refreshing', () => {
     const snapshot = buildReleaseSchemaGateSnapshot(
       [
         {
           databaseId: 'db-1',
           databaseName: 'primary',
-          status: 'blocked',
-          statusLabel: '检查失败',
+          status: 'unknown',
+          statusLabel: '待检查',
           summary: '尚未有当前版本的 schema 检查结果，已请求后台刷新。',
           freshness: 'missing',
           refreshStatus: 'queued',
@@ -112,12 +112,39 @@ describe('release schema gate', () => {
       }
     );
 
-    expect(snapshot.canCreate).toBe(false);
-    expect(snapshot.blockingReason).toBe('数据库 schema 检查尚未完成，请稍后重试');
+    expect(snapshot.canCreate).toBe(true);
+    expect(snapshot.blockingReason).toBe(null);
+    expect(snapshot.blockingCount).toBe(0);
     expect(snapshot.nextActionLabel).toBe('等待 Schema 检查完成');
     expect(snapshot.customSignals.some((chip) => chip.key === 'schema:refreshing')).toBe(true);
     expect(isReleaseSchemaGateWaitingForRefresh(snapshot)).toBe(true);
     expect(isReleaseSchemaGateRefreshUnavailable(snapshot)).toBe(false);
+  });
+
+  it('requires a schema refresh request before allowing missing revision state', () => {
+    const snapshot = buildReleaseSchemaGateSnapshot(
+      [
+        {
+          databaseId: 'db-1',
+          databaseName: 'primary',
+          status: 'unknown',
+          statusLabel: '待检查',
+          summary: '尚未有当前版本的 schema 检查结果。',
+          freshness: 'missing',
+          refreshStatus: 'idle',
+        },
+      ],
+      {
+        requested: false,
+        missingCount: 1,
+      }
+    );
+
+    expect(snapshot.canCreate).toBe(false);
+    expect(snapshot.blockingReason).toBe('数据库 schema 尚未检查，请刷新检查后再创建发布');
+    expect(snapshot.nextActionLabel).toBe('刷新 Schema 检查');
+    expect(snapshot.customSignals.some((chip) => chip.key === 'schema:unknown')).toBe(true);
+    expect(isReleaseSchemaGateWaitingForRefresh(snapshot)).toBe(false);
   });
 
   it('does not classify unavailable schema inspection as pending refresh', () => {
