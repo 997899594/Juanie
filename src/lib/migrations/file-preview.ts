@@ -399,12 +399,17 @@ function buildRunStatusPreviewFromStoredSnapshot(input: {
     input.storedPreview.declaredTotal,
     input.storedPreview.executedTotal
   );
+  const keepAuditableContent =
+    input.storedPreview.sourceLabel !== 'Desired schema' &&
+    (Boolean(input.storedPreview.executionPlan?.content?.trim()) ||
+      (input.storedPreview.fileDetails?.length ?? 0) > 0 ||
+      input.storedPreview.files.length > 0);
 
   return {
     ...input.storedPreview,
-    files: [],
-    fileDetails: undefined,
-    executionPlan: null,
+    files: keepAuditableContent ? input.storedPreview.files : [],
+    fileDetails: keepAuditableContent ? input.storedPreview.fileDetails : undefined,
+    executionPlan: keepAuditableContent ? input.storedPreview.executionPlan : null,
     total: 0,
     declaredTotal,
     executedTotal: declaredTotal,

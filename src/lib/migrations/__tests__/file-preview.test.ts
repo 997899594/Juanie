@@ -153,13 +153,6 @@ describe('migration file preview pending state', () => {
   });
 
   it('keeps historical details for completed run-status previews', async () => {
-    migrationFilesByPath.set('migrations/history', [
-      {
-        name: '001_init.sql',
-        content: 'CREATE TABLE historical_notes (id uuid primary key);',
-      },
-    ]);
-
     const previewByRunId = await buildMigrationFilePreviewByRunId(
       [
         {
@@ -167,13 +160,93 @@ describe('migration file preview pending state', () => {
           projectId: 'project-1',
           specification: { tool: 'sql', migrationPath: 'migrations/history' },
           status: 'success',
+          filePreview: {
+            sourceLabel: 'SQL 目录',
+            files: ['001_init.sql'],
+            fileDetails: [
+              {
+                path: '001_init.sql',
+                content: 'CREATE TABLE historical_notes (id uuid primary key);',
+                truncated: false,
+                language: 'sql',
+              },
+            ],
+            total: 1,
+            declaredTotal: 1,
+            executedTotal: 0,
+            truncated: false,
+            warning: null,
+          },
         },
       ],
       { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
     );
     const preview = previewByRunId.get('run-success-with-details');
 
-    expect(preview?.files).toEqual([]);
+    expect(preview?.files).toEqual(['001_init.sql']);
+    expect(preview?.fileDetails).toEqual([
+      {
+        path: '001_init.sql',
+        content: 'CREATE TABLE historical_notes (id uuid primary key);',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+    expect(preview?.total).toBe(0);
+    expect(preview?.declaredTotal).toBe(1);
+    expect(preview?.executedTotal).toBe(1);
+  });
+
+  it('keeps stored Atlas diff SQL for completed drizzle runs', async () => {
+    const previewByRunId = await buildMigrationFilePreviewByRunId(
+      [
+        {
+          id: 'run-drizzle-success-with-atlas-plan',
+          projectId: 'project-1',
+          specification: { tool: 'drizzle', sourceConfigPath: 'drizzle.config.mjs' },
+          status: 'success',
+          filePreview: {
+            sourceLabel: 'Atlas schema diff',
+            files: ['atlas-schema-diff.sql'],
+            fileDetails: [
+              {
+                path: 'atlas-schema-diff.sql',
+                content: 'ALTER TABLE notes ADD COLUMN title text;',
+                truncated: false,
+                language: 'sql',
+              },
+            ],
+            executionPlan: {
+              path: 'atlas-schema-diff.sql',
+              content: 'ALTER TABLE notes ADD COLUMN title text;',
+              language: 'sql',
+            },
+            total: 1,
+            declaredTotal: 1,
+            executedTotal: 0,
+            truncated: false,
+            warning: null,
+          },
+        },
+      ],
+      { executionStateMode: 'run_status', forceRefresh: true, includeFileDetails: true }
+    );
+    const preview = previewByRunId.get('run-drizzle-success-with-atlas-plan');
+
+    expect(preview?.files).toEqual(['atlas-schema-diff.sql']);
+    expect(preview?.fileDetails).toEqual([
+      {
+        path: 'atlas-schema-diff.sql',
+        content: 'ALTER TABLE notes ADD COLUMN title text;',
+        truncated: false,
+        language: 'sql',
+      },
+    ]);
+    expect(preview?.executionPlan).toEqual({
+      path: 'atlas-schema-diff.sql',
+      content: 'ALTER TABLE notes ADD COLUMN title text;',
+      language: 'sql',
+    });
     expect(preview?.total).toBe(0);
     expect(preview?.declaredTotal).toBe(1);
     expect(preview?.executedTotal).toBe(1);

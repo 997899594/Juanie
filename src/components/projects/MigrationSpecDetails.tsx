@@ -61,11 +61,17 @@ export function MigrationSpecDetails({
   const filePreview = specification.filePreview;
   const pendingFileCount = filePreview?.total ?? 0;
   const hasPendingChanges = pendingFileCount > 0;
+  const hasExecutionPlan = Boolean(filePreview?.executionPlan?.content?.trim());
+  const hasFileDetails = (filePreview?.fileDetails?.length ?? 0) > 0;
+  const hasFileList = (filePreview?.files?.length ?? 0) > 0;
+  const hasAuditablePreview = hasExecutionPlan || hasFileDetails || hasFileList;
   const previewTitle = hasPendingChanges
     ? filePreview?.sourceLabel === 'Atlas schema diff'
       ? '执行计划'
       : '执行预览'
-    : '已对齐';
+    : hasAuditablePreview
+      ? '历史内容'
+      : '已对齐';
 
   return (
     <div className="space-y-2">
@@ -142,7 +148,7 @@ export function MigrationSpecDetails({
             待执行 {filePreview.total} · 已执行 {filePreview.executedTotal} · 声明{' '}
             {filePreview.declaredTotal}
           </div>
-          {hasPendingChanges && filePreview?.executionPlan?.content ? (
+          {hasExecutionPlan && filePreview?.executionPlan ? (
             <div className="mt-3">
               <details
                 className="rounded-[14px] bg-[rgba(255,255,255,0.9)] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_8px_20px_rgba(55,53,47,0.03)]"
@@ -161,9 +167,7 @@ export function MigrationSpecDetails({
                 </pre>
               </details>
             </div>
-          ) : hasPendingChanges &&
-            filePreview?.fileDetails &&
-            filePreview.fileDetails.length > 0 ? (
+          ) : hasFileDetails && filePreview?.fileDetails ? (
             <div className="mt-3 space-y-3">
               {filePreview.fileDetails.map((file) => (
                 <details
@@ -188,7 +192,7 @@ export function MigrationSpecDetails({
                 </details>
               ))}
             </div>
-          ) : hasPendingChanges && filePreview?.files && filePreview.files.length > 0 ? (
+          ) : hasFileList && filePreview?.files ? (
             <div className="mt-2 space-y-1">
               {filePreview.files.map((file) => (
                 <div key={file} className="break-all font-mono text-xs text-foreground">
