@@ -7,7 +7,13 @@ import {
   buildHomeStats,
   decorateHomeAttentionRuns,
   decorateHomeProjects,
+  decorateHomeSchemaAttentionItems,
 } from '@/lib/home/view';
+import {
+  decorateSchemaAttentionDatabases,
+  isSchemaAttentionDatabase,
+  type SchemaAttentionDatabaseLike,
+} from '@/lib/inbox/schema-attention';
 import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
 
 const homeAttentionStatuses = [
@@ -69,16 +75,25 @@ export function buildHomePageData<
       } | null;
     } | null;
   },
+  TSchemaDatabase extends SchemaAttentionDatabaseLike,
 >(input: {
   userName?: string | null;
   userTeams: TTeamMember[];
   userProjects: TProject[];
   attentionRuns: TAttentionRun[];
+  schemaDatabases?: TSchemaDatabase[];
 }) {
   const attentionRuns = filterAttentionRuns(
     input.attentionRuns.filter((run) => isHomeAttentionStatus(run.status))
   );
   const attentionStats = getAttentionStats(attentionRuns);
+  const schemaItems = decorateHomeSchemaAttentionItems(
+    decorateSchemaAttentionDatabases(
+      (input.schemaDatabases ?? []).filter(
+        (database) => database.schemaState && isSchemaAttentionDatabase(database)
+      )
+    ).slice(0, 5)
+  );
   const rolesByTeamId = new Map(
     input.userTeams.map((membership) => [membership.teamId, membership.role])
   );
@@ -93,15 +108,17 @@ export function buildHomePageData<
     stats: buildHomeStats({
       projectCount: input.userProjects.length,
       teamCount: input.userTeams.length,
-      attentionCount: attentionStats.total,
+      attentionCount: attentionStats.total + schemaItems.length,
       activeProjectCount,
     }),
     commandCenter: buildHomeCommandCenter({
       projectCards,
       attentionItems,
+      schemaItems,
     }),
     projectCards,
     attentionItems,
+    schemaItems,
   };
 }
 
@@ -149,32 +166,45 @@ export async function getHomePageData(userId: string, userName?: string | null) 
         })
       : [];
 
-  const attentionRuns =
+  const [attentionRuns, schemaDatabases] =
     teamProjectIds.length > 0
-      ? await db.query.migrationRuns.findMany({
-          where: (run) =>
-            and(
-              inArray(run.projectId, teamProjectIds),
-              inArray(run.status, [...homeAttentionStatuses])
-            ),
-          orderBy: (run, { desc }) => [desc(run.createdAt)],
-          limit: 5,
-          with: {
-            database: true,
-            environment: {
-              with: {
-                domains: true,
+      ? await Promise.all([
+          db.query.migrationRuns.findMany({
+            where: (run) =>
+              and(
+                inArray(run.projectId, teamProjectIds),
+                inArray(run.status, [...homeAttentionStatuses])
+              ),
+            orderBy: (run, { desc }) => [desc(run.createdAt)],
+            limit: 5,
+            with: {
+              database: true,
+              environment: {
+                with: {
+                  domains: true,
+                },
+              },
+              project: true,
+              release: {
+                with: {
+                  environment: true,
+                },
               },
             },
-            project: true,
-            release: {
-              with: {
-                environment: true,
-              },
+          }),
+          db.query.databases.findMany({
+            where: (database, { inArray }) => inArray(database.projectId, teamProjectIds),
+            orderBy: (database, { desc }) => [desc(database.updatedAt)],
+            limit: 20,
+            with: {
+              project: true,
+              environment: true,
+              service: true,
+              schemaState: true,
             },
-          },
-        })
-      : [];
+          }),
+        ])
+      : [[], []];
 
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
     projects: visibleProjects,
@@ -194,5 +224,6 @@ export async function getHomePageData(userId: string, userName?: string | null) 
       ...run,
       previewReviewMetadata: previewReviewMetadataById.get(run.id) ?? null,
     })),
+    schemaDatabases,
   });
 }

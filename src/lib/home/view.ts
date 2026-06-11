@@ -15,6 +15,7 @@ import {
   buildPreviewSourceMetadata,
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
+import type { SchemaAttentionItem } from '@/lib/inbox/schema-attention';
 import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import {
@@ -140,6 +141,15 @@ export interface HomeAttentionRunDecorations {
   previewLifecycle: PreviewLifecycleSummary | null;
 }
 
+export interface HomeSchemaAttentionDecorations {
+  href: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  meta: string;
+  tone: 'danger' | 'neutral';
+}
+
 function needsProjectAttention(status?: string | null): boolean {
   return status === 'initializing' || status === 'pending' || status === 'failed';
 }
@@ -260,13 +270,33 @@ export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(
   });
 }
 
+export function decorateHomeSchemaAttentionItems<TItem extends SchemaAttentionItem>(
+  items: TItem[]
+): Array<TItem & HomeSchemaAttentionDecorations> {
+  return items.map((item) => ({
+    ...item,
+    href: item.href,
+    eyebrow: '数据库状态',
+    title: `${item.databaseName} · ${item.statusLabel}`,
+    description: item.summary,
+    meta: `${item.projectName} · ${item.environmentName} · ${item.lastInspectedAtLabel}`,
+    tone: item.tone,
+  }));
+}
+
 export function buildHomeCommandCenter<
   TProject extends HomeProjectLike & HomeProjectDecorations,
   TRun extends HomeAttentionRunLike & HomeAttentionRunDecorations,
->(input: { projectCards: TProject[]; attentionItems: TRun[] }): HomeCommandCenter {
+  TSchemaItem extends SchemaAttentionItem & HomeSchemaAttentionDecorations,
+>(input: {
+  projectCards: TProject[];
+  attentionItems: TRun[];
+  schemaItems?: TSchemaItem[];
+}): HomeCommandCenter {
   const projectNeedingAttention = input.projectCards.filter((project) =>
     needsProjectAttention(project.status)
   );
+  const schemaItems = input.schemaItems ?? [];
 
   const primaryAction = (() => {
     const firstAttention = input.attentionItems[0];
@@ -294,6 +324,24 @@ export function buildHomeCommandCenter<
               href: `/projects/${input.projectCards[0].id}`,
             }
           : null,
+      };
+    }
+
+    const firstSchemaItem = schemaItems[0];
+    if (firstSchemaItem) {
+      return {
+        title: `${firstSchemaItem.projectName} 数据库需要处理`,
+        summary: firstSchemaItem.description,
+        primaryAction: {
+          label: firstSchemaItem.actionLabel,
+          href: firstSchemaItem.href,
+          description: firstSchemaItem.meta,
+          tone: firstSchemaItem.tone,
+        } satisfies HomeCommandCenterAction,
+        secondaryAction: {
+          label: '查看待处理',
+          href: '/inbox?state=schema',
+        },
       };
     }
 
@@ -369,8 +417,24 @@ export function buildHomeCommandCenter<
           tone: item.status === 'failed' ? 'danger' : 'neutral',
         }) satisfies HomeCommandCenterFocusItem
     ),
+    ...schemaItems.slice(0, 3).map(
+      (item) =>
+        ({
+          id: item.id,
+          eyebrow: item.eyebrow,
+          title: item.title,
+          description: item.description,
+          href: item.href,
+          meta: item.meta,
+          tone: item.tone,
+        }) satisfies HomeCommandCenterFocusItem
+    ),
     ...projectNeedingAttention
-      .filter((project) => !input.attentionItems.some((item) => item.projectId === project.id))
+      .filter(
+        (project) =>
+          !input.attentionItems.some((item) => item.projectId === project.id) &&
+          !schemaItems.some((item) => item.projectId === project.id)
+      )
       .slice(0, 3)
       .map(
         (project) =>

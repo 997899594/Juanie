@@ -59,4 +59,33 @@ describe('home service', () => {
     expect(result.stats[2]?.value).toBe(1);
     expect(result.attentionItems.map((run) => run.id)).toEqual(['run-2']);
   });
+
+  it('includes schema attention in the homepage attention count', () => {
+    const result = buildHomePageData({
+      userName: 'Find',
+      userTeams: [{ teamId: 'team-1', role: 'owner' }],
+      userProjects: [{ id: 'proj-1', teamId: 'team-1', name: 'demo', status: 'active' }],
+      attentionRuns: [],
+      schemaDatabases: [
+        {
+          id: 'db-1',
+          projectId: 'proj-1',
+          name: 'postgres',
+          type: 'postgresql',
+          project: { id: 'proj-1', name: 'demo' },
+          environment: { id: 'env-1', name: 'production' },
+          schemaState: {
+            status: 'pending_migrations',
+            lastInspectedAt: '2026-03-26T00:00:00.000Z',
+          },
+        },
+      ],
+    });
+
+    expect(result.stats[2]?.value).toBe(1);
+    expect(result.schemaItems[0]?.title).toBe('postgres · 待执行迁移');
+    expect(result.commandCenter.primaryAction.href).toBe(
+      '/projects/proj-1/environments/env-1/schema'
+    );
+  });
 });
