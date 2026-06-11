@@ -1,5 +1,5 @@
 'use client';
-import { Activity, Database, ExternalLink, GitBranch, Globe, Package2 } from 'lucide-react';
+import { Activity, ArrowRight, Database, ExternalLink, Globe, Package2 } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
+import { StatusIndicator } from '@/components/ui/status-indicator';
 import {
   setEnvironmentRuntimeState as controlEnvironmentRuntime,
   type DatabaseSchemaRepairPlan,
@@ -223,6 +224,13 @@ interface EnvironmentRecord {
     shortCommitSha: string | null;
     createdAtLabel: string | null;
     statusDecoration: ActivityStatusDecoration;
+    sourceRelease?: {
+      id: string;
+      title: string;
+      environmentId: string | null;
+      environmentName: string;
+      shortCommitSha: string | null;
+    } | null;
   } | null;
   sourceBuild: {
     label: string;
@@ -264,16 +272,12 @@ interface EnvironmentRecord {
 function EnvironmentOverviewPanel({
   projectId,
   environment,
-  incomingFlows,
-  outgoingFlows,
   promotionAction,
   rollbackAction,
   runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  incomingFlows: DeliveryControlFlowRecord[];
-  outgoingFlows: DeliveryControlFlowRecord[];
   promotionAction?: ReactNode;
   rollbackAction?: ReactNode;
   runtimeAction?: ReactNode;
@@ -283,212 +287,248 @@ function EnvironmentOverviewPanel({
   const statusSummary =
     environment.runtimeState?.summary ?? environment.platformSignals.primarySummary;
   const databaseSummary = buildEnvironmentDatabaseSummary(environment);
-  const summaryItems = [
-    {
-      key: 'source',
-      label: '来源',
-      value: sourceSummary.label,
-      summary: sourceSummary.summary,
-    },
-    {
-      key: 'release',
-      label: '版本',
-      value: versionSummary.label,
-      summary: versionSummary.summary,
-    },
-    {
-      key: 'status',
-      label: '状态',
-      value: buildRuntimeStateLabel(environment.runtimeState),
-      summary: statusSummary ?? '运行态暂不可用',
-    },
-    {
-      key: 'database',
-      label: '数据库',
-      value: databaseSummary,
-      summary:
-        environment.databases.find((database) => database.schemaState?.summary)?.schemaState
-          ?.summary ?? '数据库状态已纳入环境视图',
-    },
-  ];
+  const schemaIssueSummary = environment.databases.find((database) => database.schemaState?.summary)
+    ?.schemaState?.summary;
   const shellClassName = 'console-panel px-5 py-5';
-  const titleClassName =
-    'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
   const deliveryHref = `/projects/${projectId}/environments/${environment.id}/delivery`;
   const primaryDomainHost = environment.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
-  const primaryStatusSummary = statusSummary ?? buildEnvironmentHeaderMeta(environment);
-  const flowRows = [
-    ...incomingFlows.map((flow) => ({
-      key: `incoming-${flow.id}`,
-      label: '来自',
-      value: flow.sourceEnvironmentName ?? '来源环境',
-    })),
-    ...outgoingFlows.map((flow) => ({
-      key: `outgoing-${flow.id}`,
-      label: '可提升到',
-      value: flow.targetEnvironmentName ?? '目标环境',
-    })),
-  ];
+  const sourceRelease = environment.latestReleaseCard?.sourceRelease ?? null;
+  const statusLabel = buildRuntimeStateLabel(environment.runtimeState);
+  const latestReleaseHref = environment.latestReleaseCard
+    ? `${deliveryHref}/${environment.latestReleaseCard.id}`
+    : deliveryHref;
 
   return (
     <div className="space-y-4">
-      <section className="console-panel px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
+      <section className="console-panel overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.42fr)]">
+          <div className="px-5 py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={titleClassName}>
-                {environment.primaryDomainUrl ? '访问地址' : '环境状态'}
-              </span>
-              {environment.primaryDomainUrl ? (
-                <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
-                  HTTPS
-                </Badge>
+              <StatusIndicator
+                status={environment.latestReleaseCard?.statusDecoration.color ?? 'neutral'}
+                pulse={environment.latestReleaseCard?.statusDecoration.pulse ?? false}
+                label={environment.latestReleaseCard?.statusDecoration.label ?? statusLabel}
+              />
+              <Badge variant="secondary">{environment.scopeLabel ?? '环境'}</Badge>
+              {environment.sourceLabel ? (
+                <Badge variant="secondary">{environment.sourceLabel}</Badge>
               ) : null}
             </div>
 
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-              {environment.primaryDomainUrl ? (
-                <a
-                  href={environment.primaryDomainUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group flex min-w-0 items-center gap-2 text-xl font-semibold tracking-[-0.035em] text-foreground transition-colors hover:text-foreground/72 sm:text-2xl"
-                >
-                  <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{primaryDomainHost}</span>
-                  <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-45 transition-opacity group-hover:opacity-100" />
-                </a>
-              ) : (
-                <div className="flex min-w-0 items-center gap-2 text-xl font-semibold tracking-[-0.035em] text-foreground sm:text-2xl">
-                  <Activity className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
-                    {buildRuntimeStateLabel(environment.runtimeState)}
-                  </span>
-                </div>
-              )}
-
-              {primaryStatusSummary ? (
-                <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-                  {primaryStatusSummary}
-                </span>
-              ) : null}
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <EnvironmentFact
+                label="当前状态"
+                value={statusLabel}
+                summary={statusSummary ?? (buildEnvironmentHeaderMeta(environment) || '状态更新中')}
+              />
+              <EnvironmentFact
+                label="当前发布"
+                value={versionSummary.label}
+                summary={versionSummary.summary || '还没有发布记录'}
+                href={latestReleaseHref}
+              />
+              <EnvironmentFact
+                label="来源"
+                value={sourceRelease ? `${sourceRelease.environmentName}` : sourceSummary.label}
+                summary={
+                  sourceRelease
+                    ? `${sourceRelease.title}${sourceRelease.shortCommitSha ? ` · ${sourceRelease.shortCommitSha}` : ''}`
+                    : sourceSummary.summary
+                }
+              />
+              <EnvironmentFact
+                label="数据库"
+                value={databaseSummary}
+                summary={schemaIssueSummary ?? '数据库状态已纳入环境视图'}
+                href={`/projects/${projectId}/environments/${environment.id}/schema`}
+              />
             </div>
           </div>
 
-          {promotionAction || rollbackAction || runtimeAction ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="border-border/70 border-t px-5 py-5 lg:border-l lg:border-t-0">
+            <div className="text-sm font-semibold">操作</div>
+            <div className="mt-4 flex flex-wrap gap-2">
               {promotionAction}
               {rollbackAction}
               {runtimeAction}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
-        <div className="grid gap-3 md:grid-cols-4">
-          {summaryItems.map((item) => (
-            <div key={item.key} className="console-inset relative min-w-0 px-4 py-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                {item.label}
-              </div>
-              <div className="mt-2 truncate text-base font-semibold tracking-[-0.02em] text-foreground">
-                {item.value}
-              </div>
-              <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                {item.summary || '等待数据'}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Package2 className="h-4 w-4" />
-            最新交付物
-          </div>
-          {environment.latestReleaseCard ? (
-            <span className="text-xs text-muted-foreground">
-              {environment.latestReleaseCard.title}
-            </span>
-          ) : null}
-        </div>
-        <DeliveryArtifactList
-          artifacts={environment.latestDeliveryArtifacts}
-          emptyLabel="当前环境暂无客户交付物。"
-          fallbackReleaseId={environment.latestReleaseCard?.id}
-        />
-      </section>
-
-      <div className="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
-        <section className={shellClassName}>
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <GitBranch className="h-4 w-4" />
-            交付路径
-          </div>
-          {flowRows.length > 0 ? (
-            <div className="space-y-2">
-              {flowRows.map((flow) => (
-                <div key={flow.key} className="console-inset px-4 py-3">
-                  <div className={titleClassName}>{flow.label}</div>
-                  <div className="mt-1 text-sm font-medium text-foreground">{flow.value}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="console-inset px-4 py-5 text-sm text-muted-foreground">
-              当前环境没有配置提升链路。
-            </div>
-          )}
-        </section>
-
-        <section className={shellClassName}>
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <Activity className="h-4 w-4" />
-            最近活动
-          </div>
-          {environment.recentActivity.length > 0 ? (
-            <div className="space-y-2">
-              {environment.recentActivity.slice(0, 3).map((activity) => (
-                <Link
-                  key={activity.key}
-                  href={activity.href ?? deliveryHref}
-                  className="console-inset block px-4 py-3 transition hover:bg-foreground/[0.035]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {activity.kind === 'release' ? (
-                        <Package2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      ) : activity.kind === 'migration' ? (
-                        <Database className="h-3.5 w-3.5 text-muted-foreground" />
-                      ) : (
-                        <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                      )}
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {activity.title}
-                      </span>
-                    </div>
-                    {activity.createdAtLabel ? (
-                      <span className="text-xs text-muted-foreground">
-                        {activity.createdAtLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                    {activity.summary}
-                  </div>
+              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+                <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
+                  变量
                 </Link>
-              ))}
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+                <Link href={`/projects/${projectId}/environments/${environment.id}/schema`}>
+                  数据库
+                </Link>
+              </Button>
             </div>
-          ) : (
+            {environment.primaryDomainUrl ? (
+              <a
+                href={environment.primaryDomainUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-flex max-w-full items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Globe className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{primaryDomainHost}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className={shellClassName}>
+          <div className="text-sm font-semibold">运行</div>
+          <div className="mt-4 space-y-3">
+            <div className="console-inset px-4 py-3">
+              <div className="text-sm font-medium text-foreground">{statusLabel}</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {environment.runtimeState?.summary ??
+                  environment.platformSignals.primarySummary ??
+                  '运行态暂不可用'}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <EnvironmentSmallFact label="命名空间" value={environment.namespace ?? '未创建'} />
+              <EnvironmentSmallFact label="部署策略" value={environment.strategyLabel ?? '默认'} />
+            </div>
+          </div>
+        </div>
+
+        <div className={shellClassName}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold">数据库</div>
+            <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+              <Link href={`/projects/${projectId}/environments/${environment.id}/schema`}>
+                查看
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-4 divide-y divide-border/70">
+            {environment.databases.length === 0 ? (
+              <div className="py-4 text-sm text-muted-foreground">当前环境没有数据库。</div>
+            ) : (
+              environment.databases.slice(0, 4).map((database) => (
+                <div key={database.id} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-foreground">{database.name}</div>
+                    <Badge variant="secondary">
+                      {database.schemaState?.statusLabel ?? database.status ?? database.type}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {database.schemaState?.summary ?? database.usageLabel}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      {environment.latestDeliveryArtifacts.length > 0 ? (
+        <section className={cn(shellClassName, 'px-4 py-4 sm:px-5')}>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Package2 className="h-4 w-4" />
+              交付物
+            </div>
+            {environment.latestReleaseCard ? (
+              <Link
+                href={latestReleaseHref}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {environment.latestReleaseCard.title}
+              </Link>
+            ) : null}
+          </div>
+          <DeliveryArtifactList
+            artifacts={environment.latestDeliveryArtifacts}
+            fallbackReleaseId={environment.latestReleaseCard?.id}
+          />
+        </section>
+      ) : null}
+
+      <section className={shellClassName}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold">最近活动</div>
+          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+            <Link href={deliveryHref}>发布记录</Link>
+          </Button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {environment.recentActivity.length === 0 ? (
             <div className="console-inset px-4 py-5 text-sm text-muted-foreground">
               暂无发布、部署或迁移活动。
             </div>
+          ) : (
+            environment.recentActivity.slice(0, 5).map((activity) => (
+              <Link
+                key={activity.key}
+                href={activity.href ?? deliveryHref}
+                className="console-inset block px-4 py-3 transition hover:bg-foreground/[0.035]"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {activity.kind === 'release' ? (
+                      <Package2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : activity.kind === 'migration' ? (
+                      <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {activity.title}
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                    {activity.createdAtLabel}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+                <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                  {activity.summary}
+                </div>
+              </Link>
+            ))
           )}
-        </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EnvironmentFact({
+  label,
+  value,
+  summary,
+  href,
+}: {
+  label: string;
+  value: string;
+  summary: string;
+  href?: string;
+}) {
+  const content = (
+    <div className="console-inset h-full px-4 py-3 transition hover:bg-foreground/[0.025]">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
       </div>
+      <div className="mt-2 truncate text-sm font-semibold text-foreground">{value}</div>
+      <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{summary}</div>
+    </div>
+  );
+
+  return href ? <Link href={href}>{content}</Link> : content;
+}
+
+function EnvironmentSmallFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="console-inset px-4 py-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -496,16 +536,12 @@ function EnvironmentOverviewPanel({
 function EnvironmentExpandedContent({
   projectId,
   environment,
-  incomingFlows,
-  outgoingFlows,
   promotionAction,
   rollbackAction,
   runtimeAction,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  incomingFlows: DeliveryControlFlowRecord[];
-  outgoingFlows: DeliveryControlFlowRecord[];
   promotionAction?: ReactNode;
   rollbackAction?: ReactNode;
   runtimeAction?: ReactNode;
@@ -514,8 +550,6 @@ function EnvironmentExpandedContent({
     <EnvironmentOverviewPanel
       projectId={projectId}
       environment={environment}
-      incomingFlows={incomingFlows}
-      outgoingFlows={outgoingFlows}
       promotionAction={promotionAction}
       rollbackAction={rollbackAction}
       runtimeAction={runtimeAction}
@@ -646,12 +680,6 @@ export function EnvironmentsPageClient({
   }
 
   const focusedEnvironmentMeta = buildEnvironmentHeaderMeta(focusedEnvironment);
-  const focusedIncomingFlows = initialData.deliveryControl.promotionFlows.filter(
-    (flow) => flow.isActive && flow.targetEnvironmentId === focusedEnvironment.id
-  );
-  const focusedOutgoingFlows = initialData.deliveryControl.promotionFlows.filter(
-    (flow) => flow.isActive && flow.sourceEnvironmentId === focusedEnvironment.id
-  );
 
   return (
     <PageShell size="section">
@@ -672,8 +700,6 @@ export function EnvironmentsPageClient({
       <EnvironmentExpandedContent
         projectId={projectId}
         environment={focusedEnvironment}
-        incomingFlows={focusedIncomingFlows}
-        outgoingFlows={focusedOutgoingFlows}
         promotionAction={
           <PromotionAction
             projectId={projectId}

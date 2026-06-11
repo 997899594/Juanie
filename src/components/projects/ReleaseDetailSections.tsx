@@ -1,4 +1,4 @@
-import { Clock3, Dot, GitBranch, Package2, Rocket } from 'lucide-react';
+import { ChevronDown, Clock3, Dot, GitBranch, Package2, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { ArtifactDownloadButton } from '@/components/projects/ArtifactDownloadButton';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
@@ -74,38 +74,58 @@ function isManagedArtifactReference(reference: string | null): reference is stri
   return Boolean(reference?.startsWith('s3://'));
 }
 
-export function ReleaseTopSummarySection({ release }: { release: ReleasePageData['release'] }) {
+export function ReleaseResultSection({ release }: { release: ReleasePageData['release'] }) {
+  const primarySummary =
+    release.blockingReason?.summary ??
+    release.narrativeSummary.result ??
+    release.platformSignals.primarySummary ??
+    null;
+
   return (
-    <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-      <div className={releaseShellClassName}>
-        <div className="mb-2">
+    <section className={releaseShellClassName}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <StatusIndicator
             status={release.statusDecoration.color}
             pulse={release.statusDecoration.pulse}
             label={release.statusDecoration.label}
           />
+          <div className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
+            {release.statusDecoration.label}
+          </div>
+          {primarySummary ? (
+            <div className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {primarySummary}
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="secondary">{release.environment?.name ?? '环境'}</Badge>
+            {release.environmentScope ? (
+              <Badge variant="secondary">{release.environmentScope}</Badge>
+            ) : null}
+            {release.previewSourceMeta.label ? (
+              <Badge variant="secondary">{release.previewSourceMeta.label}</Badge>
+            ) : null}
+          </div>
         </div>
-        <div className="text-sm font-medium">{release.environment?.name ?? '环境'}</div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {[release.environmentScope, release.environmentSource, release.previewSourceMeta.label]
-            .filter(Boolean)
-            .join(' · ')}
+
+        <div className="grid min-w-[260px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          {release.stats.map((stat) => (
+            <div key={stat.label} className="console-inset px-4 py-3">
+              <div className="text-xs text-muted-foreground">{stat.label}</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{stat.value}</div>
+            </div>
+          ))}
         </div>
       </div>
-      {release.stats.map((stat) => (
-        <div key={stat.label} className={releaseShellClassName}>
-          <div className={releaseSectionTitleClassName}>{stat.label}</div>
-          <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{stat.value}</div>
-        </div>
-      ))}
-    </div>
+    </section>
   );
 }
 
 export function ReleaseNarrativeSection({ release }: { release: ReleasePageData['release'] }) {
   return (
-    <div className={releaseShellClassName}>
-      <div className="mb-4 text-sm font-semibold">摘要</div>
+    <section className={releaseShellClassName}>
+      <div className="mb-4 text-sm font-semibold">变更摘要</div>
       <div className="space-y-4">
         <div className={releaseSubtleClassName}>
           <div className={releaseSectionTitleClassName}>阻塞</div>
@@ -162,14 +182,14 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
 export function ReleaseTimelineSection({ release }: { release: ReleasePageData['release'] }) {
   return (
-    <div className={releaseShellClassName}>
-      <div className="mb-4 text-sm font-semibold">时间线</div>
+    <section className={releaseShellClassName}>
+      <div className="mb-4 text-sm font-semibold">运行记录</div>
       <div className="space-y-3">
         {release.timeline.map((item, index) => (
           <div key={item.key} className="flex gap-3">
@@ -191,7 +211,7 @@ export function ReleaseTimelineSection({ release }: { release: ReleasePageData['
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -443,200 +463,134 @@ export function ReleaseExecutionSections({
     (deployment) =>
       deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
   );
+  const actionableMigrationItems = release.migrationItems.filter((run) =>
+    ['awaiting_approval', 'awaiting_external_completion', 'failed'].includes(run.status)
+  );
   const isDeliveryRole = role === 'delivery';
+  const hasRolloutActions =
+    !isDeliveryRole &&
+    release.environment?.deploymentStrategy &&
+    release.environment.deploymentStrategy !== 'rolling' &&
+    rolloutDeploymentItems.length > 0;
+  const hasMigrationActions = !isDeliveryRole && actionableMigrationItems.length > 0;
 
   return (
-    <div className={isDeliveryRole ? 'grid gap-4' : 'grid gap-4 xl:grid-cols-[1.1fr_0.9fr]'}>
-      <div className="space-y-4">
-        {!isDeliveryRole &&
-          release.environment?.deploymentStrategy &&
-          release.environment.deploymentStrategy !== 'rolling' &&
-          rolloutDeploymentItems.length > 0 && (
-            <section className={releaseShellClassName}>
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-                <Rocket className="h-4 w-4" />
-                放量推进
-              </div>
-              <div className="space-y-3">
-                {rolloutDeploymentItems.map((deployment) => (
-                  <div key={`rollout-${deployment.id}`} className={releaseSubtleClassName}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium">{deployment.serviceName}</div>
-                        {deployment.imageUrl && (
-                          <div className="mt-1 break-all text-xs text-muted-foreground">
-                            {deployment.imageUrl}
-                          </div>
-                        )}
-                      </div>
-                      <DeploymentRolloutAction
-                        projectId={projectId}
-                        deploymentId={deployment.id}
-                        strategyLabel={release.environmentStrategy}
-                        disabled={!releaseActions.canManage}
-                        disabledSummary={releaseActions.summary}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-        {!isDeliveryRole ? (
-          <section className={releaseShellClassName}>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-              <Package2 className="h-4 w-4" />
-              本次部署镜像
-            </div>
-            {deployableArtifacts.length === 0 ? (
-              <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-                这次发布没有需要部署的服务镜像。
-              </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {deployableArtifacts.map((artifact) => (
-                  <div
-                    key={artifact.id ?? artifact.service?.id ?? getArtifactTitle(artifact)}
-                    className={cn(releaseSubtleClassName, 'break-all')}
-                  >
-                    <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
-                      <span>{getArtifactTitle(artifact)}</span>
-                      <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
-                        {getReleaseArtifactKindLabel(artifact)}
-                      </Badge>
-                    </div>
-                    <div className="break-all text-xs text-muted-foreground">
-                      {getArtifactReference(artifact) ?? '等待镜像回传'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+    <div className="space-y-4">
+      <section className={releaseShellClassName}>
+        <div className="mb-4 text-sm font-semibold">需要操作</div>
+        {!hasRolloutActions && !hasMigrationActions ? (
+          <div className="console-inset px-4 py-5 text-sm text-muted-foreground">
+            当前没有需要人工处理的步骤。
+          </div>
         ) : null}
 
-        <section className={releaseShellClassName}>
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <Package2 className="h-4 w-4" />
-            客户交付物
-          </div>
-          {deliveryArtifacts.length === 0 ? (
-            <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-              这次发布没有客户交付物。
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {deliveryArtifacts.map((artifact) => {
-                const reference = getArtifactReference(artifact);
-
-                return (
-                  <div
-                    key={artifact.id ?? getArtifactTitle(artifact)}
-                    className={cn(releaseSubtleClassName, 'break-all')}
-                  >
-                    <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
-                      <span>{getArtifactTitle(artifact)}</span>
-                      <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
-                        {getReleaseArtifactKindLabel(artifact)}
-                      </Badge>
-                    </div>
-                    {getArtifactMeta(artifact) && (
-                      <div className="mb-2 text-xs text-muted-foreground">
-                        {getArtifactMeta(artifact)}
-                      </div>
-                    )}
-                    {isManagedArtifactReference(reference) ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <ArtifactDownloadButton
-                          releaseId={artifact.releaseId ?? releaseId}
-                          artifactId={artifact.id}
-                        />
-                        <span className="break-all text-xs text-muted-foreground">
-                          {formatArtifactReference(reference)}
-                        </span>
-                      </div>
-                    ) : isExternalArtifactReference(reference) ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <Button asChild variant="ghost" size="sm" className="rounded-full">
-                          <a href={reference} target="_blank" rel="noreferrer">
-                            下载
-                          </a>
-                        </Button>
-                        <span className="break-all text-xs text-muted-foreground">
-                          {formatArtifactReference(reference)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="break-all text-xs text-muted-foreground">
-                        {reference ?? '等待交付物回传'}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {!isDeliveryRole ? (
-          <section className={releaseShellClassName}>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+        {hasRolloutActions ? (
+          <div className="mb-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
               <Rocket className="h-4 w-4" />
-              部署进度
+              放量
             </div>
-            {release.deployments.length === 0 ? (
-              <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-                没有部署记录。
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {release.deploymentItems.map((deployment) => (
-                  <div key={deployment.id} className={releaseSubtleClassName}>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusIndicator
-                          status={deployment.statusDecoration.color}
-                          pulse={deployment.statusDecoration.pulse}
-                          label={deployment.statusDecoration.label}
-                        />
-                        <Badge variant="secondary">{deployment.serviceName}</Badge>
-                        {deployment.version && (
-                          <Badge variant="secondary">v{deployment.version}</Badge>
-                        )}
-                      </div>
+            <div className="space-y-3">
+              {rolloutDeploymentItems.map((deployment) => (
+                <div key={`rollout-${deployment.id}`} className={releaseSubtleClassName}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">{deployment.serviceName}</div>
+                      {deployment.imageUrl && (
+                        <div className="mt-1 break-all text-xs text-muted-foreground">
+                          {deployment.imageUrl}
+                        </div>
+                      )}
                     </div>
-                    {deployment.errorMessage && (
-                      <div className="mb-3 rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
-                        {deployment.errorMessage}
-                      </div>
-                    )}
-                    <DeploymentLogs
+                    <DeploymentRolloutAction
                       projectId={projectId}
                       deploymentId={deployment.id}
-                      status={deployment.status}
+                      strategyLabel={release.environmentStrategy}
+                      disabled={!releaseActions.canManage}
+                      disabledSummary={releaseActions.summary}
                     />
                   </div>
-                ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {hasMigrationActions ? (
+          <div className="space-y-3">
+            <div className="text-sm font-medium">迁移审批 / 处理</div>
+            {actionableMigrationItems.map((run) => (
+              <div key={run.id} className={releaseSubtleClassName}>
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusIndicator
+                      status={run.statusDecoration.color}
+                      pulse={run.statusDecoration.pulse}
+                      label={run.statusDecoration.label}
+                    />
+                    <Badge variant="secondary">{run.serviceName}</Badge>
+                    <Badge variant="secondary">{run.database.name}</Badge>
+                  </div>
+                  <ReleaseMigrationActions
+                    projectId={projectId}
+                    runId={run.id}
+                    status={run.status}
+                    approvalToken={run.approvalToken}
+                    disabled={!releaseActions.canManage}
+                    disabledSummary={releaseActions.summary}
+                  />
+                </div>
+                <MigrationSpecDetails
+                  specification={run.specification}
+                  databaseType={run.database.type ?? null}
+                  compact
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className={releaseShellClassName}>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div>
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+              <Package2 className="h-4 w-4" />
+              交付物
+            </div>
+            {deliveryArtifacts.length === 0 ? (
+              <div className="console-inset px-4 py-8 text-sm text-muted-foreground">
+                这次发布没有交付物。
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {deliveryArtifacts.map((artifact) => {
+                  const reference = getArtifactReference(artifact);
+
+                  return (
+                    <DeliveryArtifactCard
+                      key={artifact.id ?? getArtifactTitle(artifact)}
+                      artifact={artifact}
+                      reference={reference}
+                      releaseId={releaseId}
+                    />
+                  );
+                })}
               </div>
             )}
-          </section>
-        ) : null}
-      </div>
+          </div>
 
-      {!isDeliveryRole ? (
-        <div className="space-y-4">
-          <section className={releaseShellClassName}>
-            <div className="mb-4 text-sm font-semibold">迁移记录</div>
-            {release.migrationRuns.length === 0 ? (
-              <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-                没有迁移记录。
+          <div>
+            <div className="mb-4 text-sm font-semibold">迁移文件</div>
+            {release.migrationItems.length === 0 ? (
+              <div className="console-inset px-4 py-8 text-sm text-muted-foreground">
+                这次发布没有迁移记录。
               </div>
             ) : (
               <div className="space-y-3">
                 {release.migrationItems.map((run) => (
                   <div key={run.id} className={releaseSubtleClassName}>
-                    <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusIndicator
                           status={run.statusDecoration.color}
@@ -646,14 +600,16 @@ export function ReleaseExecutionSections({
                         <Badge variant="secondary">{run.serviceName}</Badge>
                         <Badge variant="secondary">{run.database.name}</Badge>
                       </div>
-                      <ReleaseMigrationActions
-                        projectId={projectId}
-                        runId={run.id}
-                        status={run.status}
-                        approvalToken={run.approvalToken}
-                        disabled={!releaseActions.canManage}
-                        disabledSummary={releaseActions.summary}
-                      />
+                      {!isDeliveryRole ? (
+                        <ReleaseMigrationActions
+                          projectId={projectId}
+                          runId={run.id}
+                          status={run.status}
+                          approvalToken={run.approvalToken}
+                          disabled={!releaseActions.canManage}
+                          disabledSummary={releaseActions.summary}
+                        />
+                      ) : null}
                     </div>
                     <MigrationSpecDetails
                       specification={run.specification}
@@ -664,62 +620,204 @@ export function ReleaseExecutionSections({
                 ))}
               </div>
             )}
-          </section>
-
-          <section className={releaseShellClassName}>
-            <div className="grid gap-3 md:grid-cols-2">
-              {release.sourceCommitSha && (
-                <div className={releaseSubtleClassName}>
-                  <div className={releaseSectionTitleClassName}>来源提交</div>
-                  <code className="mt-2 block text-sm font-mono text-foreground">
-                    {release.sourceCommitSha.slice(0, 7)}
-                  </code>
-                </div>
-              )}
-              <div className={releaseSubtleClassName}>
-                <div className={releaseSectionTitleClassName}>仓库与更新时间</div>
-                <div className="mt-2 text-sm text-foreground">{release.sourceRepository}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {formatPlatformDateTime(release.updatedAt) ?? '—'}
-                </div>
-              </div>
-            </div>
-            <details className={releaseSubtleClassName}>
-              <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
-                详细信息
-              </summary>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <GitBranch className="h-3.5 w-3.5" />
-                    来源分支
-                  </span>
-                  <span>{release.sourceRef}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    创建时间
-                  </span>
-                  <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
-                </div>
-                {release.metadataItems.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">{item.label}</span>
-                    {item.mono ? (
-                      <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
-                        {item.value}
-                      </code>
-                    ) : (
-                      <span>{item.value}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
-          </section>
+          </div>
         </div>
-      ) : null}
+      </section>
+
+      {isDeliveryRole ? null : (
+        <details className={cn(releaseShellClassName, 'group')}>
+          <summary className="-m-2 flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-[14px] px-2 py-2 transition hover:bg-foreground/[0.035]">
+            <span className="text-sm font-semibold text-foreground">查看运行详情</span>
+            <span className="inline-flex items-center gap-2 text-xs font-normal text-muted-foreground">
+              部署镜像、部署日志、来源元数据
+              <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-4">
+              <section className={releaseSubtleClassName}>
+                <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+                  <Package2 className="h-4 w-4" />
+                  部署镜像
+                </div>
+                {deployableArtifacts.length === 0 ? (
+                  <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+                    这次发布没有需要部署的服务镜像。
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {deployableArtifacts.map((artifact) => (
+                      <div
+                        key={artifact.id ?? artifact.service?.id ?? getArtifactTitle(artifact)}
+                        className={cn(releaseSubtleClassName, 'break-all bg-background/60')}
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+                          <span>{getArtifactTitle(artifact)}</span>
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full px-2 py-0.5 text-[10px]"
+                          >
+                            {getReleaseArtifactKindLabel(artifact)}
+                          </Badge>
+                        </div>
+                        <div className="break-all text-xs text-muted-foreground">
+                          {getArtifactReference(artifact) ?? '等待镜像回传'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className={releaseSubtleClassName}>
+                <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+                  <Rocket className="h-4 w-4" />
+                  部署日志
+                </div>
+                {release.deployments.length === 0 ? (
+                  <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-8 text-center text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
+                    没有部署记录。
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {release.deploymentItems.map((deployment) => (
+                      <div key={deployment.id} className={releaseSubtleClassName}>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusIndicator
+                              status={deployment.statusDecoration.color}
+                              pulse={deployment.statusDecoration.pulse}
+                              label={deployment.statusDecoration.label}
+                            />
+                            <Badge variant="secondary">{deployment.serviceName}</Badge>
+                            {deployment.version && (
+                              <Badge variant="secondary">v{deployment.version}</Badge>
+                            )}
+                          </div>
+                        </div>
+                        {deployment.errorMessage && (
+                          <div className="mb-3 rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
+                            {deployment.errorMessage}
+                          </div>
+                        )}
+                        <DeploymentLogs
+                          projectId={projectId}
+                          deploymentId={deployment.id}
+                          status={deployment.status}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <section className={releaseSubtleClassName}>
+              <div className="grid gap-3 md:grid-cols-2">
+                {release.sourceCommitSha && (
+                  <div className={releaseSubtleClassName}>
+                    <div className={releaseSectionTitleClassName}>来源提交</div>
+                    <code className="mt-2 block text-sm font-mono text-foreground">
+                      {release.sourceCommitSha.slice(0, 7)}
+                    </code>
+                  </div>
+                )}
+                <div className={releaseSubtleClassName}>
+                  <div className={releaseSectionTitleClassName}>仓库与更新时间</div>
+                  <div className="mt-2 text-sm text-foreground">{release.sourceRepository}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {formatPlatformDateTime(release.updatedAt) ?? '—'}
+                  </div>
+                </div>
+              </div>
+              <details className={cn(releaseSubtleClassName, 'group')}>
+                <summary className="-m-2 flex cursor-pointer list-none items-center justify-between gap-2 rounded-[14px] px-2 py-2 transition hover:bg-foreground/[0.035]">
+                  <span className="text-sm font-medium text-foreground">查看来源详情</span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition group-open:rotate-180" />
+                </summary>
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <GitBranch className="h-3.5 w-3.5" />
+                      来源分支
+                    </span>
+                    <span>{release.sourceRef}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      创建时间
+                    </span>
+                    <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
+                  </div>
+                  {release.metadataItems.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      {item.mono ? (
+                        <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                          {item.value}
+                        </code>
+                      ) : (
+                        <span>{item.value}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </section>
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function DeliveryArtifactCard({
+  artifact,
+  reference,
+  releaseId,
+}: {
+  artifact: ReleasePageData['release']['artifacts'][number];
+  reference: string | null;
+  releaseId: string;
+}) {
+  return (
+    <div className={cn(releaseSubtleClassName, 'break-all')}>
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+        <span>{getArtifactTitle(artifact)}</span>
+        <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+          {getReleaseArtifactKindLabel(artifact)}
+        </Badge>
+      </div>
+      {getArtifactMeta(artifact) && (
+        <div className="mb-2 text-xs text-muted-foreground">{getArtifactMeta(artifact)}</div>
+      )}
+      {isManagedArtifactReference(reference) ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <ArtifactDownloadButton
+            releaseId={artifact.releaseId ?? releaseId}
+            artifactId={artifact.id}
+          />
+          <span className="break-all text-xs text-muted-foreground">
+            {formatArtifactReference(reference)}
+          </span>
+        </div>
+      ) : isExternalArtifactReference(reference) ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button asChild variant="ghost" size="sm" className="rounded-full">
+            <a href={reference} target="_blank" rel="noreferrer">
+              下载
+            </a>
+          </Button>
+          <span className="break-all text-xs text-muted-foreground">
+            {formatArtifactReference(reference)}
+          </span>
+        </div>
+      ) : (
+        <div className="break-all text-xs text-muted-foreground">
+          {reference ?? '等待交付物回传'}
+        </div>
+      )}
     </div>
   );
 }

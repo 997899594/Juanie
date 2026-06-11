@@ -1,8 +1,9 @@
 import { ExternalLink, GitBranch, Settings2, Users } from 'lucide-react';
 import Link from 'next/link';
 import {
+  ProjectAttentionQueue,
   ProjectEnvironmentIndex,
-  ProjectOverviewStats,
+  ProjectOverviewFacts,
   ProjectRecentReleaseSnapshot,
   ProjectRuntimeSnapshot,
 } from '@/components/projects/ProjectOverviewSections';
@@ -29,16 +30,12 @@ export function ProjectOverviewDashboard({
     environmentCards,
     overview,
     collaboration,
-    stats,
     serviceCards,
     databaseCards,
     domainCards,
     recentReleaseCards,
+    attentionItems,
   } = pageData;
-  const productionEnvironment = environmentCards.find((environment) => environment.isProduction);
-  const productionHost =
-    productionEnvironment?.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
-  const latestProductionRelease = productionEnvironment?.latestReleaseCard ?? null;
 
   return (
     <PageShell size="content" spacing="tight">
@@ -56,15 +53,28 @@ export function ProjectOverviewDashboard({
         }
       />
 
-      <ProjectOverviewStats stats={stats} />
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+        <ProjectEnvironmentIndex
+          projectId={projectId}
+          environments={environmentCards}
+          governance={pageData.previewEnvironmentActions}
+          initialCreateOpen={initialCreatePreviewOpen}
+        />
+        <ProjectAttentionQueue projectId={projectId} items={attentionItems} />
+      </section>
 
-      <section className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+      <ProjectRecentReleaseSnapshot projectId={projectId} releases={recentReleaseCards} />
+
+      <section className="grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <ProjectRuntimeSnapshot
+          services={serviceCards}
+          databases={databaseCards}
+          domains={domainCards}
+        />
         <div className={overviewShellClassName}>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            项目现状
-          </div>
-          <div className="mt-3 space-y-3">
-            <div className="text-sm text-foreground">{collaboration.teamName ?? '团队项目'}</div>
+          <div className="text-sm font-semibold">项目信息</div>
+          <div className="mt-4 space-y-3">
+            <ProjectOverviewFacts stats={pageData.stats} />
             {overview.statusSummary ? (
               <div className="text-sm text-muted-foreground">{overview.statusSummary}</div>
             ) : null}
@@ -73,9 +83,9 @@ export function ProjectOverviewDashboard({
                 href={overview.repository.webUrl ?? undefined}
                 target={overview.repository.webUrl ? '_blank' : undefined}
                 rel={overview.repository.webUrl ? 'noreferrer' : undefined}
-                className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="inline-flex max-w-full items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
-                <span>{overview.repository.fullName}</span>
+                <span className="truncate">{overview.repository.fullName}</span>
                 {overview.repository.webUrl ? <ExternalLink className="h-3.5 w-3.5" /> : null}
               </a>
             ) : null}
@@ -88,61 +98,11 @@ export function ProjectOverviewDashboard({
               ) : null}
               <span className="inline-flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5" />
-                {collaboration.memberCount} 人
+                {collaboration.teamName ?? '团队'} · {collaboration.memberCount} 人
               </span>
               <span>创建于 {overview.createdDateLabel}</span>
             </div>
-            {overview.nextActionLabel ? (
-              <div className="console-inset px-4 py-3 text-sm text-foreground">
-                下一步：{overview.nextActionLabel}
-              </div>
-            ) : null}
           </div>
-        </div>
-
-        <div className={overviewShellClassName}>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            正式入口
-          </div>
-          <div className="mt-3 space-y-3">
-            {productionEnvironment?.primaryDomainUrl ? (
-              <a
-                href={productionEnvironment.primaryDomainUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="block truncate text-sm text-foreground transition-colors hover:text-foreground/70"
-              >
-                {productionHost}
-              </a>
-            ) : (
-              <div className="text-sm text-muted-foreground">生产环境还没有访问地址</div>
-            )}
-            {latestProductionRelease ? (
-              <div className="console-inset px-4 py-3 text-xs text-muted-foreground">
-                最近生产发布
-                <div className="mt-1 truncate text-sm font-medium text-foreground">
-                  {latestProductionRelease.title}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <ProjectEnvironmentIndex
-          projectId={projectId}
-          environments={environmentCards}
-          governance={pageData.previewEnvironmentActions}
-          initialCreateOpen={initialCreatePreviewOpen}
-        />
-        <div className="space-y-3">
-          <ProjectRecentReleaseSnapshot projectId={projectId} releases={recentReleaseCards} />
-          <ProjectRuntimeSnapshot
-            services={serviceCards}
-            databases={databaseCards}
-            domains={domainCards}
-          />
         </div>
       </section>
     </PageShell>

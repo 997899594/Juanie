@@ -6,8 +6,8 @@ import {
   ReleaseDiffSection,
   ReleaseExecutionSections,
   ReleaseNarrativeSection,
+  ReleaseResultSection,
   ReleaseTimelineSection,
-  ReleaseTopSummarySection,
 } from '@/components/projects/ReleaseDetailSections';
 import { Button } from '@/components/ui/button';
 import type { TeamRole } from '@/lib/db/schema';
@@ -61,12 +61,16 @@ export function ReleaseDetailDashboard({
         </div>
       }
     >
-      <ReleaseTopSummarySection release={release} />
+      <ReleaseResultSection release={release} />
 
-      <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-        <ReleaseNarrativeSection release={release} />
-        <ReleaseTimelineSection release={release} />
-      </section>
+      <ReleaseExecutionSections
+        projectId={projectId}
+        releaseId={releaseId}
+        role={role}
+        release={release}
+      />
+
+      <ReleaseNarrativeSection release={release} />
 
       <ReleaseDiffSection
         projectId={projectId}
@@ -75,12 +79,7 @@ export function ReleaseDetailDashboard({
         release={release}
       />
 
-      <ReleaseExecutionSections
-        projectId={projectId}
-        releaseId={releaseId}
-        role={role}
-        release={release}
-      />
+      <ReleaseTimelineSection release={release} />
     </EnvironmentPageFrame>
   );
 }

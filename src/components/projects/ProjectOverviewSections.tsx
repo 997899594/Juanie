@@ -1,4 +1,4 @@
-import { ArrowRight, Database, Globe2, Server } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Database, Globe2, Server } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ProjectPreviewEnvironmentLauncher } from '@/components/projects/ProjectPreviewEnvironmentLauncher';
@@ -105,7 +105,12 @@ export function ProjectEnvironmentIndex({
     <section className="console-panel overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">环境</div>
+          <div>
+            <div className="text-sm font-semibold">环境状态</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              当前版本、来源和下一步操作集中在这里判断。
+            </div>
+          </div>
           <ProjectPreviewEnvironmentLauncher
             projectId={projectId}
             governance={governance}
@@ -114,18 +119,18 @@ export function ProjectEnvironmentIndex({
         </div>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="divide-y divide-border/70">
         {environments.length === 0 ? (
-          <div className="console-inset px-5 py-8 text-sm text-muted-foreground">还没有环境</div>
+          <div className="px-5 py-8 text-sm text-muted-foreground">还没有环境</div>
         ) : (
           sortedEnvironments.map((environment) => (
             <Link
               key={environment.id}
               href={`/projects/${projectId}/environments/${environment.id}`}
-              className="console-inset block px-4 py-4 transition-colors hover:bg-white/90"
+              className="block px-5 py-4 transition-colors hover:bg-foreground/[0.035]"
             >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1 space-y-2">
+              <div className="grid gap-3 lg:grid-cols-[minmax(180px,0.75fr)_minmax(0,1.25fr)_auto] lg:items-center">
+                <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`h-2 w-2 rounded-full ${
@@ -145,7 +150,12 @@ export function ProjectEnvironmentIndex({
                       <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
                     ) : null}
                   </div>
+                  <div className="text-xs text-muted-foreground">
+                    {environment.scopeLabel ?? environment.sourceLabel ?? '环境'}
+                  </div>
+                </div>
 
+                <div className="min-w-0">
                   <div className="truncate text-sm text-foreground">
                     {getEnvironmentSummary(environment)}
                   </div>
@@ -156,7 +166,7 @@ export function ProjectEnvironmentIndex({
                   ) : null}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground xl:justify-end">
+                <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground lg:justify-end">
                   <ArrowRight className="h-3.5 w-3.5" />
                 </div>
               </div>
@@ -168,19 +178,102 @@ export function ProjectEnvironmentIndex({
   );
 }
 
-export function ProjectOverviewStats({ stats }: { stats: ProjectOverviewPageData['stats'] }) {
+export function ProjectOverviewFacts({ stats }: { stats: ProjectOverviewPageData['stats'] }) {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-2 sm:grid-cols-4">
       {stats.map((stat) => (
-        <div key={stat.label} className="console-panel px-5 py-4">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            {stat.label}
-          </div>
-          <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+        <div key={stat.label} className="console-inset px-3 py-3">
+          <div className="text-xs text-muted-foreground">{stat.label}</div>
+          <div className="mt-1 text-lg font-semibold tracking-tight text-foreground">
             {stat.value}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export function ProjectAttentionQueue({
+  projectId,
+  items,
+}: {
+  projectId: string;
+  items: ProjectOverviewPageData['attentionItems'];
+}) {
+  const visibleItems = items.slice(0, 6);
+
+  return (
+    <section className="console-panel overflow-hidden">
+      <div className="console-divider-bottom px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">需要处理</div>
+            <div className="mt-1 text-xs text-muted-foreground">只放需要人判断或点击的事项。</div>
+          </div>
+          {items.length > 0 ? (
+            <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+              {items.length}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-2 p-3">
+        {visibleItems.length === 0 ? (
+          <div className="flex min-h-44 flex-col items-center justify-center rounded-[14px] bg-success/[0.06] px-5 py-8 text-center">
+            <CheckCircle2 className="h-5 w-5 text-success" />
+            <div className="mt-3 text-sm font-medium text-foreground">没有待处理事项</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              发布、迁移和环境治理都没有卡点。
+            </div>
+          </div>
+        ) : (
+          visibleItems.map((item) => {
+            const environmentId =
+              item.environment &&
+              'id' in item.environment &&
+              typeof item.environment.id === 'string'
+                ? item.environment.id
+                : null;
+            const href =
+              item.releaseId && environmentId
+                ? `/projects/${projectId}/environments/${environmentId}/delivery/${item.releaseId}`
+                : environmentId
+                  ? `/projects/${projectId}/environments/${environmentId}`
+                  : `/projects/${projectId}`;
+
+            return (
+              <Link
+                key={item.id ?? `${item.releaseId}:${item.status}`}
+                href={href}
+                className="console-inset block px-4 py-3 transition-colors hover:bg-white/90"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">
+                        {item.environment?.name ?? item.environmentScopeLabel ?? '环境'}
+                      </Badge>
+                      {item.issueLabel ? (
+                        <span className="text-xs font-medium text-foreground">
+                          {item.issueLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-sm font-medium text-foreground">
+                      {item.releaseTitle ?? item.database?.name ?? '待处理事项'}
+                    </div>
+                    <div className="line-clamp-2 text-xs text-muted-foreground">
+                      {item.actionLabel ?? item.platformSignals.nextActionLabel ?? '查看并处理'}
+                    </div>
+                  </div>
+                  <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </div>
+              </Link>
+            );
+          })
+        )}
+      </div>
     </section>
   );
 }

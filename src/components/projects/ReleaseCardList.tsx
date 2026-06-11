@@ -3,7 +3,6 @@
 import { ArrowRight, Clock, GitBranch, GitCommit, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import { DeliveryArtifactList } from '@/components/projects/DeliveryArtifactList';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
@@ -12,13 +11,6 @@ import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { formatPlatformTimeContext } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
-
-function formatImageLabel(imageUrl: string): string {
-  const imageName = imageUrl.split('/').pop() ?? imageUrl;
-  const [repository, tag] = imageName.split(':');
-  if (!tag) return repository;
-  return `${repository}:${tag}`;
-}
 
 interface ReleaseCardListProps {
   projectId: string;
@@ -120,37 +112,14 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {release.artifacts.slice(0, 3).map((artifact) => (
-                          <Badge
-                            key={artifact.id}
-                            variant="secondary"
-                            className="gap-1 rounded-full px-2 py-0.5 font-normal"
-                          >
-                            <span className="font-medium">{artifact.service.name}</span>
-                            <span className="text-muted-foreground">
-                              {formatImageLabel(artifact.imageUrl)}
-                            </span>
-                          </Badge>
-                        ))}
-                        {release.artifacts.length > 3 ? (
-                          <Badge
-                            variant="secondary"
-                            className="rounded-full px-2 py-0.5 font-normal"
-                          >
-                            +{release.artifacts.length - 3}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      {release.deliveryArtifacts.length > 0 ? (
-                        <DeliveryArtifactList
-                          artifacts={release.deliveryArtifacts}
-                          fallbackReleaseId={release.id}
-                          itemClassName="bg-[rgba(255,255,255,0.78)]"
-                        />
-                      ) : null}
-                    </div>
+                    {release.deliveryArtifacts.length > 0 ? (
+                      <DeliveryArtifactList
+                        artifacts={release.deliveryArtifacts}
+                        fallbackReleaseId={release.id}
+                        itemClassName="bg-[rgba(255,255,255,0.78)]"
+                        maxItems={1}
+                      />
+                    ) : null}
                   </div>
 
                   <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center xl:items-end">

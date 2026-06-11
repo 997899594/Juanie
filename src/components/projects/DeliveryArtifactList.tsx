@@ -72,7 +72,7 @@ function isExternalArtifactReference(reference: string | null): reference is str
 export function DeliveryArtifactList({
   artifacts,
   className,
-  emptyLabel = '暂无客户交付物',
+  emptyLabel = '暂无交付物',
   fallbackReleaseId,
   itemClassName,
   maxItems,
