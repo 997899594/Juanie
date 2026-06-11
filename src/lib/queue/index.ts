@@ -120,6 +120,20 @@ async function recycleFinishedJob(job: Job | undefined | null): Promise<void> {
   }
 }
 
+export function buildReleaseQueueJobId(
+  releaseId: string,
+  options?: { delayMs?: number; nowMs?: number }
+): string {
+  const delayMs = options?.delayMs ?? 0;
+  if (delayMs <= 0) {
+    return `release-${releaseId}`;
+  }
+
+  const nowMs = options?.nowMs ?? Date.now();
+  const retryBucket = Math.floor((nowMs + delayMs) / delayMs);
+  return `release-${releaseId}-retry-${retryBucket}`;
+}
+
 export async function addProjectInitJob(
   projectId: string,
   mode: 'import' | 'create',
@@ -177,12 +191,47 @@ export async function addDeploymentJob(
 }
 
 export async function addReleaseJob(releaseId: string, options?: { traceId?: string | null }) {
-  return getReleaseQueue().add(
+  const queue = getReleaseQueue();
+  const jobId = buildReleaseQueueJobId(releaseId);
+  await recycleFinishedJob(await queue.getJob(jobId));
+
+  return queue.add(
     'release',
     { releaseId, traceId: options?.traceId ?? createTraceId(releaseId) },
     {
       attempts: 1,
-      jobId: `release-${releaseId}`,
+      jobId,
+      removeOnComplete: true,
+    }
+  );
+}
+
+export async function scheduleReleaseJob(
+  releaseId: string,
+  options?: { traceId?: string | null; delayMs?: number }
+) {
+  const queue = getReleaseQueue();
+  const delayMs = options?.delayMs ?? 0;
+  const jobId = buildReleaseQueueJobId(releaseId, { delayMs });
+  const existing = await queue.getJob(jobId);
+
+  if (existing) {
+    const state = await existing.getState();
+    if (state !== 'completed' && state !== 'failed') {
+      return existing;
+    }
+
+    await existing.remove();
+  }
+
+  return queue.add(
+    'release',
+    { releaseId, traceId: options?.traceId ?? createTraceId(releaseId) },
+    {
+      attempts: 1,
+      delay: delayMs,
+      jobId,
+      removeOnComplete: true,
     }
   );
 }

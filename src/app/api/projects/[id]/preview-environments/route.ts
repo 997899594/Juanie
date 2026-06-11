@@ -15,9 +15,7 @@ import {
   buildPreviewLaunchRef,
   launchPreviewEnvironmentFromRef,
 } from '@/lib/environments/preview-launch';
-import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
-import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -112,10 +110,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    if (error instanceof PreviewDatabaseGuardBlockedError) {
-      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     if (error instanceof PreviewCloneUnsupportedError) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { shouldRecycleExistingMigrationJobState } from '@/lib/queue';
+import { buildReleaseQueueJobId, shouldRecycleExistingMigrationJobState } from '@/lib/queue';
 import {
   getUnexpectedMigrationJobFailureCode,
   shouldReconcileUnexpectedMigrationJobFailure,
@@ -79,6 +79,16 @@ describe('migration queue failure reconciliation', () => {
 });
 
 describe('release queue failure reconciliation', () => {
+  it('uses a separate bucketed job id for delayed release admission retries', () => {
+    expect(buildReleaseQueueJobId('release-1')).toBe('release-release-1');
+    expect(buildReleaseQueueJobId('release-1', { delayMs: 10_000, nowMs: 100_000 })).toBe(
+      'release-release-1-retry-11'
+    );
+    expect(buildReleaseQueueJobId('release-1', { delayMs: 10_000, nowMs: 100_999 })).toBe(
+      'release-release-1-retry-11'
+    );
+  });
+
   it('only reconciles unexpected queue failures for active release phases', () => {
     expect(shouldReconcileUnexpectedReleaseJobFailure('admission_running')).toBe(true);
     expect(shouldReconcileUnexpectedReleaseJobFailure('queued')).toBe(true);

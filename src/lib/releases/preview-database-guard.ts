@@ -21,22 +21,6 @@ export interface PreviewDatabaseGuardSnapshot {
   customSignals: PlatformSignalChip[];
 }
 
-export class PreviewDatabaseGuardBlockedError extends Error {
-  constructor(
-    readonly snapshot: PreviewDatabaseGuardSnapshot,
-    message = snapshot.blockingReason ?? 'Release blocked by preview database strategy',
-    readonly release?: {
-      id: string;
-      projectId: string;
-      environmentId: string;
-      releasePath?: string | null;
-    } | null
-  ) {
-    super(message);
-    this.name = 'PreviewDatabaseGuardBlockedError';
-  }
-}
-
 export const previewDatabaseGuardMessage =
   '当前预览环境继承基础数据库，检测到该分支包含数据库迁移。为避免误改基础环境数据库，请改用独立预览库后再启动预览环境。';
 

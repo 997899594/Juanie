@@ -9,6 +9,7 @@ import {
   databaseMigrations,
   databases,
   type EnvironmentSchemaStateStatus,
+  environmentSchemaStateRevisions,
   environmentSchemaStates,
   migrationSpecifications,
 } from '@/lib/db/schema';
@@ -38,6 +39,7 @@ import {
   startSchemaRunnerJob,
 } from '@/lib/schema-management/schema-runner-job';
 import { classifySchemaLedgerState } from './classification';
+import { buildSchemaRevisionKey } from './revision';
 
 interface SchemaLedgerInspectionResult {
   kind: 'atlas' | 'drizzle' | 'sql' | 'desired_schema';
@@ -56,6 +58,8 @@ export interface EnvironmentSchemaStateSnapshot {
   actualVersion: string | null;
   expectedChecksum: string | null;
   actualChecksum: string | null;
+  sourceRef: string | null;
+  sourceCommitSha: string | null;
   hasLedger: boolean;
   hasUserTables: boolean;
   summary: string | null;
@@ -64,6 +68,10 @@ export interface EnvironmentSchemaStateSnapshot {
   lastErrorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface EnvironmentSchemaStateRevisionSnapshot extends EnvironmentSchemaStateSnapshot {
+  inspectedAt: Date;
 }
 
 interface EnvironmentSchemaInspectionInput {
@@ -75,7 +83,7 @@ interface EnvironmentSchemaInspectionInput {
 
 export interface EnvironmentSchemaInspectionRequestSnapshot {
   status: 'queued' | 'running' | 'unavailable' | 'failed';
-  currentState: EnvironmentSchemaStateSnapshot | null;
+  currentState: EnvironmentSchemaStateRevisionSnapshot | null;
   message: string | null;
 }
 
@@ -432,6 +440,8 @@ async function upsertEnvironmentSchemaState(input: {
   status: EnvironmentSchemaStateStatus;
   expectedEntries: string[];
   actualEntries: string[];
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
   hasLedger: boolean;
   hasUserTables: boolean;
   summary: string;
@@ -439,43 +449,76 @@ async function upsertEnvironmentSchemaState(input: {
   errorMessage?: string | null;
 }): Promise<EnvironmentSchemaStateSnapshot> {
   const now = new Date();
-  const [state] = await db
-    .insert(environmentSchemaStates)
-    .values({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-      databaseId: input.databaseId,
-      status: input.status,
-      expectedVersion: input.expectedEntries.at(-1) ?? null,
-      actualVersion: input.actualEntries.at(-1) ?? null,
-      expectedChecksum: buildChecksum(input.expectedEntries),
-      actualChecksum: buildChecksum(input.actualEntries),
-      hasLedger: input.hasLedger,
-      hasUserTables: input.hasUserTables,
-      summary: input.summary,
-      lastInspectedAt: now,
-      lastErrorCode: input.errorCode ?? null,
-      lastErrorMessage: input.errorMessage ?? null,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [environmentSchemaStates.databaseId],
-      set: {
-        status: input.status,
-        expectedVersion: input.expectedEntries.at(-1) ?? null,
-        actualVersion: input.actualEntries.at(-1) ?? null,
-        expectedChecksum: buildChecksum(input.expectedEntries),
-        actualChecksum: buildChecksum(input.actualEntries),
-        hasLedger: input.hasLedger,
-        hasUserTables: input.hasUserTables,
-        summary: input.summary,
-        lastInspectedAt: now,
-        lastErrorCode: input.errorCode ?? null,
-        lastErrorMessage: input.errorMessage ?? null,
-        updatedAt: now,
-      },
-    })
-    .returning();
+  const sourceRef = input.sourceRef ?? null;
+  const sourceCommitSha = input.sourceCommitSha ?? null;
+  const sourceKey = buildSchemaRevisionKey({ sourceRef, sourceCommitSha });
+  const stateValues = {
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+    databaseId: input.databaseId,
+    status: input.status,
+    expectedVersion: input.expectedEntries.at(-1) ?? null,
+    actualVersion: input.actualEntries.at(-1) ?? null,
+    expectedChecksum: buildChecksum(input.expectedEntries),
+    actualChecksum: buildChecksum(input.actualEntries),
+    sourceRef,
+    sourceCommitSha,
+    hasLedger: input.hasLedger,
+    hasUserTables: input.hasUserTables,
+    summary: input.summary,
+    lastInspectedAt: now,
+    lastErrorCode: input.errorCode ?? null,
+    lastErrorMessage: input.errorMessage ?? null,
+    updatedAt: now,
+  };
+  const revisionValues = {
+    projectId: stateValues.projectId,
+    environmentId: stateValues.environmentId,
+    databaseId: stateValues.databaseId,
+    sourceKey,
+    sourceRef,
+    sourceCommitSha,
+    status: stateValues.status,
+    expectedVersion: stateValues.expectedVersion,
+    actualVersion: stateValues.actualVersion,
+    expectedChecksum: stateValues.expectedChecksum,
+    actualChecksum: stateValues.actualChecksum,
+    hasLedger: stateValues.hasLedger,
+    hasUserTables: stateValues.hasUserTables,
+    summary: stateValues.summary,
+    inspectedAt: now,
+    lastErrorCode: stateValues.lastErrorCode,
+    lastErrorMessage: stateValues.lastErrorMessage,
+    updatedAt: now,
+  };
+
+  const [state] = await db.transaction(async (tx) => {
+    const [currentState] = await tx
+      .insert(environmentSchemaStates)
+      .values(stateValues)
+      .onConflictDoUpdate({
+        target: [environmentSchemaStates.databaseId],
+        set: {
+          ...stateValues,
+        },
+      })
+      .returning();
+
+    await tx
+      .insert(environmentSchemaStateRevisions)
+      .values(revisionValues)
+      .onConflictDoUpdate({
+        target: [
+          environmentSchemaStateRevisions.databaseId,
+          environmentSchemaStateRevisions.sourceKey,
+        ],
+        set: {
+          ...revisionValues,
+        },
+      });
+
+    return [currentState];
+  });
 
   await publishSchemaRepairRealtimeSnapshot({
     projectId: input.projectId,
@@ -483,6 +526,56 @@ async function upsertEnvironmentSchemaState(input: {
   });
 
   return state;
+}
+
+function toEnvironmentSchemaStateSnapshot(
+  revision: typeof environmentSchemaStateRevisions.$inferSelect
+): EnvironmentSchemaStateRevisionSnapshot {
+  return {
+    id: revision.id,
+    projectId: revision.projectId,
+    environmentId: revision.environmentId,
+    databaseId: revision.databaseId,
+    status: revision.status,
+    expectedVersion: revision.expectedVersion,
+    actualVersion: revision.actualVersion,
+    expectedChecksum: revision.expectedChecksum,
+    actualChecksum: revision.actualChecksum,
+    sourceRef: revision.sourceRef,
+    sourceCommitSha: revision.sourceCommitSha,
+    hasLedger: revision.hasLedger,
+    hasUserTables: revision.hasUserTables,
+    summary: revision.summary,
+    lastInspectedAt: revision.inspectedAt,
+    inspectedAt: revision.inspectedAt,
+    lastErrorCode: revision.lastErrorCode,
+    lastErrorMessage: revision.lastErrorMessage,
+    createdAt: revision.createdAt,
+    updatedAt: revision.updatedAt,
+  };
+}
+
+export async function getEnvironmentSchemaStateRevision(
+  projectId: string,
+  databaseId: string,
+  input: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+  }
+): Promise<EnvironmentSchemaStateRevisionSnapshot | null> {
+  const sourceRef = input.sourceRef ?? null;
+  const sourceCommitSha = input.sourceCommitSha ?? null;
+  const sourceKey = buildSchemaRevisionKey({ sourceRef, sourceCommitSha });
+
+  const revision = await db.query.environmentSchemaStateRevisions.findFirst({
+    where: and(
+      eq(environmentSchemaStateRevisions.projectId, projectId),
+      eq(environmentSchemaStateRevisions.databaseId, databaseId),
+      eq(environmentSchemaStateRevisions.sourceKey, sourceKey)
+    ),
+  });
+
+  return revision ? toEnvironmentSchemaStateSnapshot(revision) : null;
 }
 
 export async function getEnvironmentSchemaState(
@@ -535,6 +628,8 @@ async function buildSchemaInspectionFailureState(
     status: 'blocked',
     expectedEntries: [],
     actualEntries: [],
+    sourceRef: input.sourceRef ?? null,
+    sourceCommitSha: input.sourceCommitSha ?? null,
     hasLedger: false,
     hasUserTables: false,
     summary: `检查失败: ${message}`,
@@ -602,11 +697,14 @@ function sleep(ms: number): Promise<void> {
 async function waitForFreshSchemaState(
   input: EnvironmentSchemaInspectionInput,
   startedAt: Date
-): Promise<EnvironmentSchemaStateSnapshot | null> {
+): Promise<EnvironmentSchemaStateRevisionSnapshot | null> {
   const deadline = Date.now() + 10_000;
 
   while (Date.now() < deadline) {
-    const state = await getEnvironmentSchemaState(input.projectId, input.databaseId);
+    const state = await getEnvironmentSchemaStateRevision(input.projectId, input.databaseId, {
+      sourceRef: input.sourceRef,
+      sourceCommitSha: input.sourceCommitSha,
+    });
     if (state?.lastInspectedAt && state.lastInspectedAt.getTime() >= startedAt.getTime() - 1_000) {
       return state;
     }
@@ -614,7 +712,10 @@ async function waitForFreshSchemaState(
     await sleep(1_000);
   }
 
-  return await getEnvironmentSchemaState(input.projectId, input.databaseId);
+  return await getEnvironmentSchemaStateRevision(input.projectId, input.databaseId, {
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
 }
 
 async function inspectEnvironmentSchemaStateInRunner(
@@ -632,11 +733,7 @@ async function inspectEnvironmentSchemaStateInRunner(
   });
 
   const state = await waitForFreshSchemaState(input, startedAt);
-  if (
-    !state ||
-    !state.lastInspectedAt ||
-    state.lastInspectedAt.getTime() < startedAt.getTime() - 1_000
-  ) {
+  if (!state?.lastInspectedAt || state.lastInspectedAt.getTime() < startedAt.getTime() - 1_000) {
     throw new Error('Schema runner 未写入最新 schema 检查结果');
   }
 
@@ -660,6 +757,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       status: 'unmanaged',
       expectedEntries: [],
       actualEntries: [],
+      sourceRef: input.sourceRef ?? null,
+      sourceCommitSha: input.sourceCommitSha ?? null,
       hasLedger: false,
       hasUserTables: false,
       summary: '仓库中没有匹配当前数据库的迁移配置',
@@ -686,6 +785,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
           status: 'blocked',
           expectedEntries: [],
           actualEntries: [],
+          sourceRef: input.sourceRef ?? null,
+          sourceCommitSha: input.sourceCommitSha ?? null,
           hasLedger: false,
           hasUserTables: false,
           summary: reason,
@@ -710,6 +811,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: inspected.status,
         expectedEntries: desiredSchemaInspection.snapshot.expectedEntries,
         actualEntries: desiredSchemaInspection.snapshot.actualEntries,
+        sourceRef: input.sourceRef ?? null,
+        sourceCommitSha: input.sourceCommitSha ?? null,
         hasLedger: inspected.hasLedger,
         hasUserTables: inspected.hasUserTables,
         summary: inspected.summary,
@@ -737,6 +840,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: 'blocked',
         expectedEntries: [],
         actualEntries: [],
+        sourceRef: input.sourceRef ?? null,
+        sourceCommitSha: input.sourceCommitSha ?? null,
         hasLedger: false,
         hasUserTables: false,
         summary: reason,
@@ -755,6 +860,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
         status: 'blocked',
         expectedEntries: ledgerInspection.snapshot.expectedEntries,
         actualEntries: ledgerInspection.snapshot.actualEntries,
+        sourceRef: input.sourceRef ?? null,
+        sourceCommitSha: input.sourceCommitSha ?? null,
         hasLedger: ledgerInspection.snapshot.actualEntries.length > 0,
         hasUserTables: ledgerInspection.snapshot.hasUserTables,
         summary: reason,
@@ -779,6 +886,8 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       status: inspected.status,
       expectedEntries: ledgerInspection.snapshot.expectedEntries,
       actualEntries: ledgerInspection.snapshot.actualEntries,
+      sourceRef: input.sourceRef ?? null,
+      sourceCommitSha: input.sourceCommitSha ?? null,
       hasLedger: inspected.hasLedger,
       hasUserTables: inspected.hasUserTables,
       summary: inspected.summary,
@@ -819,7 +928,10 @@ export async function requestEnvironmentSchemaStateInspection(
   input: EnvironmentSchemaInspectionInput
 ): Promise<EnvironmentSchemaInspectionRequestSnapshot> {
   await loadInspectionDatabase(input);
-  const currentState = await getEnvironmentSchemaState(input.projectId, input.databaseId);
+  const currentState = await getEnvironmentSchemaStateRevision(input.projectId, input.databaseId, {
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
 
   if (!canUseSchemaRunnerJobs() || process.env.JUANIE_SCHEMA_INSPECT_FORCE_LOCAL === 'true') {
     return {

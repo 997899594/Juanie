@@ -39,11 +39,7 @@ import {
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
 import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
-import {
-  getStoredReleaseSchemaGate,
-  inspectReleaseSchemaGate,
-  type ReleaseSchemaGateSnapshot,
-} from '@/lib/schema-safety';
+import { getStoredReleaseSchemaGate, type ReleaseSchemaGateSnapshot } from '@/lib/schema-safety';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface PlanningServiceLike {
@@ -154,7 +150,6 @@ export interface EnvironmentRollbackCandidate {
 
 interface PromotionPlanningOptions {
   includeLiveChecks?: boolean;
-  schemaGateMode?: 'live' | 'stored';
   requestSchemaRefresh?: boolean;
 }
 
@@ -541,7 +536,6 @@ export async function buildProjectReleasePlan(input: {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
   entryPoint?: ReleaseEntryPoint;
-  schemaGateMode?: PromotionPlanningOptions['schemaGateMode'];
   requestSchemaRefresh?: boolean;
 }): Promise<ReleasePlanningSnapshot> {
   const project = await db.query.projects.findFirst({
@@ -594,23 +588,14 @@ export async function buildProjectReleasePlan(input: {
       sourceCommitSha: input.sourceCommitSha,
     }),
   ]);
-  const schemaGate =
-    input.schemaGateMode === 'stored'
-      ? await getStoredReleaseSchemaGate({
-          projectId: project.id,
-          environmentId: environment.id,
-          serviceIds,
-          sourceRef: input.sourceRef,
-          sourceCommitSha: input.sourceCommitSha,
-          requestRefresh: input.requestSchemaRefresh,
-        })
-      : await inspectReleaseSchemaGate({
-          projectId: project.id,
-          environmentId: environment.id,
-          serviceIds,
-          sourceRef: input.sourceRef,
-          sourceCommitSha: input.sourceCommitSha,
-        });
+  const schemaGate = await getStoredReleaseSchemaGate({
+    projectId: project.id,
+    environmentId: environment.id,
+    serviceIds,
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+    requestRefresh: input.requestSchemaRefresh,
+  });
 
   return summarizeReleasePlan({
     environment,
@@ -837,7 +822,6 @@ async function buildPromotionPlanForResolution(
         sourceRef: sourceRelease.sourceRef,
         sourceCommitSha: sourceRelease.sourceCommitSha,
         entryPoint: 'promotion',
-        schemaGateMode: options.schemaGateMode,
         requestSchemaRefresh: options.requestSchemaRefresh,
       })
     : buildStaticPlanningSnapshot({
@@ -1040,7 +1024,6 @@ export async function buildEnvironmentRollbackPlan(input: {
   projectId: string;
   environmentId: string;
   sourceReleaseId?: string | null;
-  schemaGateMode?: PromotionPlanningOptions['schemaGateMode'];
   requestSchemaRefresh?: boolean;
 }): Promise<{
   sourceRelease: EnvironmentRollbackCandidate | null;
@@ -1138,7 +1121,6 @@ export async function buildEnvironmentRollbackPlan(input: {
     sourceRef: sourceRelease.sourceRef,
     sourceCommitSha: sourceRelease.sourceCommitSha,
     entryPoint: 'rollback',
-    schemaGateMode: input.schemaGateMode,
     requestSchemaRefresh: input.requestSchemaRefresh,
   });
 

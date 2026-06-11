@@ -13,7 +13,6 @@ import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
-import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -22,8 +21,6 @@ import {
   resolveDuplicatePromotion,
   resolvePromotableSourceRelease,
 } from '@/lib/releases/planning';
-import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
-import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,7 +35,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       refreshSchemaParam === 'true' || refreshSchemaParam === '1' || refreshSchemaParam === 'yes';
     const promotion = await buildPromotionPlan(id, {
       flowId,
-      schemaGateMode: 'stored',
       requestSchemaRefresh,
     });
 
@@ -63,10 +59,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -210,13 +202,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    if (
-      error instanceof ReleaseSchemaGateBlockedError ||
-      error instanceof PreviewDatabaseGuardBlockedError
-    ) {
-      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

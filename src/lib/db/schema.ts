@@ -992,6 +992,8 @@ export const environmentSchemaStates = pgTable(
     actualVersion: varchar('actualVersion', { length: 255 }),
     expectedChecksum: varchar('expectedChecksum', { length: 64 }),
     actualChecksum: varchar('actualChecksum', { length: 64 }),
+    sourceRef: varchar('sourceRef', { length: 500 }),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
     hasLedger: boolean('hasLedger').notNull().default(false),
     hasUserTables: boolean('hasUserTables').notNull().default(false),
     summary: text('summary'),
@@ -1007,6 +1009,63 @@ export const environmentSchemaStates = pgTable(
     environmentIdIdx: index('environmentSchemaState_environmentId_idx').on(table.environmentId),
     databaseIdIdx: index('environmentSchemaState_databaseId_idx').on(table.databaseId),
     uniqueDatabase: unique('environmentSchemaState_database_unique').on(table.databaseId),
+  })
+);
+
+export const environmentSchemaStateRevisions = pgTable(
+  'environmentSchemaStateRevision',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+
+    sourceKey: varchar('sourceKey', { length: 700 }).notNull(),
+    sourceRef: varchar('sourceRef', { length: 500 }),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
+    status: environmentSchemaStateStatusEnum('status').notNull(),
+    expectedVersion: varchar('expectedVersion', { length: 255 }),
+    actualVersion: varchar('actualVersion', { length: 255 }),
+    expectedChecksum: varchar('expectedChecksum', { length: 64 }),
+    actualChecksum: varchar('actualChecksum', { length: 64 }),
+    hasLedger: boolean('hasLedger').notNull().default(false),
+    hasUserTables: boolean('hasUserTables').notNull().default(false),
+    summary: text('summary'),
+    inspectedAt: timestamp('inspectedAt').notNull(),
+    lastErrorCode: varchar('lastErrorCode', { length: 100 }),
+    lastErrorMessage: text('lastErrorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('environmentSchemaStateRevision_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('environmentSchemaStateRevision_environmentId_idx').on(
+      table.environmentId
+    ),
+    databaseIdIdx: index('environmentSchemaStateRevision_databaseId_idx').on(table.databaseId),
+    sourceKeyIdx: index('environmentSchemaStateRevision_sourceKey_idx').on(
+      table.databaseId,
+      table.sourceKey
+    ),
+    sourceCommitIdx: index('environmentSchemaStateRevision_sourceCommit_idx').on(
+      table.databaseId,
+      table.sourceCommitSha
+    ),
+    sourceRefIdx: index('environmentSchemaStateRevision_sourceRef_idx').on(
+      table.databaseId,
+      table.sourceRef
+    ),
+    uniqueRevision: unique('environmentSchemaStateRevision_database_revision_unique').on(
+      table.databaseId,
+      table.sourceKey
+    ),
   })
 );
 
@@ -1817,6 +1876,7 @@ export const databasesRelations = relations(databases, ({ one, many }) => ({
     fields: [databases.id],
     references: [environmentSchemaStates.databaseId],
   }),
+  schemaStateRevisions: many(environmentSchemaStateRevisions),
   repairPlans: many(schemaRepairPlans),
   migrationSpecifications: many(migrationSpecifications),
   migrationRuns: many(migrationRuns),
@@ -1909,6 +1969,24 @@ export const environmentSchemaStatesRelations = relations(environmentSchemaState
     references: [databases.id],
   }),
 }));
+
+export const environmentSchemaStateRevisionsRelations = relations(
+  environmentSchemaStateRevisions,
+  ({ one }) => ({
+    project: one(projects, {
+      fields: [environmentSchemaStateRevisions.projectId],
+      references: [projects.id],
+    }),
+    environment: one(environments, {
+      fields: [environmentSchemaStateRevisions.environmentId],
+      references: [environments.id],
+    }),
+    database: one(databases, {
+      fields: [environmentSchemaStateRevisions.databaseId],
+      references: [databases.id],
+    }),
+  })
+);
 
 export const schemaRepairPlansRelations = relations(schemaRepairPlans, ({ one, many }) => ({
   project: one(projects, {

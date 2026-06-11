@@ -3,12 +3,14 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
+import { scheduleReleaseJob } from '@/lib/queue';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
   failReleaseForCurrentPhase,
   loadReleaseForOrchestration,
   persistReleaseRecapSafely,
+  runReleaseAdmission,
   startReleaseDeploymentStage,
   startReleaseMigrationPhase,
   updateReleaseStatus,
@@ -20,6 +22,7 @@ import type { ReleaseJobData } from './index';
 const releaseWorkerLogger = logger.child({ component: 'release-worker' });
 const releaseWorkerLockDurationMs = 300_000;
 const releaseWorkerLockRenewTimeMs = 60_000;
+const schemaAdmissionRetryDelayMs = 10_000;
 
 export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
   return (releaseStatusesRequiringFailureReconciliation as readonly string[]).includes(status);
@@ -68,6 +71,14 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     environmentId: release.environmentId,
   });
 
+  if (release.status !== 'admission_running' && release.status !== 'queued') {
+    return {
+      success: true,
+      skipped: true,
+      status: release.status,
+    };
+  }
+
   if (release.artifacts.length === 0) {
     await updateReleaseStatus(release.id, 'failed', 'Release has no artifacts to verify');
     throw new Error('Release has no artifacts to verify');
@@ -83,6 +94,33 @@ export async function processRelease(job: Job<ReleaseJobData>) {
         terminal: true,
         artifactOnly: true,
       };
+    }
+
+    if (release.status === 'admission_running') {
+      const admission = await runReleaseAdmission(release);
+
+      if (admission.kind === 'pending_schema_refresh') {
+        await scheduleReleaseJob(release.id, {
+          traceId: job.data.traceId,
+          delayMs: schemaAdmissionRetryDelayMs,
+        });
+        return {
+          success: true,
+          terminal: false,
+          phase: 'admission',
+          retryAfterMs: schemaAdmissionRetryDelayMs,
+        };
+      }
+
+      if (admission.kind === 'blocked') {
+        return {
+          success: false,
+          terminal: true,
+          phase: 'admission',
+          blocked: true,
+          reason: admission.reason,
+        };
+      }
     }
 
     await updateReleaseStatus(release.id, 'planning');

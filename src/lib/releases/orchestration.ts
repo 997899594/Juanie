@@ -7,6 +7,7 @@ import {
   type ReleaseStatus,
   releases,
 } from '@/lib/db/schema';
+import { clearEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
@@ -19,6 +20,10 @@ import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/rele
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
 import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
+import {
+  inspectPreviewDatabaseGuardForRelease,
+  previewDatabaseGuardMessage,
+} from '@/lib/releases/preview-database-guard';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import {
   getObservedDeploymentTerminalStatus,
@@ -30,6 +35,10 @@ import {
   supersedableMigrationRunStatuses,
   supersedableReleaseStatuses,
 } from '@/lib/releases/state-machine';
+import {
+  getStoredReleaseSchemaGate,
+  isReleaseSchemaGateWaitingForRefresh,
+} from '@/lib/schema-safety';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
@@ -62,6 +71,19 @@ type ReleaseMigrationPhaseProgressResult =
       errorMessage: string | null;
     };
 
+export type ReleaseAdmissionResult =
+  | {
+      kind: 'accepted';
+    }
+  | {
+      kind: 'pending_schema_refresh';
+      reason: string;
+    }
+  | {
+      kind: 'blocked';
+      reason: string;
+    };
+
 export async function loadReleaseForOrchestration(releaseId: string) {
   return db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
@@ -92,6 +114,64 @@ export async function updateReleaseStatus(
     .where(eq(releases.id, releaseId));
 
   await publishReleaseRealtimeSnapshot(releaseId);
+}
+
+export async function runReleaseAdmission(
+  release: OrchestratedRelease
+): Promise<ReleaseAdmissionResult> {
+  const deployableServiceIds = getDeployableReleaseArtifacts(release.artifacts)
+    .map((artifact) => artifact.serviceId)
+    .filter((serviceId): serviceId is string => Boolean(serviceId));
+
+  if (deployableServiceIds.length === 0) {
+    await updateReleaseStatus(release.id, 'queued');
+    return { kind: 'accepted' };
+  }
+
+  const sourceCommitSha = release.configCommitSha ?? release.sourceCommitSha;
+  const previewDatabaseGuard = await inspectPreviewDatabaseGuardForRelease({
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+    environment: release.environment,
+    serviceIds: deployableServiceIds,
+    sourceRef: release.sourceRef,
+    sourceCommitSha,
+  });
+
+  if (!previewDatabaseGuard.canCreate) {
+    const reason = previewDatabaseGuard.blockingReason ?? previewDatabaseGuardMessage;
+    await updateReleaseStatus(release.id, 'admission_failed', reason);
+    await persistReleaseRecapSafely(release.id);
+    return { kind: 'blocked', reason };
+  }
+
+  const schemaGate = await getStoredReleaseSchemaGate({
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+    serviceIds: deployableServiceIds,
+    sourceRef: release.sourceRef,
+    sourceCommitSha,
+    requestRefresh: true,
+  });
+
+  if (!schemaGate.canCreate) {
+    const reason = schemaGate.blockingReason ?? 'Release blocked by schema state';
+    if (isReleaseSchemaGateWaitingForRefresh(schemaGate)) {
+      await updateReleaseStatus(release.id, 'admission_running', reason);
+      await persistReleaseRecapSafely(release.id);
+      return { kind: 'pending_schema_refresh', reason };
+    }
+
+    await updateReleaseStatus(release.id, 'admission_failed', reason);
+    await persistReleaseRecapSafely(release.id);
+    return { kind: 'blocked', reason };
+  }
+
+  await updateReleaseStatus(release.id, 'queued');
+  if (release.environment.previewBuildStatus) {
+    await clearEnvironmentSourceBuildState(release.environment.id);
+  }
+  return { kind: 'accepted' };
 }
 
 export async function persistReleaseRecapSafely(releaseId: string) {
@@ -536,7 +616,7 @@ export async function resumeReleaseAfterDeploymentProgress(deploymentId: string)
     },
   });
 
-  if (!release || release.status !== 'deploying') {
+  if (release?.status !== 'deploying') {
     return { resumed: false, reason: 'release_not_deploying' as const };
   }
 
@@ -610,7 +690,7 @@ export async function completeReleaseAfterRolloutIfReady(releaseId: string) {
     },
   });
 
-  if (!release || release.status !== 'awaiting_rollout') {
+  if (release?.status !== 'awaiting_rollout') {
     return false;
   }
 

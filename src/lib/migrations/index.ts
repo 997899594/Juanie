@@ -15,6 +15,8 @@ import {
   evaluateMigrationPolicy,
   evaluateReleasePolicy,
 } from '@/lib/policies/delivery';
+import { getEnvironmentSchemaStateRevision } from '@/lib/schema-management/inspect';
+import { isSchemaStateForRequestedRevision } from '@/lib/schema-management/revision';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationPath } from './path';
@@ -22,6 +24,38 @@ import { resolveMigrationSpecifications } from './resolver';
 import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
 export { resolveMigrationSpecifications } from './resolver';
+
+export type ReleaseMigrationCreationDecision =
+  | {
+      kind: 'create';
+    }
+  | {
+      kind: 'skip';
+    }
+  | {
+      kind: 'missing_current_schema_state';
+    };
+
+export function resolveReleaseMigrationCreationDecision(
+  state:
+    | {
+        status: string;
+        sourceRef?: string | null;
+        sourceCommitSha?: string | null;
+      }
+    | null
+    | undefined,
+  requested: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+  }
+): ReleaseMigrationCreationDecision {
+  if (!state || !isSchemaStateForRequestedRevision(state, requested)) {
+    return { kind: 'missing_current_schema_state' };
+  }
+
+  return state.status === 'pending_migrations' ? { kind: 'create' } : { kind: 'skip' };
+}
 
 function buildPlanEnvVars(spec: ResolvedMigrationSpec): string[] {
   const envVars: string[] = [];
@@ -117,6 +151,27 @@ export async function resolveAndCreateMigrationRuns(
   const runs = [];
 
   for (const spec of specs) {
+    if (phase !== 'manual') {
+      const schemaState = await getEnvironmentSchemaStateRevision(projectId, spec.database.id, {
+        sourceRef: input.sourceRef,
+        sourceCommitSha: input.sourceCommitSha,
+      });
+      const decision = resolveReleaseMigrationCreationDecision(schemaState, {
+        sourceRef: input.sourceRef,
+        sourceCommitSha: input.sourceCommitSha,
+      });
+
+      if (decision.kind === 'missing_current_schema_state') {
+        throw new Error(
+          `数据库 ${spec.database.name} 尚未有当前版本的 schema 检查结果，不能执行发布迁移`
+        );
+      }
+
+      if (decision.kind === 'skip') {
+        continue;
+      }
+    }
+
     let initialStatus: MigrationRunStatus | undefined;
     if (phase !== 'manual') {
       if (spec.specification.executionMode === 'manual_platform') {

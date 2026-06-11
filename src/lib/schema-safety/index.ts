@@ -1,8 +1,8 @@
 export {
   getStoredReleaseSchemaGate,
-  inspectReleaseSchemaGate,
+  isReleaseSchemaGateRefreshUnavailable,
+  isReleaseSchemaGateWaitingForRefresh,
   isReleaseSchemaStateBlocking,
-  ReleaseSchemaGateBlockedError,
   type ReleaseSchemaGateRefreshSnapshot,
   type ReleaseSchemaGateSnapshot,
   type ReleaseSchemaGateState,

@@ -361,13 +361,15 @@ function normalizeStoredMigrationFilePreviewSnapshot(
     return null;
   }
 
+  const sourceLabel = snapshot.sourceLabel;
+  const isDesiredSchemaPreview = sourceLabel === 'Desired schema';
+
   return {
-    sourceLabel: snapshot.sourceLabel,
+    sourceLabel,
     files: normalizeStringArray(snapshot.files),
-    fileDetails:
-      snapshot.sourceLabel === 'Desired schema'
-        ? undefined
-        : normalizeFilePreviewDetails(snapshot.fileDetails),
+    fileDetails: isDesiredSchemaPreview
+      ? undefined
+      : normalizeFilePreviewDetails(snapshot.fileDetails),
 
     executionPlan: normalizeExecutionPlan(snapshot.executionPlan),
     total: normalizeNumber(snapshot.total),

@@ -6,11 +6,8 @@ import { db } from '@/lib/db';
 import { environments, projects } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
-import { getAdmissionFailureResponsePayload } from '@/lib/releases/admission-response';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildEnvironmentRollbackPlan } from '@/lib/releases/planning';
-import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
-import { ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 
 export async function GET(
   request: Request,
@@ -43,17 +40,12 @@ export async function GET(
         projectId: id,
         environmentId: envId,
         sourceReleaseId,
-        schemaGateMode: 'stored',
         requestSchemaRefresh,
       })
     );
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    if (error instanceof ReleaseSchemaGateBlockedError) {
-      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -103,7 +95,6 @@ export async function POST(
       projectId: id,
       environmentId: envId,
       sourceReleaseId,
-      schemaGateMode: 'stored',
     });
 
     if (!rollback.sourceRelease || !rollback.plan.canCreate) {
@@ -150,13 +141,6 @@ export async function POST(
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    if (
-      error instanceof ReleaseSchemaGateBlockedError ||
-      error instanceof PreviewDatabaseGuardBlockedError
-    ) {
-      return NextResponse.json(getAdmissionFailureResponsePayload(error), { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

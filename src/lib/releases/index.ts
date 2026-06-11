@@ -11,25 +11,15 @@ import {
 } from '@/lib/db/schema';
 import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
-import {
-  clearEnvironmentSourceBuildState,
-  setEnvironmentSourceBuildState,
-} from '@/lib/environments/source-build-state';
+import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
 import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
-import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
-import {
-  inspectPreviewDatabaseGuardForRelease,
-  PreviewDatabaseGuardBlockedError,
-  previewDatabaseGuardMessage,
-} from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
-import { inspectReleaseSchemaGate, ReleaseSchemaGateBlockedError } from '@/lib/schema-safety';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 import { getDeliveryReleaseArtifacts, getDeployableReleaseArtifacts } from './artifacts';
@@ -71,13 +61,6 @@ export interface CreateProjectReleaseInput {
   triggeredByUserId?: string | null;
   summary?: string | null;
   entryPoint?: ReleaseEntryPoint;
-}
-
-export interface PersistedAdmissionRelease {
-  id: string;
-  projectId: string;
-  environmentId: string;
-  releasePath: string;
 }
 
 export function resolveEnvironment(
@@ -205,58 +188,17 @@ async function persistRelease(
     })
     .returning();
 
-  const releasePath = buildReleaseDetailPath(project.id, environment.id, release.id);
-  const admissionRelease = {
-    id: release.id,
-    projectId: release.projectId,
-    environmentId: release.environmentId,
-    releasePath,
-  } satisfies PersistedAdmissionRelease;
-
-  const failAdmission = async (errorMessage: string) => {
+  const failReleaseCreation = async (errorMessage: string) => {
     await db
       .update(releases)
       .set({
-        status: 'admission_failed',
+        status: 'failed',
         errorMessage,
         updatedAt: new Date(),
       })
       .where(eq(releases.id, release.id));
     await publishReleaseRealtimeSnapshot(release.id);
   };
-
-  const previewDatabaseGuard =
-    deployableServiceIds.length > 0
-      ? await inspectPreviewDatabaseGuardForRelease({
-          projectId: project.id,
-          environmentId: environment.id,
-          environment,
-          serviceIds: deployableServiceIds,
-          sourceRef: meta.sourceRef,
-          sourceCommitSha: meta.sourceCommitSha ?? null,
-        })
-      : { canCreate: true as const };
-
-  if (!previewDatabaseGuard.canCreate) {
-    await failAdmission(previewDatabaseGuard.blockingReason ?? previewDatabaseGuardMessage);
-    throw new PreviewDatabaseGuardBlockedError(previewDatabaseGuard, undefined, admissionRelease);
-  }
-
-  const schemaGate =
-    deployableServiceIds.length > 0
-      ? await inspectReleaseSchemaGate({
-          projectId: project.id,
-          environmentId: environment.id,
-          serviceIds: deployableServiceIds,
-          sourceRef: meta.sourceRef,
-          sourceCommitSha: meta.sourceCommitSha ?? null,
-        })
-      : { canCreate: true as const };
-
-  if (!schemaGate.canCreate) {
-    await failAdmission(schemaGate.blockingReason ?? 'Release blocked by schema state');
-    throw new ReleaseSchemaGateBlockedError(schemaGate, admissionRelease);
-  }
 
   try {
     await db.insert(releaseArtifacts).values([
@@ -292,27 +234,14 @@ async function persistRelease(
         sourceImagePlatform: artifact.sourceImagePlatform,
       })),
     ]);
-
-    await db
-      .update(releases)
-      .set({
-        status: 'queued',
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(releases.id, release.id));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await failAdmission(message);
+    await failReleaseCreation(message);
     throw error;
   }
 
-  if (environment.previewBuildStatus) {
-    await clearEnvironmentSourceBuildState(environment.id);
-  }
-
   const traceId = createTraceId(release.id);
-  releaseServiceLogger.info('Release queued', {
+  releaseServiceLogger.info('Release admission queued', {
     ...buildTraceLogFields({
       traceId,
       projectId: project.id,

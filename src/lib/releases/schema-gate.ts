@@ -2,10 +2,10 @@ import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   type EnvironmentSchemaInspectionRequestSnapshot,
   type EnvironmentSchemaStateSnapshot,
-  getEnvironmentSchemaState,
-  inspectEnvironmentSchemaState,
+  getEnvironmentSchemaStateRevision,
   requestEnvironmentSchemaStateInspection,
 } from '@/lib/schema-management/inspect';
+import { isSchemaStateForRequestedRevision } from '@/lib/schema-management/revision';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-safety/presentation';
 import type { PlatformSignalChip } from '@/lib/signals/platform';
 
@@ -24,6 +24,8 @@ export interface ReleaseSchemaGateState {
   hasLedger?: boolean;
   hasUserTables?: boolean;
   freshness?: 'live' | 'stored' | 'missing';
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
   lastInspectedAt?: string | Date | null;
   refreshStatus?: EnvironmentSchemaInspectionRequestSnapshot['status'] | 'idle';
 }
@@ -47,22 +49,6 @@ export interface ReleaseSchemaGateSnapshot {
   customSignals: PlatformSignalChip[];
   states: ReleaseSchemaGateState[];
   refresh?: ReleaseSchemaGateRefreshSnapshot;
-}
-
-export class ReleaseSchemaGateBlockedError extends Error {
-  constructor(
-    readonly snapshot: ReleaseSchemaGateSnapshot,
-    readonly release?: {
-      id: string;
-      projectId: string;
-      environmentId: string;
-      releasePath?: string | null;
-    } | null,
-    message = snapshot.blockingReason ?? 'Release blocked by schema state'
-  ) {
-    super(message);
-    this.name = 'ReleaseSchemaGateBlockedError';
-  }
 }
 
 function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): PlatformSignalChip | null {
@@ -114,7 +100,25 @@ export function isReleaseSchemaStateBlocking(state: ReleaseSchemaGateState): boo
   return state.hasLedger === true || state.hasUserTables === true;
 }
 
-function buildReleaseSchemaGateSnapshot(
+export function isReleaseSchemaGateWaitingForRefresh(
+  snapshot: Pick<ReleaseSchemaGateSnapshot, 'canCreate' | 'refresh'>
+): boolean {
+  if (snapshot.canCreate) {
+    return false;
+  }
+
+  const refresh = snapshot.refresh;
+  return Boolean(refresh && refresh.queuedCount + refresh.runningCount > 0);
+}
+
+export function isReleaseSchemaGateRefreshUnavailable(
+  snapshot: Pick<ReleaseSchemaGateSnapshot, 'refresh'>
+): boolean {
+  const refresh = snapshot.refresh;
+  return Boolean(refresh && refresh.unavailableCount + refresh.failedCount > 0);
+}
+
+export function buildReleaseSchemaGateSnapshot(
   states: ReleaseSchemaGateState[],
   refresh?: Partial<ReleaseSchemaGateRefreshSnapshot>
 ): ReleaseSchemaGateSnapshot {
@@ -153,9 +157,9 @@ function buildReleaseSchemaGateSnapshot(
     });
   } else if (refreshSnapshot.unavailableCount + refreshSnapshot.failedCount > 0) {
     customSignals.push({
-      key: 'schema:refresh-deferred',
-      label: 'Schema 提交时强校验',
-      tone: 'neutral',
+      key: 'schema:refresh-failed',
+      label: 'Schema 检查不可用',
+      tone: 'danger',
     });
   } else if (refreshSnapshot.missingCount > 0) {
     customSignals.push({
@@ -173,15 +177,36 @@ function buildReleaseSchemaGateSnapshot(
   }
 
   const firstBlockingState = blockingStates[0] ?? null;
+  const hasRefreshBlockedState = blockingStates.some(
+    (state) => state.refreshStatus === 'queued' || state.refreshStatus === 'running'
+  );
+  const hasUnavailableRefreshState =
+    refreshSnapshot.unavailableCount + refreshSnapshot.failedCount > 0;
+  const hasPendingMissingBlockedState = blockingStates.some(
+    (state) => state.freshness === 'missing' && state.refreshStatus !== 'failed'
+  );
 
   return {
     canCreate: blockingStates.length === 0,
     checkedCount: states.length,
     blockingCount: blockingStates.length,
     blockingReason:
-      blockingStates.length > 0 ? `存在 ${blockingStates.length} 个数据库 schema 门禁未满足` : null,
+      blockingStates.length > 0
+        ? hasUnavailableRefreshState
+          ? '数据库 schema 检查不可用，请查看环境数据库诊断'
+          : hasRefreshBlockedState || hasPendingMissingBlockedState
+            ? '数据库 schema 检查尚未完成，请稍后重试'
+            : `存在 ${blockingStates.length} 个数据库 schema 门禁未满足`
+        : null,
     summary: firstBlockingState?.summary ?? null,
-    nextActionLabel: blockingStates.length > 0 ? '先在环境页处理数据库纳管' : null,
+    nextActionLabel:
+      blockingStates.length > 0
+        ? hasUnavailableRefreshState
+          ? '查看数据库诊断'
+          : hasRefreshBlockedState || hasPendingMissingBlockedState
+            ? '等待 Schema 检查完成'
+            : '先在环境页处理数据库纳管'
+        : null,
     customSignals,
     states,
     refresh: refreshSnapshot,
@@ -238,6 +263,8 @@ function toReleaseSchemaGateState(input: {
     hasLedger: input.state.hasLedger,
     hasUserTables: input.state.hasUserTables,
     freshness: input.freshness,
+    sourceRef: input.state.sourceRef,
+    sourceCommitSha: input.state.sourceCommitSha,
     lastInspectedAt: input.state.lastInspectedAt,
     refreshStatus: input.refreshStatus ?? 'idle',
   };
@@ -248,17 +275,21 @@ function buildMissingReleaseSchemaGateState(input: {
     id: string;
     name: string;
   };
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
   requestedRefresh: boolean;
   refreshStatus?: ReleaseSchemaGateState['refreshStatus'];
 }): ReleaseSchemaGateState {
   return {
     databaseId: input.database.id,
     databaseName: input.database.name,
-    status: 'unmanaged',
-    statusLabel: getEnvironmentSchemaStateLabel('unmanaged'),
+    status: 'blocked',
+    statusLabel: getEnvironmentSchemaStateLabel('blocked'),
     summary: input.requestedRefresh
-      ? '尚未有 schema 检查结果，已请求后台刷新；创建发布时会再次强校验'
-      : '尚未有 schema 检查结果；创建发布时会再次强校验',
+      ? '尚未有当前版本的 schema 检查结果，已请求后台刷新。'
+      : '尚未有当前版本的 schema 检查结果。',
+    sourceRef: input.sourceRef ?? null,
+    sourceCommitSha: input.sourceCommitSha ?? null,
     hasLedger: false,
     hasUserTables: false,
     freshness: 'missing',
@@ -267,37 +298,14 @@ function buildMissingReleaseSchemaGateState(input: {
   };
 }
 
-export async function inspectReleaseSchemaGate(input: {
-  projectId: string;
-  environmentId: string;
-  serviceIds: string[];
-  sourceRef?: string | null;
-  sourceCommitSha?: string | null;
-}): Promise<ReleaseSchemaGateSnapshot> {
-  const databases = await resolveReleaseSchemaGateDatabases(input);
-
-  if (databases.length === 0) {
-    return buildReleaseSchemaGateSnapshot([]);
+export function isStoredSchemaStateForRequestedRevision(
+  state: EnvironmentSchemaStateSnapshot,
+  input: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
   }
-
-  const states = await Promise.all(
-    databases.map(async (database) => {
-      const state = await inspectEnvironmentSchemaState({
-        projectId: input.projectId,
-        databaseId: database.id,
-        sourceRef: input.sourceRef,
-        sourceCommitSha: input.sourceCommitSha,
-      });
-
-      return toReleaseSchemaGateState({
-        database,
-        state,
-        freshness: 'live',
-      });
-    })
-  );
-
-  return buildReleaseSchemaGateSnapshot(states);
+): boolean {
+  return isSchemaStateForRequestedRevision(state, input);
 }
 
 export async function getStoredReleaseSchemaGate(input: {
@@ -314,17 +322,31 @@ export async function getStoredReleaseSchemaGate(input: {
     return buildReleaseSchemaGateSnapshot([]);
   }
 
+  const revisionStates = await Promise.all(
+    databases.map(async (database) => ({
+      databaseId: database.id,
+      state: await getEnvironmentSchemaStateRevision(input.projectId, database.id, {
+        sourceRef: input.sourceRef,
+        sourceCommitSha: input.sourceCommitSha,
+      }),
+    }))
+  );
+  const revisionStateByDatabaseId = new Map(
+    revisionStates.map((item) => [item.databaseId, item.state] as const)
+  );
   const refreshRequests = input.requestRefresh
     ? await Promise.all(
-        databases.map(async (database) => ({
-          databaseId: database.id,
-          request: await requestEnvironmentSchemaStateInspection({
-            projectId: input.projectId,
+        databases
+          .filter((database) => !revisionStateByDatabaseId.get(database.id))
+          .map(async (database) => ({
             databaseId: database.id,
-            sourceRef: input.sourceRef,
-            sourceCommitSha: input.sourceCommitSha,
-          }),
-        }))
+            request: await requestEnvironmentSchemaStateInspection({
+              projectId: input.projectId,
+              databaseId: database.id,
+              sourceRef: input.sourceRef,
+              sourceCommitSha: input.sourceCommitSha,
+            }),
+          }))
       )
     : [];
   const refreshByDatabaseId = new Map(
@@ -334,12 +356,13 @@ export async function getStoredReleaseSchemaGate(input: {
   const states = await Promise.all(
     databases.map(async (database) => {
       const refresh = refreshByDatabaseId.get(database.id) ?? null;
-      const state =
-        refresh?.currentState ?? (await getEnvironmentSchemaState(input.projectId, database.id));
+      const state = revisionStateByDatabaseId.get(database.id) ?? null;
 
-      if (!state) {
+      if (!state || !isStoredSchemaStateForRequestedRevision(state, input)) {
         return buildMissingReleaseSchemaGateState({
           database,
+          sourceRef: input.sourceRef,
+          sourceCommitSha: input.sourceCommitSha,
           requestedRefresh: input.requestRefresh === true,
           refreshStatus: refresh?.status ?? 'idle',
         });
