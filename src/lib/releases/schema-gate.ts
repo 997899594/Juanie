@@ -101,10 +101,7 @@ export function isReleaseSchemaStateBlocking(state: ReleaseSchemaGateState): boo
     return false;
   }
 
-  if (
-    state.status === 'unknown' &&
-    (state.refreshStatus === 'queued' || state.refreshStatus === 'running')
-  ) {
+  if (state.status === 'unknown') {
     return false;
   }
 
@@ -193,13 +190,13 @@ export function buildReleaseSchemaGateSnapshot(
   );
   const hasUnavailableRefreshState =
     refreshSnapshot.unavailableCount + refreshSnapshot.failedCount > 0;
-  const hasIdleMissingState = blockingStates.some(
-    (state) => state.freshness === 'missing' && (state.refreshStatus ?? 'idle') === 'idle'
-  );
   const hasPendingMissingState = states.some(
     (state) =>
       state.freshness === 'missing' &&
       (state.refreshStatus === 'queued' || state.refreshStatus === 'running')
+  );
+  const hasIdleMissingState = states.some(
+    (state) => state.freshness === 'missing' && (state.refreshStatus ?? 'idle') === 'idle'
   );
 
   return {
@@ -212,9 +209,7 @@ export function buildReleaseSchemaGateSnapshot(
           ? '数据库 schema 检查不可用，请查看环境数据库诊断'
           : hasRefreshBlockedState
             ? '数据库 schema 检查尚未完成，请稍后重试'
-            : hasIdleMissingState
-              ? '数据库 schema 尚未检查，请刷新检查后再创建发布'
-              : `存在 ${blockingStates.length} 个数据库 schema 门禁未满足`
+            : `存在 ${blockingStates.length} 个数据库 schema 门禁未满足`
         : null,
     summary: firstBlockingState?.summary ?? null,
     nextActionLabel:
@@ -223,12 +218,12 @@ export function buildReleaseSchemaGateSnapshot(
           ? '查看数据库诊断'
           : hasRefreshBlockedState
             ? '等待 Schema 检查完成'
-            : hasIdleMissingState
-              ? '刷新 Schema 检查'
-              : '先在环境页处理数据库纳管'
+            : '先在环境页处理数据库纳管'
         : hasPendingMissingState
           ? '等待 Schema 检查完成'
-          : null,
+          : hasIdleMissingState
+            ? '创建后自动检查'
+            : null,
     customSignals,
     states,
     refresh: refreshSnapshot,

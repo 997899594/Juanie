@@ -236,7 +236,7 @@ export function ReleasePromoteDialog({
                       >
                         <span>
                           还有 {schemaRefresh?.missingCount}{' '}
-                          个数据库尚无当前版本检查结果；可先创建发布，准入会继续等待检查。
+                          个数据库尚无当前版本检查结果；发布创建后会自动检查并等待准入。
                         </span>
                         {onRefreshSchema ? (
                           <Button

@@ -121,7 +121,7 @@ describe('release schema gate', () => {
     expect(isReleaseSchemaGateRefreshUnavailable(snapshot)).toBe(false);
   });
 
-  it('requires a schema refresh request before allowing missing revision state', () => {
+  it('allows release creation before missing revision state is refreshed', () => {
     const snapshot = buildReleaseSchemaGateSnapshot(
       [
         {
@@ -140,9 +140,10 @@ describe('release schema gate', () => {
       }
     );
 
-    expect(snapshot.canCreate).toBe(false);
-    expect(snapshot.blockingReason).toBe('数据库 schema 尚未检查，请刷新检查后再创建发布');
-    expect(snapshot.nextActionLabel).toBe('刷新 Schema 检查');
+    expect(snapshot.canCreate).toBe(true);
+    expect(snapshot.blockingReason).toBe(null);
+    expect(snapshot.blockingCount).toBe(0);
+    expect(snapshot.nextActionLabel).toBe('创建后自动检查');
     expect(snapshot.customSignals.some((chip) => chip.key === 'schema:unknown')).toBe(true);
     expect(isReleaseSchemaGateWaitingForRefresh(snapshot)).toBe(false);
   });

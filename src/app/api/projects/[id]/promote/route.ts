@@ -118,6 +118,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
+    const promotionPlan = await buildPromotionPlan(id, {
+      flowId,
+      requestSchemaRefresh: true,
+    });
+
+    if (!promotionPlan.sourceRelease) {
+      return NextResponse.json(
+        {
+          error:
+            promotionPlan.plan.blockingReason ??
+            `${promotion.sourceEnvironment.name} 来源发布缺少可复用制品，请先重新发布`,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (!promotionPlan.plan.canCreate || promotionPlan.plan.blockingReason) {
+      return NextResponse.json(
+        { error: promotionPlan.plan.blockingReason ?? '提升发布准入未通过' },
+        { status: 409 }
+      );
+    }
+
     const promotionSource = await resolvePromotableSourceRelease({
       projectId: id,
       sourceEnvironment: promotion.sourceEnvironment,
