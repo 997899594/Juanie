@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import type { ComponentType } from 'react';
 import { cn } from '@/lib/utils';
+import { PlatformNavItem } from './platform-navigation';
 
 export interface SectionNavItem {
   href: string;
@@ -37,20 +37,19 @@ export function SectionNav({ items, className, size = 'md', tone = 'primary' }: 
         const Icon = item.icon;
 
         return (
-          <Link
+          <PlatformNavItem
             key={item.href}
             href={item.href}
+            icon={Icon}
+            label={item.label}
+            active={item.isActive}
+            tone="pill"
             className={cn(
-              'inline-flex items-center rounded-full font-medium transition-colors',
               itemSizeClassName[size],
-              item.isActive
-                ? activeToneClassName[tone]
-                : 'bg-transparent text-muted-foreground hover:bg-white/80 hover:text-foreground'
+              item.isActive && tone === 'inverted' && activeToneClassName.inverted,
+              item.isActive && tone === 'primary' && activeToneClassName.primary
             )}
-          >
-            {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-            {item.label}
-          </Link>
+          />
         );
       })}
     </nav>

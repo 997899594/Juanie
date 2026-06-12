@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './card';
+import { SectionLabel } from './platform';
 
 interface StatsCardProps {
   title: string;
@@ -19,9 +20,7 @@ export function StatsCard({ title, value, description, icon, trend, className }:
       <CardContent className="px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {title}
-            </p>
+            <SectionLabel as="p">{title}</SectionLabel>
             <p className="text-xl font-semibold tracking-tight">{value}</p>
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
             {trend && (

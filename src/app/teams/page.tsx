@@ -1,10 +1,10 @@
 import { Plus, Users } from 'lucide-react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
+import { ActionTile } from '@/components/ui/platform';
 import { auth } from '@/lib/auth';
 import { getTeamsListPageData } from '@/lib/teams/list-service';
 
@@ -16,7 +16,6 @@ export default async function TeamsPage() {
   }
 
   const { teamCards } = await getTeamsListPageData(session.user.id);
-  const shellClassName = 'console-panel';
 
   return (
     <PageShell size="wide">
@@ -37,26 +36,22 @@ export default async function TeamsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teamCards.map((team) => {
             return (
-              <Link
+              <ActionTile
                 key={team.id}
                 href={`/teams/${team.id}`}
-                className={`${shellClassName} px-5 py-4 transition-colors hover:bg-white/90`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-[18px]">
-                      <AvatarFallback className="rounded-[18px] bg-secondary/80 text-xs font-semibold">
-                        {team.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{team.name}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">@{team.slug}</div>
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">团队</div>
-                </div>
-              </Link>
+                title={team.name}
+                description={`@${team.slug}`}
+                icon={
+                  <Avatar className="h-10 w-10 rounded-[18px]">
+                    <AvatarFallback className="rounded-[18px] bg-secondary/80 text-xs font-semibold">
+                      {team.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                }
+                iconFrame={false}
+                accessory={<div className="text-[11px] text-muted-foreground">团队</div>}
+                showArrow={false}
+              />
             );
           })}
         </div>

@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { forwardRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Button, type ButtonProps } from './button';
+import { SectionLabel } from './platform';
+import { BackAction } from './platform-navigation';
 
 interface PageHeaderProps {
   title: string;
@@ -29,11 +31,7 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0 space-y-2">
-        {eyebrow ? (
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {eyebrow}
-          </div>
-        ) : null}
+        {eyebrow ? <SectionLabel>{eyebrow}</SectionLabel> : null}
         <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-[2rem]">
           {title}
         </h1>
@@ -96,11 +94,10 @@ export function PageBackAction({
   label?: string;
 }) {
   return (
-    <PageHeaderAction
+    <BackAction
       label={label}
       href={href}
       icon={<ArrowLeft className="h-4 w-4" />}
-      variant="ghost"
       size={size}
       className={className}
       {...props}

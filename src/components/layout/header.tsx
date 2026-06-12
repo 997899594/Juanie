@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { PlatformNavItem, PlatformNavLabel } from '@/components/ui/platform-navigation';
 import { useProjectContext } from '@/lib/project-context';
-import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
 import {
   buildEnvironmentNavHref,
@@ -152,19 +152,14 @@ export function Header() {
                   const isActive = isMobileProjectTabActive(item.href);
 
                   return (
-                    <Link
+                    <PlatformNavItem
                       key={item.href}
                       href={item.href}
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
-                        isActive
-                          ? 'bg-secondary text-foreground'
-                          : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span>{item.title}</span>
-                    </Link>
+                      icon={Icon}
+                      label={item.title}
+                      active={isActive}
+                      tone="pill"
+                    />
                   );
                 })}
               </nav>
@@ -177,19 +172,14 @@ export function Header() {
                   const isActive = isMobileTabActive(item.href);
 
                   return (
-                    <Link
+                    <PlatformNavItem
                       key={item.href}
                       href={item.href}
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
-                        isActive
-                          ? 'bg-foreground text-background'
-                          : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span>{item.title}</span>
-                    </Link>
+                      icon={Icon}
+                      label={item.title}
+                      active={isActive}
+                      tone="pill"
+                    />
                   );
                 })}
               </nav>
@@ -218,29 +208,22 @@ export function Header() {
 
             <div className="flex-1 overflow-y-auto px-4 py-4">
               <div>
-                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  全局
-                </div>
+                <PlatformNavLabel className="mb-3">全局</PlatformNavLabel>
                 <nav className="space-y-2">
                   {mainNav.map((item) => {
                     const Icon = item.icon;
                     const isActive = isNavItemActive(pathname, item.href);
 
                     return (
-                      <Link
+                      <PlatformNavItem
                         key={item.href}
                         href={item.href}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={cn(
-                          'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
-                          isActive
-                            ? 'bg-secondary text-foreground'
-                            : 'bg-card text-foreground hover:bg-secondary'
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
+                        icon={Icon}
+                        label={item.title}
+                        active={isActive}
+                        tone="sheet"
+                      />
                     );
                   })}
                 </nav>
@@ -248,29 +231,22 @@ export function Header() {
 
               {mobileProjectTabs.length > 0 && (
                 <div className="mt-6">
-                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    当前项目
-                  </div>
+                  <PlatformNavLabel className="mb-3">当前项目</PlatformNavLabel>
                   <nav className="space-y-2">
                     {mobileProjectTabs.map((item) => {
                       const Icon = item.icon;
                       const isActive = isMobileProjectTabActive(item.href);
 
                       return (
-                        <Link
+                        <PlatformNavItem
                           key={item.href}
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={cn(
-                            'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
-                            isActive
-                              ? 'bg-secondary text-foreground'
-                              : 'bg-card text-foreground hover:bg-secondary'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
+                          icon={Icon}
+                          label={item.title}
+                          active={isActive}
+                          tone="sheet"
+                        />
                       );
                     })}
                   </nav>
@@ -279,29 +255,22 @@ export function Header() {
 
               {mobileEnvironmentTabs.length > 0 && (
                 <div className="mt-6">
-                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    当前环境
-                  </div>
+                  <PlatformNavLabel className="mb-3">当前环境</PlatformNavLabel>
                   <nav className="space-y-2">
                     {mobileEnvironmentTabs.map((item) => {
                       const Icon = item.icon;
                       const isActive = isMobileTabActive(item.href);
 
                       return (
-                        <Link
+                        <PlatformNavItem
                           key={item.href}
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={cn(
-                            'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
-                            isActive
-                              ? 'bg-secondary text-foreground'
-                              : 'bg-card text-foreground hover:bg-secondary'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
+                          icon={Icon}
+                          label={item.title}
+                          active={isActive}
+                          tone="sheet"
+                        />
                       );
                     })}
                   </nav>

@@ -50,7 +50,7 @@ type PagePanelElement = 'div' | 'section' | 'article' | 'aside';
 type PagePanelVariant = 'panel' | 'surface' | 'floating' | 'card' | 'muted' | 'inset' | 'plain';
 type PagePanelPadding = 'none' | 'sm' | 'md' | 'lg';
 
-interface PagePanelProps {
+export interface PagePanelProps {
   children: ReactNode;
   as?: PagePanelElement;
   className?: string;

@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { PlatformNavItem } from '@/components/ui/platform-navigation';
 import { isNavItemActive, mobileMainNav } from './navigation';
 
 export function MobileBottomNav() {
@@ -16,19 +15,14 @@ export function MobileBottomNav() {
           const isActive = isNavItemActive(pathname, item.href);
 
           return (
-            <Link
+            <PlatformNavItem
               key={item.href}
               href={item.href}
-              className={cn(
-                'flex min-h-12 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-1.5 text-[11px] font-medium transition-colors',
-                isActive
-                  ? 'bg-secondary text-foreground'
-                  : 'text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              <span>{item.title}</span>
-            </Link>
+              icon={Icon}
+              label={item.title}
+              active={isActive}
+              tone="bottom"
+            />
           );
         })}
       </nav>

@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { PlatformNavItem, PlatformNavLabel } from '@/components/ui/platform-navigation';
 import { useProjectContext } from '@/lib/project-context';
-import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
 import {
   buildEnvironmentNavHref,
@@ -62,28 +61,20 @@ export function Sidebar() {
               const isActive = isNavItemActive(pathname, item.href);
               const Icon = item.icon;
               return (
-                <Link
+                <PlatformNavItem
                   key={item.href}
                   href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-secondary text-foreground'
-                      : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </Link>
+                  icon={Icon}
+                  label={item.title}
+                  active={isActive}
+                />
               );
             })}
           </nav>
 
           {projectId && (
             <div className="mt-6">
-              <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                当前项目
-              </div>
+              <PlatformNavLabel>当前项目</PlatformNavLabel>
               <nav className="space-y-1">
                 {projectNav.map((item) => {
                   const href = buildProjectNavHref(projectId, item.href);
@@ -91,19 +82,13 @@ export function Sidebar() {
                   const Icon = item.icon;
 
                   return (
-                    <Link
+                    <PlatformNavItem
                       key={item.href}
                       href={href}
-                      className={cn(
-                        'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
-                        isActive
-                          ? 'bg-secondary text-foreground'
-                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                      icon={Icon}
+                      label={item.title}
+                      active={isActive}
+                    />
                   );
                 })}
               </nav>
@@ -112,9 +97,7 @@ export function Sidebar() {
 
           {isInEnvironment && projectId && environmentId && (
             <div className="mt-6">
-              <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {environmentName || projectName || '当前环境'}
-              </div>
+              <PlatformNavLabel>{environmentName || projectName || '当前环境'}</PlatformNavLabel>
               <nav className="space-y-1">
                 {environmentNav.map((item) => {
                   const href = buildEnvironmentNavHref(projectId, environmentId, item.href);
@@ -125,19 +108,13 @@ export function Sidebar() {
                   const Icon = item.icon;
 
                   return (
-                    <Link
+                    <PlatformNavItem
                       key={item.href}
                       href={href}
-                      className={cn(
-                        'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
-                        isActive
-                          ? 'bg-secondary text-foreground'
-                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                      icon={Icon}
+                      label={item.title}
+                      active={isActive}
+                    />
                   );
                 })}
               </nav>

@@ -5,6 +5,12 @@ import { X } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Button, type ButtonProps } from './button';
+import {
+  modalFooterClassName,
+  modalHeaderClassName,
+  modalOverlayClassName,
+  modalSheetClassName,
+} from './modal-chrome';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -35,14 +41,7 @@ const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      'fixed inset-0 z-50 bg-[rgba(28,27,24,0.28)] backdrop-blur-[10px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-      className
-    )}
-    {...props}
-  />
+  <DialogPrimitive.Overlay ref={ref} className={cn(modalOverlayClassName, className)} {...props} />
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
@@ -58,7 +57,8 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 w-full bg-[rgba(251,250,247,0.995)] shadow-[0_-28px_88px_rgba(15,23,42,0.14)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:w-[min(calc(100vw-3rem),var(--dialog-content-width,40rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[34px] sm:shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_34px_96px_rgba(55,53,47,0.18)] sm:ring-1 sm:ring-[rgba(15,23,42,0.055)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        modalSheetClassName,
+        'sm:w-[min(calc(100vw-3rem),var(--dialog-content-width,40rem))]',
         dialogContentLayoutClasses[layout],
         dialogContentSizeClasses[size],
         className
@@ -82,7 +82,7 @@ type DialogChromeProps = React.HTMLAttributes<HTMLDivElement> & {
 const DialogHeader = ({ className, chrome = false, ...props }: DialogChromeProps) => (
   <div
     className={cn(
-      'flex flex-col gap-2 text-center sm:text-left',
+      modalHeaderClassName,
       chrome && 'shrink-0 px-5 py-5 pr-16 sm:px-7 sm:py-6',
       className
     )}
@@ -105,7 +105,7 @@ DialogBody.displayName = 'DialogBody';
 const DialogFooter = ({ className, chrome = false, ...props }: DialogChromeProps) => (
   <div
     className={cn(
-      'flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end',
+      modalFooterClassName,
       chrome &&
         'console-divider-top shrink-0 bg-[#fbfaf7] px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-7 sm:pb-4',
       className

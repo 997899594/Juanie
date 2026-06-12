@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { SectionLabel } from './platform';
 
 export interface PriorityDeckItem {
   key: string;
@@ -50,11 +51,7 @@ export function PriorityDeck({ title, items, className }: PriorityDeckProps) {
                   className={cn('mt-1 h-2 w-2 rounded-full', toneClasses[item.tone ?? 'default'])}
                 />
                 <div className="min-w-0">
-                  {item.eyebrow ? (
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {item.eyebrow}
-                    </div>
-                  ) : null}
+                  {item.eyebrow ? <SectionLabel>{item.eyebrow}</SectionLabel> : null}
                   <div className="text-sm font-semibold text-foreground">{item.title}</div>
                 </div>
               </div>

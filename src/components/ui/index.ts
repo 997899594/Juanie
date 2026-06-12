@@ -10,6 +10,8 @@ export * from './input';
 export * from './label';
 export * from './page-header';
 export * from './page-shell';
+export * from './platform';
+export * from './platform-navigation';
 export * from './priority-deck';
 export * from './section-nav';
 export * from './select';

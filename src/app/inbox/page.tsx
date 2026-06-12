@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageShell } from '@/components/ui/page-shell';
+import { MetricTile, SectionLabel } from '@/components/ui/platform';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { formatApprovalStatusLabel } from '@/lib/approvals/view';
 import { auth } from '@/lib/auth';
@@ -52,20 +53,13 @@ export default async function InboxPage({
 
       <div className="grid gap-2 md:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className={`${shellClassName} px-4 py-3`}>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-2 text-sm font-semibold text-foreground">{stat.value}</div>
-          </div>
+          <MetricTile key={stat.label} label={stat.label} value={stat.value} />
         ))}
       </div>
 
       <div className={`${shellClassName} px-4 py-4`}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            筛选
-          </div>
+          <SectionLabel className="mr-2">筛选</SectionLabel>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
             <Link href={buildInboxFilterHref('all')}>全部</Link>
           </Button>

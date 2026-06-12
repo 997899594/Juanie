@@ -1,11 +1,11 @@
 'use client';
 
 import { FolderKanban, Plus } from 'lucide-react';
-import Link from 'next/link';
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, PageHeaderAction } from '@/components/ui/page-header';
-import { PagePanel, PageShell } from '@/components/ui/page-shell';
+import { PageShell } from '@/components/ui/page-shell';
+import { ActionTile, MetricTile, SectionLabel } from '@/components/ui/platform';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import type { ProjectListCard, ProjectListStat } from '@/lib/projects/list-view';
 import { getRuntimeStatusDotClass } from '@/lib/runtime/status-presentation';
@@ -20,7 +20,6 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
   const stats = initialStats.map((stat) =>
     stat.label === '项目' ? { ...stat, value: projectCards.length } : stat
   );
-  const shellClassName = 'console-panel';
 
   useProjectsRealtime({
     projectIds: projectCards.map((project) => project.id),
@@ -59,12 +58,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
 
       <div className="grid gap-2 md:grid-cols-3">
         {stats.map((stat) => (
-          <PagePanel key={stat.label} padding="sm">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-2 text-sm font-semibold text-foreground">{stat.value}</div>
-          </PagePanel>
+          <MetricTile key={stat.label} label={stat.label} value={stat.value} />
         ))}
       </div>
 
@@ -77,43 +71,43 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
       ) : (
         <div className="grid gap-3 xl:grid-cols-2">
           {projectCards.map((project) => (
-            <Link
+            <ActionTile
               key={project.id}
               href={`/projects/${project.id}`}
-              className={`${shellClassName} hover-lift flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-white/90`}
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-secondary/80">
-                  <FolderKanban className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{project.name}</div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              title={project.name}
+              icon={<FolderKanban className="h-4 w-4" />}
+              meta={
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span className="rounded-full bg-secondary/72 px-2.5 py-1">
                       {project.teamName}
                     </span>
-                    {project.repositoryLabel && (
+                    {project.repositoryLabel ? (
                       <code className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px]">
                         {project.repositoryLabel}
                       </code>
-                    )}
+                    ) : null}
                   </div>
-                  <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                  <SectionLabel className="tracking-[0.14em]">
                     {project.createdAtLabel}
+                  </SectionLabel>
+                </div>
+              }
+              showArrow={false}
+              className="hover-lift justify-between"
+              accessory={
+                <div className="rounded-full bg-secondary/76 px-3 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`}
+                    />
+                    <span className="text-xs capitalize text-muted-foreground">
+                      {project.statusLabel}
+                    </span>
                   </div>
                 </div>
-              </div>
-              <div className="rounded-full bg-secondary/76 px-3 py-1.5">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`}
-                  />
-                  <span className="text-xs capitalize text-muted-foreground">
-                    {project.statusLabel}
-                  </span>
-                </div>
-              </div>
-            </Link>
+              }
+            />
           ))}
         </div>
       )}
