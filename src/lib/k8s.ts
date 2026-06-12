@@ -2000,6 +2000,37 @@ export async function waitForDeploymentReady(input: {
   throw new Error(lastObservedIssue ?? `Deployment ${input.name} rollout timed out`);
 }
 
+export async function waitForDeploymentObserved(input: {
+  namespace: string;
+  name: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}) {
+  const timeoutMs = input.timeoutMs ?? 60 * 1000;
+  const pollMs = input.pollMs ?? 2000;
+  const deadline = Date.now() + timeoutMs;
+  const { apps } = getK8sClient();
+  let lastObservedIssue: string | null = null;
+
+  while (Date.now() < deadline) {
+    const deployment = await apps.readNamespacedDeployment({
+      namespace: input.namespace,
+      name: input.name,
+    });
+    const generation = deployment.metadata?.generation ?? 0;
+    const observedGeneration = deployment.status?.observedGeneration ?? 0;
+
+    if (generation > 0 && observedGeneration >= generation) {
+      return;
+    }
+
+    lastObservedIssue = `observed ${observedGeneration}/${generation}`;
+    await sleep(pollMs);
+  }
+
+  throw new Error(lastObservedIssue ?? `Deployment ${input.name} observation timed out`);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

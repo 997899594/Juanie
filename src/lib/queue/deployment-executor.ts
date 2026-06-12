@@ -210,6 +210,9 @@ export async function executeDeploymentWorkload(
     const candidateName = buildCandidateDeploymentName(stableName);
     const verificationPlan = buildServiceVerificationPlan(service);
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
+    const stableSnapshot = stableExists
+      ? await getDeploymentSnapshot(targetEnvironment.namespace, stableName)
+      : null;
     const canShiftTraffic = service.type === 'web' && service.isPublic !== false;
     const shouldVerifyCandidateFirst = verificationPlan.blockingPaths.length > 0;
     const shouldUseArgoRollouts = shouldUseArgoRolloutsForService({
@@ -261,7 +264,7 @@ export async function executeDeploymentWorkload(
         snapshot: {
           image: imageName,
           port: service.port ?? 3000,
-          replicas: service.replicas ?? 1,
+          replicas: stableSnapshot?.replicas ?? service.replicas ?? 1,
           env: platformRuntimeEnv,
           envFrom,
           cpuRequest: service.cpuRequest ?? undefined,

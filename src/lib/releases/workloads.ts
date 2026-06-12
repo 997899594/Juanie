@@ -10,6 +10,7 @@ import {
   updateDeployment,
   upsertService,
   verifyServiceReachability,
+  waitForDeploymentObserved,
   waitForDeploymentReady,
 } from '@/lib/k8s';
 import { syncEnvironmentServiceTrafficRoutes } from '@/lib/releases/traffic';
@@ -81,6 +82,27 @@ export function buildServiceVerificationPlan(service: {
     blockingPaths: Array.from(blockingPaths),
     observedPaths: Array.from(observedPaths),
   };
+}
+
+async function waitForPromotedDeployment(input: {
+  namespace: string;
+  name: string;
+  replicas: number;
+  minReadyMs: number;
+}) {
+  if (input.replicas <= 0) {
+    await waitForDeploymentObserved({
+      namespace: input.namespace,
+      name: input.name,
+    });
+    return;
+  }
+
+  await waitForDeploymentReady({
+    namespace: input.namespace,
+    name: input.name,
+    minReadyMs: input.minReadyMs,
+  });
 }
 
 export function isProgressiveStrategy(
@@ -423,9 +445,10 @@ export async function promoteCandidateSnapshotToStable(input: {
       await input.onLog?.(`Created ${input.stableName} → ${input.snapshot.image}`);
     }
 
-    await waitForDeploymentReady({
+    await waitForPromotedDeployment({
       namespace: input.namespace,
       name: input.stableName,
+      replicas: input.snapshot.replicas,
       minReadyMs: input.service.type === 'web' ? 0 : 15_000,
     });
   } catch (error) {
@@ -445,9 +468,10 @@ export async function promoteCandidateSnapshotToStable(input: {
         memoryRequest: previousStableSnapshot.memoryRequest,
         memoryLimit: previousStableSnapshot.memoryLimit,
       });
-      await waitForDeploymentReady({
+      await waitForPromotedDeployment({
         namespace: input.namespace,
         name: input.stableName,
+        replicas: previousStableSnapshot.replicas,
         minReadyMs: input.service.type === 'web' ? 0 : 15_000,
       });
       await input.onLog?.(`Restored ${input.stableName} → ${previousStableSnapshot.image}`);
