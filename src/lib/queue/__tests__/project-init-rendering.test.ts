@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
   buildMonorepoCiDeliverables,
@@ -9,13 +11,87 @@ import {
   encodeMonorepoAffectedRules,
   encodeMonorepoCiDeliverables,
   inferSchemaConfig,
+  renderGitHubCI,
   renderGitHubCIMonorepo,
+  renderGitLabCI,
+  renderGitLabCIMonorepo,
   renderJuanieConfig,
   resolvePackageScriptCommand,
   selectMonorepoCiWork,
 } from '@/lib/queue/project-init';
 
 describe('project init migration inference', () => {
+  it('renders generated CI through build-run aggregation instead of per-service releases', () => {
+    const project = {
+      id: 'project_1',
+      slug: 'nexusnote',
+      name: 'NexusNote',
+      productionBranch: 'main',
+      repositoryId: 'repo_1',
+      repository: null,
+      configJson: {
+        services: {
+          web: {
+            build: {
+              strategy: 'bake',
+              definition: 'docker-bake.hcl',
+              target: 'web',
+            },
+          },
+        },
+      },
+    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
+    const context = {
+      services: [
+        {
+          id: 'service_web',
+          projectId: 'project_1',
+          name: 'web',
+          type: 'web',
+          buildCommand: 'bun run build',
+          startCommand: 'bun run start',
+          port: 3000,
+        } as typeof services.$inferSelect,
+      ],
+      databases: [],
+    };
+    const rendered = [
+      renderGitHubCI(project, context),
+      renderGitLabCI(project, context),
+      renderGitHubCIMonorepo(project, context.services),
+      renderGitLabCIMonorepo(project, context.services),
+    ];
+
+    const githubRendered = [rendered[0], rendered[2]];
+
+    for (const ci of rendered) {
+      expect(ci).toContain('.juanie/build-run.sh');
+      expect(ci).not.toContain('-X POST "https://juanie.art/api/releases"');
+      expect(ci).not.toContain('/api/releases/lookup');
+      expect(ci).not.toContain('Trigger Juanie Release');
+    }
+
+    for (const ci of githubRendered) {
+      const githubRunIdExpression = '$' + '{{ github.run_id }}';
+      const githubRunAttemptExpression = '$' + '{{ github.run_attempt }}';
+      expect(ci).toContain('actions/checkout@v4');
+      expect(ci).toContain('docker/setup-buildx-action@v3');
+      expect(ci).toContain('docker/login-action@v3');
+      expect(ci).toContain(
+        `JUANIE_EXTERNAL_RUN_ID: ${githubRunIdExpression}-${githubRunAttemptExpression}`
+      );
+      expect(ci).not.toContain('actions/checkout@v5');
+      expect(ci).not.toContain('docker/setup-buildx-action@v4');
+      expect(ci).not.toContain('docker/login-action@v4');
+    }
+
+    const buildRunScript = readFileSync(
+      join(process.cwd(), 'templates', 'ci', 'build-run.sh'),
+      'utf-8'
+    );
+    expect(buildRunScript).toContain('/api/build-runs');
+  });
+
   it('prefers packageManager field over lockfiles', () => {
     expect(
       detectPackageManager(['package.json', 'package-lock.json'], {

@@ -84,6 +84,22 @@ export type ReleaseArtifactKind = (typeof releaseArtifactKinds)[number];
 export const releaseArtifactStatuses = ['pending', 'building', 'succeeded', 'failed'] as const;
 export type ReleaseArtifactStatus = (typeof releaseArtifactStatuses)[number];
 
+export const buildRunStatuses = [
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'finalizing',
+  'finalized',
+] as const;
+export type BuildRunStatus = (typeof buildRunStatuses)[number];
+
+export const buildUnitStatuses = ['pending', 'running', 'succeeded', 'failed'] as const;
+export type BuildUnitStatus = (typeof buildUnitStatuses)[number];
+
+export const buildArtifactKinds = ['image', 'package', 'static', 'function'] as const;
+export type BuildArtifactKind = (typeof buildArtifactKinds)[number];
+
 export const deploymentStatuses = [
   'queued',
   'migration_pending',
@@ -222,6 +238,9 @@ export const databaseRoleEnum = pgEnum('databaseRole', databaseRoles);
 export const databaseRuntimeEnum = pgEnum('databaseRuntime', databaseRuntimes);
 export const projectStatusEnum = pgEnum('projectStatus', projectStatuses);
 export const releaseStatusEnum = pgEnum('releaseStatus', releaseStatuses);
+export const buildRunStatusEnum = pgEnum('buildRunStatus', buildRunStatuses);
+export const buildUnitStatusEnum = pgEnum('buildUnitStatus', buildUnitStatuses);
+export const buildArtifactKindEnum = pgEnum('buildArtifactKind', buildArtifactKinds);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
@@ -1230,6 +1249,115 @@ export const environmentVariables = pgTable(
 // Release Tables
 // ============================================
 
+export const buildRuns = pgTable(
+  'buildRun',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repositoryId: uuid('repositoryId').references(() => repositories.id, { onDelete: 'set null' }),
+    releaseId: uuid('releaseId').references((): AnyPgColumn => releases.id, {
+      onDelete: 'set null',
+    }),
+
+    sourceRepository: varchar('sourceRepository', { length: 255 }).notNull(),
+    sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }).notNull(),
+    provider: varchar('provider', { length: 40 }).notNull().default('github'),
+    externalRunId: varchar('externalRunId', { length: 255 }),
+    status: buildRunStatusEnum('status').notNull().default('pending'),
+    plan: jsonb('plan').notNull().default(sql`'{}'::jsonb`),
+    errorMessage: text('errorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+    startedAt: timestamp('startedAt'),
+    finishedAt: timestamp('finishedAt'),
+  },
+  (table) => ({
+    projectIdIdx: index('buildRun_projectId_idx').on(table.projectId),
+    repositoryIdIdx: index('buildRun_repositoryId_idx').on(table.repositoryId),
+    releaseIdIdx: index('buildRun_releaseId_idx').on(table.releaseId),
+    sourceIdx: index('buildRun_source_idx').on(
+      table.sourceRepository,
+      table.sourceRef,
+      table.sourceCommitSha
+    ),
+    externalRunUnique: unique('buildRun_repository_provider_external_unique').on(
+      table.repositoryId,
+      table.provider,
+      table.externalRunId
+    ),
+    statusIdx: index('buildRun_status_idx').on(table.status),
+  })
+);
+
+export const buildUnits = pgTable(
+  'buildUnit',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    buildRunId: uuid('buildRunId')
+      .notNull()
+      .references(() => buildRuns.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'set null' }),
+
+    unitKey: varchar('unitKey', { length: 120 }).notNull(),
+    serviceName: varchar('serviceName', { length: 100 }).notNull(),
+    status: buildUnitStatusEnum('status').notNull().default('pending'),
+    image: varchar('image', { length: 1000 }),
+    imageDigest: varchar('imageDigest', { length: 255 }),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    errorMessage: text('errorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+    startedAt: timestamp('startedAt'),
+    finishedAt: timestamp('finishedAt'),
+  },
+  (table) => ({
+    buildRunIdIdx: index('buildUnit_buildRunId_idx').on(table.buildRunId),
+    serviceIdIdx: index('buildUnit_serviceId_idx').on(table.serviceId),
+    statusIdx: index('buildUnit_status_idx').on(table.status),
+    buildRunUnitUnique: unique('buildUnit_buildRun_unit_unique').on(
+      table.buildRunId,
+      table.unitKey
+    ),
+  })
+);
+
+export const buildArtifacts = pgTable(
+  'buildArtifact',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    buildRunId: uuid('buildRunId')
+      .notNull()
+      .references(() => buildRuns.id, { onDelete: 'cascade' }),
+    buildUnitId: uuid('buildUnitId')
+      .notNull()
+      .references(() => buildUnits.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'set null' }),
+
+    kind: buildArtifactKindEnum('kind').notNull().default('image'),
+    name: varchar('name', { length: 120 }).notNull(),
+    uri: varchar('uri', { length: 1000 }).notNull(),
+    digest: varchar('digest', { length: 255 }),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    buildRunIdIdx: index('buildArtifact_buildRunId_idx').on(table.buildRunId),
+    buildUnitIdIdx: index('buildArtifact_buildUnitId_idx').on(table.buildUnitId),
+    serviceIdIdx: index('buildArtifact_serviceId_idx').on(table.serviceId),
+    buildUnitArtifactUnique: unique('buildArtifact_buildUnit_kind_name_unique').on(
+      table.buildUnitId,
+      table.kind,
+      table.name
+    ),
+  })
+);
+
 export const releases = pgTable(
   'release',
   {
@@ -1763,6 +1891,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   domains: many(domains),
   environmentVariables: many(environmentVariables),
   releases: many(releases),
+  buildRuns: many(buildRuns),
   deployments: many(deployments),
   initSteps: many(projectInitSteps),
   aiPluginRuns: many(aiPluginRuns),
@@ -1788,6 +1917,8 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   environmentVariables: many(environmentVariables),
   databases: many(databases),
   releaseArtifacts: many(releaseArtifacts),
+  buildUnits: many(buildUnits),
+  buildArtifacts: many(buildArtifacts),
   migrationSpecifications: many(migrationSpecifications),
   migrationRuns: many(migrationRuns),
 }));
@@ -2057,6 +2188,50 @@ export const environmentVariablesRelations = relations(environmentVariables, ({ 
   }),
 }));
 
+export const buildRunsRelations = relations(buildRuns, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [buildRuns.projectId],
+    references: [projects.id],
+  }),
+  repository: one(repositories, {
+    fields: [buildRuns.repositoryId],
+    references: [repositories.id],
+  }),
+  release: one(releases, {
+    fields: [buildRuns.releaseId],
+    references: [releases.id],
+  }),
+  units: many(buildUnits),
+  artifacts: many(buildArtifacts),
+}));
+
+export const buildUnitsRelations = relations(buildUnits, ({ one, many }) => ({
+  buildRun: one(buildRuns, {
+    fields: [buildUnits.buildRunId],
+    references: [buildRuns.id],
+  }),
+  service: one(services, {
+    fields: [buildUnits.serviceId],
+    references: [services.id],
+  }),
+  artifacts: many(buildArtifacts),
+}));
+
+export const buildArtifactsRelations = relations(buildArtifacts, ({ one }) => ({
+  buildRun: one(buildRuns, {
+    fields: [buildArtifacts.buildRunId],
+    references: [buildRuns.id],
+  }),
+  buildUnit: one(buildUnits, {
+    fields: [buildArtifacts.buildUnitId],
+    references: [buildUnits.id],
+  }),
+  service: one(services, {
+    fields: [buildArtifacts.serviceId],
+    references: [services.id],
+  }),
+}));
+
 export const releasesRelations = relations(releases, ({ one, many }) => ({
   project: one(projects, {
     fields: [releases.projectId],
@@ -2085,6 +2260,7 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   aiPluginSnapshots: many(aiPluginSnapshots),
   aiTasks: many(aiTasks),
   artifactDownloadEvents: many(artifactDownloadEvents),
+  buildRuns: many(buildRuns),
 }));
 
 export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one, many }) => ({

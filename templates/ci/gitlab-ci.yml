@@ -4,7 +4,6 @@ stages:
 
 variables:
   REGISTRY: $CI_REGISTRY
-  IMAGE_TAG: $CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHA
   DOCKER_TLS_CERTDIR: "/certs"
 
 build:
@@ -13,259 +12,27 @@ build:
   services:
     - docker:24-dind
   before_script:
-    - apk add --no-cache curl jq ruby
+    - apk add --no-cache bash curl jq
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
       set -euo pipefail
 
-      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
-      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
-      IMAGE_TAG="$CI_REGISTRY_IMAGE:sha-$SOURCE_SHA"
-      export SOURCE_SHA RELEASE_REF IMAGE_TAG
+      export JUANIE_SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      export JUANIE_RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+      export JUANIE_REPOSITORY="$CI_PROJECT_PATH"
+      export JUANIE_PROVIDER="gitlab"
+      export JUANIE_IMAGE_REGISTRY="$CI_REGISTRY"
+      export JUANIE_EXTERNAL_RUN_ID="$CI_PIPELINE_ID"
+      export JUANIE_TOKEN="$CI_JOB_TOKEN"
 
-      ruby <<'RUBY' > juanie-ci-meta.json
-      require 'json'
-      require 'yaml'
+      bash .juanie/build-run.sh start
+      bash .juanie/build-run.sh build-all
+      bash .juanie/build-run.sh finalize
 
-      config = YAML.load_file('juanie.yaml') || {}
-      services = Array(config['services'])
-
-      raise 'juanie.yaml must define at least one service' if services.empty?
-
-      service_names = services.map do |service|
-        name = service['name'].to_s.strip
-        raise 'service.name is required' if name.empty?
-        name
-      end
-
-      build_descriptors = services.map do |service|
-        build = service['build'] || {}
-        name = service['name'].to_s.strip
-
-        {
-          'name' => name,
-          'strategy' => (build['strategy'] || 'auto').to_s.strip,
-          'context' => (build['context'] || '.').to_s.strip,
-          'dockerfile' => build['dockerfile']&.to_s,
-          'target' => build['target']&.to_s&.strip,
-          'definition' => build['definition']&.to_s,
-        }
-      end
-
-      canonical = build_descriptors.first
-      conflicting = build_descriptors.find do |descriptor|
-        %w[strategy context dockerfile definition].any? do |key|
-          descriptor[key] != canonical[key]
-        end
-      end
-
-      if conflicting
-        raise(
-          "single-repo Juanie CI requires all services to share one build definition; conflicting service=#{conflicting['name']}"
-        )
-      end
-
-      target_names = build_descriptors.map { |descriptor| descriptor['target'].to_s }.reject(&:empty?)
-      multi_target_build = target_names.uniq.length > 1
-      image_for = lambda do |service_name|
-        base = ENV.fetch('IMAGE_TAG')
-        next base unless multi_target_build
-
-        safe_name = service_name.downcase.gsub(/[^a-z0-9_.-]+/, '-').gsub(/\A-+|-+\z/, '')
-        "#{base}-#{safe_name}"
-      end
-
-      release_services = service_names.map do |name|
-        {
-          name: name,
-          image: image_for.call(name),
-        }
-      end
-
-      if canonical['definition'].nil? || canonical['definition'].empty?
-        canonical['definition'] = './docker-bake.hcl' if File.file?('docker-bake.hcl')
-        canonical['definition'] ||= './docker-bake.json' if File.file?('docker-bake.json')
-      end
-
-      if canonical['dockerfile'].nil? || canonical['dockerfile'].empty?
-        canonical['dockerfile'] = 'Dockerfile' if File.file?('Dockerfile')
-      end
-
-      if canonical['strategy'] == 'dockerfile' && multi_target_build
-        raise 'single-repo Juanie CI only supports per-service build.target with build.strategy=bake'
-      end
-
-      build_output = canonical.merge('target' => target_names.uniq.join(','))
-
-      puts JSON.generate(
-        {
-          releaseServices: release_services,
-          build: build_output,
-          publishedImages: release_services.map { |service| service[:image] }.uniq,
-          bakeSet: build_descriptors.flat_map do |descriptor|
-            target = descriptor['target'].to_s
-            next [] if target.empty?
-
-            [
-              "#{target}.tags=#{image_for.call(descriptor['name'])}",
-              "#{target}.args.GIT_SHA=#{ENV.fetch('SOURCE_SHA')}",
-            ]
-          end,
-        }
-      )
-      RUBY
-
-      BUILD_STRATEGY=$(jq -r '.build.strategy' juanie-ci-meta.json)
-      BUILD_CONTEXT=$(jq -r '.build.context' juanie-ci-meta.json)
-      BUILD_DOCKERFILE=$(jq -r '.build.dockerfile // ""' juanie-ci-meta.json)
-      BUILD_TARGET=$(jq -r '.build.target // ""' juanie-ci-meta.json)
-      BUILD_DEFINITION=$(jq -r '.build.definition // ""' juanie-ci-meta.json)
-      RELEASE_SERVICES_JSON=$(jq -c '.releaseServices' juanie-ci-meta.json)
-      PUBLISHED_IMAGES_JSON=$(jq -c '.publishedImages' juanie-ci-meta.json)
-
-      if [ "$BUILD_STRATEGY" = "bake" ] || { [ "$BUILD_STRATEGY" = "auto" ] && [ -n "$BUILD_DEFINITION" ]; }; then
-        if [ -n "$BUILD_TARGET" ]; then
-          BAKE_SET_ARGS=""
-          while IFS= read -r setting; do
-            BAKE_SET_ARGS="$BAKE_SET_ARGS --set $setting"
-          done <<EOF
-      $(jq -r '.bakeSet[]' juanie-ci-meta.json)
-      EOF
-          docker buildx bake --file "$BUILD_DEFINITION" $(printf '%s' "$BUILD_TARGET" | tr ',' ' ') $BAKE_SET_ARGS --push
-        else
-          docker buildx bake --file "$BUILD_DEFINITION" \
-            --set "*.tags=$IMAGE_TAG" \
-            --set "*.args.GIT_SHA=$SOURCE_SHA" \
-            --push
-        fi
-      elif [ "$BUILD_STRATEGY" = "dockerfile" ] || { [ "$BUILD_STRATEGY" = "auto" ] && [ -z "$BUILD_DEFINITION" ] && [ -n "$BUILD_DOCKERFILE" ]; }; then
-        docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
-        docker push "$IMAGE_TAG"
-      else
-        docker run --rm \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          -v "$PWD:/workspace" \
-          -w /workspace \
-          buildpacksio/pack \
-          pack build "$IMAGE_TAG" --builder paketobuildpacks/builder-jammy-full --publish
-      fi
-    - |
-      set -euo pipefail
-
-      deadline=$(( $(date +%s) + 180 ))
-      while [ "$(date +%s)" -lt "$deadline" ]; do
-        missing=0
-        while IFS= read -r image; do
-          if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
-            echo "Published image is available: $image"
-          else
-            echo "Waiting for image manifest to become visible: $image"
-            missing=1
-          fi
-        done <<EOF
-      $(printf '%s\n' "$PUBLISHED_IMAGES_JSON" | jq -r '.[]')
-      EOF
-
-        if [ "$missing" -eq 0 ]; then
-          break
-        fi
-
-        sleep 5
-      done
-
-      while IFS= read -r image; do
-        docker buildx imagetools inspect "$image" >/dev/null 2>&1
-      done <<EOF
-      $(printf '%s\n' "$PUBLISHED_IMAGES_JSON" | jq -r '.[]')
-      EOF
-    - |
-      set -euo pipefail
-
-      RELEASE_PAYLOAD=$(jq -cn \
-        --arg repository "$CI_PROJECT_PATH" \
-        --arg sha "$SOURCE_SHA" \
-        --arg ref "$RELEASE_REF" \
-        --argjson services "$RELEASE_SERVICES_JSON" \
-        '{
-          repository: $repository,
-          sha: $sha,
-          ref: $ref,
-          services: $services
-        }')
-
-      RELEASE_RESPONSE_FILE="$(mktemp)"
-      RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $CI_JOB_TOKEN" \
-        -d "$RELEASE_PAYLOAD")
-      RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
-      rm -f "$RELEASE_RESPONSE_FILE"
-
-      echo "$RELEASE_RESPONSE"
-
-      if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-        RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-        if [ -n "$RELEASE_PATH" ]; then
-          echo "Release detail: https://juanie.art${RELEASE_PATH}"
-        fi
-        echo "Juanie release request failed with HTTP ${RELEASE_STATUS}"
-        exit 1
-      fi
-
-      RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
-      if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-        echo "Juanie did not return a release id"
-        echo "$RELEASE_RESPONSE"
-        exit 1
-      fi
-
-      RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-      if [ -n "$RELEASE_PATH" ]; then
-        echo "Release detail: https://juanie.art${RELEASE_PATH}"
-      fi
-
-      printf '%s' "$RELEASE_ID" > .juanie-release-id
-      printf '%s' "$RELEASE_SERVICES_JSON" > .juanie-release-services.json
-
-      for attempt in $(seq 1 180); do
-        STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
-          -H "Authorization: Bearer $CI_JOB_TOKEN")
-
-        RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
-        STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
-        STATUS_LABEL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.statusLabel')
-        ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
-
-        echo "Juanie release ${RELEASE_ID}: ${STATUS} (${STATUS_LABEL})"
-
-        case "$RESOLUTION" in
-          succeeded)
-            printf '%s' 'true' > .juanie-artifacts-ready
-            exit 0
-            ;;
-          action_required)
-            if [ -n "$RELEASE_PATH" ]; then
-              echo "Juanie release requires manual action: https://juanie.art${RELEASE_PATH}"
-            fi
-            if [ "$STATUS" = "awaiting_rollout" ]; then
-              printf '%s' 'true' > .juanie-artifacts-ready
-            else
-              printf '%s' 'false' > .juanie-artifacts-ready
-            fi
-            exit 0
-            ;;
-          failed)
-            echo "Juanie release failed: ${ERROR_MESSAGE:-unknown error}"
-            exit 1
-            ;;
-        esac
-
-        sleep 10
-      done
-
-      echo "Timed out waiting for Juanie release ${RELEASE_ID}"
-      exit 1
+      cp .juanie/build-run/release-id .juanie-release-id
+      cp .juanie/build-run/release-services.json .juanie-release-services.json
+      cp .juanie/build-run/artifacts-ready .juanie-artifacts-ready
   artifacts:
     paths:
       - .juanie-release-id
@@ -294,13 +61,10 @@ deliver:
         exit 0
       fi
 
-      RELEASE_ID="$(cat .juanie-release-id)"
-      RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)"
-
       JUANIE_TOKEN="$CI_JOB_TOKEN" \
-        JUANIE_RELEASE_ID="$RELEASE_ID" \
+        JUANIE_RELEASE_ID="$(cat .juanie-release-id)" \
         JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
-        JUANIE_RELEASE_SERVICES_JSON="$RELEASE_SERVICES_JSON" \
+        JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)" \
         bash .juanie/delivery-artifacts.sh
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"

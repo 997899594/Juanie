@@ -18,13 +18,19 @@ import {
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import type { ProjectDeleteJobData } from './index';
 
-const JUANIE_BASE_REPOSITORY_FILES = ['juanie.yaml', '.env.juanie.example', 'JUANIE.md'] as const;
+const JUANIE_BASE_REPOSITORY_FILES = [
+  'juanie.yaml',
+  '.juanie/build-run.sh',
+  '.juanie/delivery-artifacts.sh',
+  '.env.juanie.example',
+  'JUANIE.md',
+] as const;
 const JUANIE_GITHUB_WORKFLOW_PATH = '.github/workflows/juanie-ci.yml';
 const JUANIE_GITLAB_CI_PATH = '.gitlab-ci.yml';
 const JUANIE_GITLAB_CI_MARKERS = [
-  'https://juanie.art/api/releases',
+  'https://juanie.art/api/build-runs',
+  '.juanie/build-run.sh',
   'JUANIE_SOURCE_SHA',
-  'juanie-ci-meta.json',
 ] as const;
 const projectDeleteLogger = logger.child({ component: 'project-delete' });
 

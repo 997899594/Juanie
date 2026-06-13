@@ -66,6 +66,7 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const projectInitLogger = logger.child({ component: 'project-init' });
+const JUANIE_BUILD_RUN_SCRIPT_PATH = '.juanie/build-run.sh';
 const JUANIE_DELIVERY_SCRIPT_PATH = '.juanie/delivery-artifacts.sh';
 
 export { requiredCapabilitiesForStep } from './project-init-capabilities';
@@ -1827,6 +1828,7 @@ async function pushCicdConfig(
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
   files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
+  files[JUANIE_BUILD_RUN_SCRIPT_PATH] = renderBuildRunScript();
   files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
 
   if (Object.keys(files).length > 0) {
@@ -1864,7 +1866,7 @@ async function pushCicdConfig(
   });
 }
 
-function renderGitHubCI(
+export function renderGitHubCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
@@ -1899,7 +1901,19 @@ function renderDeliveryArtifactsScript(): string {
   );
 }
 
-function renderGitLabCI(
+function renderBuildRunScript(): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'build-run.sh');
+
+  if (existsSync(templatePath)) {
+    return readFileSync(templatePath, 'utf-8');
+  }
+
+  throw new Error(
+    `Build run script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
+}
+
+export function renderGitLabCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },

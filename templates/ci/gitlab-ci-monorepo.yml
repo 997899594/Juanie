@@ -97,11 +97,13 @@ detect:
           );
 
       writeFileSync('services.json', JSON.stringify(selected));
+      writeFileSync('service-names.json', JSON.stringify(selected.map((service) => service.name)));
       writeFileSync('deliverables.json', JSON.stringify(selectedDeliverables));
       BUN
   artifacts:
     paths:
       - services.json
+      - service-names.json
       - deliverables.json
 
 build:
@@ -109,117 +111,44 @@ build:
   image: docker:24
   services:
     - docker:24-dind
+  needs:
+    - job: detect
+      artifacts: true
   before_script:
-    - apk add --no-cache curl jq
+    - apk add --no-cache bash curl jq
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
       set -euo pipefail
 
-      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
-      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
-      SERVICES_JSON="$(cat services.json)"
-
-      if [ "$SERVICES_JSON" = '[]' ]; then
+      if [ "$(cat services.json)" = '[]' ]; then
         echo 'No affected services'
         exit 0
       fi
 
-      for SERVICE in $(printf '%s' "$SERVICES_JSON" | jq -c '.[]'); do
-        SERVICE_NAME=$(printf '%s' "$SERVICE" | jq -r '.name')
-        BUILD_STRATEGY=$(printf '%s' "$SERVICE" | jq -r '.build.strategy // "dockerfile"')
-        BUILD_DEFINITION=$(printf '%s' "$SERVICE" | jq -r '.build.definition // ""')
-        BUILD_TARGET=$(printf '%s' "$SERVICE" | jq -r '.build.target // ""')
-        BUILD_CONTEXT=$(printf '%s' "$SERVICE" | jq -r '.build.context // "."')
-        BUILD_DOCKERFILE=$(printf '%s' "$SERVICE" | jq -r '.build.dockerfile // ""')
-        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE_NAME:sha-$SOURCE_SHA
+      export JUANIE_SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      export JUANIE_RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+      export JUANIE_REPOSITORY="$CI_PROJECT_PATH"
+      export JUANIE_PROVIDER="gitlab"
+      export JUANIE_IMAGE_REGISTRY="$CI_REGISTRY"
+      export JUANIE_EXTERNAL_RUN_ID="$CI_PIPELINE_ID"
+      export JUANIE_TOKEN="$CI_JOB_TOKEN"
+      export JUANIE_SELECTED_SERVICES_JSON="$(cat service-names.json)"
 
-        if [ -z "$BUILD_TARGET" ]; then
-          BUILD_TARGET="$SERVICE_NAME"
-        fi
+      bash .juanie/build-run.sh start
+      bash .juanie/build-run.sh build-all
+      bash .juanie/build-run.sh finalize
 
-        if [ -z "$BUILD_DOCKERFILE" ]; then
-          APP_DIR=$(printf '%s' "$SERVICE" | jq -r '.appDir')
-          BUILD_DOCKERFILE="$APP_DIR/Dockerfile"
-        fi
-
-        if [ "$BUILD_STRATEGY" = 'bake' ] && [ -n "$BUILD_DEFINITION" ]; then
-          docker buildx bake "$BUILD_TARGET" \
-            -f "$BUILD_DEFINITION" \
-            --set ${BUILD_TARGET}.tags=${IMAGE_TAG} \
-            --set ${BUILD_TARGET}.args.GIT_SHA=${SOURCE_SHA} \
-            --push
-        else
-          docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
-          docker push "$IMAGE_TAG"
-        fi
-
-        RELEASE_RESPONSE_FILE="$(mktemp)"
-        RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer $CI_JOB_TOKEN" \
-          -d "{
-            \"repository\": \"$CI_PROJECT_PATH\",
-            \"sha\": \"$SOURCE_SHA\",
-            \"ref\": \"$RELEASE_REF\",
-            \"services\": [
-              {
-                \"name\": \"$SERVICE_NAME\",
-                \"image\": \"$IMAGE_TAG\"
-              }
-            ]
-          }")
-        RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
-        rm -f "$RELEASE_RESPONSE_FILE"
-
-        echo "$RELEASE_RESPONSE"
-
-        if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-          RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-          if [ -n "$RELEASE_PATH" ]; then
-            echo "Release detail: https://juanie.art${RELEASE_PATH}"
-          fi
-          echo "Juanie release request failed with HTTP ${RELEASE_STATUS}"
-          exit 1
-        fi
-
-        RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
-        RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
-          echo 'Juanie did not return a release id'
-          echo "$RELEASE_RESPONSE"
-          exit 1
-        fi
-
-        for attempt in $(seq 1 180); do
-          STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
-            -H "Authorization: Bearer $CI_JOB_TOKEN")
-
-          RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
-          STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
-          ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
-
-          echo "Juanie release ${RELEASE_ID}: status=${STATUS}"
-
-          case "$RESOLUTION" in
-            succeeded)
-              break
-              ;;
-            action_required)
-              if [ -n "$RELEASE_PATH" ]; then
-                echo "Juanie release requires manual action: https://juanie.art${RELEASE_PATH}"
-              fi
-              break
-              ;;
-            failed)
-              echo "Juanie release failed: ${ERROR_MESSAGE:-unknown error}"
-              exit 1
-              ;;
-          esac
-
-          sleep 10
-        done
-      done
+      cp .juanie/build-run/release-id .juanie-release-id
+      cp .juanie/build-run/release-services.json .juanie-release-services.json
+      cp .juanie/build-run/artifacts-ready .juanie-artifacts-ready
+      cp -r .juanie/build-run .juanie-build-run
+  artifacts:
+    paths:
+      - .juanie-release-id
+      - .juanie-release-services.json
+      - .juanie-artifacts-ready
+      - .juanie-build-run
   rules:
     - if: $CI_PIPELINE_SOURCE
 
@@ -233,6 +162,7 @@ deliver:
       artifacts: true
     - job: build
       optional: true
+      artifacts: true
   before_script:
     - apk add --no-cache bash curl jq ruby tar zip
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -240,60 +170,23 @@ deliver:
     - |
       set -euo pipefail
 
+      if [ ! -f .juanie-artifacts-ready ] || [ "$(cat .juanie-artifacts-ready)" != "true" ]; then
+        echo 'Release is not ready for delivery artifact extraction'
+        exit 0
+      fi
+
       DELIVERABLES_JSON="$(cat deliverables.json)"
       if [ "$DELIVERABLES_JSON" = '[]' ]; then
         echo 'No affected deliverables'
         exit 0
       fi
 
-      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
-      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
-
       printf '%s' "$DELIVERABLES_JSON" | jq -c '.[]' | while IFS= read -r DELIVERABLE; do
-        SOURCE_SERVICE="$(printf '%s' "$DELIVERABLE" | jq -r '.sourceService')"
-        IMAGE_TAG="$CI_REGISTRY_IMAGE/$SOURCE_SERVICE:sha-$SOURCE_SHA"
-        RELEASE_SERVICES_JSON="$(jq -cn --arg name "$SOURCE_SERVICE" --arg image "$IMAGE_TAG" '[{name: $name, image: $image}]')"
-
-        LOOKUP_PAYLOAD="$(
-          jq -cn \
-            --arg repository "$CI_PROJECT_PATH" \
-            --arg sha "$SOURCE_SHA" \
-            --arg ref "$RELEASE_REF" \
-            --arg service "$SOURCE_SERVICE" \
-            '{repository: $repository, sha: $sha, ref: $ref, service: $service}'
-        )"
-        LOOKUP_RESPONSE="$(
-          curl -fsSL -X POST "https://juanie.art/api/releases/lookup" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $CI_JOB_TOKEN" \
-            -d "$LOOKUP_PAYLOAD"
-        )"
-
-        RELEASE_ID="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.id')"
-        RELEASE_PATH="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.releasePath // empty')"
-        RELEASE_STATUS="$(printf '%s' "$LOOKUP_RESPONSE" | jq -r '.release.status')"
-        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
-          echo 'Juanie release lookup did not return a release id'
-          exit 1
-        fi
-
-        case "$RELEASE_STATUS" in
-          succeeded|awaiting_rollout)
-            ;;
-          *)
-            echo "Juanie release ${RELEASE_ID} is ${RELEASE_STATUS}; delivery artifact extraction is not allowed"
-            if [ -n "$RELEASE_PATH" ]; then
-              echo "Release detail: https://juanie.art${RELEASE_PATH}"
-            fi
-            exit 1
-            ;;
-        esac
-
         printf '%s' "$DELIVERABLE" | jq -c '[.]' > .juanie-deliverables.json
         JUANIE_TOKEN="$CI_JOB_TOKEN" \
-          JUANIE_RELEASE_ID="$RELEASE_ID" \
+          JUANIE_RELEASE_ID="$(cat .juanie-release-id)" \
           JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
-          JUANIE_RELEASE_SERVICES_JSON="$RELEASE_SERVICES_JSON" \
+          JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)" \
           JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json \
           bash .juanie/delivery-artifacts.sh
       done

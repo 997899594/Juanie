@@ -13,7 +13,7 @@ stages: [build]
 build:
   script:
     - echo "$JUANIE_SOURCE_SHA"
-    - curl -X POST "https://juanie.art/api/releases"
+    - bash .juanie/build-run.sh start
 `)
     ).toBe(true);
 
@@ -35,6 +35,8 @@ test:
       })
     ).toEqual([
       'juanie.yaml',
+      '.juanie/build-run.sh',
+      '.juanie/delivery-artifacts.sh',
       '.env.juanie.example',
       'JUANIE.md',
       '.github/workflows/juanie-ci.yml',
@@ -47,17 +49,30 @@ test:
 variables:
   SOURCE_SHA: "$JUANIE_SOURCE_SHA"
 script:
-  - cat juanie-ci-meta.json
+  - curl -X POST "https://juanie.art/api/build-runs"
 `,
       })
-    ).toEqual(['juanie.yaml', '.env.juanie.example', 'JUANIE.md', '.gitlab-ci.yml']);
+    ).toEqual([
+      'juanie.yaml',
+      '.juanie/build-run.sh',
+      '.juanie/delivery-artifacts.sh',
+      '.env.juanie.example',
+      'JUANIE.md',
+      '.gitlab-ci.yml',
+    ]);
 
     expect(
       buildJuanieRepositoryCleanupPaths({
         provider: 'gitlab-self-hosted',
         gitlabCiContent: 'stages: [test]',
       })
-    ).toEqual(['juanie.yaml', '.env.juanie.example', 'JUANIE.md']);
+    ).toEqual([
+      'juanie.yaml',
+      '.juanie/build-run.sh',
+      '.juanie/delivery-artifacts.sh',
+      '.env.juanie.example',
+      'JUANIE.md',
+    ]);
   });
 
   it('only deletes preview ApplicationSet when the project actually has preview environments', () => {

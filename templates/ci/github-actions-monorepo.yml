@@ -33,6 +33,7 @@ jobs:
     outputs:
       services: ${{ steps.detect.outputs.services }}
       deliverables: ${{ steps.detect.outputs.deliverables }}
+      service_names: ${{ steps.detect.outputs.service_names }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,141 +133,132 @@ jobs:
             process.env.GITHUB_OUTPUT,
             `deliverables=${JSON.stringify(selectedDeliverables)}\n`
           );
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `service_names=${JSON.stringify(selected.map((service) => service.name))}\n`
+          );
           NODE
 
-  build:
+  plan:
     needs: detect
     if: ${{ needs.detect.outputs.services != '[]' }}
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect.outputs.services) }}
     runs-on: ubuntu-latest
     permissions:
+      contents: read
+    outputs:
+      build_run_id: ${{ steps.plan.outputs.build_run_id }}
+      groups: ${{ steps.plan.outputs.groups }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
+
+      - name: Start Juanie Build Run
+        id: plan
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_REPOSITORY: ${{ github.repository }}
+          JUANIE_PROVIDER: github
+          JUANIE_IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          JUANIE_EXTERNAL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          JUANIE_SELECTED_SERVICES_JSON: ${{ needs.detect.outputs.service_names }}
+        run: |
+          set -euo pipefail
+
+          bash .juanie/build-run.sh start
+
+          echo "build_run_id=$(cat .juanie/build-run/build-run-id)" >> "$GITHUB_OUTPUT"
+          {
+            echo 'groups<<JUANIE_BUILD_GROUPS'
+            cat .juanie/build-run/groups.json
+            echo 'JUANIE_BUILD_GROUPS'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Juanie Build Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: juanie-build-run-${{ steps.plan.outputs.build_run_id }}
+          path: .juanie/build-run
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJson(needs.plan.outputs.groups) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.JUANIE_SOURCE_SHA }}
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/download-artifact@v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: .juanie/build-run
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.service.name }}
+      - name: Build and Push Group
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
+          JUANIE_BUILD_GROUP_JSON: ${{ toJson(matrix.group) }}
+          JUANIE_DOCKER_CACHE_BACKEND: gha
+        run: bash .juanie/build-run.sh build-group
+
+  release:
+    needs:
+      - plan
+      - build
+    if: ${{ always() && needs.plan.outputs.build_run_id != '' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      artifacts_ready: ${{ steps.release.outputs.artifacts_ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: .juanie/build-run
+
+      - name: Finalize Juanie Build Run
+        id: release
+        env:
+          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
         run: |
           set -euo pipefail
 
-          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:sha-${{ env.JUANIE_SOURCE_SHA }}
-          BUILD_STRATEGY="${{ matrix.service.build.strategy }}"
-          BUILD_DEFINITION="${{ matrix.service.build.definition }}"
-          BUILD_TARGET="${{ matrix.service.build.target }}"
-          BUILD_CONTEXT="${{ matrix.service.build.context }}"
-          BUILD_DOCKERFILE="${{ matrix.service.build.dockerfile }}"
+          bash .juanie/build-run.sh finalize
 
-          if [ -z "$BUILD_TARGET" ]; then
-            BUILD_TARGET="${{ matrix.service.name }}"
-          fi
-
-          if [ -z "$BUILD_DOCKERFILE" ]; then
-            BUILD_DOCKERFILE="${{ matrix.service.appDir }}/Dockerfile"
-          fi
-
-          if [ -z "$BUILD_CONTEXT" ]; then
-            BUILD_CONTEXT='.'
-          fi
-
-          if [ "$BUILD_STRATEGY" = 'bake' ] && [ -n "$BUILD_DEFINITION" ]; then
-            docker buildx bake "$BUILD_TARGET" \
-              -f "$BUILD_DEFINITION" \
-              --set "$BUILD_TARGET.tags=$IMAGE_TAG" \
-              --set "$BUILD_TARGET.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}" \
-              --push
-          else
-            docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
-            docker push "$IMAGE_TAG"
-          fi
-
-      - name: Trigger Juanie Release
-        if: success()
-        run: |
-          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:sha-${{ env.JUANIE_SOURCE_SHA }}
-          RELEASE_RESPONSE_FILE="$(mktemp)"
-          RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -d '{
-              "repository": "${{ github.repository }}",
-              "sha": "${{ env.JUANIE_SOURCE_SHA }}",
-              "ref": "${{ env.JUANIE_RELEASE_REF }}",
-              "services": [
-                {
-                  "name": "${{ matrix.service.name }}",
-                  "image": "'"$IMAGE_TAG"'"
-                }
-              ]
-            }')
-          RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
-          rm -f "$RELEASE_RESPONSE_FILE"
-
-          echo "$RELEASE_RESPONSE"
-
-          if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
-            RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-            if [ -n "$RELEASE_PATH" ]; then
-              echo "Release detail: https://juanie.art${RELEASE_PATH}"
-            fi
-            echo "Juanie release request failed with HTTP ${RELEASE_STATUS}"
-            exit 1
-          fi
-
-          RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
-          RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = 'null' ]; then
-            echo 'Juanie did not return a release id'
-            echo "$RELEASE_RESPONSE"
-            exit 1
-          fi
-
-          for attempt in $(seq 1 180); do
-            STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}")
-
-            RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
-            STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
-            ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
-
-            echo "Juanie release ${RELEASE_ID}: status=${STATUS}"
-
-            case "$RESOLUTION" in
-              succeeded)
-                exit 0
-                ;;
-              action_required)
-                if [ -n "$RELEASE_PATH" ]; then
-                  echo "Juanie release requires manual action: https://juanie.art${RELEASE_PATH}"
-                fi
-                exit 0
-                ;;
-              failed)
-                echo "Juanie release failed: ${ERROR_MESSAGE:-unknown error}"
-                exit 1
-                ;;
-            esac
-
-            sleep 10
-          done
-
-          echo "Timed out waiting for Juanie release ${RELEASE_ID}"
-          exit 1
+          echo "release_id=$(cat .juanie/build-run/release-id)" >> "$GITHUB_OUTPUT"
+          echo "artifacts_ready=$(cat .juanie/build-run/artifacts-ready)" >> "$GITHUB_OUTPUT"
 
   deliver:
     needs:
       - detect
-      - build
-    if: ${{ needs.detect.outputs.deliverables != '[]' }}
+      - plan
+      - release
+    if: ${{ needs.detect.outputs.deliverables != '[]' && needs.release.outputs.artifacts_ready == 'true' }}
     strategy:
       matrix:
         deliverable: ${{ fromJson(needs.detect.outputs.deliverables) }}
@@ -279,76 +271,27 @@ jobs:
         with:
           ref: ${{ env.JUANIE_SOURCE_SHA }}
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: .juanie/build-run
 
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve source release
-        id: release
-        env:
-          JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          source_service='${{ matrix.deliverable.sourceService }}'
-          image_tag=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${source_service}:sha-${{ env.JUANIE_SOURCE_SHA }}
-          release_services_json="$(jq -cn --arg name "$source_service" --arg image "$image_tag" '[{name: $name, image: $image}]')"
-          lookup_payload="$(
-            jq -cn \
-              --arg repository "${GITHUB_REPOSITORY}" \
-              --arg sha "${JUANIE_SOURCE_SHA}" \
-              --arg ref "${JUANIE_RELEASE_REF}" \
-              --arg service "$source_service" \
-              '{repository: $repository, sha: $sha, ref: $ref, service: $service}'
-          )"
-
-          lookup_response="$(
-            curl -fsSL -X POST "https://juanie.art/api/releases/lookup" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${JUANIE_TOKEN}" \
-              -d "$lookup_payload"
-          )"
-
-          release_id="$(printf '%s' "$lookup_response" | jq -r '.release.id')"
-          release_path="$(printf '%s' "$lookup_response" | jq -r '.release.releasePath // empty')"
-          status="$(printf '%s' "$lookup_response" | jq -r '.release.status')"
-          [ -n "$release_id" ] && [ "$release_id" != "null" ] || {
-            echo 'Juanie release lookup did not return a release id'
-            exit 1
-          }
-
-          case "$status" in
-            succeeded|awaiting_rollout)
-              echo "artifacts_ready=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "Juanie release ${release_id} is ${status}; delivery artifact extraction is not allowed"
-              if [ -n "$release_path" ]; then
-                echo "Release detail: https://juanie.art${release_path}"
-              fi
-              exit 1
-              ;;
-          esac
-
-          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
-          {
-            echo "release_services_json<<JUANIE_RELEASE_SERVICES"
-            echo "$release_services_json"
-            echo "JUANIE_RELEASE_SERVICES"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Extract and Register Delivery Artifact
-        if: ${{ steps.release.outputs.artifacts_ready == 'true' }}
         env:
           JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          JUANIE_RELEASE_ID: ${{ needs.release.outputs.release_id }}
           JUANIE_REPOSITORY: ${{ github.repository }}
-          JUANIE_RELEASE_SERVICES_JSON: ${{ steps.release.outputs.release_services_json }}
         run: |
           set -euo pipefail
+
           jq -n --argjson item '${{ toJson(matrix.deliverable) }}' '[$item]' > .juanie-deliverables.json
+          export JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie/build-run/release-services.json)"
           JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json bash .juanie/delivery-artifacts.sh
