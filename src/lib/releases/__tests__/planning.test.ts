@@ -219,7 +219,7 @@ describe('release planning', () => {
     expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:blocking')).toBe(true);
   });
 
-  it('presents schema blockers before approval-only guidance', () => {
+  it('presents schema blockers without mixing in approval-only guidance', () => {
     const plan = summarizeReleasePlan({
       environment: { isProduction: true, isPreview: false },
       services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
@@ -262,12 +262,14 @@ describe('release planning', () => {
 
     const panel = buildReleasePlanningPanel({ plan });
 
-    expect(plan.issue?.code).toBe('approval_blocked');
+    expect(plan.issue).toBe(null);
+    expect(plan.releasePolicy.requiresApproval).toBe(false);
     expect(panel.canSubmit).toBe(false);
     expect(panel.issueSummary).toBe(
       '存在 1 个数据库 schema 门禁未满足：数据库账本与仓库迁移链不一致'
     );
     expect(panel.issueSummary).not.toContain('发布详情审批');
+    expect(panel.chips.some((chip) => chip.key === 'pre-deploy')).toBe(false);
   });
 
   it('allows release creation when schema gate only reports pending migrations', () => {
@@ -307,6 +309,123 @@ describe('release planning', () => {
     expect(
       plan.platformSignals.chips.some((chip) => chip.key === 'schema:pending_migrations')
     ).toBe(true);
+  });
+
+  it('does not present pending schema checks as pre-deploy migrations', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: true, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [
+        {
+          database: {
+            id: 'db-1',
+            type: 'postgresql',
+          },
+          environment: { isProduction: true, isPreview: false },
+          specification: {
+            executionMode: 'automatic',
+            phase: 'preDeploy',
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'manual_in_production',
+          },
+        },
+      ],
+      schemaGate: {
+        canCreate: true,
+        checkedCount: 1,
+        blockingCount: 0,
+        blockingReason: null,
+        summary: null,
+        nextActionLabel: '等待 Schema 检查完成',
+        customSignals: [
+          {
+            key: 'schema:refreshing',
+            label: 'Schema 刷新中',
+            tone: 'neutral',
+          },
+        ],
+        states: [
+          {
+            databaseId: 'db-1',
+            databaseName: 'primary',
+            status: 'unknown',
+            statusLabel: '待检查',
+            summary: '尚未有当前版本的 schema 检查结果，已请求后台刷新。',
+            freshness: 'missing',
+            refreshStatus: 'queued',
+          },
+        ],
+        refresh: {
+          requested: true,
+          queuedCount: 1,
+          runningCount: 0,
+          unavailableCount: 0,
+          failedCount: 0,
+          missingCount: 1,
+        },
+      },
+    });
+    const panel = buildReleasePlanningPanel({ plan });
+
+    expect(plan.canCreate).toBe(true);
+    expect(plan.releasePolicy.requiresApproval).toBe(false);
+    expect(plan.issue).toBe(null);
+    expect(plan.migration.preDeployCount).toBe(0);
+    expect(plan.migration.automaticCount).toBe(0);
+    expect(panel.canSubmit).toBe(true);
+    expect(panel.issueSummary).not.toContain('迁移');
+    expect(panel.issueSummary).not.toContain('审批');
+    expect(panel.nextActionLabel).toBe('等待 Schema 检查完成');
+    expect(panel.chips.some((chip) => chip.key === 'pre-deploy')).toBe(false);
+    expect(panel.chips.some((chip) => chip.key === 'schema:refreshing')).toBe(true);
+  });
+
+  it('ignores runtime-only databases when summarizing release migrations', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: true, isPreview: false },
+      services: [{ id: 'svc-1', name: 'worker', image: 'ghcr.io/demo/worker:1' }],
+      migrationSpecs: [
+        {
+          database: {
+            id: 'db-redis',
+            type: 'redis',
+          },
+          environment: { isProduction: true, isPreview: false },
+          specification: {
+            executionMode: 'automatic',
+            phase: 'preDeploy',
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'manual_in_production',
+          },
+        },
+      ],
+      schemaGate: {
+        canCreate: true,
+        checkedCount: 0,
+        blockingCount: 0,
+        blockingReason: null,
+        summary: null,
+        nextActionLabel: null,
+        customSignals: [],
+        states: [],
+        refresh: {
+          requested: false,
+          queuedCount: 0,
+          runningCount: 0,
+          unavailableCount: 0,
+          failedCount: 0,
+          missingCount: 0,
+        },
+      },
+    });
+    const panel = buildReleasePlanningPanel({ plan });
+
+    expect(plan.releasePolicy.requiresApproval).toBe(false);
+    expect(plan.migration.preDeployCount).toBe(0);
+    expect(plan.migration.automaticCount).toBe(0);
+    expect(panel.chips.some((chip) => chip.key === 'pre-deploy')).toBe(false);
+    expect(panel.issueSummary).not.toContain('迁移');
+    expect(panel.issueSummary).not.toContain('审批');
   });
 
   it('allows promotion planning while schema inspection is refreshing', () => {

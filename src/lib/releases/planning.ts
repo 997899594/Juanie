@@ -38,6 +38,7 @@ import {
 } from '@/lib/releases/admission';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
+import { resolveExecutableReleaseMigrationSpecs } from '@/lib/releases/migration-applicability';
 import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
 import { getStoredReleaseSchemaGate, type ReleaseSchemaGateSnapshot } from '@/lib/schema-safety';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
@@ -56,6 +57,10 @@ interface PlanningMigrationSpecLike {
     compatibility?: string | null;
     approvalPolicy?: string | null;
   };
+  database?: {
+    id?: string | null;
+    type?: string | null;
+  } | null;
   environment: {
     isProduction?: boolean | null;
     isPreview?: boolean | null;
@@ -396,19 +401,24 @@ export function summarizeReleasePlan(input: {
   migrationWarnings?: string[];
   schemaGate?: ReleaseSchemaGateSnapshot | null;
 }): ReleasePlanningSnapshot {
-  const preDeploySpecs = input.migrationSpecs.filter(
+  const schemaGate = input.schemaGate ?? null;
+  const executableMigrationSpecs = resolveExecutableReleaseMigrationSpecs({
+    migrationSpecs: input.migrationSpecs,
+    schemaGate,
+  });
+  const preDeploySpecs = executableMigrationSpecs.filter(
     (spec) => spec.specification.phase === 'preDeploy'
   );
-  const postDeploySpecs = input.migrationSpecs.filter(
+  const postDeploySpecs = executableMigrationSpecs.filter(
     (spec) => spec.specification.phase === 'postDeploy'
   );
-  const automaticSpecs = input.migrationSpecs.filter(
+  const automaticSpecs = executableMigrationSpecs.filter(
     (spec) => spec.specification.executionMode === 'automatic'
   );
-  const manualPlatformSpecs = input.migrationSpecs.filter(
+  const manualPlatformSpecs = executableMigrationSpecs.filter(
     (spec) => spec.specification.executionMode === 'manual_platform'
   );
-  const externalSpecs = input.migrationSpecs.filter(
+  const externalSpecs = executableMigrationSpecs.filter(
     (spec) => spec.specification.executionMode === 'external'
   );
   const preDeployManualPlatformCount = preDeploySpecs.filter(
@@ -417,7 +427,7 @@ export function summarizeReleasePlan(input: {
   const preDeployExternalCount = preDeploySpecs.filter(
     (spec) => spec.specification.executionMode === 'external'
   ).length;
-  const migrationDecisions = input.migrationSpecs.map((spec) =>
+  const migrationDecisions = executableMigrationSpecs.map((spec) =>
     evaluateMigrationPolicy({
       environment: spec.environment,
       specification: spec.specification,
@@ -433,20 +443,20 @@ export function summarizeReleasePlan(input: {
   const environmentPolicy = evaluateEnvironmentPolicy(input.environment);
   const releasePolicy = evaluateReleasePolicy({
     environment: input.environment,
-    migrationRuns: input.migrationSpecs.map((spec) => ({
+    migrationRuns: executableMigrationSpecs.map((spec) => ({
       specification: spec.specification,
     })),
   });
   const previewDatabaseGuard = inspectPreviewDatabaseGuard({
     environment: input.environment,
-    migrationSpecs: input.migrationSpecs,
+    migrationSpecs: executableMigrationSpecs,
+    schemaGate,
   });
   const requiresExternalCompletion = preDeployExternalCount > 0;
   const migrationSummary =
     preDeployManualPlatformCount > 0 || preDeployExternalCount > 0
       ? '发布创建后会进入前置迁移等待流程'
       : null;
-  const schemaGate = input.schemaGate ?? null;
   const blockingReason = previewDatabaseGuard.blockingReason ?? schemaGate?.blockingReason ?? null;
   const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
   const totalAutomatic = automaticSpecs.length;

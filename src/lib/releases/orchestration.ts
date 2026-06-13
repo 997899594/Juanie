@@ -129,22 +129,6 @@ export async function runReleaseAdmission(
   }
 
   const sourceCommitSha = release.configCommitSha ?? release.sourceCommitSha;
-  const previewDatabaseGuard = await inspectPreviewDatabaseGuardForRelease({
-    projectId: release.projectId,
-    environmentId: release.environmentId,
-    environment: release.environment,
-    serviceIds: deployableServiceIds,
-    sourceRef: release.sourceRef,
-    sourceCommitSha,
-  });
-
-  if (!previewDatabaseGuard.canCreate) {
-    const reason = previewDatabaseGuard.blockingReason ?? previewDatabaseGuardMessage;
-    await updateReleaseStatus(release.id, 'admission_failed', reason);
-    await persistReleaseRecapSafely(release.id);
-    return { kind: 'blocked', reason };
-  }
-
   const schemaGate = await getStoredReleaseSchemaGate({
     projectId: release.projectId,
     environmentId: release.environmentId,
@@ -162,6 +146,23 @@ export async function runReleaseAdmission(
     await updateReleaseStatus(release.id, 'admission_running', reason);
     await persistReleaseRecapSafely(release.id);
     return { kind: 'pending_schema_refresh', reason };
+  }
+
+  const previewDatabaseGuard = await inspectPreviewDatabaseGuardForRelease({
+    projectId: release.projectId,
+    environmentId: release.environmentId,
+    environment: release.environment,
+    serviceIds: deployableServiceIds,
+    sourceRef: release.sourceRef,
+    sourceCommitSha,
+    schemaGate,
+  });
+
+  if (!previewDatabaseGuard.canCreate) {
+    const reason = previewDatabaseGuard.blockingReason ?? previewDatabaseGuardMessage;
+    await updateReleaseStatus(release.id, 'admission_failed', reason);
+    await persistReleaseRecapSafely(release.id);
+    return { kind: 'blocked', reason };
   }
 
   if (!schemaGate.canCreate) {

@@ -1,4 +1,6 @@
 import { resolveMigrationSpecifications } from '@/lib/migrations';
+import { hasExecutableReleaseMigrations } from '@/lib/releases/migration-applicability';
+import type { ReleaseSchemaGateSnapshot } from '@/lib/schema-safety';
 import type { PlatformSignalChip } from '@/lib/signals/platform';
 
 interface PreviewDatabaseGuardEnvironmentLike {
@@ -11,6 +13,10 @@ interface PreviewDatabaseGuardMigrationSpecLike {
   specification: {
     phase: 'preDeploy' | 'postDeploy' | 'manual';
   };
+  database?: {
+    id?: string | null;
+    type?: string | null;
+  } | null;
 }
 
 export interface PreviewDatabaseGuardSnapshot {
@@ -30,20 +36,19 @@ function isPreviewEnvironment(environment: PreviewDatabaseGuardEnvironmentLike):
   return environment.kind === 'preview' || environment.isPreview === true;
 }
 
-function hasReleaseMigrations(migrationSpecs: PreviewDatabaseGuardMigrationSpecLike[]): boolean {
-  return migrationSpecs.some(
-    (spec) => spec.specification.phase === 'preDeploy' || spec.specification.phase === 'postDeploy'
-  );
-}
-
 export function inspectPreviewDatabaseGuard(input: {
   environment: PreviewDatabaseGuardEnvironmentLike;
   migrationSpecs: PreviewDatabaseGuardMigrationSpecLike[];
+  schemaGate?: ReleaseSchemaGateSnapshot | null;
 }): PreviewDatabaseGuardSnapshot {
   const shouldBlock =
     isPreviewEnvironment(input.environment) &&
     input.environment.databaseStrategy === 'inherit' &&
-    hasReleaseMigrations(input.migrationSpecs);
+    hasExecutableReleaseMigrations({
+      migrationSpecs: input.migrationSpecs,
+      schemaGate: input.schemaGate,
+      phases: ['preDeploy', 'postDeploy'],
+    });
 
   return {
     canCreate: !shouldBlock,
@@ -69,6 +74,7 @@ export async function inspectPreviewDatabaseGuardForRelease(input: {
   serviceIds: string[];
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
+  schemaGate?: ReleaseSchemaGateSnapshot | null;
 }): Promise<PreviewDatabaseGuardSnapshot> {
   const [preDeploySpecs, postDeploySpecs] = await Promise.all([
     resolveMigrationSpecifications(input.projectId, input.environmentId, 'preDeploy', {
@@ -86,5 +92,6 @@ export async function inspectPreviewDatabaseGuardForRelease(input: {
   return inspectPreviewDatabaseGuard({
     environment: input.environment,
     migrationSpecs: [...preDeploySpecs, ...postDeploySpecs],
+    schemaGate: input.schemaGate,
   });
 }
