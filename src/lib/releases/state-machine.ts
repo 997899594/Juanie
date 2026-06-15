@@ -62,6 +62,10 @@ export function isActiveReleaseStatus(status: string): boolean {
   return activeReleaseStatuses.includes(status as ActiveReleaseStatus);
 }
 
+export function canReleaseAcceptRolloutActions(status: string | null | undefined): boolean {
+  return status === 'awaiting_rollout';
+}
+
 export function getObservedDeploymentTerminalStatus(
   status: DeploymentStatus
 ): ObservedDeploymentTerminalStatus | null {

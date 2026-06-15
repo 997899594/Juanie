@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type * as k8s from '@kubernetes/client-node';
 import {
+  collectDeploymentPodIssues,
   describeDeploymentPodIssues,
+  formatDeploymentPodIssue,
   formatPodWarningEvent,
   getEventTimestamp,
   getPodStatusMessage,
@@ -29,21 +31,24 @@ describe('kubernetes pod diagnostics', () => {
     ] as k8s.V1Pod[];
 
     expect(describeDeploymentPodIssues(pods)).toBe(
-      'web-7d9f · ImagePullBackOff: back-off pulling image'
+      'web-7d9f · container waiting: ImagePullBackOff: back-off pulling image'
     );
   });
 
-  it('容器退出时返回退出原因', () => {
+  it('容器退出时返回容器名、退出原因和退出码', () => {
     const pods = [
       {
         metadata: { name: 'worker-0' },
         status: {
           containerStatuses: [
             {
+              name: 'app',
+              restartCount: 0,
               state: {
                 terminated: {
                   reason: 'Error',
                   message: 'command failed',
+                  exitCode: 1,
                 },
               },
             },
@@ -52,7 +57,70 @@ describe('kubernetes pod diagnostics', () => {
       },
     ] as k8s.V1Pod[];
 
-    expect(describeDeploymentPodIssues(pods)).toBe('worker-0 · Error: command failed');
+    expect(describeDeploymentPodIssues(pods)).toBe(
+      'worker-0 · app terminated: Error: command failed (exit code 1, restarts 0)'
+    );
+  });
+
+  it('容器退出但 Kubernetes 没有 termination message 时不降级成裸 Error', () => {
+    const pods = [
+      {
+        metadata: { name: 'nexusnote-uclhhb-worker-5cbc87474f-2848g' },
+        status: {
+          containerStatuses: [
+            {
+              name: 'app',
+              restartCount: 0,
+              state: {
+                terminated: {
+                  reason: 'Error',
+                  exitCode: 1,
+                },
+              },
+            },
+          ],
+        },
+      },
+    ] as k8s.V1Pod[];
+
+    expect(describeDeploymentPodIssues(pods)).toBe(
+      'nexusnote-uclhhb-worker-5cbc87474f-2848g · app terminated: Error (exit code 1, restarts 0)'
+    );
+  });
+
+  it('CrashLoopBackOff 时保留上一次退出原因', () => {
+    const pods = [
+      {
+        metadata: { name: 'worker-0' },
+        status: {
+          containerStatuses: [
+            {
+              name: 'app',
+              restartCount: 3,
+              state: {
+                waiting: {
+                  reason: 'CrashLoopBackOff',
+                  message: 'back-off restarting failed container',
+                },
+              },
+              lastState: {
+                terminated: {
+                  reason: 'Error',
+                  exitCode: 1,
+                },
+              },
+            },
+          ],
+        },
+      },
+    ] as k8s.V1Pod[];
+
+    const issue = collectDeploymentPodIssues(pods)[0]!;
+
+    expect(issue.lastTerminationExitCode).toBe(1);
+    expect(formatDeploymentPodIssue(issue)).toBe(
+      'worker-0 · app waiting: CrashLoopBackOff: back-off restarting failed container (restarts 3, last exit code 1, last reason Error)'
+    );
   });
 
   it('Pod 状态消息优先读取 initContainer 的等待态再读取业务容器', () => {

@@ -34,6 +34,9 @@ function classifyDeploymentFailureStatus(message: string) {
     'HTTP probe failed',
     'Deployment rollout failed',
     'rollout timed out',
+    'terminated:',
+    'waiting:',
+    'exit code ',
     'ready 0/',
     'Unhealthy',
   ];

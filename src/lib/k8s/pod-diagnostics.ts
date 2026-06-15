@@ -1,14 +1,41 @@
 import type * as k8s from '@kubernetes/client-node';
 
+const BLOCKING_WAITING_REASONS = new Set([
+  'ImagePullBackOff',
+  'ErrImagePull',
+  'CrashLoopBackOff',
+  'CreateContainerConfigError',
+  'CreateContainerError',
+  'RunContainerError',
+  'InvalidImageName',
+]);
+
+export interface DeploymentPodIssue {
+  podName: string;
+  containerName: string;
+  containerStatus: k8s.V1ContainerStatus;
+  state: 'waiting' | 'terminated';
+  reason: string;
+  message: string | null;
+  exitCode: number | null;
+  signal: number | null;
+  restartCount: number | null;
+  lastTerminationReason: string | null;
+  lastTerminationExitCode: number | null;
+}
+
+function formatReasonWithMessage(reason: string | undefined, message: string | undefined): string {
+  const fallbackReason = reason ?? 'Unknown';
+  return message ? `${fallbackReason}: ${message}` : fallbackReason;
+}
+
 export function getContainerWaitingMessage(containerStatus?: k8s.V1ContainerStatus): string | null {
   const waiting = containerStatus?.state?.waiting;
   if (!waiting) {
     return null;
   }
 
-  return waiting.message
-    ? `${waiting.reason ?? 'Waiting'}: ${waiting.message}`
-    : (waiting.reason ?? 'Waiting');
+  return formatReasonWithMessage(waiting.reason ?? 'Waiting', waiting.message);
 }
 
 export function getContainerTerminatedMessage(
@@ -23,34 +50,98 @@ export function getContainerTerminatedMessage(
     return null;
   }
 
-  return terminated.message
-    ? `${terminated.reason ?? 'Terminated'}: ${terminated.message}`
-    : (terminated.reason ?? 'Terminated');
+  return formatReasonWithMessage(terminated.reason ?? 'Terminated', terminated.message);
 }
 
-export function describeDeploymentPodIssues(pods: k8s.V1Pod[]): string | null {
+function isBlockingWaitingMessage(message: string): boolean {
+  return Array.from(BLOCKING_WAITING_REASONS).some((reason) => message.includes(reason));
+}
+
+function getContainerStatuses(pod: k8s.V1Pod): k8s.V1ContainerStatus[] {
+  return [...(pod.status?.initContainerStatuses ?? []), ...(pod.status?.containerStatuses ?? [])];
+}
+
+export function collectDeploymentPodIssues(pods: k8s.V1Pod[]): DeploymentPodIssue[] {
+  const issues: DeploymentPodIssue[] = [];
+
   for (const pod of pods) {
-    const statuses = pod.status?.containerStatuses ?? [];
+    const podName = pod.metadata?.name ?? 'pod';
+    const statuses = getContainerStatuses(pod);
 
     for (const status of statuses) {
       const waitingMessage = getContainerWaitingMessage(status);
-      if (
-        waitingMessage &&
-        ['ImagePullBackOff', 'ErrImagePull', 'CrashLoopBackOff', 'CreateContainerConfigError'].some(
-          (reason) => waitingMessage.includes(reason)
-        )
-      ) {
-        return `${pod.metadata?.name ?? 'pod'} · ${waitingMessage}`;
+      if (waitingMessage && isBlockingWaitingMessage(waitingMessage)) {
+        const lastTermination = status.lastState?.terminated ?? null;
+        issues.push({
+          podName,
+          containerName: status.name ?? 'container',
+          containerStatus: status,
+          state: 'waiting',
+          reason: status.state?.waiting?.reason ?? 'Waiting',
+          message: status.state?.waiting?.message ?? null,
+          exitCode: null,
+          signal: null,
+          restartCount: status.restartCount ?? null,
+          lastTerminationReason: lastTermination?.reason ?? null,
+          lastTerminationExitCode: lastTermination?.exitCode ?? null,
+        });
+        continue;
       }
 
       const terminatedMessage = getContainerTerminatedMessage(status);
       if (terminatedMessage) {
-        return `${pod.metadata?.name ?? 'pod'} · ${terminatedMessage}`;
+        const terminated = status.state?.terminated;
+        issues.push({
+          podName,
+          containerName: status.name ?? 'container',
+          containerStatus: status,
+          state: 'terminated',
+          reason: terminated?.reason ?? 'Terminated',
+          message: terminated?.message ?? null,
+          exitCode: terminated?.exitCode ?? null,
+          signal: terminated?.signal ?? null,
+          restartCount: status.restartCount ?? null,
+          lastTerminationReason: null,
+          lastTerminationExitCode: null,
+        });
       }
     }
   }
 
-  return null;
+  return issues;
+}
+
+export function formatDeploymentPodIssue(issue: DeploymentPodIssue): string {
+  const details: string[] = [];
+
+  if (issue.exitCode !== null) {
+    details.push(`exit code ${issue.exitCode}`);
+  }
+
+  if (issue.signal !== null && issue.signal > 0) {
+    details.push(`signal ${issue.signal}`);
+  }
+
+  if (issue.restartCount !== null) {
+    details.push(`restarts ${issue.restartCount}`);
+  }
+
+  if (issue.lastTerminationExitCode !== null) {
+    details.push(`last exit code ${issue.lastTerminationExitCode}`);
+  }
+
+  if (issue.lastTerminationReason) {
+    details.push(`last reason ${issue.lastTerminationReason}`);
+  }
+
+  const reason = formatReasonWithMessage(issue.reason, issue.message ?? undefined);
+  const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+  return `${issue.podName} · ${issue.containerName} ${issue.state}: ${reason}${suffix}`;
+}
+
+export function describeDeploymentPodIssues(pods: k8s.V1Pod[]): string | null {
+  const issue = collectDeploymentPodIssues(pods)[0];
+  return issue ? formatDeploymentPodIssue(issue) : null;
 }
 
 export function getEventTimestamp(event: k8s.CoreV1Event): number {

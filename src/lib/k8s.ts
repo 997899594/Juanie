@@ -9,7 +9,8 @@ import {
   selectActiveDeploymentReplicaSet,
 } from '@/lib/k8s/deployment-rollout';
 import {
-  describeDeploymentPodIssues,
+  collectDeploymentPodIssues,
+  formatDeploymentPodIssue,
   formatPodWarningEvent,
   getEventTimestamp,
   getPodStatusMessage,
@@ -415,11 +416,26 @@ export async function getPodLogs(
   namespace: string,
   podName: string,
   containerName?: string,
-  tailLines: number = 100,
+  tailLinesOrOptions:
+    | number
+    | {
+        tailLines?: number;
+        follow?: boolean;
+        previous?: boolean;
+        timestamps?: boolean;
+        limitBytes?: number;
+      } = 100,
   follow: boolean = false
 ): Promise<string> {
   const { config } = getK8sClient();
   const logger = new k8s.Log(config);
+  const options =
+    typeof tailLinesOrOptions === 'number'
+      ? {
+          tailLines: tailLinesOrOptions,
+          follow,
+        }
+      : tailLinesOrOptions;
   let output = '';
 
   const stream = new Writable({
@@ -430,8 +446,11 @@ export async function getPodLogs(
   });
 
   await logger.log(namespace, podName, containerName ?? '', stream, {
-    follow,
-    tailLines,
+    follow: options.follow ?? false,
+    limitBytes: options.limitBytes,
+    previous: options.previous,
+    tailLines: options.tailLines ?? 100,
+    timestamps: options.timestamps ?? false,
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -1914,6 +1933,108 @@ async function describeDeploymentEventIssues(
   return `${event.involvedObject.name ?? 'pod'} · ${formatPodWarningEvent(event)}`;
 }
 
+const DEPLOYMENT_FAILURE_LOG_TAIL_LINES = 30;
+const DEPLOYMENT_FAILURE_LOG_LIMIT_BYTES = 16_384;
+const DEPLOYMENT_FAILURE_LOG_MAX_CHARS = 4_000;
+
+function sanitizeDiagnosticText(value: string): string {
+  return value
+    .replace(
+      /(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/([^:\s/@]+):([^@\s]+)@/gi,
+      '$1://$2:[redacted]@'
+    )
+    .replace(/(authorization:\s*bearer\s+)[^\s]+/gi, '$1[redacted]')
+    .replace(
+      /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|ACCESS_KEY|PRIVATE_KEY)[A-Z0-9_]*)(\s*[=:]\s*)(["']?)[^\s"']+\3/gi,
+      '$1$2[redacted]'
+    );
+}
+
+function trimDiagnosticLogTail(value: string): string | null {
+  const lines = sanitizeDiagnosticText(value)
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const tail = lines.slice(-DEPLOYMENT_FAILURE_LOG_TAIL_LINES).join('\n');
+  if (tail.length <= DEPLOYMENT_FAILURE_LOG_MAX_CHARS) {
+    return tail;
+  }
+
+  return tail.slice(tail.length - DEPLOYMENT_FAILURE_LOG_MAX_CHARS);
+}
+
+async function getDeploymentFailureLogTail(
+  namespace: string,
+  issue: ReturnType<typeof collectDeploymentPodIssues>[number]
+): Promise<string | null> {
+  const attempts =
+    issue.state === 'waiting'
+      ? [
+          { previous: true, label: 'previous logs' },
+          { previous: false, label: 'current logs' },
+        ]
+      : [
+          { previous: false, label: 'current logs' },
+          { previous: true, label: 'previous logs' },
+        ];
+
+  for (const attempt of attempts) {
+    try {
+      const logs = await getPodLogs(namespace, issue.podName, issue.containerName, {
+        tailLines: DEPLOYMENT_FAILURE_LOG_TAIL_LINES,
+        previous: attempt.previous,
+        limitBytes: DEPLOYMENT_FAILURE_LOG_LIMIT_BYTES,
+        timestamps: false,
+      });
+      const tail = trimDiagnosticLogTail(logs);
+      if (tail) {
+        return `${attempt.label}:\n${tail}`;
+      }
+    } catch (error) {
+      k8sLogger.warn('Could not read failed container logs for deployment readiness diagnostics', {
+        namespace,
+        podName: issue.podName,
+        containerName: issue.containerName,
+        previous: attempt.previous,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return null;
+}
+
+async function describeDeploymentPodFailure(input: {
+  namespace: string;
+  pods: k8s.V1Pod[];
+}): Promise<string | null> {
+  const issue = collectDeploymentPodIssues(input.pods)[0];
+  if (!issue) {
+    return null;
+  }
+
+  const [eventIssue, logTail] = await Promise.all([
+    describeDeploymentEventIssues(input.namespace, input.pods),
+    getDeploymentFailureLogTail(input.namespace, issue),
+  ]);
+  const parts = [formatDeploymentPodIssue(issue)];
+
+  if (eventIssue && !parts.includes(eventIssue)) {
+    parts.push(`event: ${eventIssue}`);
+  }
+
+  if (logTail) {
+    parts.push(logTail);
+  }
+
+  return parts.join('\n');
+}
+
 export async function waitForDeploymentReady(input: {
   namespace: string;
   name: string;
@@ -1947,10 +2068,10 @@ export async function waitForDeploymentReady(input: {
     const progressingCondition = deployment.status?.conditions?.find(
       (condition) => condition.type === 'Progressing'
     );
-
-    if (progressingCondition?.status === 'False') {
-      throw new Error(progressingCondition.message ?? 'Deployment rollout failed');
-    }
+    const progressingFailedMessage =
+      progressingCondition?.status === 'False'
+        ? (progressingCondition.message ?? 'Deployment rollout failed')
+        : null;
 
     const deploymentSelector = formatK8sLabelSelector(deployment.spec?.selector?.matchLabels ?? {});
     const replicaSets = await getReplicaSets(input.namespace, deploymentSelector || undefined);
@@ -1961,9 +2082,16 @@ export async function waitForDeploymentReady(input: {
     const pods = activeReplicaSetSelector
       ? await getPods(input.namespace, activeReplicaSetSelector)
       : [];
-    const podIssue = describeDeploymentPodIssues(pods);
+    const podIssue = await describeDeploymentPodFailure({
+      namespace: input.namespace,
+      pods,
+    });
     if (podIssue) {
       throw new Error(podIssue);
+    }
+
+    if (progressingFailedMessage) {
+      throw new Error(progressingFailedMessage);
     }
 
     const eventIssue = await describeDeploymentEventIssues(input.namespace, pods);

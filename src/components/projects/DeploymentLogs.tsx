@@ -143,6 +143,7 @@ export function DeploymentLogs({ projectId, deploymentId, status }: DeploymentLo
             </span>
             <span
               className={cn(
+                'whitespace-pre-wrap break-words',
                 entry.level === 'error'
                   ? 'text-red-400'
                   : entry.level === 'warn'

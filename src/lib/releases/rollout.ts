@@ -18,6 +18,7 @@ import {
   persistReleaseRecapSafely,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
+import { canReleaseAcceptRolloutActions } from '@/lib/releases/state-machine';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import {
   buildServiceVerificationPlan,
@@ -88,6 +89,13 @@ export async function buildDeploymentRolloutPlan(input: {
 }) {
   const deployment = await db.query.deployments.findFirst({
     where: eq(deployments.id, input.deploymentId),
+    with: {
+      release: {
+        columns: {
+          status: true,
+        },
+      },
+    },
   });
 
   if (!deployment || deployment.projectId !== input.projectId) {
@@ -110,6 +118,34 @@ export async function buildDeploymentRolloutPlan(input: {
 
   if (!project || !environment) {
     throw new Error('无法解析部署上下文');
+  }
+
+  if (!canReleaseAcceptRolloutActions(deployment.release?.status)) {
+    const releaseStatus = deployment.release?.status ?? 'unknown';
+    return {
+      deployment: {
+        id: deployment.id,
+        serviceId: deployment.serviceId ?? null,
+      },
+      plan: {
+        canFinalize: false,
+        blockingReason: `当前发布状态为 ${releaseStatus}，不能继续放量`,
+        strategyLabel: isProgressiveStrategy(environment.deploymentStrategy)
+          ? getStrategyLabel(environment.deploymentStrategy)
+          : null,
+        platformSignals: buildPlatformSignalSnapshot({
+          customSignals: [
+            {
+              key: 'rollout:release-not-awaiting-rollout',
+              label: '发布已结束',
+              tone: 'danger',
+            },
+          ],
+          customSummary: '当前发布已经不在待放量状态，残留部署只能作为诊断信息查看',
+          customNextActionLabel: '查看失败原因',
+        }),
+      },
+    };
   }
 
   if (!service) {

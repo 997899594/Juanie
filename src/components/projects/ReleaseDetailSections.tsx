@@ -29,6 +29,7 @@ import {
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
+import { canReleaseAcceptRolloutActions } from '@/lib/releases/state-machine';
 import { formatPlatformDateTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
@@ -242,6 +243,19 @@ function getMigrationReviewSummary(migrationItems: ReleaseMigrationItem[]): stri
 
 function shouldOpenMigrationReview(run: ReleaseMigrationItem, index: number, total: number) {
   return total === 1 || index === 0 || isActionableMigration(run) || run.status === 'failed';
+}
+
+export function getActionableRolloutDeployments(
+  release: Pick<ReleasePageData['release'], 'status' | 'deploymentItems'>
+): ReleaseDeploymentItem[] {
+  if (!canReleaseAcceptRolloutActions(release.status)) {
+    return [];
+  }
+
+  return release.deploymentItems.filter(
+    (deployment) =>
+      deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
+  );
 }
 
 function ReleaseRolloutActionSection({
@@ -528,7 +542,7 @@ function ReleaseDeploymentLogsSection({
                 </div>
               </div>
               {deployment.errorMessage ? (
-                <div className="mb-3 rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
+                <div className="mb-3 whitespace-pre-wrap break-words rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
                   {deployment.errorMessage}
                 </div>
               ) : null}
@@ -604,10 +618,7 @@ export function ReleaseExecutionSections({
   const releaseActions = buildReleaseEnvironmentActionSnapshot(role, release.environment);
   const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
   const deliveryArtifacts = getDeliveryReleaseArtifacts(release.artifacts);
-  const rolloutDeploymentItems = release.deploymentItems.filter(
-    (deployment) =>
-      deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
-  );
+  const rolloutDeploymentItems = getActionableRolloutDeployments(release);
   const isDeliveryRole = role === 'delivery';
   const hasRolloutActions =
     !isDeliveryRole &&
