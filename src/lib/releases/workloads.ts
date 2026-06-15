@@ -14,11 +14,13 @@ import {
   waitForDeploymentReady,
 } from '@/lib/k8s';
 import { syncEnvironmentServiceTrafficRoutes } from '@/lib/releases/traffic';
+import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 
 export interface ReleaseWorkloadServiceLike {
   id: string;
   name: string;
   type: string;
+  startCommand: string | null;
   isPublic?: boolean | null;
   port?: number | null;
   replicas?: number | null;
@@ -271,6 +273,7 @@ export async function upsertServiceWorkload(input: {
   onLog?: (message: string) => Promise<void>;
 }) {
   const enableHttpProbes = input.service.type === 'web';
+  const runtimeCommand = buildServiceRuntimeCommandSpec(input.service);
 
   try {
     await updateDeployment(input.namespace, input.resourceName, {
@@ -279,6 +282,8 @@ export async function upsertServiceWorkload(input: {
       env: input.env,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
+      command: runtimeCommand.command,
+      args: runtimeCommand.args,
       healthcheckPath: input.service.healthcheckPath ?? undefined,
       enableHttpProbes,
       cpuRequest: input.service.cpuRequest ?? undefined,
@@ -298,6 +303,8 @@ export async function upsertServiceWorkload(input: {
       env: input.env,
       envFrom: input.envFrom,
       imagePullSecrets: input.imagePullSecrets ?? [],
+      command: runtimeCommand.command,
+      args: runtimeCommand.args,
       healthcheckPath: input.service.healthcheckPath ?? undefined,
       enableHttpProbes,
       cpuRequest: input.service.cpuRequest ?? undefined,
@@ -419,6 +426,8 @@ export async function promoteCandidateSnapshotToStable(input: {
         envFrom: input.snapshot.envFrom,
         replicas: input.snapshot.replicas,
         imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
+        command: input.snapshot.command,
+        args: input.snapshot.args,
         healthcheckPath: input.service.healthcheckPath ?? undefined,
         enableHttpProbes,
         cpuRequest: input.snapshot.cpuRequest,
@@ -435,6 +444,8 @@ export async function promoteCandidateSnapshotToStable(input: {
         env: input.snapshot.env,
         envFrom: input.snapshot.envFrom,
         imagePullSecrets: input.snapshot.imagePullSecrets ?? [],
+        command: input.snapshot.command,
+        args: input.snapshot.args,
         healthcheckPath: input.service.healthcheckPath ?? undefined,
         enableHttpProbes,
         cpuRequest: input.snapshot.cpuRequest,
@@ -461,6 +472,8 @@ export async function promoteCandidateSnapshotToStable(input: {
         envFrom: previousStableSnapshot.envFrom,
         replicas: previousStableSnapshot.replicas,
         imagePullSecrets: previousStableSnapshot.imagePullSecrets ?? [],
+        command: previousStableSnapshot.command,
+        args: previousStableSnapshot.args,
         healthcheckPath: input.service.healthcheckPath ?? undefined,
         enableHttpProbes,
         cpuRequest: previousStableSnapshot.cpuRequest,

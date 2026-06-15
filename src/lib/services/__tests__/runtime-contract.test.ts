@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'bun:test';
+import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 import { getUnsafeRuntimeDatabaseInfrastructureChange } from '@/lib/services/runtime-contract';
+
+describe('service runtime command contract', () => {
+  it('turns juanie.yaml run.command into the pod entrypoint contract', () => {
+    expect(
+      buildServiceRuntimeCommandSpec({
+        name: 'worker',
+        startCommand: 'bun .worker-runtime/start-workers.js',
+      })
+    ).toEqual({
+      command: ['sh', '-lc'],
+      args: ['bun .worker-runtime/start-workers.js'],
+      displayCommand: 'bun .worker-runtime/start-workers.js',
+    });
+  });
+
+  it('does not fall back to image CMD when run.command is missing', () => {
+    expect(() =>
+      buildServiceRuntimeCommandSpec({
+        name: 'worker',
+        startCommand: null,
+      })
+    ).toThrow('Service worker is missing run.command in juanie.yaml');
+  });
+});
 
 describe('runtime database contract safety', () => {
   it('blocks changing a managed database type through juanie.yaml', () => {

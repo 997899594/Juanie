@@ -76,6 +76,8 @@ export interface ArgoRolloutSpec {
   env?: Record<string, string>;
   envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
+  command: string[];
+  args: string[];
   healthcheckPath?: string;
   cpuRequest?: string;
   cpuLimit?: string;
@@ -281,7 +283,7 @@ async function deleteArgocdResource(ref: ArgocdResourceRef): Promise<void> {
   }
 }
 
-function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
+export function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
   const strategy =
     spec.strategy === 'canary'
       ? {
@@ -338,6 +340,8 @@ function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
                 ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
                 : undefined,
               envFrom: spec.envFrom,
+              command: spec.command,
+              args: spec.args,
               readinessProbe: {
                 httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },
                 initialDelaySeconds: 15,

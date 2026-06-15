@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildArgoRolloutBody,
   buildPromoteArgoRolloutPatch,
   buildScaleArgoRolloutPatch,
   getArgoRolloutReadiness,
@@ -68,6 +69,38 @@ describe('Argo Rollouts workload routing', () => {
     expect(buildPromoteArgoRolloutPatch({ hasBlueGreenStrategy: false })).toEqual([
       { op: 'add', path: '/spec/paused', value: false },
     ]);
+  });
+
+  it('renders the service runtime command into rollout pod templates', () => {
+    const rollout = buildArgoRolloutBody({
+      name: 'nexusnote-web',
+      namespace: 'juanie-nexusnote-prod',
+      image: 'ghcr.io/acme/nexusnote:sha-abc-web',
+      port: 3000,
+      replicas: 1,
+      stableServiceName: 'nexusnote-web',
+      previewServiceName: 'nexusnote-web-candidate',
+      strategy: 'blue_green',
+      autoPromotionEnabled: false,
+      command: ['sh', '-lc'],
+      args: ['bun .worker-runtime/start-workers.js'],
+    });
+
+    const container = (
+      rollout.spec as {
+        template: {
+          spec: {
+            containers: Array<{
+              command?: string[];
+              args?: string[];
+            }>;
+          };
+        };
+      }
+    ).template.spec.containers[0];
+
+    expect(container?.command).toEqual(['sh', '-lc']);
+    expect(container?.args).toEqual(['bun .worker-runtime/start-workers.js']);
   });
 
   it('recognizes completed blue-green rollouts only after active and preview selectors settle', () => {

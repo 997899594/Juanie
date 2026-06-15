@@ -1131,8 +1131,8 @@ export async function createDeployment(
     env?: Record<string, string>;
     envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
     imagePullSecrets?: string[];
-    command?: string[];
-    args?: string[];
+    command: string[];
+    args: string[];
     healthcheckPath?: string;
     enableHttpProbes?: boolean;
     cpuRequest?: string;
@@ -1202,6 +1202,8 @@ export async function updateDeployment(
     env?: Record<string, string>;
     envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
     imagePullSecrets?: string[];
+    command: string[];
+    args: string[];
     healthcheckPath?: string;
     enableHttpProbes?: boolean;
     cpuRequest?: string;
@@ -1237,6 +1239,8 @@ export async function updateDeployment(
             : container.env,
           // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
           ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
+          command: spec.command,
+          args: spec.args,
           ...(spec.enableHttpProbes === false
             ? {}
             : buildHttpProbes({ healthcheckPath: spec.healthcheckPath, port })),
@@ -1878,6 +1882,8 @@ export async function deploymentExists(namespace: string, name: string): Promise
 export interface DeploymentSnapshot {
   image: string | null;
   replicas: number;
+  command: string[];
+  args: string[];
   env?: Record<string, string>;
   envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
@@ -2263,6 +2269,8 @@ export async function getDeploymentSnapshot(
     return {
       image: container.image ?? null,
       replicas: current.spec?.replicas ?? 1,
+      command: container.command ?? [],
+      args: container.args ?? [],
       env: container.env
         ?.filter((item) => item.name && item.value !== undefined)
         .reduce<Record<string, string>>((env, item) => {

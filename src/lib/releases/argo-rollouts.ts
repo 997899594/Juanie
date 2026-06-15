@@ -18,6 +18,7 @@ import type {
   ServiceVerificationPlan,
   WorkloadEnvFromRef,
 } from '@/lib/releases/workloads';
+import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 
 const ARGO_ROLLOUT_VERIFICATION_TIMEOUT_MS = 180_000;
 
@@ -74,6 +75,8 @@ function buildArgoRolloutSpec(input: {
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
 }): ArgoRolloutSpec {
+  const runtimeCommand = buildServiceRuntimeCommandSpec(input.service);
+
   return {
     name: input.rolloutName,
     namespace: input.namespace,
@@ -87,6 +90,8 @@ function buildArgoRolloutSpec(input: {
     env: input.env,
     envFrom: input.envFrom,
     imagePullSecrets: input.imagePullSecrets,
+    command: runtimeCommand.command,
+    args: runtimeCommand.args,
     healthcheckPath: input.service.healthcheckPath ?? undefined,
     cpuRequest: input.service.cpuRequest ?? undefined,
     cpuLimit: input.service.cpuLimit ?? undefined,

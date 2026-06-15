@@ -52,6 +52,7 @@ import { getProjectProductionBranch } from '@/lib/projects/refs';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { publishProjectRealtimeSnapshot } from '@/lib/realtime/projects';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
+import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
 import { requiredCapabilitiesForStep } from './project-init-capabilities';
@@ -1447,6 +1448,7 @@ export function renderJuanieConfig(
 
   for (const service of context.services) {
     const serviceConfig = serviceConfigMap[service.name];
+    const runtimeCommand = buildServiceRuntimeCommandSpec(service);
     const autoscaling =
       service.autoscaling &&
       typeof service.autoscaling === 'object' &&
@@ -1471,7 +1473,7 @@ export function renderJuanieConfig(
       ...buildServiceBuildLines(service, automation, serviceConfig),
       '    # run describes the command Juanie starts after deployment.',
       '    run:',
-      `      command: ${service.startCommand ?? 'npm start'}`
+      `      command: ${runtimeCommand.displayCommand}`
     );
 
     if (service.port) {

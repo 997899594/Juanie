@@ -103,6 +103,11 @@ function getProjectConfigForBuildPlan(
     monorepo,
     services: project.services.map((service) => {
       const serviceConfig = serviceConfigMap[service.name] ?? {};
+      const startCommand = service.startCommand?.trim();
+
+      if (!startCommand) {
+        throw new BuildRunError(`Service ${service.name} is missing run.command in juanie.yaml`);
+      }
 
       return {
         name: service.name,
@@ -119,7 +124,7 @@ function getProjectConfigForBuildPlan(
             }
           | undefined,
         run: {
-          command: service.startCommand ?? (service.type === 'web' ? 'npm start' : 'npm run start'),
+          command: startCommand,
           ...(service.port ? { port: service.port } : {}),
         },
       };

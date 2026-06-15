@@ -37,6 +37,7 @@ import {
   isProgressiveStrategy,
   promoteCandidateSnapshotToStable,
 } from '@/lib/releases/workloads';
+import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 import {
   syncProjectDatabaseRuntimeContractsFromRepo,
   syncProjectServiceRuntimeContractsFromRepo,
@@ -254,6 +255,8 @@ export async function executeDeploymentWorkload(
     }
 
     if (!shouldVerifyCandidateFirst) {
+      const runtimeCommand = buildServiceRuntimeCommandSpec(service);
+
       await promoteCandidateSnapshotToStable({
         namespace: targetEnvironment.namespace,
         projectSlug: project.slug,
@@ -265,6 +268,8 @@ export async function executeDeploymentWorkload(
           image: imageName,
           port: service.port ?? 3000,
           replicas: stableSnapshot?.replicas ?? service.replicas ?? 1,
+          command: runtimeCommand.command,
+          args: runtimeCommand.args,
           env: platformRuntimeEnv,
           envFrom,
           cpuRequest: service.cpuRequest ?? undefined,
