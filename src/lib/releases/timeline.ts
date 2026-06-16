@@ -1,6 +1,7 @@
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
+import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import type { ReleaseTimelineItem, ReleaseViewLike } from '@/lib/releases/release-view-shared';
@@ -125,6 +126,7 @@ export function buildReleaseTimeline(input: {
   environmentStrategy: string | null;
 }): ReleaseTimelineItem[] {
   const { release } = input;
+  const lifecycle = resolveReleaseLifecycle(release);
   const releaseEnvironmentId = release.environment?.id ?? null;
   const releaseHref =
     release.projectId && releaseEnvironmentId
@@ -206,10 +208,7 @@ export function buildReleaseTimeline(input: {
   if (
     release.environment?.deploymentStrategy &&
     release.environment.deploymentStrategy !== 'rolling' &&
-    release.deployments.some(
-      (deployment) =>
-        deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
-    )
+    lifecycle.canAcceptRolloutActions
   ) {
     items.push({
       key: 'rollout-ready',

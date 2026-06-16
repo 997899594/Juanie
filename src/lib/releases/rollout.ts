@@ -13,12 +13,12 @@ import {
   requiresManualArgoRolloutPromotion,
   shouldUseArgoRolloutsForService,
 } from '@/lib/releases/argo-rollouts';
+import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import {
   completeReleaseAfterRolloutIfReady,
   persistReleaseRecapSafely,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
-import { canReleaseAcceptRolloutActions } from '@/lib/releases/state-machine';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import {
   buildServiceVerificationPlan,
@@ -93,6 +93,22 @@ export async function buildDeploymentRolloutPlan(input: {
       release: {
         columns: {
           status: true,
+          errorMessage: true,
+        },
+        with: {
+          deployments: {
+            columns: {
+              id: true,
+              status: true,
+              errorMessage: true,
+            },
+          },
+          migrationRuns: {
+            columns: {
+              id: true,
+              status: true,
+            },
+          },
         },
       },
     },
@@ -120,7 +136,11 @@ export async function buildDeploymentRolloutPlan(input: {
     throw new Error('无法解析部署上下文');
   }
 
-  if (!canReleaseAcceptRolloutActions(deployment.release?.status)) {
+  const lifecycle = deployment.release
+    ? resolveReleaseLifecycle(deployment.release)
+    : resolveReleaseLifecycle({ status: 'unknown' });
+
+  if (!lifecycle.canAcceptRolloutActions) {
     const releaseStatus = deployment.release?.status ?? 'unknown';
     return {
       deployment: {
@@ -129,7 +149,9 @@ export async function buildDeploymentRolloutPlan(input: {
       },
       plan: {
         canFinalize: false,
-        blockingReason: `当前发布状态为 ${releaseStatus}，不能继续放量`,
+        blockingReason: lifecycle.failureSummary
+          ? `当前发布为${lifecycle.failureSummary}，不能继续放量`
+          : `当前发布状态为 ${releaseStatus}，不能继续放量`,
         strategyLabel: isProgressiveStrategy(environment.deploymentStrategy)
           ? getStrategyLabel(environment.deploymentStrategy)
           : null,

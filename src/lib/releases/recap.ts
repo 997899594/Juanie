@@ -24,6 +24,7 @@ import {
   getReleaseIntelligenceSnapshot,
   type ReleaseIntelligenceSnapshot,
 } from '@/lib/releases/intelligence';
+import { type ReleaseLifecycleIssue, resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import type {
   ReleaseBlockingReason,
@@ -210,93 +211,11 @@ function buildReleaseBlockingReason(input: {
   intelligence: ReleaseIntelligenceSnapshot;
   governanceEvents?: ReleaseGovernanceEvent[] | null;
 }): ReleaseBlockingReason | null {
+  const lifecycle = resolveReleaseLifecycle(input.release);
   const latestGovernanceEvent = input.governanceEvents?.[0] ?? null;
 
-  if (input.release.migrationRuns.some((run) => run.status === 'awaiting_approval')) {
-    return {
-      label: '迁移审批阻塞',
-      summary: '这次发布已经进入迁移环节，但存在待审批的迁移步骤，因此不会继续推进部署。',
-      nextActionLabel: '先处理迁移审批，再继续发布',
-    };
-  }
-
-  if (input.release.migrationRuns.some((run) => run.status === 'awaiting_external_completion')) {
-    return {
-      label: '外部迁移阻塞',
-      summary: '这次发布已经进入迁移环节，但还在等待外部迁移完成确认，因此不会继续推进部署。',
-      nextActionLabel: '先标记外部迁移结果，再继续发布',
-    };
-  }
-
-  if (input.release.migrationRuns.some((run) => run.status === 'failed')) {
-    return {
-      label: '迁移失败',
-      summary: '发布没有卡在应用放量，而是被失败迁移直接阻塞。',
-      nextActionLabel: '检查迁移命令、数据库状态并重试',
-    };
-  }
-
-  if (input.release.migrationRuns.some((run) => run.status === 'canceled')) {
-    return {
-      label: '迁移取消',
-      summary: '发布链路在迁移阶段被中断，需要先确认取消原因。',
-      nextActionLabel: '恢复迁移后再继续发布',
-    };
-  }
-
-  if (
-    input.release.status === 'canceled' ||
-    input.release.deployments.some((deployment) => deployment.status === 'canceled')
-  ) {
-    const superseded = input.release.deployments.some((deployment) =>
-      deployment.errorMessage?.includes('Superseded by deployment')
-    );
-
-    return {
-      label: superseded ? '发布已被接管' : '发布已取消',
-      summary: superseded
-        ? '同一环境有更新的发布接管了这次部署，因此当前链路被主动收口，不再继续推进。'
-        : '这次发布已经被取消，不会再继续推进后续部署环节。',
-      nextActionLabel: superseded ? '查看最新 release' : '确认取消原因',
-    };
-  }
-
-  if (input.release.status === 'awaiting_rollout') {
-    return {
-      label: '待放量',
-      summary: '候选版本已经通过部署与校验，但当前仍在等待人工完成放量或切换。',
-      nextActionLabel: '完成放量后再收口发布',
-    };
-  }
-
-  if (
-    input.release.status === 'verification_failed' ||
-    input.release.deployments.some((deployment) => deployment.status === 'verification_failed')
-  ) {
-    const failedDeployment = input.release.deployments.find(
-      (deployment) => deployment.status === 'verification_failed'
-    );
-
-    return {
-      label: '校验失败',
-      summary: failedDeployment?.errorMessage
-        ? `候选版本没有通过运行态校验：${failedDeployment.errorMessage}`
-        : '镜像已经部署，但运行态校验没有通过，因此平台不会把这次发布记为成功。',
-      nextActionLabel: '补齐环境变量或修复启动错误后重试发布',
-    };
-  }
-
-  const failedDeployment = input.release.deployments.find((deployment) =>
-    ['failed', 'rolled_back'].includes(deployment.status)
-  );
-  if (failedDeployment) {
-    return {
-      label: '部署失败',
-      summary: failedDeployment.errorMessage
-        ? `部署阶段失败：${failedDeployment.errorMessage}`
-        : '发布在部署阶段中断，当前版本没有进入稳定服务。',
-      nextActionLabel: '检查运行日志、环境变量和服务配置后重试',
-    };
+  if (lifecycle.issue) {
+    return buildLifecycleBlockingReason(lifecycle.issue);
   }
 
   if (input.release.infrastructureDiagnostics?.primaryIssue) {
@@ -325,6 +244,87 @@ function buildReleaseBlockingReason(input: {
   }
 
   return null;
+}
+
+function buildLifecycleBlockingReason(issue: ReleaseLifecycleIssue): ReleaseBlockingReason {
+  switch (issue.code) {
+    case 'approval_blocked':
+      return {
+        label: '迁移审批阻塞',
+        summary: '这次发布已经进入迁移环节，但存在待审批的迁移步骤，因此不会继续推进部署。',
+        nextActionLabel: '先处理迁移审批，再继续发布',
+      };
+    case 'external_completion_blocked':
+      return {
+        label: '外部迁移阻塞',
+        summary: '这次发布已经进入迁移环节，但还在等待外部迁移完成确认，因此不会继续推进部署。',
+        nextActionLabel: '先标记外部迁移结果，再继续发布',
+      };
+    case 'migration_failed':
+      return {
+        label: '迁移失败',
+        summary: '发布没有卡在应用放量，而是被失败迁移直接阻塞。',
+        nextActionLabel: '检查迁移命令、数据库状态并重试',
+      };
+    case 'migration_canceled':
+      return {
+        label: '迁移取消',
+        summary: '发布链路在迁移阶段被中断，需要先确认取消原因。',
+        nextActionLabel: '恢复迁移后再继续发布',
+      };
+    case 'rollout_pending':
+      return {
+        label: '待放量',
+        summary: '候选版本已经通过部署与校验，但当前仍在等待人工完成放量或切换。',
+        nextActionLabel: '完成放量后再收口发布',
+      };
+    case 'verification_failed':
+      return {
+        label: '校验失败',
+        summary:
+          issue.source === 'deployment'
+            ? `候选版本没有通过运行态校验：${issue.summary}`
+            : '镜像已经部署，但运行态校验没有通过，因此平台不会把这次发布记为成功。',
+        nextActionLabel: '补齐环境变量或修复启动错误后重试发布',
+      };
+    case 'deployment_failed':
+      return {
+        label: '部署失败',
+        summary:
+          issue.source === 'deployment'
+            ? `部署阶段失败：${issue.summary}`
+            : '发布在部署阶段中断，当前版本没有进入稳定服务。',
+        nextActionLabel: '检查运行日志、环境变量和服务配置后重试',
+      };
+    case 'release_canceled': {
+      const superseded = issue.summary.includes('接管');
+      return {
+        label: superseded ? '发布已被接管' : '发布已取消',
+        summary: superseded
+          ? '同一环境有更新的发布接管了这次部署，因此当前链路被主动收口，不再继续推进。'
+          : '这次发布已经被取消，不会再继续推进后续部署环节。',
+        nextActionLabel: superseded ? '查看最新 release' : '确认取消原因',
+      };
+    }
+    case 'admission_failed':
+      return {
+        label: '准入失败',
+        summary: issue.summary,
+        nextActionLabel: '查看准入原因',
+      };
+    case 'degraded':
+      return {
+        label: '发布降级',
+        summary: issue.summary,
+        nextActionLabel: '检查后置迁移',
+      };
+    case 'release_failed':
+      return {
+        label: '发布失败',
+        summary: issue.summary,
+        nextActionLabel: '检查发布日志',
+      };
+  }
 }
 
 function buildRecapHeadline(input: {

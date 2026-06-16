@@ -3,6 +3,7 @@ import {
   isPreviewEnvironment,
   isProductionEnvironment,
 } from '@/lib/environments/model';
+import { type ReleaseLifecycleIssueCode, resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 
 export type ReleaseRiskLevel = 'low' | 'medium' | 'high';
 export type ReleaseIssueCode =
@@ -36,6 +37,20 @@ interface ReleaseLike {
     } | null;
   }>;
 }
+
+const lifecycleIssueCodeMap: Record<ReleaseLifecycleIssueCode, ReleaseIssueCode> = {
+  admission_failed: 'admission_failed',
+  approval_blocked: 'approval_blocked',
+  external_completion_blocked: 'external_completion_blocked',
+  migration_failed: 'migration_failed',
+  migration_canceled: 'migration_canceled',
+  verification_failed: 'verification_failed',
+  deployment_failed: 'deployment_failed',
+  rollout_pending: 'rollout_pending',
+  release_canceled: 'release_canceled',
+  degraded: 'degraded',
+  release_failed: 'release_failed',
+};
 
 export interface MigrationAttentionLike {
   status: string;
@@ -79,27 +94,6 @@ export interface ReleaseIntelligenceSnapshot {
 
 function uniqueReasons(reasons: string[]): string[] {
   return [...new Set(reasons)];
-}
-
-function isSupersededMessage(message?: string | null): boolean {
-  return message?.includes('Superseded by deployment') ?? false;
-}
-
-function getCanceledReleaseMessage(release: ReleaseLike): string | null {
-  const canceledDeployment = release.deployments?.find(
-    (deployment) => deployment.status === 'canceled'
-  );
-  const canceledMessage = canceledDeployment?.errorMessage ?? release.errorMessage ?? null;
-
-  if (!canceledDeployment && release.status !== 'canceled') {
-    return null;
-  }
-
-  if (isSupersededMessage(canceledMessage)) {
-    return '发布已被更新版本接管';
-  }
-
-  return '发布已取消';
 }
 
 const releaseIssueConfig: Record<
@@ -208,72 +202,7 @@ function getPreviewExpiryState(expiresAt?: Date | string | null): 'expired' | 's
 }
 
 export function getReleaseFailureSummary(release: ReleaseLike): string | null {
-  const canceledReleaseMessage = getCanceledReleaseMessage(release);
-  if (canceledReleaseMessage) {
-    return canceledReleaseMessage;
-  }
-
-  if (release.errorMessage) {
-    return release.errorMessage;
-  }
-
-  const failedMigration = release.migrationRuns?.find((run) => run.status === 'failed');
-  if (failedMigration) {
-    return '迁移执行失败';
-  }
-
-  const canceledMigration = release.migrationRuns?.find((run) => run.status === 'canceled');
-  if (canceledMigration) {
-    return '迁移被取消';
-  }
-
-  const failedDeployment = release.deployments?.find(
-    (deployment) => deployment.status === 'failed' || deployment.status === 'verification_failed'
-  );
-  if (failedDeployment) {
-    return failedDeployment.status === 'verification_failed' ? '部署校验失败' : '部署执行失败';
-  }
-
-  if (release.status === 'awaiting_rollout') {
-    return '发布等待放量完成';
-  }
-
-  if (release.status === 'awaiting_approval') {
-    return '发布等待迁移审批';
-  }
-
-  if (release.status === 'awaiting_external_completion') {
-    return '发布等待外部迁移完成';
-  }
-
-  const externalMigration = release.migrationRuns?.find(
-    (run) => run.status === 'awaiting_external_completion'
-  );
-  if (externalMigration) {
-    return '迁移等待外部完成确认';
-  }
-
-  if (release.status === 'verification_failed') {
-    return '发布校验失败';
-  }
-
-  if (release.status === 'admission_failed') {
-    return release.errorMessage ?? '发布准入失败';
-  }
-
-  if (release.status === 'migration_pre_failed') {
-    return '前置迁移失败';
-  }
-
-  if (release.status === 'failed') {
-    return '发布失败';
-  }
-
-  if (release.status === 'degraded') {
-    return '发布降级';
-  }
-
-  return null;
+  return resolveReleaseLifecycle(release).failureSummary;
 }
 
 export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | null {
@@ -282,69 +211,13 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;
 
-  if (release.status === 'awaiting_approval') {
-    return 'approval_blocked';
-  }
-
-  if (release.status === 'admission_failed') {
-    return 'admission_failed';
-  }
-
-  if (release.status === 'awaiting_external_completion') {
-    return 'external_completion_blocked';
-  }
-
-  if (release.migrationRuns?.some((run) => run.status === 'awaiting_approval')) {
-    return 'approval_blocked';
-  }
-
-  if (release.migrationRuns?.some((run) => run.status === 'awaiting_external_completion')) {
-    return 'external_completion_blocked';
-  }
-
-  if (release.migrationRuns?.some((run) => run.status === 'failed')) {
-    return 'migration_failed';
-  }
-
-  if (release.migrationRuns?.some((run) => run.status === 'canceled')) {
-    return 'migration_canceled';
-  }
-
-  if (
-    release.status === 'canceled' ||
-    release.deployments?.some((deployment) => deployment.status === 'canceled')
-  ) {
-    return 'release_canceled';
-  }
-
-  if (release.deployments?.some((deployment) => deployment.status === 'failed')) {
-    return 'deployment_failed';
-  }
-
-  if (
-    release.deployments?.some((deployment) => deployment.status === 'verification_failed') ||
-    release.status === 'verification_failed'
-  ) {
-    return 'verification_failed';
-  }
-
-  if (
-    release.deployments?.some((deployment) => deployment.status === 'awaiting_rollout') ||
-    release.status === 'awaiting_rollout'
-  ) {
-    return 'rollout_pending';
+  const lifecycleIssueCode = resolveReleaseLifecycle(release).issue?.code;
+  if (lifecycleIssueCode) {
+    return lifecycleIssueCodeMap[lifecycleIssueCode];
   }
 
   if (previewExpiryState === 'expired') {
     return 'preview_expired';
-  }
-
-  if (release.status === 'degraded') {
-    return 'degraded';
-  }
-
-  if (['migration_pre_failed', 'failed'].includes(release.status)) {
-    return 'release_failed';
   }
 
   return null;
@@ -520,12 +393,9 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const previewExpiryState = isPreview
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;
-  const hasApproval =
-    release.status === 'awaiting_approval' ||
-    release.migrationRuns?.some((run) => run.status === 'awaiting_approval');
-  const hasExternalCompletion =
-    release.status === 'awaiting_external_completion' ||
-    release.migrationRuns?.some((run) => run.status === 'awaiting_external_completion');
+  const lifecycle = resolveReleaseLifecycle(release);
+  const hasApproval = lifecycle.issue?.code === 'approval_blocked';
+  const hasExternalCompletion = lifecycle.issue?.code === 'external_completion_blocked';
   const hasFailedMigration = release.migrationRuns?.some((run) =>
     ['failed', 'canceled'].includes(run.status)
   );
@@ -535,15 +405,11 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const hasManualProdGate = release.migrationRuns?.some(
     (run) => run.specification?.approvalPolicy === 'manual_in_production' && isProduction
   );
-  const hasFailedDeployment = release.deployments?.some(
-    (deployment) => deployment.status === 'failed' || deployment.status === 'verification_failed'
-  );
-  const hasCanceledRelease =
-    release.status === 'canceled' ||
-    release.deployments?.some((deployment) => deployment.status === 'canceled');
-  const hasAwaitingRollout = release.deployments?.some(
-    (deployment) => deployment.status === 'awaiting_rollout'
-  );
+  const hasFailedDeployment =
+    lifecycle.issue?.code === 'deployment_failed' ||
+    lifecycle.issue?.code === 'verification_failed';
+  const hasCanceledRelease = lifecycle.issue?.code === 'release_canceled';
+  const hasAwaitingRollout = lifecycle.issue?.code === 'rollout_pending';
 
   if (isProduction) {
     riskLevel = 'medium';

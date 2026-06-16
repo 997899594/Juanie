@@ -96,4 +96,53 @@ describe('release detail view', () => {
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
     expect(release.migrationItems[0]?.approvalToken).toBe('token-1');
   });
+
+  it('does not render rollout-ready timeline when a sibling deployment already failed', () => {
+    const release = decorateReleaseDetail(
+      {
+        id: 'rel-3',
+        status: 'awaiting_rollout',
+        errorMessage: null,
+        projectId: 'proj-1',
+        environment: {
+          id: 'env-prod',
+          name: 'production',
+          isProduction: true,
+          isPreview: false,
+          deploymentStrategy: 'controlled',
+        },
+        artifacts: [
+          {
+            service: { id: 'svc-web', name: 'web' },
+            serviceId: 'svc-web',
+            kind: 'image',
+            imageUrl: 'ghcr.io/demo/web:2',
+            imageDigest: null,
+          },
+          {
+            service: { id: 'svc-worker', name: 'worker' },
+            serviceId: 'svc-worker',
+            kind: 'image',
+            imageUrl: 'ghcr.io/demo/worker:2',
+            imageDigest: null,
+          },
+        ],
+        deployments: [
+          { id: 'dep-web', status: 'awaiting_rollout', serviceId: 'svc-web' },
+          {
+            id: 'dep-worker',
+            status: 'verification_failed',
+            serviceId: 'svc-worker',
+            errorMessage: 'worker exited with code 1',
+          },
+        ],
+        migrationRuns: [],
+      },
+      null
+    );
+
+    expect(release.blockingReason?.label).toBe('校验失败');
+    expect(release.timeline.map((item) => item.title)).not.toContain('渐进式发布待推进');
+    expect(release.timeline.map((item) => item.title)).toContain('worker 校验失败');
+  });
 });

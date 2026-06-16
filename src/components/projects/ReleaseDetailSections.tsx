@@ -27,9 +27,9 @@ import {
   getReleaseArtifactUri,
 } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
+import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
-import { canReleaseAcceptRolloutActions } from '@/lib/releases/state-machine';
 import { formatPlatformDateTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
@@ -248,14 +248,17 @@ function shouldOpenMigrationReview(run: ReleaseMigrationItem, index: number, tot
 export function getActionableRolloutDeployments(
   release: Pick<ReleasePageData['release'], 'status' | 'deploymentItems'>
 ): ReleaseDeploymentItem[] {
-  if (!canReleaseAcceptRolloutActions(release.status)) {
+  const lifecycle = resolveReleaseLifecycle({
+    status: release.status,
+    deployments: release.deploymentItems,
+  });
+
+  if (!lifecycle.canAcceptRolloutActions) {
     return [];
   }
 
-  return release.deploymentItems.filter(
-    (deployment) =>
-      deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
-  );
+  const actionableDeploymentIds = new Set(lifecycle.actionableRolloutDeploymentIds);
+  return release.deploymentItems.filter((deployment) => actionableDeploymentIds.has(deployment.id));
 }
 
 function ReleaseRolloutActionSection({

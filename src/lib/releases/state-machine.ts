@@ -4,6 +4,7 @@ import type {
   MigrationRunStatus,
   ReleaseStatus,
 } from '@/lib/db/schema';
+import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 
 export const activeReleaseStatuses = [
   'admission_running',
@@ -63,7 +64,11 @@ export function isActiveReleaseStatus(status: string): boolean {
 }
 
 export function canReleaseAcceptRolloutActions(status: string | null | undefined): boolean {
-  return status === 'awaiting_rollout';
+  return status
+    ? resolveReleaseLifecycle({
+        status,
+      }).canAcceptRolloutActions
+    : false;
 }
 
 export function getObservedDeploymentTerminalStatus(
@@ -126,40 +131,38 @@ export function resolveReleaseDeploymentResolution(
     errorMessage?: string | null;
   }>
 ): ReleaseDeploymentResolution {
-  const verificationFailed = deployments.find(
-    (deployment) => deployment.status === 'verification_failed'
-  );
-  if (verificationFailed) {
+  const lifecycle = resolveReleaseLifecycle({
+    status: deployments.some((deployment) => deployment.status === 'awaiting_rollout')
+      ? 'awaiting_rollout'
+      : 'deploying',
+    deployments,
+  });
+
+  if (lifecycle.issue?.code === 'verification_failed') {
     return {
       kind: 'failed',
       failureStatus: 'verification_failed',
-      message:
-        verificationFailed.errorMessage ??
-        `Deployment ${verificationFailed.id} ended with status verification_failed`,
+      message: lifecycle.issue.summary,
     };
   }
 
-  const failed = deployments.find(
-    (deployment) => deployment.status === 'failed' || deployment.status === 'rolled_back'
-  );
-  if (failed) {
+  if (lifecycle.issue?.code === 'deployment_failed') {
     return {
       kind: 'failed',
       failureStatus: 'failed',
-      message: failed.errorMessage ?? `Deployment ${failed.id} ended with status ${failed.status}`,
+      message: lifecycle.issue.summary,
     };
   }
 
-  const canceled = deployments.find((deployment) => deployment.status === 'canceled');
-  if (canceled) {
+  if (lifecycle.issue?.code === 'release_canceled') {
     return {
       kind: 'canceled',
       failureStatus: 'canceled',
-      message: canceled.errorMessage ?? `Deployment ${canceled.id} ended with status canceled`,
+      message: lifecycle.issue.summary,
     };
   }
 
-  if (deployments.some((deployment) => deployment.status === 'awaiting_rollout')) {
+  if (lifecycle.issue?.code === 'rollout_pending') {
     return { kind: 'awaiting_rollout' };
   }
 
