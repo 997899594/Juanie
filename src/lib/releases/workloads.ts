@@ -3,6 +3,7 @@ import {
   type DeploymentSnapshot,
   deleteDeployment,
   deleteService,
+  describeDeploymentRolloutDiagnostics,
   getCiliumHTTPRoutes,
   getDeploymentSnapshot,
   getDeployments,
@@ -463,6 +464,18 @@ export async function promoteCandidateSnapshotToStable(input: {
       minReadyMs: input.service.type === 'web' ? 0 : 15_000,
     });
   } catch (error) {
+    const rolloutDiagnostics = await describeDeploymentRolloutDiagnostics({
+      namespace: input.namespace,
+      name: input.stableName,
+    }).catch((diagnosticsError) => {
+      const message =
+        diagnosticsError instanceof Error ? diagnosticsError.message : String(diagnosticsError);
+      return `Deployment diagnostics unavailable for ${input.stableName}: ${message}`;
+    });
+    await input.onLog?.(
+      `Deployment diagnostics before restore for ${input.stableName}:\n${rolloutDiagnostics}`
+    );
+
     if (input.stableExists && previousStableSnapshot?.image) {
       await input.onLog?.(`Restoring ${input.stableName} → ${previousStableSnapshot.image}`);
       await updateDeployment(input.namespace, input.stableName, {

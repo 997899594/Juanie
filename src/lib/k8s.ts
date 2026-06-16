@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
 import {
   describeReplicaSetReadiness,
+  describeReplicaSetStatus,
   formatK8sLabelSelector,
   getReplicaSetPodLabelSelector,
   isReplicaSetReadyForDeployment,
@@ -1099,6 +1100,8 @@ export function isK8sAvailable(): boolean {
 }
 
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
+const DEFAULT_DEPLOYMENT_ROLLOUT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_DEPLOYMENT_PROGRESS_DEADLINE_SECONDS = 540;
 const LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR = [
   'juanie.dev/last-applied-configuration',
   'juanie.dev/last-applied-spec',
@@ -1139,6 +1142,7 @@ export async function createDeployment(
     cpuLimit?: string;
     memoryRequest?: string;
     memoryLimit?: string;
+    progressDeadlineSeconds?: number;
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
@@ -1155,6 +1159,8 @@ export async function createDeployment(
       metadata: { name },
       spec: {
         replicas: spec.replicas,
+        progressDeadlineSeconds:
+          spec.progressDeadlineSeconds ?? DEFAULT_DEPLOYMENT_PROGRESS_DEADLINE_SECONDS,
         revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
         selector: { matchLabels: { app: name } },
         template: {
@@ -1210,6 +1216,7 @@ export async function updateDeployment(
     cpuLimit?: string;
     memoryRequest?: string;
     memoryLimit?: string;
+    progressDeadlineSeconds?: number;
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
@@ -1276,6 +1283,10 @@ export async function updateDeployment(
         },
         spec: {
           replicas: spec.replicas ?? current.spec?.replicas,
+          progressDeadlineSeconds:
+            spec.progressDeadlineSeconds ??
+            current.spec?.progressDeadlineSeconds ??
+            DEFAULT_DEPLOYMENT_PROGRESS_DEADLINE_SECONDS,
           revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
           selector: current.spec?.selector || { matchLabels: { app: name } },
           template: {
@@ -1942,6 +1953,7 @@ async function describeDeploymentEventIssues(
 const DEPLOYMENT_FAILURE_LOG_TAIL_LINES = 30;
 const DEPLOYMENT_FAILURE_LOG_LIMIT_BYTES = 16_384;
 const DEPLOYMENT_FAILURE_LOG_MAX_CHARS = 4_000;
+const DEPLOYMENT_ROLLOUT_DIAGNOSTIC_MAX_CHARS = 8_000;
 
 function sanitizeDiagnosticText(value: string): string {
   return value
@@ -2041,6 +2053,134 @@ async function describeDeploymentPodFailure(input: {
   return parts.join('\n');
 }
 
+function formatDeploymentCondition(condition: k8s.V1DeploymentCondition): string {
+  return [condition.type, condition.status, condition.reason, condition.message]
+    .filter(Boolean)
+    .join(': ');
+}
+
+function formatPodContainerStatus(status: k8s.V1ContainerStatus): string {
+  const state =
+    status.state?.waiting?.reason ??
+    status.state?.terminated?.reason ??
+    (status.state?.running ? 'Running' : 'Unknown');
+  const details = [
+    `${status.name}: ${state}`,
+    `ready ${status.ready ? 'true' : 'false'}`,
+    `restarts ${status.restartCount ?? 0}`,
+  ];
+  const terminated = status.state?.terminated;
+  const waitingMessage = status.state?.waiting?.message;
+
+  if (terminated) {
+    details.push(`exit ${terminated.exitCode}`);
+  }
+
+  if (waitingMessage) {
+    details.push(waitingMessage);
+  }
+
+  return details.join(', ');
+}
+
+function formatPodDiagnosticSummary(pod: k8s.V1Pod): string {
+  const name = pod.metadata?.name ?? 'pod';
+  const phase = pod.status?.phase ?? 'Unknown';
+  const reason = pod.status?.reason;
+  const message = pod.status?.message;
+  const containers = [
+    ...(pod.status?.initContainerStatuses ?? []),
+    ...(pod.status?.containerStatuses ?? []),
+  ];
+  const containerText =
+    containers.length > 0 ? containers.map(formatPodContainerStatus).join(' | ') : 'no containers';
+
+  return [`${name}: phase ${phase}`, reason, message, containerText].filter(Boolean).join(' · ');
+}
+
+function truncateDeploymentDiagnostic(value: string): string {
+  if (value.length <= DEPLOYMENT_ROLLOUT_DIAGNOSTIC_MAX_CHARS) {
+    return value;
+  }
+
+  return `${value.slice(0, DEPLOYMENT_ROLLOUT_DIAGNOSTIC_MAX_CHARS)}\n...<truncated>`;
+}
+
+export async function describeDeploymentRolloutDiagnostics(input: {
+  namespace: string;
+  name: string;
+}): Promise<string> {
+  const { apps } = getK8sClient();
+  const lines: string[] = [];
+  const deployment = await apps.readNamespacedDeployment({
+    namespace: input.namespace,
+    name: input.name,
+  });
+  const desiredReplicas = deployment.spec?.replicas ?? 1;
+  const updatedReplicas = deployment.status?.updatedReplicas ?? 0;
+  const readyReplicas = deployment.status?.readyReplicas ?? 0;
+  const availableReplicas = deployment.status?.availableReplicas ?? 0;
+  const generation = deployment.metadata?.generation ?? 0;
+  const observedGeneration = deployment.status?.observedGeneration ?? 0;
+
+  lines.push(
+    `Deployment ${input.name}: generation ${observedGeneration}/${generation}, desired ${desiredReplicas}, updated ${updatedReplicas}, ready ${readyReplicas}, available ${availableReplicas}`
+  );
+
+  for (const condition of deployment.status?.conditions ?? []) {
+    lines.push(`condition: ${formatDeploymentCondition(condition)}`);
+  }
+
+  const deploymentSelector = formatK8sLabelSelector(deployment.spec?.selector?.matchLabels ?? {});
+  const replicaSets = await getReplicaSets(input.namespace, deploymentSelector || undefined);
+  const activeReplicaSet = selectActiveDeploymentReplicaSet(deployment, replicaSets);
+
+  if (activeReplicaSet) {
+    lines.push(`active: ${describeReplicaSetStatus(activeReplicaSet)}`);
+  } else {
+    lines.push(`active: waiting for current ReplicaSet for ${input.name}`);
+  }
+
+  const relatedReplicaSets = replicaSets
+    .filter((replicaSet) => replicaSet.metadata?.name !== activeReplicaSet?.metadata?.name)
+    .slice(0, 3);
+  for (const replicaSet of relatedReplicaSets) {
+    lines.push(`related: ${describeReplicaSetStatus(replicaSet)}`);
+  }
+
+  const activeReplicaSetSelector = activeReplicaSet
+    ? getReplicaSetPodLabelSelector(activeReplicaSet)
+    : deploymentSelector;
+  const pods = activeReplicaSetSelector
+    ? await getPods(input.namespace, activeReplicaSetSelector)
+    : [];
+
+  if (pods.length === 0) {
+    lines.push(
+      `pods: none for selector ${activeReplicaSetSelector || deploymentSelector || 'n/a'}`
+    );
+  }
+
+  for (const pod of pods) {
+    lines.push(`pod: ${formatPodDiagnosticSummary(pod)}`);
+  }
+
+  const eventIssue = await describeDeploymentEventIssues(input.namespace, pods);
+  if (eventIssue) {
+    lines.push(`event: ${eventIssue}`);
+  }
+
+  const podIssue = collectDeploymentPodIssues(pods)[0];
+  if (podIssue) {
+    const logTail = await getDeploymentFailureLogTail(input.namespace, podIssue);
+    if (logTail) {
+      lines.push(logTail);
+    }
+  }
+
+  return truncateDeploymentDiagnostic(lines.join('\n'));
+}
+
 export async function waitForDeploymentReady(input: {
   namespace: string;
   name: string;
@@ -2048,7 +2188,7 @@ export async function waitForDeploymentReady(input: {
   pollMs?: number;
   minReadyMs?: number;
 }) {
-  const timeoutMs = input.timeoutMs ?? 10 * 60 * 1000;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_DEPLOYMENT_ROLLOUT_TIMEOUT_MS;
   const pollMs = input.pollMs ?? 3000;
   const minReadyMs = input.minReadyMs ?? 0;
   const deadline = Date.now() + timeoutMs;
@@ -2131,7 +2271,19 @@ export async function waitForDeploymentReady(input: {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 
-  throw new Error(lastObservedIssue ?? `Deployment ${input.name} rollout timed out`);
+  const diagnostics = await describeDeploymentRolloutDiagnostics({
+    namespace: input.namespace,
+    name: input.name,
+  }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return `diagnostics unavailable: ${message}`;
+  });
+
+  throw new Error(
+    [`Deployment ${input.name} rollout timed out`, lastObservedIssue, diagnostics]
+      .filter(Boolean)
+      .join('\n')
+  );
 }
 
 export async function waitForDeploymentObserved(input: {

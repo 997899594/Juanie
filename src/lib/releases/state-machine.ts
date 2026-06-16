@@ -126,15 +126,6 @@ export function resolveReleaseDeploymentResolution(
     errorMessage?: string | null;
   }>
 ): ReleaseDeploymentResolution {
-  const canceled = deployments.find((deployment) => deployment.status === 'canceled');
-  if (canceled) {
-    return {
-      kind: 'canceled',
-      failureStatus: 'canceled',
-      message: canceled.errorMessage ?? `Deployment ${canceled.id} ended with status canceled`,
-    };
-  }
-
   const verificationFailed = deployments.find(
     (deployment) => deployment.status === 'verification_failed'
   );
@@ -156,6 +147,15 @@ export function resolveReleaseDeploymentResolution(
       kind: 'failed',
       failureStatus: 'failed',
       message: failed.errorMessage ?? `Deployment ${failed.id} ended with status ${failed.status}`,
+    };
+  }
+
+  const canceled = deployments.find((deployment) => deployment.status === 'canceled');
+  if (canceled) {
+    return {
+      kind: 'canceled',
+      failureStatus: 'canceled',
+      message: canceled.errorMessage ?? `Deployment ${canceled.id} ended with status canceled`,
     };
   }
 

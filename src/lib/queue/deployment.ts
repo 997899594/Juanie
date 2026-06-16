@@ -1,10 +1,13 @@
 import { Job, Worker } from 'bullmq';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { isK8sAvailable } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
-import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
+import {
+  appendDeploymentRealtimeLogs,
+  updateDeploymentRealtimeState,
+} from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
   shouldUseArgoRolloutsForService,
@@ -19,6 +22,7 @@ import { executeDeploymentWorkload, logDeployment } from './deployment-executor'
 import type { DeploymentJobData } from './index';
 
 const deploymentWorkerLogger = logger.child({ component: 'deployment-worker' });
+const SIBLING_CANCEL_REASON_MAX_CHARS = 500;
 
 function classifyDeploymentFailureStatus(message: string) {
   const verificationSignals = [
@@ -39,6 +43,8 @@ function classifyDeploymentFailureStatus(message: string) {
     'exit code ',
     'ready 0/',
     'Unhealthy',
+    'is progressing',
+    'Deployment diagnostics',
   ];
 
   if (verificationSignals.some((signal) => message.includes(signal))) {
@@ -100,6 +106,75 @@ async function cleanupFailedCandidateResources(deploymentId: string): Promise<bo
   return true;
 }
 
+async function cancelSiblingAwaitingRolloutDeployments(input: {
+  releaseId: string;
+  failedDeploymentId: string;
+  failureMessage: string;
+}) {
+  const siblingDeployments = await db.query.deployments.findMany({
+    where: eq(deployments.releaseId, input.releaseId),
+    columns: {
+      id: true,
+      status: true,
+    },
+  });
+  const awaitingRolloutDeployments = siblingDeployments.filter(
+    (deployment) =>
+      deployment.id !== input.failedDeploymentId && deployment.status === 'awaiting_rollout'
+  );
+
+  if (awaitingRolloutDeployments.length === 0) {
+    return;
+  }
+
+  const compactFailureMessage =
+    input.failureMessage.length > SIBLING_CANCEL_REASON_MAX_CHARS
+      ? `${input.failureMessage.slice(0, SIBLING_CANCEL_REASON_MAX_CHARS)}...<truncated>`
+      : input.failureMessage;
+  const message = `Canceled pending rollout because deployment ${input.failedDeploymentId} failed: ${compactFailureMessage}`;
+  const now = new Date();
+
+  await db
+    .update(deployments)
+    .set({
+      status: 'canceled',
+      errorMessage: message,
+    })
+    .where(
+      and(
+        inArray(
+          deployments.id,
+          awaitingRolloutDeployments.map((deployment) => deployment.id)
+        ),
+        eq(deployments.status, 'awaiting_rollout')
+      )
+    );
+
+  await appendDeploymentRealtimeLogs(
+    awaitingRolloutDeployments.map((deployment) => ({
+      deploymentId: deployment.id,
+      level: 'warn',
+      message,
+    }))
+  );
+
+  await Promise.all(
+    awaitingRolloutDeployments.map((deployment) =>
+      updateDeploymentRealtimeState(deployment.id, {
+        status: 'canceled',
+        errorMessage: message,
+      })
+    )
+  );
+
+  deploymentWorkerLogger.warn('Canceled sibling rollout deployments after release failure', {
+    releaseId: input.releaseId,
+    failedDeploymentId: input.failedDeploymentId,
+    canceledDeploymentIds: awaitingRolloutDeployments.map((deployment) => deployment.id),
+    at: now.toISOString(),
+  });
+}
+
 export async function processDeployment(job: Job<DeploymentJobData>) {
   const traceFields = buildTraceLogFields({
     traceId: job.data.traceId,
@@ -148,6 +223,15 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       status,
       errorMessage: message,
     });
+
+    if (deployment.releaseId) {
+      await cancelSiblingAwaitingRolloutDeployments({
+        releaseId: deployment.releaseId,
+        failedDeploymentId: deployment.id,
+        failureMessage: message,
+      });
+    }
+
     await resumeReleaseAfterDeploymentProgress(deployment.id);
 
     await cleanupFailedCandidateResources(deployment.id).catch(async (cleanupError) => {

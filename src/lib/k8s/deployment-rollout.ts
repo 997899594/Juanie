@@ -130,3 +130,14 @@ export function describeReplicaSetReadiness(
   const availableReplicas = replicaSet.status?.availableReplicas ?? 0;
   return `${name} ready ${readyReplicas}/${desiredReplicas}, available ${availableReplicas}/${desiredReplicas}`;
 }
+
+export function describeReplicaSetStatus(replicaSet: k8s.V1ReplicaSet): string {
+  const name = replicaSet.metadata?.name ?? 'ReplicaSet';
+  const desired = replicaSet.spec?.replicas ?? 0;
+  const current = replicaSet.status?.replicas ?? 0;
+  const ready = replicaSet.status?.readyReplicas ?? 0;
+  const available = replicaSet.status?.availableReplicas ?? 0;
+  const revision = replicaSet.metadata?.annotations?.[DEPLOYMENT_REVISION_ANNOTATION] ?? 'unknown';
+
+  return `${name} revision ${revision}: desired ${desired}, current ${current}, ready ${ready}, available ${available}`;
+}
