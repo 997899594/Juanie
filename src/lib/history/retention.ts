@@ -1,6 +1,12 @@
 import { and, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { aiPluginRuns, aiPluginSnapshots, auditLogs, deploymentLogs } from '@/lib/db/schema';
+import {
+  aiPluginRuns,
+  aiPluginSnapshots,
+  auditLogs,
+  deploymentDiagnostics,
+  deploymentLogs,
+} from '@/lib/db/schema';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -24,6 +30,7 @@ export interface HistoryRetentionPolicy {
 
 export interface HistoryRetentionResult {
   deletedDeploymentLogs: number;
+  deletedDeploymentDiagnostics: number;
   deletedAuditLogs: number;
   deletedAIPluginRuns: number;
   deletedAIPluginSnapshots: number;
@@ -61,6 +68,7 @@ export async function cleanupRetainedHistory(
 
   const [
     deletedDeploymentLogs,
+    deletedDeploymentDiagnostics,
     deletedAuditLogs,
     deletedAIPluginRuns,
     deletedAIPluginSnapshots,
@@ -71,6 +79,11 @@ export async function cleanupRetainedHistory(
       .delete(deploymentLogs)
       .where(lt(deploymentLogs.createdAt, deploymentLogCutoff))
       .returning({ id: deploymentLogs.id })
+      .then((rows) => rows.length),
+    db
+      .delete(deploymentDiagnostics)
+      .where(lt(deploymentDiagnostics.createdAt, deploymentLogCutoff))
+      .returning({ id: deploymentDiagnostics.id })
       .then((rows) => rows.length),
     db
       .delete(auditLogs)
@@ -128,6 +141,7 @@ export async function cleanupRetainedHistory(
 
   return {
     deletedDeploymentLogs,
+    deletedDeploymentDiagnostics,
     deletedAuditLogs,
     deletedAIPluginRuns,
     deletedAIPluginSnapshots,

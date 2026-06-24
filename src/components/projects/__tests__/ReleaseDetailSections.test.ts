@@ -9,6 +9,7 @@ describe('release detail sections', () => {
     version: null,
     imageUrl: 'ghcr.io/demo/web:sha',
     errorMessage: null,
+    diagnostic: null,
     statusDecoration: {
       color: 'warning' as const,
       pulse: false,

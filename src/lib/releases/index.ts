@@ -478,7 +478,14 @@ export async function getReleaseById(releaseId: string) {
           service: true,
         },
       },
-      deployments: true,
+      deployments: {
+        with: {
+          diagnostics: {
+            orderBy: (diagnostics, { desc }) => [desc(diagnostics.capturedAt)],
+            limit: 1,
+          },
+        },
+      },
       migrationRuns: {
         with: {
           service: true,

@@ -2,6 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
+import { captureDeploymentDiagnostics } from '@/lib/deployments/diagnostics';
 import { isK8sAvailable } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 import {
@@ -223,6 +224,23 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       status,
       errorMessage: message,
     });
+    const diagnostics = await captureDeploymentDiagnostics({
+      deploymentId: deployment.id,
+      reason: status === 'verification_failed' ? 'verification_failed' : 'deployment_failed',
+      errorMessage: message,
+    }).catch(async (diagnosticError) => {
+      const diagnosticMessage =
+        diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError);
+      await logDeployment(
+        deployment.id,
+        `Deployment diagnostics capture failed: ${diagnosticMessage}`,
+        'warn'
+      );
+      return null;
+    });
+    if (diagnostics) {
+      await logDeployment(deployment.id, `Captured deployment diagnostics: ${diagnostics.summary}`);
+    }
 
     if (deployment.releaseId) {
       await cancelSiblingAwaitingRolloutDeployments({

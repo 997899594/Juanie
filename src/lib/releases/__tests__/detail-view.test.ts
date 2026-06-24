@@ -44,7 +44,47 @@ describe('release detail view', () => {
             uri: 'https://ci.example.com/artifacts/kit-sdk.tgz',
           },
         ],
-        deployments: [{ id: 'dep-1', status: 'running', serviceId: 'svc-1' }],
+        deployments: [
+          {
+            id: 'dep-1',
+            status: 'running',
+            serviceId: 'svc-1',
+            diagnostics: [
+              {
+                id: 'diag-1',
+                reason: 'verification_failed',
+                summary: 'web pod failed readiness',
+                capturedAt: '2026-06-24T00:00:00.000Z',
+                snapshot: {
+                  schemaVersion: 1,
+                  capturedAt: '2026-06-24T00:00:00.000Z',
+                  reason: 'verification_failed',
+                  errorMessage: 'readiness failed',
+                  namespace: 'juanie-demo-staging',
+                  workload: {
+                    kind: 'argo_rollout',
+                    name: 'demo-web',
+                    namespace: 'juanie-demo-staging',
+                    summary: 'Argo Rollout demo-web · available 0 · desired 1',
+                    selector: 'app=demo-web',
+                    desiredReplicas: 1,
+                    updatedReplicas: 1,
+                    readyReplicas: 0,
+                    availableReplicas: 0,
+                    generation: 2,
+                    observedGeneration: 2,
+                    phase: 'Progressing',
+                    image: 'ghcr.io/demo/web:2',
+                    conditions: [],
+                  },
+                  pods: [],
+                  events: [],
+                  logTails: [],
+                },
+              },
+            ],
+          },
+        ],
         migrationRuns: [
           {
             id: 'run-1',
@@ -93,6 +133,7 @@ describe('release detail view', () => {
     expect(release.timeline.map((item) => item.title)).not.toContain('发布发布中');
     expect(release.timeline.map((item) => item.title)).not.toContain('部署发布中');
     expect(release.deploymentItems[0]?.serviceName).toBe('web');
+    expect(release.deploymentItems[0]?.diagnostic?.summary).toBe('web pod failed readiness');
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
     expect(release.migrationItems[0]?.approvalToken).toBe('token-1');
   });

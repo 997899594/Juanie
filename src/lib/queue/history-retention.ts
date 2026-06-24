@@ -21,6 +21,7 @@ export function startHistoryRetention(): void {
       const result = await cleanupRetainedHistory(policy);
       historyRetentionLogger.info('History retention cleanup completed', {
         deletedDeploymentLogs: result.deletedDeploymentLogs,
+        deletedDeploymentDiagnostics: result.deletedDeploymentDiagnostics,
         deletedAuditLogs: result.deletedAuditLogs,
         deletedAIPluginRuns: result.deletedAIPluginRuns,
         deletedAIPluginSnapshots: result.deletedAIPluginSnapshots,

@@ -4,6 +4,7 @@ import {
   Dot,
   Download,
   FileCode2,
+  FileText,
   GitBranch,
   Package2,
   Rocket,
@@ -507,6 +508,74 @@ function ReleaseDeploymentArtifactsSection({ artifacts }: { artifacts: ReleaseAr
   );
 }
 
+function DeploymentDiagnosticBlock({ deployment }: { deployment: ReleaseDeploymentItem }) {
+  const diagnostic = deployment.diagnostic;
+
+  if (!diagnostic) {
+    return null;
+  }
+
+  const snapshot = diagnostic.snapshot;
+  const capturedAt = formatPlatformDateTime(diagnostic.capturedAt);
+  const primaryEvent = snapshot.events[0] ?? null;
+  const primaryLogTail = snapshot.logTails[0] ?? null;
+
+  return (
+    <div className="mb-3 rounded-2xl border border-warning/30 bg-warning/[0.06] px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+          <FileText className="h-4 w-4 text-warning" />
+          诊断快照
+        </div>
+        <div className="text-xs text-muted-foreground">{capturedAt ?? '刚刚采集'}</div>
+      </div>
+      <div className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-foreground">
+        {diagnostic.summary}
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        <div className="rounded-xl bg-background/70 px-3 py-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Workload
+          </div>
+          <div className="mt-1 break-words text-xs leading-5 text-foreground">
+            {snapshot.workload.summary}
+          </div>
+        </div>
+        <div className="rounded-xl bg-background/70 px-3 py-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Pod
+          </div>
+          <div className="mt-1 break-words text-xs leading-5 text-foreground">
+            {snapshot.pods[0]?.summary ?? '没有捕获到 Pod'}
+          </div>
+        </div>
+      </div>
+      {primaryEvent ? (
+        <div className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Event
+          </div>
+          <div className="mt-1 break-words text-xs leading-5 text-foreground">
+            {[primaryEvent.involvedObjectName, primaryEvent.reason, primaryEvent.message]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+        </div>
+      ) : null}
+      {primaryLogTail ? (
+        <details className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+          <summary className="cursor-pointer list-none text-xs font-medium text-foreground">
+            查看容器日志尾部
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-foreground/[0.04] p-3 text-[11px] leading-5 text-muted-foreground">
+            {primaryLogTail.text}
+          </pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function ReleaseDeploymentLogsSection({
   projectId,
   deploymentItems,
@@ -549,6 +618,7 @@ function ReleaseDeploymentLogsSection({
                   {deployment.errorMessage}
                 </div>
               ) : null}
+              <DeploymentDiagnosticBlock deployment={deployment} />
               <DeploymentLogs
                 projectId={projectId}
                 deploymentId={deployment.id}

@@ -1,3 +1,4 @@
+import type { DeploymentDiagnosticSnapshot } from '@/lib/deployments/diagnostics-types';
 import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
 import {
   buildPreviewLifecycleSummary,
@@ -175,6 +176,13 @@ export interface ReleaseViewLike {
     imageUrl?: string | null;
     errorMessage?: string | null;
     status: string;
+    diagnostics?: Array<{
+      id: string;
+      reason: string;
+      summary: string;
+      capturedAt: Date | string;
+      snapshot: DeploymentDiagnosticSnapshot;
+    }>;
   }>;
   infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
   governanceEvents?: ReleaseGovernanceEvent[] | null;
@@ -246,6 +254,13 @@ export interface ReleaseDetailDecorations {
     version: string | null;
     imageUrl: string | null;
     errorMessage: string | null;
+    diagnostic: {
+      id: string;
+      reason: string;
+      summary: string;
+      capturedAt: Date | string;
+      snapshot: DeploymentDiagnosticSnapshot;
+    } | null;
     statusDecoration: ReleaseStatusDecoration;
     serviceName: string;
   }>;
@@ -452,6 +467,15 @@ export function buildDeploymentItems(
     version: deployment.version ?? null,
     imageUrl: deployment.imageUrl ?? null,
     errorMessage: deployment.errorMessage ?? null,
+    diagnostic: deployment.diagnostics?.[0]
+      ? {
+          id: deployment.diagnostics[0].id,
+          reason: deployment.diagnostics[0].reason,
+          summary: deployment.diagnostics[0].summary,
+          capturedAt: deployment.diagnostics[0].capturedAt,
+          snapshot: deployment.diagnostics[0].snapshot,
+        }
+      : null,
     statusDecoration: getDeploymentStatusDecoration(deployment.status),
     serviceName: deployment.serviceId
       ? (release.artifacts.find((artifact) => artifact.service?.id === deployment.serviceId)

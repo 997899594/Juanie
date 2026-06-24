@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
+import { captureDeploymentDiagnostics } from '@/lib/deployments/diagnostics';
 import { getEnvironmentDeploymentRuntime } from '@/lib/environments/model';
 import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
 import {
@@ -444,6 +445,11 @@ export async function finalizeDeploymentRollout(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await markDeploymentRolloutFailed(deployment.id, message);
+    await captureDeploymentDiagnostics({
+      deploymentId: deployment.id,
+      reason: 'rollout_failed',
+      errorMessage: message,
+    });
 
     if (deployment.releaseId) {
       await updateReleaseStatus(deployment.releaseId, 'verification_failed', message);

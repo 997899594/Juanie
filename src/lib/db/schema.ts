@@ -15,6 +15,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { DatabaseCapability } from '@/lib/databases/capabilities';
+import type { DeploymentDiagnosticSnapshot } from '@/lib/deployments/diagnostics-types';
 import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview-types';
 import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 
@@ -1542,6 +1543,47 @@ export const deploymentLogs = pgTable(
   })
 );
 
+export const deploymentDiagnostics = pgTable(
+  'deploymentDiagnostic',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    deploymentId: uuid('deploymentId')
+      .notNull()
+      .references(() => deployments.id, { onDelete: 'cascade' }),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'set null' }),
+
+    namespace: varchar('namespace', { length: 255 }),
+    workloadKind: varchar('workloadKind', { length: 40 }).notNull(),
+    workloadName: varchar('workloadName', { length: 255 }),
+    reason: varchar('reason', { length: 80 }).notNull(),
+    summary: text('summary').notNull(),
+    errorMessage: text('errorMessage'),
+    snapshot: jsonb('snapshot').$type<DeploymentDiagnosticSnapshot>().notNull(),
+    capturedAt: timestamp('capturedAt').defaultNow().notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    deploymentIdIdx: index('deploymentDiagnostic_deploymentId_idx').on(table.deploymentId),
+    releaseIdIdx: index('deploymentDiagnostic_releaseId_idx').on(table.releaseId),
+    environmentCapturedAtIdx: index('deploymentDiagnostic_environment_capturedAt_idx').on(
+      table.environmentId,
+      table.capturedAt
+    ),
+    workloadIdx: index('deploymentDiagnostic_workload_idx').on(
+      table.namespace,
+      table.workloadKind,
+      table.workloadName
+    ),
+  })
+);
+
 // ============================================
 // Project Templates
 // ============================================
@@ -2324,12 +2366,36 @@ export const deploymentsRelations = relations(deployments, ({ one, many }) => ({
     references: [users.id],
   }),
   logs: many(deploymentLogs),
+  diagnostics: many(deploymentDiagnostics),
 }));
 
 export const deploymentLogsRelations = relations(deploymentLogs, ({ one }) => ({
   deployment: one(deployments, {
     fields: [deploymentLogs.deploymentId],
     references: [deployments.id],
+  }),
+}));
+
+export const deploymentDiagnosticsRelations = relations(deploymentDiagnostics, ({ one }) => ({
+  deployment: one(deployments, {
+    fields: [deploymentDiagnostics.deploymentId],
+    references: [deployments.id],
+  }),
+  release: one(releases, {
+    fields: [deploymentDiagnostics.releaseId],
+    references: [releases.id],
+  }),
+  project: one(projects, {
+    fields: [deploymentDiagnostics.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [deploymentDiagnostics.environmentId],
+    references: [environments.id],
+  }),
+  service: one(services, {
+    fields: [deploymentDiagnostics.serviceId],
+    references: [services.id],
   }),
 }));
 

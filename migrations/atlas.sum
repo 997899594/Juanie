@@ -1,4 +1,4 @@
-h1:kYNK4LVCSIxM5RYqL3QriIEQZwXRn9UvrCEu52QN43M=
+h1:kWBPiUm9GibBqyDoC2Lf3kG7vB4syFNFhCmm2uxNJ54=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -23,3 +23,4 @@ h1:kYNK4LVCSIxM5RYqL3QriIEQZwXRn9UvrCEu52QN43M=
 20260610143000_release_admission_status.sql h1:z1W0CXUcTFnk+55ILppMListYFqVAb3TN5/XRwDChdI=
 20260611143000_schema_state_revision.sql h1:7s5UfXTRAnfthStFWNmWqYsmbnOcMZQUAeLBdlua8ec=
 20260612103000_build_run_graph.sql h1:ToVkr4bH6hTd0y2vWQi7gKICvfepqJbTyTjQSaY9Kog=
+20260624110000_deployment_diagnostics.sql h1:N+vIFvblq+QrIHp4ZOwxFQAU+3jeBYgJPlpHeqVwMvg=
