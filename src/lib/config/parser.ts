@@ -23,6 +23,8 @@ const pathPatternSchema = z.string().min(1).max(300);
 const monorepoAffectedSchema = z
   .object({
     strategy: z.enum(['turbo', 'all', 'manual']).optional().default('turbo'),
+    task: z.string().min(1).max(100).optional().default('build'),
+    useTaskInputs: z.boolean().optional().default(false),
     global: z.array(pathPatternSchema).max(100).optional().default([]),
     inputs: z.array(pathPatternSchema).max(200).optional().default([]),
   })
@@ -108,6 +110,7 @@ export const serviceSchema = z
     monorepo: z
       .object({
         appDir: z.string().min(1).optional(),
+        packageName: z.string().min(1).max(214).optional(),
       })
       .optional(),
 

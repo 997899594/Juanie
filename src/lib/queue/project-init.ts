@@ -69,6 +69,7 @@ const isDev = process.env.NODE_ENV === 'development';
 const projectInitLogger = logger.child({ component: 'project-init' });
 const JUANIE_BUILD_RUN_SCRIPT_PATH = '.juanie/build-run.sh';
 const JUANIE_DELIVERY_SCRIPT_PATH = '.juanie/delivery-artifacts.sh';
+const JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH = '.juanie/affected-workspace.mjs';
 
 export { requiredCapabilitiesForStep } from './project-init-capabilities';
 
@@ -609,6 +610,7 @@ type RepoAutomationContextLike = Pick<
 type ProjectConfigServiceEntry = {
   monorepo?: {
     appDir?: string;
+    packageName?: string;
   };
   runtime?: {
     language?: 'node' | 'bun' | 'static' | 'custom';
@@ -664,9 +666,15 @@ type ProjectConfigDeliverableEntry = {
 
 interface MonorepoAffectedRules {
   strategy?: 'turbo' | 'all' | 'manual';
+  task?: string;
+  useTaskInputs?: boolean;
   global?: string[];
   inputs?: string[];
 }
+
+type MonorepoCiAffectedRules = Required<MonorepoAffectedRules> & {
+  packageManager?: PackageManager;
+};
 
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
   return supportsDatabaseAutomatedMigrations(dbType);
@@ -1241,12 +1249,13 @@ function resolveMonorepoAffectedRules(
   automation: RepoAutomationContextLike
 ): Required<MonorepoAffectedRules> {
   const configured = getProjectMonorepoConfig(project)?.affected;
-  const inferredInputs = automation.monorepoType === 'turborepo' ? ['packages/**'] : [];
 
   return {
     strategy: configured?.strategy ?? (automation.monorepoType === 'turborepo' ? 'turbo' : 'all'),
+    task: configured?.task ?? 'build',
+    useTaskInputs: configured?.useTaskInputs ?? false,
     global: uniqueStrings([...(configured?.global ?? []), ...defaultMonorepoGlobalInputs]),
-    inputs: uniqueStrings(configured?.inputs ?? inferredInputs),
+    inputs: uniqueStrings(configured?.inputs ?? []),
   };
 }
 
@@ -1331,7 +1340,7 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
 
     if (deliverable.monorepo?.appDir) {
       lines.push(
-        '    # monorepo.appDir is only used for affected-file detection; extraction reads the image.',
+        '    # monorepo.appDir binds this artifact to workspace affected detection; extraction reads the image.',
         '    monorepo:',
         `      appDir: ${deliverable.monorepo.appDir}`
       );
@@ -1433,8 +1442,12 @@ export function renderJuanieConfig(
       `  packageManager: ${automation.packageManager}`,
       '  # affected controls change detection. Turbo graph is primary; inputs are explicit fallbacks.',
       '  affected:',
-      '    # strategy turbo uses Turborepo/workspace knowledge plus the rules below.',
+      '    # strategy turbo uses Turborepo query affected before path-rule fallback.',
       `    strategy: ${monorepoAffected.strategy}`,
+      '    # task is the Turborepo pipeline task used when task input precision is enabled.',
+      `    task: ${monorepoAffected.task}`,
+      '    # useTaskInputs true narrows affected detection to Turbo task inputs for the task above.',
+      `    useTaskInputs: ${monorepoAffected.useTaskInputs}`,
       '    # global paths trigger a full build because they can change every package.',
       '    global:',
       ...buildCommentedListLines('      ', monorepoAffected.global),
@@ -1466,6 +1479,12 @@ export function renderJuanieConfig(
             '    # monorepo.appDir points at this workload inside the repository.',
             '    monorepo:',
             `      appDir: ${getProjectServiceAppDir(project, service.name)}`,
+            ...(serviceConfig?.monorepo?.packageName
+              ? [
+                  '      # packageName is the Turborepo package identity used for graph-aware affected detection.',
+                  `      packageName: "${serviceConfig.monorepo.packageName}"`,
+                ]
+              : []),
           ]
         : []),
       ...buildServiceRuntimeLines(serviceConfig),
@@ -1782,7 +1801,14 @@ async function pushCicdConfig(
   for (const service of topologyServices) {
     nextServiceConfigMap[service.name] = {
       ...(existingServiceConfigMap[service.name] ?? {}),
-      ...(service.appDir && service.appDir !== '.' ? { monorepo: { appDir: service.appDir } } : {}),
+      ...(service.appDir && service.appDir !== '.'
+        ? {
+            monorepo: {
+              appDir: service.appDir,
+              ...(service.packageName ? { packageName: service.packageName } : {}),
+            },
+          }
+        : {}),
       ...(service.runtime ? { runtime: service.runtime } : {}),
       ...(service.build ? { build: service.build } : {}),
     };
@@ -1832,6 +1858,7 @@ async function pushCicdConfig(
   files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
   files[JUANIE_BUILD_RUN_SCRIPT_PATH] = renderBuildRunScript();
   files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
+  files[JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH] = renderAffectedWorkspaceScript();
 
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
@@ -1915,6 +1942,18 @@ function renderBuildRunScript(): string {
   );
 }
 
+function renderAffectedWorkspaceScript(): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'affected-workspace.mjs');
+
+  if (existsSync(templatePath)) {
+    return readFileSync(templatePath, 'utf-8');
+  }
+
+  throw new Error(
+    `Affected workspace script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
+}
+
 export function renderGitLabCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1941,6 +1980,7 @@ interface MonorepoCiServiceEntry {
   name: string;
   type: 'web' | 'worker' | 'cron';
   appDir: string;
+  packageName: string;
   build: {
     strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
     command?: string;
@@ -1993,6 +2033,7 @@ export function buildMonorepoCiServices(
       name: service.name,
       type: service.type,
       appDir,
+      packageName: serviceConfig?.monorepo?.packageName ?? service.name,
       build: {
         strategy:
           build?.strategy ??
@@ -2058,10 +2099,18 @@ export function selectMonorepoCiWork(input: {
             (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
           )
       );
+  const selectedServiceNames = new Set(selectedServices.map((service) => service.name));
+  const deliverablesForSelectedServices = input.shouldBuildAll
+    ? input.deliverables
+    : input.deliverables.filter(
+        (deliverable) =>
+          selectedDeliverables.includes(deliverable) ||
+          (deliverable.sourceService && selectedServiceNames.has(deliverable.sourceService))
+      );
 
   return {
     services: selectedServices,
-    deliverables: selectedDeliverables,
+    deliverables: deliverablesForSelectedServices,
   };
 }
 
@@ -2091,10 +2140,13 @@ export function encodeMonorepoAffectedRules(
   }
 ): string {
   const configured = getProjectMonorepoConfig(project)?.affected;
-  const rules: Required<MonorepoAffectedRules> = {
+  const rules: MonorepoCiAffectedRules = {
     strategy: configured?.strategy ?? 'turbo',
+    task: configured?.task ?? 'build',
+    useTaskInputs: configured?.useTaskInputs ?? false,
+    packageManager: getProjectMonorepoConfig(project)?.packageManager,
     global: uniqueStrings([...(configured?.global ?? []), ...defaultMonorepoGlobalInputs]),
-    inputs: uniqueStrings(configured?.inputs ?? ['packages/**']),
+    inputs: uniqueStrings(configured?.inputs ?? []),
   };
 
   return Buffer.from(JSON.stringify(rules), 'utf8').toString('base64');

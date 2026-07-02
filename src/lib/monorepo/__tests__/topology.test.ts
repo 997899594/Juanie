@@ -117,6 +117,7 @@ deliverables:
 
           if (path === 'apps/web/package.json') {
             return JSON.stringify({
+              name: '@acme/web',
               scripts: {
                 start: 'next start -p 3001',
                 build: 'next build',
@@ -183,14 +184,18 @@ deliverables:
     expect(topology.services[0]?.name).toBe('web');
     expect(topology.services[0]?.type).toBe('web');
     expect(topology.services[0]?.appDir).toBe('apps/web');
+    expect(topology.services[0]?.packageName).toBe('@acme/web');
+    expect(topology.services[0]?.build?.command).toBe('turbo run build --filter=@acme/web');
     expect(topology.services[0]?.port).toBe(3001);
     expect(topology.services[1]?.name).toBe('worker');
     expect(topology.services[1]?.type).toBe('worker');
     expect(topology.services[1]?.appDir).toBe('packages/worker');
+    expect(topology.services[1]?.packageName).toBe('@acme/worker');
     expect(topology.services[1]?.startCommand).toBe('node worker.js');
     expect(topology.services[2]?.name).toBe('cron');
     expect(topology.services[2]?.type).toBe('cron');
     expect(topology.services[2]?.appDir).toBe('packages/cron');
+    expect(topology.services[2]?.packageName).toBe('@acme/cron');
     expect(topology.services[2]?.schedule).toBe('*/5 * * * *');
   });
 });

@@ -7,6 +7,7 @@ This repository is connected to **Juanie**.
 - `{{CI_FILE}}`
 - `juanie.yaml`
 - `.juanie/build-run.sh`
+- `.juanie/affected-workspace.mjs`
 - `.juanie/delivery-artifacts.sh`
 - `.env.juanie.example`
 - `JUANIE.md`

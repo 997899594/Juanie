@@ -31,3 +31,13 @@ export {
   type RepositoryTopologyReader,
   type RepositoryTopologyService,
 } from './topology';
+export {
+  createTurborepoWorkspaceGraph,
+  getTurborepoAffectedPolicy,
+  getTurborepoAppDir,
+  getTurborepoPackageName,
+  isTurborepoType,
+  type TurborepoAffectedPolicy,
+  type TurborepoWorkspaceGraph,
+  type TurborepoWorkspaceService,
+} from './workspace-graph';

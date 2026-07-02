@@ -37,6 +37,7 @@ test:
       'juanie.yaml',
       '.juanie/build-run.sh',
       '.juanie/delivery-artifacts.sh',
+      '.juanie/affected-workspace.mjs',
       '.env.juanie.example',
       'JUANIE.md',
       '.github/workflows/juanie-ci.yml',
@@ -56,6 +57,7 @@ script:
       'juanie.yaml',
       '.juanie/build-run.sh',
       '.juanie/delivery-artifacts.sh',
+      '.juanie/affected-workspace.mjs',
       '.env.juanie.example',
       'JUANIE.md',
       '.gitlab-ci.yml',
@@ -70,6 +72,7 @@ script:
       'juanie.yaml',
       '.juanie/build-run.sh',
       '.juanie/delivery-artifacts.sh',
+      '.juanie/affected-workspace.mjs',
       '.env.juanie.example',
       'JUANIE.md',
     ]);

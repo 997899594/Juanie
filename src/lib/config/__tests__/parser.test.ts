@@ -218,6 +218,8 @@ monorepo:
   packageManager: pnpm
   affected:
     strategy: turbo
+    task: build
+    useTaskInputs: true
     global:
       - package.json
       - pnpm-lock.yaml
@@ -233,6 +235,7 @@ services:
       nodeVersion: "22"
     monorepo:
       appDir: apps/dualx-server
+      packageName: "@acme/dualx-server"
     build:
       command: pnpm --filter dualx-server build
       package:
@@ -258,7 +261,10 @@ deliverables:
 `);
 
     expect(parsed.isValid).toBe(true);
+    expect(parsed.monorepo?.affected?.task).toBe('build');
+    expect(parsed.monorepo?.affected?.useTaskInputs).toBe(true);
     expect(parsed.monorepo?.affected?.inputs).toEqual(['kit/**', 'acs/**']);
+    expect(parsed.services[0]?.monorepo?.packageName).toBe('@acme/dualx-server');
     expect(parsed.services[0]?.runtime?.framework).toBe('nest');
     expect(parsed.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
     expect(parsed.deliverables?.[0]?.variants[0]?.extract.from).toBe('/app/dist');

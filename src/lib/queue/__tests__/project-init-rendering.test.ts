@@ -567,7 +567,7 @@ describe('project init migration inference', () => {
       '# deliverables are customer-downloadable artifacts extracted from verified service images.'
     );
     expect(config).toContain('inputs:');
-    expect(config).toContain('- packages/**');
+    expect(config).toContain('      []');
   });
 
   it('embeds packages monorepo services into CI build metadata', () => {
@@ -584,6 +584,8 @@ describe('project init migration inference', () => {
           packageManager: 'pnpm',
           affected: {
             strategy: 'turbo',
+            task: 'build',
+            useTaskInputs: true,
             inputs: ['kit/**', 'acs/**'],
           },
         },
@@ -591,6 +593,7 @@ describe('project init migration inference', () => {
           worker: {
             monorepo: {
               appDir: 'packages/worker',
+              packageName: '@acme/worker',
             },
             runtime: {
               language: 'node',
@@ -635,10 +638,23 @@ describe('project init migration inference', () => {
     expect(ciServices.length).toBe(1);
     expect(ciServices[0]?.name).toBe('worker');
     expect(ciServices[0]?.appDir).toBe('packages/worker');
+    expect(ciServices[0]?.packageName).toBe('@acme/worker');
     expect(ciServices[0]?.type).toBe('worker');
     expect(ciServices[0]?.build.dockerfile).toBe('packages/worker/Dockerfile');
     expect(ciServices[0]?.build.context).toBe('.');
     expect(affectedRules.inputs).toEqual(['kit/**', 'acs/**']);
+    expect(affectedRules.task).toBe('build');
+    expect(affectedRules.useTaskInputs).toBe(true);
+    expect(rendered).toContain('node .juanie/affected-workspace.mjs');
+    const affectedScript = readFileSync(
+      join(process.cwd(), 'templates', 'ci', 'affected-workspace.mjs'),
+      'utf-8'
+    );
+    expect(affectedScript).toContain('turbo');
+    expect(affectedScript).toContain('query');
+    expect(affectedScript).toContain('affected');
+    expect(affectedScript).toContain('--base');
+    expect(affectedScript).toContain('--head');
   });
 
   it('renders configured deliverables as real manifest entries instead of commented examples', () => {
@@ -742,6 +758,7 @@ describe('project init migration inference', () => {
           name: 'web',
           type: 'web',
           appDir: 'apps/web',
+          packageName: '@acme/web',
           build: {},
         },
       ],
@@ -764,6 +781,40 @@ describe('project init migration inference', () => {
 
     expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
     expect(result.services.map((service) => service.name)).toEqual(['web']);
+  });
+
+  it('extracts image-derived deliverables when their source service is selected', () => {
+    const result = selectMonorepoCiWork({
+      shouldBuildAll: false,
+      changedFiles: ['apps/web/src/page.tsx'],
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          appDir: 'apps/web',
+          packageName: '@acme/web',
+          build: {},
+        },
+      ],
+      deliverables: [
+        {
+          name: 'web-baremetal',
+          type: 'baremetal',
+          appDir: 'packages/exporter',
+          sourceService: 'web',
+          variant: {
+            name: 'linux-amd64',
+            platform: 'linux/amd64',
+            extract: { from: '/app/dist', to: '.' },
+            package: { format: 'tar.gz' },
+            checks: [],
+          },
+        },
+      ],
+    });
+
+    expect(result.services.map((service) => service.name)).toEqual(['web']);
+    expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
   });
 
   it('builds yarn commands without run', () => {

@@ -79,6 +79,7 @@ describe('build plan', () => {
           type: 'web',
           monorepo: {
             appDir: 'apps/admin',
+            packageName: '@acme/admin',
           },
           build: {
             strategy: 'dockerfile',
@@ -95,6 +96,7 @@ describe('build plan', () => {
           type: 'web',
           monorepo: {
             appDir: 'apps/api',
+            packageName: '@acme/api',
           },
           build: {
             strategy: 'dockerfile',
@@ -132,6 +134,12 @@ describe('build plan', () => {
         buildDefinition: null,
       },
     ]);
+    expect(plan.units[0]?.workspace).toEqual({
+      type: 'turborepo',
+      appDir: 'apps/admin',
+      packageName: '@acme/admin',
+      task: 'build',
+    });
     expect(getBuildPlanReleaseServices(plan).map((service) => service.image)).toEqual([
       'ghcr.io/acme/platform:sha-def456-admin',
       'ghcr.io/acme/platform:sha-def456-api',

@@ -1,4 +1,9 @@
 import type { JuanieConfig, ServiceConfig } from '@/lib/config/parser';
+import {
+  createTurborepoWorkspaceGraph,
+  getTurborepoAppDir,
+  getTurborepoPackageName,
+} from '@/lib/monorepo';
 
 export type BuildArtifactKind = 'image' | 'package' | 'static' | 'function';
 export type BuildStrategy = 'dockerfile' | 'bake' | 'buildpacks' | 'custom' | 'external';
@@ -20,6 +25,12 @@ export interface BuildUnit {
   dockerfile: string | null;
   bakeTarget: string | null;
   bakeDefinition: string | null;
+  workspace?: {
+    type: 'turborepo';
+    appDir: string;
+    packageName: string;
+    task: string;
+  };
   outputs: BuildArtifactOutput[];
 }
 
@@ -111,6 +122,7 @@ function buildUnit(input: {
   imageRepository: string;
   sha: string;
   multiImage: boolean;
+  workspace?: BuildUnit['workspace'];
 }): BuildUnit {
   const strategy = normalizeBuildStrategy(input.service.build?.strategy ?? 'auto');
   const serviceName = input.service.name;
@@ -124,6 +136,7 @@ function buildUnit(input: {
     dockerfile: getDockerfile(input.service, strategy),
     bakeTarget: getBakeTarget(input.service),
     bakeDefinition: getBuildDefinition(input.service),
+    ...(input.workspace ? { workspace: input.workspace } : {}),
     outputs: [
       {
         kind: 'image',
@@ -224,12 +237,25 @@ export function createBuildPlan(input: {
     .map((service) => service.build?.target?.trim())
     .filter((value): value is string => Boolean(value));
   const multiImage = new Set(targetNames).size > 1 || allServices.length > 1;
+  const workspaceGraph = createTurborepoWorkspaceGraph(input.config);
+  const workspaceByService = new Map(
+    workspaceGraph?.services.map((service) => [service.serviceName, service]) ?? []
+  );
   const units = services.map((service) =>
     buildUnit({
       service,
       imageRepository,
       sha: input.sha,
       multiImage,
+      workspace: workspaceGraph
+        ? {
+            type: 'turborepo',
+            appDir: workspaceByService.get(service.name)?.appDir ?? getTurborepoAppDir(service),
+            packageName:
+              workspaceByService.get(service.name)?.packageName ?? getTurborepoPackageName(service),
+            task: workspaceByService.get(service.name)?.task ?? workspaceGraph.affected.task,
+          }
+        : undefined,
     })
   );
 

@@ -34,6 +34,7 @@ export interface RepositoryTopologyService {
   name: string;
   type: ServiceType;
   appDir: string;
+  packageName?: string;
   startCommand: string;
   port: number;
   schedule?: string;
@@ -243,7 +244,11 @@ function inferBuildMetadata(input: {
   bakeTargets: string[];
   serviceName: string;
 }): RepositoryTopologyBuild | undefined {
-  const buildCommand = input.packageJson?.scripts?.build?.trim() ?? 'npm run build';
+  const packageName = input.packageJson?.name?.trim();
+  const packageSelector = packageName || input.serviceName;
+  const buildCommand = packageName
+    ? `turbo run build --filter=${packageName}`
+    : (input.packageJson?.scripts?.build?.trim() ?? `turbo run build --filter=${packageSelector}`);
 
   if (input.bakeDefinitionPath) {
     const candidates = [input.serviceName, basename(input.appDir)];
@@ -278,6 +283,7 @@ function toTopologyServiceFromConfig(service: ServiceConfig): RepositoryTopology
     name: service.name,
     type: service.type,
     appDir: service.monorepo?.appDir ?? '.',
+    packageName: service.monorepo?.packageName,
     startCommand: service.run.command,
     port: service.run.port ?? 3000,
     schedule: service.schedule,
@@ -363,6 +369,7 @@ async function inspectWorkspaceServices(input: {
 
       const packageJson = parsePackageJson(packageJsonContent);
       const serviceName = basename(entry.path);
+      const packageName = packageJson?.name?.trim();
       const serviceType = inferServiceType(serviceName, packageJson);
       const run = inferRunCommand(serviceType, packageJson, packageManager);
       const port = run.port ?? (serviceType === 'web' ? 3000 : undefined);
@@ -371,6 +378,7 @@ async function inspectWorkspaceServices(input: {
         name: serviceName,
         type: serviceType,
         appDir: entry.path,
+        ...(packageName ? { packageName } : {}),
         startCommand: run.command,
         port: port ?? 3000,
         build: inferBuildMetadata({

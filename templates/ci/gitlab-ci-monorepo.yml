@@ -11,95 +11,12 @@ variables:
 
 detect:
   stage: detect
-  image: oven/bun:1
+  image: node:24-bookworm-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+    - corepack enable
   script:
-    - |
-      bun <<'BUN'
-      import { execSync } from 'node:child_process';
-      import { writeFileSync } from 'node:fs';
-
-      const services = JSON.parse(
-        Buffer.from(process.env.JUANIE_SERVICE_MATRIX_B64 ?? '', 'base64').toString('utf8')
-      );
-      const deliverables = JSON.parse(
-        Buffer.from(process.env.JUANIE_DELIVERABLE_MATRIX_B64 ?? '', 'base64').toString('utf8')
-      );
-      const affectedRules = JSON.parse(
-        Buffer.from(process.env.JUANIE_AFFECTED_RULES_B64 ?? '', 'base64').toString('utf8')
-      );
-      const serviceDirs = services.map((service) => service.appDir);
-      const deliverableDirs = deliverables.map((deliverable) => deliverable.appDir);
-      const globalInputs = affectedRules.global ?? [];
-      const sharedInputs = affectedRules.inputs ?? [];
-      const globalPrefixes = ['.github/', '.gitlab/'];
-      const beforeSha = process.env.CI_COMMIT_BEFORE_SHA;
-      const sourceSha = process.env.JUANIE_SOURCE_SHA || process.env.CI_COMMIT_SHA;
-      const fullBuild =
-        process.env.JUANIE_FORCE_FULL_BUILD === '1' ||
-        !beforeSha ||
-        /^0+$/.test(beforeSha);
-      let changedFiles = [];
-
-      if (!fullBuild) {
-        const output = execSync(`git diff --name-only ${beforeSha} ${sourceSha}`, {
-          encoding: 'utf8',
-        });
-        changedFiles = output.split('\n').map((line) => line.trim()).filter(Boolean);
-      }
-
-      const matchesInput = (file, pattern) => {
-        if (!pattern) return false;
-        if (pattern.endsWith('/**')) return file.startsWith(pattern.slice(0, -2));
-        if (pattern.endsWith('/*')) {
-          const prefix = pattern.slice(0, -1);
-          return file.startsWith(prefix) && !file.slice(prefix.length).includes('/');
-        }
-        if (pattern.endsWith('/')) return file.startsWith(pattern);
-        return file === pattern;
-      };
-
-      const matchesAnyInput = (file, patterns) =>
-        patterns.some((pattern) => matchesInput(file, pattern));
-
-      const isSharedInputFile = (file) =>
-        matchesAnyInput(file, sharedInputs) &&
-        ![...serviceDirs, ...deliverableDirs].some(
-          (appDir) => file === appDir || file.startsWith(`${appDir}/`)
-        );
-
-      const shouldBuildAll =
-        fullBuild ||
-        changedFiles.some(
-          (file) =>
-            matchesAnyInput(file, globalInputs) ||
-            globalPrefixes.some((prefix) => file.startsWith(prefix)) ||
-            isSharedInputFile(file)
-        );
-
-      const selectedDeliverables = shouldBuildAll
-        ? deliverables
-        : deliverables.filter((deliverable) =>
-            changedFiles.some(
-              (file) => file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
-            )
-          );
-      const sourceServicesForDeliverables = new Set(
-        selectedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
-      );
-      const selected = shouldBuildAll
-        ? services
-        : services.filter(
-            (service) =>
-              sourceServicesForDeliverables.has(service.name) ||
-              changedFiles.some(
-                (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
-              )
-          );
-
-      writeFileSync('services.json', JSON.stringify(selected));
-      writeFileSync('service-names.json', JSON.stringify(selected.map((service) => service.name)));
-      writeFileSync('deliverables.json', JSON.stringify(selectedDeliverables));
-      BUN
+    - node .juanie/affected-workspace.mjs
   artifacts:
     paths:
       - services.json
