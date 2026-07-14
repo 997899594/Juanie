@@ -69,11 +69,22 @@ services:
     run:
       command: ./bin/start
       port: 6014
+buildTargets:
+  - name: dualx-server
+    kind: bundle
+    monorepo:
+      appDir: apps/dualx-server
+      packageName: "@acme/dualx-server"
+    build:
+      strategy: dockerfile
+      dockerfile: .juanie/build-targets/dualx-server.Dockerfile
+    output:
+      path: apps/dualx-server/dist
 deliverables:
   - name: dualx-server-baremetal
     type: baremetal
     source:
-      service: dualx-server
+      target: dualx-server
     variants:
       - name: linux-amd64
         platform: linux/amd64
@@ -100,7 +111,7 @@ deliverables:
     expect(topology.services[0]?.runtime?.framework).toBe('nest');
     expect(topology.services[0]?.build?.package?.strategy).toBe('pnpm-deploy');
     expect(topology.configDeliverables?.[0]?.name).toBe('dualx-server-baremetal');
-    expect(topology.configDeliverables?.[0]?.source?.service).toBe('dualx-server');
+    expect(topology.configDeliverables?.[0]?.source?.target).toBe('dualx-server');
     expect(topology.managedConfigContent).toContain('deliverables:');
   });
 
@@ -197,5 +208,118 @@ deliverables:
     expect(topology.services[2]?.appDir).toBe('packages/cron');
     expect(topology.services[2]?.packageName).toBe('@acme/cron');
     expect(topology.services[2]?.schedule).toBe('*/5 * * * *');
+  });
+
+  it('projects a Fuser-shaped workspace graph into only real runtime services', async () => {
+    const files = new Map<string, string>([
+      [
+        'package.json',
+        JSON.stringify({
+          packageManager: 'bun@1.3.11',
+          scripts: { postinstall: 'bun scripts/fetch-vision-core.ts' },
+        }),
+      ],
+      [
+        '.env.example',
+        'OSS_ACCESS_KEY_ID=\nOSS_ACCESS_KEY_SECRET=\nOSS_REGION=oss-cn-beijing\nOSS_BUCKET=product-build\n',
+      ],
+      [
+        'apps/web/package.json',
+        JSON.stringify({
+          name: '@data-fuser/web',
+          scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+          dependencies: { react: '^19.0.0', vite: '^8.0.0' },
+        }),
+      ],
+      [
+        'apps/server/package.json',
+        JSON.stringify({
+          name: '@data-fuser/server',
+          scripts: { build: 'nest build', start: 'nest start' },
+          dependencies: {
+            '@nestjs/core': '^11.0.0',
+            '@nestjs/bullmq': '^11.0.0',
+            '@nestjs/schedule': '^6.0.0',
+            bullmq: '^5.0.0',
+            ioredis: '^5.0.0',
+            'typeorm-dm': '^1.0.0',
+          },
+        }),
+      ],
+      [
+        'apps/server/.env.example',
+        'DB_HOST=\nDB_PORT=5236\nDB_USER=SYSDBA\nDB_PASSWORD=\nDB_NAME=DAMENG\nREDIS_HOST=\nREDIS_PORT=6379\nAUTH_SERVICE_URL=\n',
+      ],
+      [
+        'apps/docs/package.json',
+        JSON.stringify({
+          name: '@data-fuser/docs',
+          scripts: { build: 'vocs build', 'docs:api': 'typedoc' },
+          dependencies: { vocs: '^1.0.0' },
+        }),
+      ],
+      [
+        'packages/visionkit/package.json',
+        JSON.stringify({
+          name: 'visionkit',
+          scripts: { build: 'vite build', 'pack-zip': 'bun scripts/pack-zip.ts' },
+        }),
+      ],
+      [
+        'packages/ui/package.json',
+        JSON.stringify({
+          name: '@visionkit/ui',
+          scripts: { test: 'vitest run', typecheck: 'tsgo --noEmit' },
+          dependencies: { react: '^19.0.0' },
+        }),
+      ],
+    ]);
+    const topology = await inspectRepositoryTopology(
+      {
+        async listRootFiles() {
+          return ['turbo.json', 'package.json', 'bun.lock', '.env.example'];
+        },
+        async getFileContent(_repo, path) {
+          return files.get(path) ?? null;
+        },
+        async listDirectory(_repo, path) {
+          if (path === 'apps') {
+            return ['web', 'server', 'docs'].map((name) => ({
+              name,
+              path: `apps/${name}`,
+              type: 'dir' as const,
+            }));
+          }
+          if (path === 'packages') {
+            return ['visionkit', 'ui'].map((name) => ({
+              name,
+              path: `packages/${name}`,
+              type: 'dir' as const,
+            }));
+          }
+          return [];
+        },
+      },
+      'featuremaker/data-fuser',
+      'main'
+    );
+
+    expect(topology.services.map((service) => service.name)).toEqual(['web', 'server']);
+    expect(topology.services[0]?.runtime?.language).toBe('static');
+    expect(topology.services[0]?.run).toEqual({
+      command: 'nginx -g "daemon off;"',
+      port: 8080,
+    });
+    expect(topology.deliveryGraph.artifacts.map((artifact) => artifact.name)).toEqual([
+      'docs',
+      'visionkit',
+    ]);
+    expect(topology.deliveryGraph.libraries.map((library) => library.name)).toEqual(['ui']);
+    expect(topology.deliveryGraph.resources.map((resource) => resource.engine)).toEqual([
+      'dameng',
+      'redis',
+      undefined,
+      's3-compatible',
+    ]);
   });
 });

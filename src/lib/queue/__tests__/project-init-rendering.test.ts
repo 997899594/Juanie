@@ -564,7 +564,7 @@ describe('project init migration inference', () => {
     expect(config).toContain('appDir: packages/worker');
     expect(config).toContain('# monorepo tells Juanie how to calculate affected services');
     expect(config).toContain(
-      '# deliverables are customer-downloadable artifacts extracted from verified service images.'
+      '# deliverables are customer-downloadable outputs produced by buildTargets.'
     );
     expect(config).toContain('inputs:');
     expect(config).toContain('      []');
@@ -670,7 +670,7 @@ describe('project init migration inference', () => {
             {
               name: 'web-baremetal',
               type: 'baremetal',
-              source: { service: 'web' },
+              source: { target: 'web-baremetal' },
               variants: [
                 {
                   name: 'linux-amd64',
@@ -713,17 +713,29 @@ describe('project init migration inference', () => {
 
     expect(config).toContain('deliverables:');
     expect(config).toContain('- name: web-baremetal');
-    expect(config).toContain('service: web');
+    expect(config).toContain('target: web-baremetal');
     expect(config).toContain('from: /app/dist');
     expect(config).not.toContain('# deliverables:');
 
     const projectWithDeliverableConfig = {
       configJson: {
+        buildTargets: [
+          {
+            name: 'web-baremetal',
+            kind: 'bundle',
+            monorepo: { appDir: 'packages/exporter', packageName: '@acme/exporter' },
+            build: {
+              strategy: 'dockerfile',
+              dockerfile: '.juanie/build-targets/exporter.Dockerfile',
+            },
+            output: { path: 'packages/exporter/dist' },
+          },
+        ],
         deliverables: [
           {
             name: 'web-baremetal',
             type: 'baremetal',
-            source: { service: 'web' },
+            source: { target: 'web-baremetal' },
             variants: [
               {
                 name: 'linux-amd64',
@@ -744,12 +756,12 @@ describe('project init migration inference', () => {
     );
 
     expect(deliverables[0]?.name).toBe('web-baremetal');
-    expect(deliverables[0]?.sourceService).toBe('web');
+    expect(deliverables[0]?.sourceTarget).toBe('web-baremetal');
     expect(deliverables[0]?.variant.extract.from).toBe('/app/dist');
     expect(encodedDeliverables[0]?.variant.package.format).toBe('tar.gz');
   });
 
-  it('builds the source service when only an image-derived deliverable changed', () => {
+  it('keeps build-only target changes out of the runtime service matrix', () => {
     const result = selectMonorepoCiWork({
       shouldBuildAll: false,
       changedFiles: ['packages/exporter/README.md'],
@@ -767,7 +779,7 @@ describe('project init migration inference', () => {
           name: 'web-baremetal',
           type: 'baremetal',
           appDir: 'packages/exporter',
-          sourceService: 'web',
+          sourceTarget: 'web-baremetal',
           variant: {
             name: 'linux-amd64',
             platform: 'linux/amd64',
@@ -780,10 +792,10 @@ describe('project init migration inference', () => {
     });
 
     expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
-    expect(result.services.map((service) => service.name)).toEqual(['web']);
+    expect(result.services).toEqual([]);
   });
 
-  it('extracts image-derived deliverables when their source service is selected', () => {
+  it('does not rebuild an independent target when only a runtime service changes', () => {
     const result = selectMonorepoCiWork({
       shouldBuildAll: false,
       changedFiles: ['apps/web/src/page.tsx'],
@@ -801,7 +813,7 @@ describe('project init migration inference', () => {
           name: 'web-baremetal',
           type: 'baremetal',
           appDir: 'packages/exporter',
-          sourceService: 'web',
+          sourceTarget: 'web-baremetal',
           variant: {
             name: 'linux-amd64',
             platform: 'linux/amd64',
@@ -814,7 +826,7 @@ describe('project init migration inference', () => {
     });
 
     expect(result.services.map((service) => service.name)).toEqual(['web']);
-    expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
+    expect(result.deliverables).toEqual([]);
   });
 
   it('builds yarn commands without run', () => {

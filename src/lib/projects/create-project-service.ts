@@ -21,6 +21,7 @@ import {
   promotionFlows,
   services,
 } from '@/lib/db/schema';
+import type { DeliveryGraph } from '@/lib/delivery-graph/model';
 import {
   allocateManagedHostnameBaseWithDb,
   buildManagedEnvironmentHostname,
@@ -31,14 +32,19 @@ import {
   isPlatformManagedRuntimeEnvKey,
 } from '@/lib/env-vars/system';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import {
+  gateway,
+  getTeamIntegrationSession,
+} from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
+import { inspectRepositoryTopology } from '@/lib/monorepo';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
 import {
   buildEnvironmentTopologyBlueprint,
   type CreateEnvironmentTemplate,
 } from '@/lib/projects/environment-topology';
+import { mergeDetectedDatabases, toImportServiceConfig } from '@/lib/projects/import-delivery';
 import { getRequiredCapabilitiesForProjectBootstrap } from '@/lib/queue/project-init-capabilities';
 import { buildProjectInitStepSeeds } from '@/lib/queue/project-init-steps';
 
@@ -70,6 +76,7 @@ export interface CreateProjectInitialVariable {
   key: string;
   value: string;
   isSecret?: boolean;
+  injectionType?: 'runtime' | 'build';
 }
 
 type CreateProjectErrorCode =
@@ -167,6 +174,7 @@ function normalizeInitialVariables(
       key: variable.key.trim(),
       value: variable.value,
       isSecret: variable.isSecret ?? true,
+      injectionType: variable.injectionType ?? 'runtime',
     }))
     .filter((variable) => variable.key.length > 0 || variable.value.length > 0);
 
@@ -221,7 +229,7 @@ async function buildInitialVariableRows(
           key: variable.key,
           value: null,
           isSecret: true,
-          injectionType: 'runtime',
+          injectionType: variable.injectionType,
           encryptedValue: encrypted.encryptedValue,
           iv: encrypted.iv,
           authTag: encrypted.authTag,
@@ -235,7 +243,7 @@ async function buildInitialVariableRows(
         key: variable.key,
         value: variable.value,
         isSecret: false,
-        injectionType: 'runtime',
+        injectionType: variable.injectionType,
         encryptedValue: null,
         iv: null,
         authTag: null,
@@ -295,10 +303,52 @@ async function ensureImportedRepositoryId(input: {
   return ensureRepository(input.repositoryId, input.repositoryFullName, input.integrationSession);
 }
 
+async function inspectImportedRepository(input: {
+  createInput: CreateProjectInput;
+  integrationSession: Awaited<ReturnType<typeof getTeamIntegrationSession>>;
+}): Promise<{
+  deliveryGraph: DeliveryGraph | null;
+  services: ServiceConfig[];
+  databases: DatabaseConfig[];
+}> {
+  if (input.createInput.mode !== 'import' || !input.createInput.repositoryFullName) {
+    return {
+      deliveryGraph: null,
+      services: input.createInput.services,
+      databases: input.createInput.databases,
+    };
+  }
+
+  const topology = await inspectRepositoryTopology(
+    {
+      listRootFiles: (repo, ref) => gateway.listRootFiles(input.integrationSession, repo, ref),
+      getFileContent: (repo, path, ref) =>
+        gateway.getFileContent(input.integrationSession, repo, path, ref),
+      listDirectory: (repo, path, ref) =>
+        gateway.listDirectory(input.integrationSession, repo, path, ref),
+    },
+    input.createInput.repositoryFullName,
+    input.createInput.productionBranch
+  );
+  const requestedByName = new Map(
+    input.createInput.services.map((service) => [service.name, service])
+  );
+  const services = topology.services.map((service) =>
+    toImportServiceConfig(service, requestedByName.get(service.name))
+  );
+
+  return {
+    deliveryGraph: topology.deliveryGraph,
+    services,
+    databases: mergeDetectedDatabases(input.createInput.databases, topology.deliveryGraph),
+  };
+}
+
 async function createProjectAggregate(input: {
   createInput: CreateProjectInput;
   repositoryId: string | null;
   uniqueSlug: string;
+  deliveryGraph: DeliveryGraph | null;
 }) {
   const {
     createInput: {
@@ -323,6 +373,7 @@ async function createProjectAggregate(input: {
     },
     repositoryId,
     uniqueSlug,
+    deliveryGraph,
   } = input;
 
   const topology = buildEnvironmentTopologyBlueprint({
@@ -339,6 +390,7 @@ async function createProjectAggregate(input: {
       serviceConfig.name,
       {
         ...(serviceConfig.monorepo ? { monorepo: serviceConfig.monorepo } : {}),
+        ...(serviceConfig.runtime ? { runtime: serviceConfig.runtime } : {}),
         ...(serviceConfig.build ? { build: serviceConfig.build } : {}),
       },
     ])
@@ -373,6 +425,7 @@ async function createProjectAggregate(input: {
             environmentTemplate: environmentTemplate ?? 'staging_production_preview',
           },
           services: serviceTopologyConfig,
+          ...(deliveryGraph ? { deliveryGraph } : {}),
           routing: {
             vanitySlug: slug,
             managedHostnameBase,
@@ -591,7 +644,6 @@ async function createProjectAggregate(input: {
 
 export async function createProjectWithBootstrap(input: CreateProjectInput) {
   assertCreateProjectBasics(input);
-  assertDatabaseSelections(input);
   await assertTeamCanCreateProject(input.teamId, input.userId);
 
   const integrationSession = await resolveBootstrapIntegrationSession({
@@ -605,14 +657,21 @@ export async function createProjectWithBootstrap(input: CreateProjectInput) {
     repositoryFullName: input.repositoryFullName,
     integrationSession,
   });
+  const inspected = await inspectImportedRepository({
+    createInput: input,
+    integrationSession,
+  });
+  const resolvedInput = {
+    ...input,
+    services: inspected.services,
+    databases: inspected.databases,
+  };
+  assertDatabaseSelections(resolvedInput);
   const project = await createProjectAggregate({
-    createInput: {
-      ...input,
-      services: input.services ?? [],
-      databases: input.databases ?? [],
-    },
+    createInput: resolvedInput,
     repositoryId,
     uniqueSlug: `${input.slug}-${nanoid(6).toLowerCase()}`,
+    deliveryGraph: inspected.deliveryGraph,
   });
 
   return { project };

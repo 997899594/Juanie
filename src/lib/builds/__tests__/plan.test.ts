@@ -169,4 +169,46 @@ describe('build plan', () => {
       })
     ).toThrow('Build plan references unknown services: worker');
   });
+
+  it('plans build-only targets without leaking them into release services', () => {
+    const config = {
+      monorepo: { type: 'turborepo' },
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          run: { command: 'bun run start', port: 3000 },
+        },
+      ],
+      buildTargets: [
+        {
+          name: 'sdk',
+          kind: 'package',
+          monorepo: { appDir: 'packages/sdk', packageName: '@acme/sdk' },
+          build: {
+            strategy: 'dockerfile',
+            dockerfile: '.juanie/build-targets/sdk.Dockerfile',
+            context: '.',
+            secrets: ['OSS_ACCESS_KEY_ID'],
+          },
+          output: { path: 'packages/sdk/dist' },
+        },
+      ],
+    } satisfies Pick<JuanieConfig, 'services' | 'monorepo' | 'buildTargets'>;
+
+    const plan = createBuildPlan({
+      config,
+      repository: 'acme/platform',
+      ref: 'main',
+      sha: 'abc123',
+      selectedServices: [],
+      selectedTargets: ['sdk'],
+    });
+
+    expect(plan.units.length).toBe(1);
+    expect(plan.units[0]?.id).toBe('target-sdk');
+    expect(plan.units[0]?.secrets).toEqual(['OSS_ACCESS_KEY_ID']);
+    expect(plan.release.requiredUnits).toEqual(['target-sdk']);
+    expect(getBuildPlanReleaseServices(plan)).toEqual([]);
+  });
 });

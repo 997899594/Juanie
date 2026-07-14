@@ -25,6 +25,7 @@ const updateEnvVarSchema = z.object({
     .optional(),
   value: z.string().optional(),
   isSecret: z.boolean().optional(),
+  injectionType: z.enum(['runtime', 'build']).optional(),
   restartRuntime: z.boolean().default(false),
 });
 
@@ -48,6 +49,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       key: payload.data.key,
       value: payload.data.value,
       isSecret: payload.data.isSecret,
+      injectionType: payload.data.injectionType,
       restartRuntime: payload.data.restartRuntime,
     });
 

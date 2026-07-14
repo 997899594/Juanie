@@ -4,7 +4,7 @@ import { BuildRunError, startBuildRun } from '@/lib/builds/service';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { repository, ref, sha, registry, provider, externalRunId, services } = body;
+    const { repository, ref, sha, registry, provider, externalRunId, services, targets } = body;
 
     if (
       typeof repository !== 'string' ||
@@ -28,6 +28,9 @@ export async function POST(request: Request) {
       services: Array.isArray(services)
         ? services.filter((item) => typeof item === 'string')
         : undefined,
+      targets: Array.isArray(targets)
+        ? targets.filter((item) => typeof item === 'string')
+        : undefined,
       provider: typeof provider === 'string' && provider.trim() ? provider.trim() : undefined,
       externalRunId:
         typeof externalRunId === 'string' && externalRunId.trim()
@@ -41,6 +44,7 @@ export async function POST(request: Request) {
         success: true,
         buildRun: result.buildRun,
         plan: result.plan,
+        secretAccessToken: result.secretAccessToken,
       },
       { status: 201 }
     );

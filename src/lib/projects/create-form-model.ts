@@ -6,6 +6,7 @@ import type {
   PlatformDatabaseType,
 } from '@/lib/databases/platform-support';
 import { getDefaultDatabaseProvisionType } from '@/lib/databases/platform-support';
+import type { DeliveryGraph, DeliveryGraphSummary } from '@/lib/delivery-graph/model';
 import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import {
   applyRuntimeProfileToServices,
@@ -48,6 +49,15 @@ export interface AnalyzeServiceResponse {
     memoryLimit?: string;
   };
   isPublic?: boolean;
+}
+
+export interface AnalyzeRepositoryResponse {
+  monorepoType: string;
+  hasDockerBake: boolean;
+  bakeTargets: string[];
+  services: AnalyzeServiceResponse[];
+  deliveryGraph: DeliveryGraph;
+  summary: DeliveryGraphSummary;
 }
 
 export interface ServiceWithId {
@@ -102,6 +112,7 @@ export interface InitialVariableWithId {
   key: string;
   value: string;
   isSecret: boolean;
+  injectionType: 'runtime' | 'build';
 }
 
 export function withServiceIds(services: Omit<ServiceWithId, '_id'>[]): ServiceWithId[] {
@@ -182,6 +193,7 @@ export function createInitialVariableDraft(): InitialVariableWithId {
     key: '',
     value: '',
     isSecret: true,
+    injectionType: 'runtime',
   };
 }
 

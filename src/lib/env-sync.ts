@@ -82,6 +82,7 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
   const vars = await db.query.environmentVariables.findMany({
     where: and(
       eq(environmentVariables.projectId, projectId),
+      eq(environmentVariables.injectionType, 'runtime'),
       or(
         // 项目级：无 environmentId 且无 serviceId
         and(isNull(environmentVariables.environmentId), isNull(environmentVariables.serviceId)),
@@ -202,6 +203,7 @@ export async function syncServiceEnvVarsToK8s(
   const vars = await db.query.environmentVariables.findMany({
     where: and(
       eq(environmentVariables.serviceId, serviceId),
+      eq(environmentVariables.injectionType, 'runtime'),
       isNull(environmentVariables.environmentId)
     ),
   });

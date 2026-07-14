@@ -1,21 +1,18 @@
 import { type JuanieConfig, parseJuanieConfig, type ServiceConfig } from '@/lib/config/parser';
+import { inferDeliveryGraph } from '@/lib/delivery-graph/inference';
+import {
+  type DeliveryGraph,
+  type DeliveryGraphPackage,
+  type DeliveryGraphWorkspaceInput,
+  deliveryGraphVersion,
+} from '@/lib/delivery-graph/model';
 import { detectMonorepoType, type MonorepoType } from './detect';
 
 type ServiceType = 'web' | 'worker' | 'cron';
 type BuildStrategy = 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
 
-type PackageJsonShape = {
-  name?: string;
+type PackageJsonShape = DeliveryGraphPackage & {
   packageManager?: string;
-  scripts?: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  juanie?: {
-    schedule?: string;
-  };
-  config?: {
-    schedule?: string;
-  };
 };
 
 export interface RepositoryTopologyBuild {
@@ -25,6 +22,7 @@ export interface RepositoryTopologyBuild {
   context?: string;
   target?: string;
   definition?: string;
+  secrets?: string[];
   package?: {
     strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
   };
@@ -83,8 +81,10 @@ export interface RepositoryTopology {
   bakeTargets: string[];
   bakeDefinitionPath: string | null;
   rootPackageJson: PackageJsonShape | null;
+  deliveryGraph: DeliveryGraph;
   services: RepositoryTopologyService[];
   configMonorepo?: JuanieConfig['monorepo'];
+  configBuildTargets?: JuanieConfig['buildTargets'];
   configDeliverables?: JuanieConfig['deliverables'];
   managedConfigContent?: string | null;
   source: 'juanie_config' | 'turborepo_scan' | 'docker_bake' | 'package_json' | 'default';
@@ -100,6 +100,16 @@ function parsePackageJson(content: string | null): PackageJsonShape | null {
   } catch {
     return null;
   }
+}
+
+function parseEnvironmentKeys(content: string | null): string[] {
+  if (!content) return [];
+  const keys = new Set<string>();
+  for (const line of content.split('\n')) {
+    const match = line.trim().match(/^(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=/u);
+    if (match?.[1]) keys.add(match[1]);
+  }
+  return [...keys];
 }
 
 function detectPackageManager(
@@ -310,6 +320,43 @@ function toTopologyServiceFromConfig(service: ServiceConfig): RepositoryTopology
   };
 }
 
+function buildDeclaredDeliveryGraph(
+  serviceList: RepositoryTopologyService[],
+  buildTargets: JuanieConfig['buildTargets'] = []
+): DeliveryGraph {
+  return {
+    version: deliveryGraphVersion,
+    workloads: serviceList.map((service) => ({
+      id: `workload:${service.appDir}:${service.name}`,
+      name: service.name,
+      packageName: service.packageName,
+      appDir: service.appDir,
+      type: service.type,
+      runtimeKind: service.runtime?.language === 'static' ? 'static' : 'server',
+      runtimeCapabilities:
+        service.type === 'worker' ? ['worker'] : service.type === 'cron' ? ['scheduler'] : ['http'],
+      buildCommand: service.build?.command,
+      startCommand: service.startCommand,
+      port: service.run.port,
+      schedule: service.schedule,
+      hasDockerfile: Boolean(service.build?.dockerfile),
+      confidence: 'declared',
+    })),
+    artifacts: (buildTargets ?? []).map((target) => ({
+      id: `artifact:${target.name}`,
+      name: target.name,
+      packageName: target.monorepo.packageName,
+      appDir: target.monorepo.appDir,
+      kind: target.kind,
+      buildCommand: target.build.command,
+      outputPath: target.output.path,
+    })),
+    libraries: [],
+    resources: [],
+    warnings: [],
+  };
+}
+
 async function safeListDirectory(
   reader: RepositoryTopologyReader,
   repoFullName: string,
@@ -336,7 +383,58 @@ async function safeGetFileContent(
   }
 }
 
-async function inspectWorkspaceServices(input: {
+function toTopologyServiceFromWorkload(input: {
+  workload: DeliveryGraph['workloads'][number];
+  workspace: DeliveryGraphWorkspaceInput;
+  bakeDefinitionPath: string | null;
+  bakeTargets: string[];
+  packageManager: 'bun' | 'pnpm' | 'yarn' | 'npm';
+}): RepositoryTopologyService {
+  const { workload, workspace } = input;
+  const build = inferBuildMetadata({
+    appDir: workspace.path,
+    packageJson: workspace.packageJson,
+    hasDockerfile: workspace.hasDockerfile,
+    bakeDefinitionPath: input.bakeDefinitionPath,
+    bakeTargets: input.bakeTargets,
+    serviceName: workload.name,
+  });
+
+  return {
+    name: workload.name,
+    type: workload.type,
+    appDir: workload.appDir,
+    packageName: workload.packageName,
+    startCommand: workload.startCommand,
+    port: workload.port ?? 3000,
+    schedule: workload.schedule,
+    build,
+    run: {
+      command: workload.startCommand,
+      ...(typeof workload.port === 'number' ? { port: workload.port } : {}),
+    },
+    healthcheck:
+      workload.type === 'web'
+        ? {
+            path: workload.runtimeKind === 'static' ? '/healthz' : '/api/health',
+            interval: 30,
+          }
+        : undefined,
+    scaling: workload.type === 'web' ? { min: 1 } : undefined,
+    runtime: {
+      language:
+        workload.runtimeKind === 'static'
+          ? 'static'
+          : input.packageManager === 'bun'
+            ? 'bun'
+            : 'node',
+      ...(workload.runtimeKind === 'static' ? { framework: 'static' } : {}),
+    },
+    isPublic: workload.type === 'web',
+  };
+}
+
+async function inspectWorkspaceDelivery(input: {
   reader: RepositoryTopologyReader;
   repoFullName: string;
   ref?: string;
@@ -344,72 +442,81 @@ async function inspectWorkspaceServices(input: {
   rootPackageJson: PackageJsonShape | null;
   bakeDefinitionPath: string | null;
   bakeTargets: string[];
-}): Promise<RepositoryTopologyService[]> {
+}): Promise<{ graph: DeliveryGraph; services: RepositoryTopologyService[] }> {
   const packageManager = detectPackageManager(input.rootFiles, input.rootPackageJson);
+  const [appEntries, packageEntries, rootEnvironmentContent] = await Promise.all([
+    safeListDirectory(input.reader, input.repoFullName, 'apps', input.ref),
+    safeListDirectory(input.reader, input.repoFullName, 'packages', input.ref),
+    safeGetFileContent(input.reader, input.repoFullName, '.env.example', input.ref),
+  ]);
   const entries = [
-    ...(await safeListDirectory(input.reader, input.repoFullName, 'apps', input.ref)),
-    ...(await safeListDirectory(input.reader, input.repoFullName, 'packages', input.ref)),
-  ].filter((entry) => entry.type === 'dir');
+    ...appEntries
+      .filter((entry) => entry.type === 'dir')
+      .map((entry) => ({ ...entry, zone: 'app' as const })),
+    ...packageEntries
+      .filter((entry) => entry.type === 'dir')
+      .map((entry) => ({ ...entry, zone: 'package' as const })),
+  ];
 
-  const services: Array<RepositoryTopologyService | null> = await Promise.all(
-    entries.map(async (entry) => {
-      const [packageJsonContent, dockerfileContent] = await Promise.all([
-        safeGetFileContent(
-          input.reader,
-          input.repoFullName,
-          `${entry.path}/package.json`,
-          input.ref
-        ),
-        safeGetFileContent(input.reader, input.repoFullName, `${entry.path}/Dockerfile`, input.ref),
-      ]);
+  const workspaces = (
+    await Promise.all(
+      entries.map(async (entry): Promise<DeliveryGraphWorkspaceInput | null> => {
+        const [packageJsonContent, dockerfileContent, environmentContent] = await Promise.all([
+          safeGetFileContent(
+            input.reader,
+            input.repoFullName,
+            `${entry.path}/package.json`,
+            input.ref
+          ),
+          safeGetFileContent(
+            input.reader,
+            input.repoFullName,
+            `${entry.path}/Dockerfile`,
+            input.ref
+          ),
+          safeGetFileContent(
+            input.reader,
+            input.repoFullName,
+            `${entry.path}/.env.example`,
+            input.ref
+          ),
+        ]);
+        const packageJson = parsePackageJson(packageJsonContent);
+        if (!packageJson && !dockerfileContent) return null;
 
-      if (!packageJsonContent && !dockerfileContent) {
-        return null;
-      }
-
-      const packageJson = parsePackageJson(packageJsonContent);
-      const serviceName = basename(entry.path);
-      const packageName = packageJson?.name?.trim();
-      const serviceType = inferServiceType(serviceName, packageJson);
-      const run = inferRunCommand(serviceType, packageJson, packageManager);
-      const port = run.port ?? (serviceType === 'web' ? 3000 : undefined);
-
-      const service: RepositoryTopologyService = {
-        name: serviceName,
-        type: serviceType,
-        appDir: entry.path,
-        ...(packageName ? { packageName } : {}),
-        startCommand: run.command,
-        port: port ?? 3000,
-        build: inferBuildMetadata({
-          appDir: entry.path,
-          packageJson,
+        return {
+          path: entry.path,
+          zone: entry.zone,
+          packageJson: packageJson ?? {},
           hasDockerfile: Boolean(dockerfileContent),
-          bakeDefinitionPath: input.bakeDefinitionPath,
-          bakeTargets: input.bakeTargets,
-          serviceName,
-        }),
-        run: {
-          command: run.command,
-          ...(typeof port === 'number' ? { port } : {}),
-        },
-        healthcheck:
-          serviceType === 'web'
-            ? {
-                path: '/api/health',
-                interval: 30,
-              }
-            : undefined,
-        scaling: serviceType === 'web' ? { min: 1 } : undefined,
-        isPublic: serviceType === 'web',
-        ...(serviceType === 'cron' && run.schedule ? { schedule: run.schedule } : {}),
-      };
+          environmentKeys: parseEnvironmentKeys(environmentContent),
+        };
+      })
+    )
+  ).filter((workspace): workspace is DeliveryGraphWorkspaceInput => workspace !== null);
 
-      return service;
-    })
-  );
+  const graph = inferDeliveryGraph({
+    packageManager,
+    rootPackageJson: input.rootPackageJson,
+    rootEnvironmentKeys: parseEnvironmentKeys(rootEnvironmentContent),
+    workspaces,
+  });
+  const workspaceByPath = new Map(workspaces.map((workspace) => [workspace.path, workspace]));
+  const services = graph.workloads.map((workload) => {
+    const workspace = workspaceByPath.get(workload.appDir);
+    if (!workspace) {
+      throw new Error(`Missing workspace descriptor for ${workload.id}`);
+    }
+    return toTopologyServiceFromWorkload({
+      workload,
+      workspace,
+      bakeDefinitionPath: input.bakeDefinitionPath,
+      bakeTargets: input.bakeTargets,
+      packageManager,
+    });
+  });
 
-  return services.filter((service): service is RepositoryTopologyService => service !== null);
+  return { graph, services };
 }
 
 export async function inspectRepositoryTopology(
@@ -447,6 +554,7 @@ export async function inspectRepositoryTopology(
   if (managedConfigContentResolved) {
     const parsedConfig = parseJuanieConfig(managedConfigContentResolved);
     if (parsedConfig.isValid && parsedConfig.services.length > 0) {
+      const serviceList = parsedConfig.services.map(toTopologyServiceFromConfig);
       return {
         monorepoType,
         rootFiles,
@@ -454,8 +562,10 @@ export async function inspectRepositoryTopology(
         bakeTargets,
         bakeDefinitionPath,
         rootPackageJson,
-        services: parsedConfig.services.map(toTopologyServiceFromConfig),
+        deliveryGraph: buildDeclaredDeliveryGraph(serviceList, parsedConfig.buildTargets),
+        services: serviceList,
         configMonorepo: parsedConfig.monorepo,
+        configBuildTargets: parsedConfig.buildTargets,
         configDeliverables: parsedConfig.deliverables,
         managedConfigContent: managedConfigContentResolved,
         source: 'juanie_config',
@@ -464,7 +574,7 @@ export async function inspectRepositoryTopology(
   }
 
   if (monorepoType === 'turborepo') {
-    const services = await inspectWorkspaceServices({
+    const delivery = await inspectWorkspaceDelivery({
       reader,
       repoFullName,
       ref,
@@ -474,7 +584,7 @@ export async function inspectRepositoryTopology(
       bakeTargets,
     });
 
-    if (services.length > 0) {
+    if (delivery.services.length > 0 || delivery.graph.artifacts.length > 0) {
       return {
         monorepoType,
         rootFiles,
@@ -482,13 +592,38 @@ export async function inspectRepositoryTopology(
         bakeTargets,
         bakeDefinitionPath,
         rootPackageJson,
-        services,
+        deliveryGraph: delivery.graph,
+        services: delivery.services,
         source: 'turborepo_scan',
       };
     }
   }
 
   if (bakeTargets.length > 0) {
+    const serviceList: RepositoryTopologyService[] = bakeTargets.map((target) => ({
+      name: target,
+      type: 'web',
+      appDir: '.',
+      startCommand: 'npm start',
+      port: 3000,
+      build: {
+        strategy: 'bake',
+        command: 'npm run build',
+        definition: bakeDefinitionPath ?? undefined,
+        context: '.',
+        target,
+      },
+      run: {
+        command: 'npm start',
+        port: 3000,
+      },
+      healthcheck: {
+        path: '/api/health',
+        interval: 30,
+      },
+      scaling: { min: 1 },
+      isPublic: true,
+    }));
     return {
       monorepoType,
       rootFiles,
@@ -496,30 +631,8 @@ export async function inspectRepositoryTopology(
       bakeTargets,
       bakeDefinitionPath,
       rootPackageJson,
-      services: bakeTargets.map((target) => ({
-        name: target,
-        type: 'web',
-        appDir: '.',
-        startCommand: 'npm start',
-        port: 3000,
-        build: {
-          strategy: 'bake',
-          command: 'npm run build',
-          definition: bakeDefinitionPath ?? undefined,
-          context: '.',
-          target,
-        },
-        run: {
-          command: 'npm start',
-          port: 3000,
-        },
-        healthcheck: {
-          path: '/api/health',
-          interval: 30,
-        },
-        scaling: { min: 1 },
-        isPublic: true,
-      })),
+      deliveryGraph: buildDeclaredDeliveryGraph(serviceList),
+      services: serviceList,
       source: 'docker_bake',
     };
   }
@@ -531,6 +644,32 @@ export async function inspectRepositoryTopology(
     detectPackageManager(rootFiles, rootPackageJson)
   );
   const port = run.port ?? (serviceType === 'web' ? 3000 : undefined);
+  const serviceList: RepositoryTopologyService[] = [
+    {
+      name: 'web',
+      type: serviceType,
+      appDir: '.',
+      startCommand: run.command,
+      port: port ?? 3000,
+      schedule: serviceType === 'cron' ? run.schedule : undefined,
+      build: {
+        command: rootPackageJson?.scripts?.build?.trim() ?? 'npm run build',
+      },
+      run: {
+        command: run.command,
+        ...(typeof port === 'number' ? { port } : {}),
+      },
+      healthcheck:
+        serviceType === 'web'
+          ? {
+              path: '/api/health',
+              interval: 30,
+            }
+          : undefined,
+      scaling: serviceType === 'web' ? { min: 1 } : undefined,
+      isPublic: serviceType === 'web',
+    },
+  ];
 
   return {
     monorepoType,
@@ -539,32 +678,8 @@ export async function inspectRepositoryTopology(
     bakeTargets,
     bakeDefinitionPath,
     rootPackageJson,
-    services: [
-      {
-        name: 'web',
-        type: serviceType,
-        appDir: '.',
-        startCommand: run.command,
-        port: port ?? 3000,
-        schedule: serviceType === 'cron' ? run.schedule : undefined,
-        build: {
-          command: rootPackageJson?.scripts?.build?.trim() ?? 'npm run build',
-        },
-        run: {
-          command: run.command,
-          ...(typeof port === 'number' ? { port } : {}),
-        },
-        healthcheck:
-          serviceType === 'web'
-            ? {
-                path: '/api/health',
-                interval: 30,
-              }
-            : undefined,
-        scaling: serviceType === 'web' ? { min: 1 } : undefined,
-        isPublic: serviceType === 'web',
-      },
-    ],
+    deliveryGraph: buildDeclaredDeliveryGraph(serviceList),
+    services: serviceList,
     source: rootPackageJson ? 'package_json' : 'default',
   };
 }

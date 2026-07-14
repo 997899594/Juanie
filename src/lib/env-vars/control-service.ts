@@ -25,6 +25,7 @@ interface EnvironmentVariableRecord {
   key: string;
   value: string | null;
   isSecret: boolean | null;
+  injectionType: string | null;
   environmentId: string | null;
   serviceId: string | null;
   encryptedValue: string | null;
@@ -291,6 +292,7 @@ export async function listEnvironmentVariablesForProject(input: {
       key: true,
       value: true,
       isSecret: true,
+      injectionType: true,
       environmentId: true,
       serviceId: true,
       createdAt: true,
@@ -313,6 +315,7 @@ export async function createEnvironmentVariableForProject(input: {
   key: string;
   value: string;
   isSecret: boolean;
+  injectionType: 'runtime' | 'build';
   environmentId?: string | null;
   serviceId?: string | null;
   restartRuntime?: boolean;
@@ -351,6 +354,7 @@ export async function createEnvironmentVariableForProject(input: {
         key: input.key,
         value: null,
         isSecret: true,
+        injectionType: input.injectionType,
         environmentId: scope.environmentId,
         serviceId: scope.serviceId,
         encryptedValue,
@@ -362,6 +366,7 @@ export async function createEnvironmentVariableForProject(input: {
         key: input.key,
         value: input.value,
         isSecret: false,
+        injectionType: input.injectionType,
         environmentId: scope.environmentId,
         serviceId: scope.serviceId,
         encryptedValue: null,
@@ -373,22 +378,25 @@ export async function createEnvironmentVariableForProject(input: {
     id: environmentVariables.id,
     key: environmentVariables.key,
     isSecret: environmentVariables.isSecret,
+    injectionType: environmentVariables.injectionType,
     environmentId: environmentVariables.environmentId,
     serviceId: environmentVariables.serviceId,
     createdAt: environmentVariables.createdAt,
   });
 
-  await reconcileEnvironmentRuntime({
-    projectId: input.projectId,
-    environment: scope.environment,
-    serviceId: scope.serviceId,
-    restartRuntime: input.restartRuntime,
-    logContext: {
-      key: input.key,
+  if (input.injectionType === 'runtime') {
+    await reconcileEnvironmentRuntime({
+      projectId: input.projectId,
+      environment: scope.environment,
       serviceId: scope.serviceId,
-      operation: 'create',
-    },
-  });
+      restartRuntime: input.restartRuntime,
+      logContext: {
+        key: input.key,
+        serviceId: scope.serviceId,
+        operation: 'create',
+      },
+    });
+  }
 
   return created;
 }
@@ -400,6 +408,7 @@ export async function updateEnvironmentVariableForProject(input: {
   key?: string;
   value?: string;
   isSecret?: boolean;
+  injectionType?: 'runtime' | 'build';
   restartRuntime?: boolean;
 }) {
   await getProjectAccessWithRoleOrThrow(
@@ -435,6 +444,7 @@ export async function updateEnvironmentVariableForProject(input: {
     key: string;
     value: string | null;
     isSecret: boolean;
+    injectionType: string;
     encryptedValue: string | null;
     iv: string | null;
     authTag: string | null;
@@ -445,6 +455,9 @@ export async function updateEnvironmentVariableForProject(input: {
 
   if (input.key !== undefined) {
     updateData.key = input.key;
+  }
+  if (input.injectionType !== undefined) {
+    updateData.injectionType = input.injectionType;
   }
 
   const finalIsSecret = input.isSecret ?? Boolean(envVar.isSecret);
@@ -511,17 +524,19 @@ export async function updateEnvironmentVariableForProject(input: {
       }))
     : null;
 
-  await reconcileEnvironmentRuntime({
-    projectId: input.projectId,
-    environment,
-    serviceId: envVar.serviceId,
-    restartRuntime: input.restartRuntime,
-    logContext: {
-      variableId: envVar.id,
-      environmentId: envVar.environmentId,
-      operation: 'update',
-    },
-  });
+  if (envVar.injectionType !== 'build' || input.injectionType === 'runtime') {
+    await reconcileEnvironmentRuntime({
+      projectId: input.projectId,
+      environment,
+      serviceId: envVar.serviceId,
+      restartRuntime: input.restartRuntime,
+      logContext: {
+        variableId: envVar.id,
+        environmentId: envVar.environmentId,
+        operation: 'update',
+      },
+    });
+  }
 
   return { success: true };
 }
@@ -557,17 +572,19 @@ export async function deleteEnvironmentVariableForProject(input: {
       }))
     : null;
 
-  await reconcileEnvironmentRuntime({
-    projectId: input.projectId,
-    environment,
-    serviceId: envVar.serviceId,
-    restartRuntime: input.restartRuntime,
-    logContext: {
-      variableId: envVar.id,
-      environmentId: envVar.environmentId,
-      operation: 'delete',
-    },
-  });
+  if (envVar.injectionType !== 'build') {
+    await reconcileEnvironmentRuntime({
+      projectId: input.projectId,
+      environment,
+      serviceId: envVar.serviceId,
+      restartRuntime: input.restartRuntime,
+      logContext: {
+        variableId: envVar.id,
+        environmentId: envVar.environmentId,
+        operation: 'delete',
+      },
+    });
+  }
 
   return { success: true };
 }

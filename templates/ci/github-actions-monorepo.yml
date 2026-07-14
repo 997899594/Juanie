@@ -34,6 +34,7 @@ jobs:
       services: ${{ steps.detect.outputs.services }}
       deliverables: ${{ steps.detect.outputs.deliverables }}
       service_names: ${{ steps.detect.outputs.service_names }}
+      target_names: ${{ steps.detect.outputs.target_names }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +52,7 @@ jobs:
 
   plan:
     needs: detect
-    if: ${{ needs.detect.outputs.services != '[]' }}
+    if: ${{ needs.detect.outputs.services != '[]' || needs.detect.outputs.target_names != '[]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,6 +73,7 @@ jobs:
           JUANIE_IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           JUANIE_EXTERNAL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           JUANIE_SELECTED_SERVICES_JSON: ${{ needs.detect.outputs.service_names }}
+          JUANIE_SELECTED_TARGETS_JSON: ${{ needs.detect.outputs.target_names }}
         run: |
           set -euo pipefail
 
@@ -203,5 +205,5 @@ jobs:
           set -euo pipefail
 
           jq -n --argjson item '${{ toJson(matrix.deliverable) }}' '[$item]' > .juanie-deliverables.json
-          export JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie/build-run/release-services.json)"
+          export JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie/build-run/build-outputs.json)"
           JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json bash .juanie/delivery-artifacts.sh

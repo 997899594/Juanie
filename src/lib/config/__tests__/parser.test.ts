@@ -243,11 +243,22 @@ services:
     run:
       command: ./bin/start
       port: 6014
+buildTargets:
+  - name: dualx-server
+    kind: bundle
+    monorepo:
+      appDir: apps/dualx-server
+      packageName: "@acme/dualx-server"
+    build:
+      strategy: dockerfile
+      dockerfile: .juanie/build-targets/dualx-server.Dockerfile
+    output:
+      path: apps/dualx-server/dist
 deliverables:
   - name: dualx-server-baremetal
     type: baremetal
     source:
-      service: dualx-server
+      target: dualx-server
     variants:
       - name: linux-amd64
         platform: linux/amd64
@@ -270,7 +281,7 @@ deliverables:
     expect(parsed.deliverables?.[0]?.variants[0]?.extract.from).toBe('/app/dist');
   });
 
-  it('requires delivery artifacts to declare the source image service', () => {
+  it('requires delivery artifacts to declare a build target source', () => {
     const parsed = parseJuanieConfig(`
 services:
   - name: web
@@ -292,7 +303,31 @@ deliverables:
 
     expect(parsed.isValid).toBe(false);
     expect(parsed.errors).toContain(
-      'deliverables.0.source.service: deliverables must declare source.service for image-derived extraction'
+      'deliverables.0.source: Invalid input: expected object, received undefined'
     );
+  });
+
+  it('rejects deliverables whose source target is not declared', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: npm start
+deliverables:
+  - name: sdk
+    type: package
+    source:
+      target: missing
+    variants:
+      - name: default
+        extract:
+          from: /juanie/output
+        package:
+          format: tgz
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors).toContain('Deliverable "sdk" references unknown build target "missing"');
   });
 });

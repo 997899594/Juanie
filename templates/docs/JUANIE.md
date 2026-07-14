@@ -9,6 +9,8 @@ This repository is connected to **Juanie**.
 - `.juanie/build-run.sh`
 - `.juanie/affected-workspace.mjs`
 - `.juanie/delivery-artifacts.sh`
+- `.juanie/runtime/*.Dockerfile`
+- `.juanie/build-targets/*.Dockerfile`
 - `.env.juanie.example`
 - `JUANIE.md`
 
@@ -17,12 +19,13 @@ These files are injected and updated by Juanie during project import or project 
 ## Rules
 
 - Do not hand-edit the platform-managed files above.
-- Real secrets and runtime environment values live in Juanie, not in this repository.
+- Real build secrets and runtime environment values live in Juanie, not in this repository.
 - If the Juanie workflow contract becomes stale or preview/release triggering fails, re-sync the project from Juanie instead of patching the files manually.
 
 ## What Juanie reads from this repo
 
 - service build and runtime structure
+- build-only targets and their immutable outputs
 - schema and database intent from `juanie.yaml`
 - customer deliverable extraction rules from `juanie.yaml`
 - application source at the selected branch or commit

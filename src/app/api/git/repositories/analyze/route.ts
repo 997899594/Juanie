@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/api/access';
+import type { DeliveryGraph, DeliveryGraphSummary } from '@/lib/delivery-graph/model';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -11,6 +12,7 @@ import {
   inspectRepositoryTopology,
   type MonorepoType,
   type RepositoryTopologyService,
+  summarizeDeliveryGraph,
 } from '@/lib/monorepo';
 
 interface AnalyzeResult {
@@ -18,6 +20,8 @@ interface AnalyzeResult {
   hasDockerBake: boolean;
   bakeTargets: string[];
   services: RepositoryTopologyService[];
+  deliveryGraph: DeliveryGraph;
+  summary: DeliveryGraphSummary;
 }
 
 type NormalizableError = {
@@ -83,6 +87,8 @@ export async function GET(request: NextRequest) {
       hasDockerBake: result.hasDockerBake,
       bakeTargets: result.bakeTargets,
       services: result.services,
+      deliveryGraph: result.deliveryGraph,
+      summary: summarizeDeliveryGraph(result.deliveryGraph),
     } satisfies AnalyzeResult);
   } catch (error) {
     const apiError = toApiError(error);

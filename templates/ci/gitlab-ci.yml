@@ -32,11 +32,13 @@ build:
 
       cp .juanie/build-run/release-id .juanie-release-id
       cp .juanie/build-run/release-services.json .juanie-release-services.json
+      cp .juanie/build-run/build-outputs.json .juanie-build-outputs.json
       cp .juanie/build-run/artifacts-ready .juanie-artifacts-ready
   artifacts:
     paths:
       - .juanie-release-id
       - .juanie-release-services.json
+      - .juanie-build-outputs.json
       - .juanie-artifacts-ready
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
@@ -64,7 +66,7 @@ deliver:
       JUANIE_TOKEN="$CI_JOB_TOKEN" \
         JUANIE_RELEASE_ID="$(cat .juanie-release-id)" \
         JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
-        JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)" \
+        JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie-build-outputs.json)" \
         bash .juanie/delivery-artifacts.sh
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"

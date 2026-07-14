@@ -8,6 +8,7 @@ import {
   getUnsupportedPreviewCloneDatabases,
 } from '@/lib/databases/platform-support';
 import type { TeamRole } from '@/lib/db/schema';
+import type { DeliveryGraph, DeliveryGraphSummary } from '@/lib/delivery-graph/model';
 import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentDeploymentStrategyLabel,
@@ -15,6 +16,7 @@ import {
 import { submitCreateProject } from '@/lib/projects/create-client-actions';
 import type { CreateRuntimeProfile, CreateTemplateOption } from '@/lib/projects/create-defaults';
 import {
+  type AnalyzeRepositoryResponse,
   type AnalyzeServiceResponse,
   buildImportFallbackServices,
   buildTemplateServiceDrafts,
@@ -88,6 +90,8 @@ export interface CreateProjectFormData {
   monorepoType: string;
   hasDockerBake: boolean;
   bakeTargets: string[];
+  deliveryGraph: DeliveryGraph | null;
+  deliveryGraphSummary: DeliveryGraphSummary | null;
 }
 
 export const CREATE_PROJECT_STEPS: Array<{ id: CreateProjectStep; title: string }> = [
@@ -128,6 +132,8 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
     monorepoType: 'none',
     hasDockerBake: false,
     bakeTargets: [],
+    deliveryGraph: null,
+    deliveryGraphSummary: null,
   });
 
   const [repositories, setRepositories] = useState<
@@ -215,11 +221,13 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
             monorepoType: 'none',
             hasDockerBake: false,
             bakeTargets: [],
+            deliveryGraph: null,
+            deliveryGraphSummary: null,
           }));
           return;
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as AnalyzeRepositoryResponse;
         const nextServices = withServiceIds(
           (data.services as AnalyzeServiceResponse[]).map((service) =>
             normalizeService(service, formData.runtimeProfile)
@@ -232,6 +240,8 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
           monorepoType: data.monorepoType ?? 'none',
           hasDockerBake: Boolean(data.hasDockerBake),
           bakeTargets: Array.isArray(data.bakeTargets) ? data.bakeTargets : [],
+          deliveryGraph: data.deliveryGraph,
+          deliveryGraphSummary: data.summary,
         }));
       } catch (error) {
         console.error('Failed to analyze repository:', error);
@@ -242,6 +252,8 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
           monorepoType: 'none',
           hasDockerBake: false,
           bakeTargets: [],
+          deliveryGraph: null,
+          deliveryGraphSummary: null,
         }));
       } finally {
         setIsLoadingAnalyze(false);
@@ -280,6 +292,8 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
       repositoryId: prev.mode === 'import' ? '' : prev.repositoryId,
       repositoryFullName: prev.mode === 'import' ? '' : prev.repositoryFullName,
       services: prev.mode === 'import' ? [] : prev.services,
+      deliveryGraph: prev.mode === 'import' ? null : prev.deliveryGraph,
+      deliveryGraphSummary: prev.mode === 'import' ? null : prev.deliveryGraphSummary,
     }));
   };
 
@@ -297,6 +311,8 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
       monorepoType: 'none',
       hasDockerBake: false,
       bakeTargets: [],
+      deliveryGraph: null,
+      deliveryGraphSummary: null,
     }));
   };
 
@@ -408,6 +424,7 @@ export function useCreateProjectForm({ teamScopes, templates }: CreateProjectFor
           key: normalizeVariableKey(variable.key),
           value: variable.value,
           isSecret: variable.isSecret,
+          injectionType: variable.injectionType,
         })),
       });
 

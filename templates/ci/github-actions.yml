@@ -163,7 +163,7 @@ jobs:
           JUANIE_DELIVERY_STORAGE_MODE: github_actions
         run: |
           set -euo pipefail
-          export JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie/build-run/release-services.json)"
+          export JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie/build-run/build-outputs.json)"
           bash .juanie/delivery-artifacts.sh
 
       - name: Upload Delivery Artifacts

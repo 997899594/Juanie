@@ -27,8 +27,6 @@ export interface DeliveryArtifactRegistrationInput {
   sbomUri?: string | null;
   provenanceUri?: string | null;
   status?: ReleaseArtifactStatus | null;
-  sourceService?: string | null;
-  sourceServiceId?: string | null;
   sourceImageUri?: string | null;
   sourceImageDigest?: string | null;
   sourceImagePlatform?: string | null;
@@ -63,7 +61,6 @@ async function getReleaseForRepository(releaseId: string) {
       project: {
         with: {
           repository: true,
-          services: true,
         },
       },
     },
@@ -74,25 +71,6 @@ async function getReleaseForRepository(releaseId: string) {
   }
 
   return release;
-}
-
-function resolveSourceService(
-  release: Awaited<ReturnType<typeof getReleaseForRepository>>,
-  artifact: DeliveryArtifactRegistrationInput
-) {
-  const sourceService =
-    (artifact.sourceServiceId
-      ? release.project.services.find((service) => service.id === artifact.sourceServiceId)
-      : undefined) ??
-    (artifact.sourceService
-      ? release.project.services.find((service) => service.name === artifact.sourceService)
-      : undefined);
-
-  if ((artifact.sourceServiceId || artifact.sourceService) && !sourceService) {
-    throw accessError('invalid_scope', `Unknown source service for artifact ${artifact.name}`);
-  }
-
-  return sourceService ?? null;
 }
 
 function assertReleaseAcceptsDeliveryArtifacts(
@@ -157,7 +135,6 @@ export async function appendReleaseDeliveryArtifacts(input: {
 
   const values = input.artifacts.map((artifact, index) => {
     assertDeliveryArtifact(artifact, index);
-    const sourceService = resolveSourceService(release, artifact);
 
     return {
       releaseId: release.id,
@@ -178,7 +155,6 @@ export async function appendReleaseDeliveryArtifacts(input: {
       status: artifact.status ?? 'succeeded',
       imageUrl: null,
       imageDigest: null,
-      sourceServiceId: sourceService?.id ?? null,
       sourceImageUri: artifact.sourceImageUri?.trim() || null,
       sourceImageDigest: artifact.sourceImageDigest?.trim() || null,
       sourceImagePlatform:
@@ -206,7 +182,6 @@ export async function appendReleaseDeliveryArtifacts(input: {
           sbomUri: value.sbomUri,
           provenanceUri: value.provenanceUri,
           status: value.status,
-          sourceServiceId: value.sourceServiceId,
           sourceImageUri: value.sourceImageUri,
           sourceImageDigest: value.sourceImageDigest,
           sourceImagePlatform: value.sourceImagePlatform,

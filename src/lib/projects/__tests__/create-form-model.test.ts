@@ -61,10 +61,34 @@ describe('create project form model', () => {
 
   it('校验初始变量名和值', () => {
     const variables = [
-      { _id: 'one', key: 'DATABASE_URL', value: 'postgres://demo', isSecret: true },
-      { _id: 'two', key: ' database_url ', value: 'postgres://demo2', isSecret: true },
-      { _id: 'three', key: 'bad-key', value: 'x', isSecret: false },
-      { _id: 'four', key: 'EMPTY_VALUE', value: '', isSecret: false },
+      {
+        _id: 'one',
+        key: 'DATABASE_URL',
+        value: 'postgres://demo',
+        isSecret: true,
+        injectionType: 'runtime' as const,
+      },
+      {
+        _id: 'two',
+        key: ' database_url ',
+        value: 'postgres://demo2',
+        isSecret: true,
+        injectionType: 'runtime' as const,
+      },
+      {
+        _id: 'three',
+        key: 'bad-key',
+        value: 'x',
+        isSecret: false,
+        injectionType: 'runtime' as const,
+      },
+      {
+        _id: 'four',
+        key: 'EMPTY_VALUE',
+        value: '',
+        isSecret: false,
+        injectionType: 'runtime' as const,
+      },
     ];
 
     expect(getInitialVariableError(variables[0], variables)).toBe('变量名重复');
@@ -74,7 +98,13 @@ describe('create project form model', () => {
     expect(getInitialVariableError(variables[3], variables)).toBe('变量值不能为空');
     expect(
       isInitialVariableReady(
-        { _id: 'five', key: 'APP_SECRET', value: 'secret', isSecret: true },
+        {
+          _id: 'five',
+          key: 'APP_SECRET',
+          value: 'secret',
+          isSecret: true,
+          injectionType: 'runtime',
+        },
         variables
       )
     ).toBe(true);

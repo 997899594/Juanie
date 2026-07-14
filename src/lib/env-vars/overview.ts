@@ -8,6 +8,7 @@ interface VisibleEnvVarRecord {
   key: string;
   value: string | null;
   isSecret: boolean;
+  injectionType: string | null;
   environmentId: string | null;
   serviceId: string | null;
   createdAt: Date;
@@ -39,7 +40,15 @@ export interface EnvironmentVariableOverview {
 function toVisibleRecord(
   record: Pick<
     typeof environmentVariables.$inferSelect,
-    'id' | 'key' | 'value' | 'isSecret' | 'environmentId' | 'serviceId' | 'createdAt' | 'updatedAt'
+    | 'id'
+    | 'key'
+    | 'value'
+    | 'isSecret'
+    | 'injectionType'
+    | 'environmentId'
+    | 'serviceId'
+    | 'createdAt'
+    | 'updatedAt'
   >
 ): VisibleEnvVarRecord {
   return {
@@ -69,6 +78,7 @@ export async function getEnvironmentVariableOverview(
         key: true,
         value: true,
         isSecret: true,
+        injectionType: true,
         environmentId: true,
         serviceId: true,
         createdAt: true,
@@ -91,6 +101,7 @@ export async function getEnvironmentVariableOverview(
         key: true,
         value: true,
         isSecret: true,
+        injectionType: true,
         environmentId: true,
         serviceId: true,
         createdAt: true,
@@ -108,6 +119,7 @@ export async function getEnvironmentVariableOverview(
         key: true,
         value: true,
         isSecret: true,
+        injectionType: true,
         environmentId: true,
         serviceId: true,
         createdAt: true,

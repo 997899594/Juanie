@@ -1,4 +1,4 @@
-import type { JuanieConfig, ServiceConfig } from '@/lib/config/parser';
+import type { BuildTargetConfig, JuanieConfig, ServiceConfig } from '@/lib/config/parser';
 import {
   createTurborepoWorkspaceGraph,
   getTurborepoAppDir,
@@ -12,7 +12,8 @@ export type BuildGroupMode = 'bake_group' | 'service_matrix' | 'affected_matrix'
 export interface BuildArtifactOutput {
   kind: BuildArtifactKind;
   name: string;
-  service: string;
+  service?: string;
+  target?: string;
   image: string;
 }
 
@@ -25,6 +26,7 @@ export interface BuildUnit {
   dockerfile: string | null;
   bakeTarget: string | null;
   bakeDefinition: string | null;
+  secrets: string[];
   workspace?: {
     type: 'turborepo';
     appDir: string;
@@ -136,6 +138,7 @@ function buildUnit(input: {
     dockerfile: getDockerfile(input.service, strategy),
     bakeTarget: getBakeTarget(input.service),
     bakeDefinition: getBuildDefinition(input.service),
+    secrets: input.service.build?.secrets ?? [],
     ...(input.workspace ? { workspace: input.workspace } : {}),
     outputs: [
       {
@@ -145,6 +148,47 @@ function buildUnit(input: {
         image: buildImageTag({
           imageRepository: input.imageRepository,
           service: serviceName,
+          sha: input.sha,
+          multiImage: input.multiImage,
+        }),
+      },
+    ],
+  };
+}
+
+function buildTargetUnit(input: {
+  target: BuildTargetConfig;
+  imageRepository: string;
+  sha: string;
+  multiImage: boolean;
+}): BuildUnit {
+  const strategy = normalizeBuildStrategy(input.target.build.strategy ?? 'dockerfile');
+  const targetName = input.target.name;
+
+  return {
+    id: `target-${sanitizeUnitId(targetName)}`,
+    service: targetName,
+    kind: input.target.kind === 'documentation' ? 'static' : 'package',
+    strategy,
+    context: input.target.build.context?.trim() || '.',
+    dockerfile: input.target.build.dockerfile?.trim() || null,
+    bakeTarget: input.target.build.target?.trim() || null,
+    bakeDefinition: input.target.build.definition?.trim() || null,
+    secrets: input.target.build.secrets ?? [],
+    workspace: {
+      type: 'turborepo',
+      appDir: input.target.monorepo.appDir,
+      packageName: input.target.monorepo.packageName ?? input.target.name,
+      task: 'build',
+    },
+    outputs: [
+      {
+        kind: input.target.kind === 'documentation' ? 'static' : 'package',
+        name: targetName,
+        target: targetName,
+        image: buildImageTag({
+          imageRepository: input.imageRepository,
+          service: `target-${targetName}`,
           sha: input.sha,
           multiImage: input.multiImage,
         }),
@@ -204,16 +248,18 @@ function buildGroups(units: BuildUnit[], monorepo: boolean): BuildGroup[] {
 }
 
 export function createBuildPlan(input: {
-  config: Pick<JuanieConfig, 'services' | 'monorepo'>;
+  config: Pick<JuanieConfig, 'services' | 'monorepo' | 'buildTargets'>;
   repository: string;
   ref: string;
   sha: string;
   registry?: string;
   selectedServices?: string[];
+  selectedTargets?: string[];
 }): BuildPlan {
   const registry = input.registry ?? 'ghcr.io';
   const imageRepository = `${registry.replace(/\/$/, '')}/${input.repository}`;
   const allServices = input.config.services;
+  const allTargets = input.config.buildTargets ?? [];
   const selectedServiceNames = new Set(input.selectedServices ?? []);
   const knownServiceNames = new Set(allServices.map((service) => service.name));
   const unknownServiceNames = [...selectedServiceNames].filter(
@@ -225,23 +271,34 @@ export function createBuildPlan(input: {
   }
 
   const services =
-    selectedServiceNames.size > 0
-      ? allServices.filter((service) => selectedServiceNames.has(service.name))
-      : allServices;
+    input.selectedServices === undefined
+      ? allServices
+      : allServices.filter((service) => selectedServiceNames.has(service.name));
 
-  if (services.length === 0) {
-    throw new Error('Build plan has no selected services');
+  const selectedTargetNames = new Set(input.selectedTargets ?? []);
+  const knownTargetNames = new Set(allTargets.map((target) => target.name));
+  const unknownTargetNames = [...selectedTargetNames].filter((name) => !knownTargetNames.has(name));
+  if (unknownTargetNames.length > 0) {
+    throw new Error(`Build plan references unknown targets: ${unknownTargetNames.join(', ')}`);
+  }
+  const targets =
+    input.selectedTargets === undefined
+      ? allTargets
+      : allTargets.filter((target) => selectedTargetNames.has(target.name));
+
+  if (services.length === 0 && targets.length === 0) {
+    throw new Error('Build plan has no selected services or targets');
   }
 
   const targetNames = allServices
     .map((service) => service.build?.target?.trim())
     .filter((value): value is string => Boolean(value));
-  const multiImage = new Set(targetNames).size > 1 || allServices.length > 1;
+  const multiImage = new Set(targetNames).size > 1 || allServices.length + allTargets.length > 1;
   const workspaceGraph = createTurborepoWorkspaceGraph(input.config);
   const workspaceByService = new Map(
     workspaceGraph?.services.map((service) => [service.serviceName, service]) ?? []
   );
-  const units = services.map((service) =>
+  const serviceUnits = services.map((service) =>
     buildUnit({
       service,
       imageRepository,
@@ -258,6 +315,10 @@ export function createBuildPlan(input: {
         : undefined,
     })
   );
+  const targetUnits = targets.map((target) =>
+    buildTargetUnit({ target, imageRepository, sha: input.sha, multiImage })
+  );
+  const units = [...serviceUnits, ...targetUnits];
 
   return {
     source: {
@@ -280,6 +341,9 @@ export function getBuildPlanReleaseServices(
   return plan.units.flatMap((unit) =>
     unit.outputs
       .filter((output) => output.kind === 'image')
+      .filter((output): output is BuildArtifactOutput & { service: string } =>
+        Boolean(output.service)
+      )
       .map((output) => ({
         name: output.service,
         image: output.image,

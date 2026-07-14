@@ -8,10 +8,18 @@ import {
   reviewSubtleClassName,
   SectionHeading,
 } from '@/components/projects/create-project-form-ui';
+import { DeliveryGraphSummaryView } from '@/components/projects/delivery-graph-summary';
 import type { CreateProjectFormController } from '@/components/projects/use-create-project-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -53,6 +61,13 @@ export function CreateProjectConfigStep({ controller }: CreateProjectConfigStepP
           <Loader2 className="mb-4 h-8 w-8 animate-spin text-foreground" />
           <p className="text-sm text-muted-foreground">正在识别仓库结构...</p>
         </div>
+      ) : null}
+
+      {formData.mode === 'import' && formData.deliveryGraph && formData.deliveryGraphSummary ? (
+        <DeliveryGraphSummaryView
+          graph={formData.deliveryGraph}
+          summary={formData.deliveryGraphSummary}
+        />
       ) : null}
 
       <SectionHeading title="项目配置" />
@@ -135,84 +150,90 @@ export function CreateProjectConfigStep({ controller }: CreateProjectConfigStepP
         </div>
       </div>
 
-      <div className="space-y-3">
-        <SectionHeading title="资源档位" />
-        <div className="grid gap-3 md:grid-cols-3">
-          {createRuntimeProfiles.map((profile) => (
-            <ChoiceCardButton
-              key={profile.value}
-              onClick={() => updateRuntimeProfile(profile.value)}
-              title={profile.label}
-              description={profile.description}
-              selected={formData.runtimeProfile === profile.value}
-            />
-          ))}
-        </div>
-      </div>
+      {formData.mode === 'create' ? (
+        <>
+          <div className="space-y-3">
+            <SectionHeading title="资源档位" />
+            <div className="grid gap-3 md:grid-cols-3">
+              {createRuntimeProfiles.map((profile) => (
+                <ChoiceCardButton
+                  key={profile.value}
+                  onClick={() => updateRuntimeProfile(profile.value)}
+                  title={profile.label}
+                  description={profile.description}
+                  selected={formData.runtimeProfile === profile.value}
+                />
+              ))}
+            </div>
+          </div>
 
-      <div className="space-y-3">
-        <SectionHeading title="环境拓扑" />
-        <div className="grid gap-3 md:grid-cols-3">
-          {createEnvironmentTemplates.map((template) => (
-            <ChoiceCardButton
-              key={template.value}
-              onClick={() =>
-                setFormData((prev) => ({
-                  ...prev,
-                  environmentTemplate: template.value,
-                }))
-              }
-              title={template.label}
-              description={template.description}
-              selected={formData.environmentTemplate === template.value}
-            />
-          ))}
-        </div>
-      </div>
+          <div className="space-y-3">
+            <SectionHeading title="环境拓扑" />
+            <div className="grid gap-3 md:grid-cols-3">
+              {createEnvironmentTemplates.map((template) => (
+                <ChoiceCardButton
+                  key={template.value}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      environmentTemplate: template.value,
+                    }))
+                  }
+                  title={template.label}
+                  description={template.description}
+                  selected={formData.environmentTemplate === template.value}
+                />
+              ))}
+            </div>
+          </div>
 
-      <div className="space-y-3">
-        <SectionHeading title="生产发布" />
-        <div className="grid gap-3 md:grid-cols-2">
-          {createProductionDeploymentStrategies.map((strategy) => (
-            <ChoiceCardButton
-              key={strategy.value}
-              onClick={() =>
-                setFormData((prev) => ({
-                  ...prev,
-                  productionDeploymentStrategy: strategy.value,
-                }))
-              }
-              title={strategy.label}
-              description={strategy.description}
-              selected={formData.productionDeploymentStrategy === strategy.value}
-            />
-          ))}
-        </div>
-      </div>
+          <div className="space-y-3">
+            <SectionHeading title="生产发布" />
+            <div className="grid gap-3 md:grid-cols-2">
+              {createProductionDeploymentStrategies.map((strategy) => (
+                <ChoiceCardButton
+                  key={strategy.value}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      productionDeploymentStrategy: strategy.value,
+                    }))
+                  }
+                  title={strategy.label}
+                  description={strategy.description}
+                  selected={formData.productionDeploymentStrategy === strategy.value}
+                />
+              ))}
+            </div>
+          </div>
 
-      <div className="space-y-3">
-        <SectionHeading title="预览库策略" />
-        <div className="grid gap-3 md:grid-cols-2">
-          {createPreviewDatabaseStrategies.map((strategy) => (
-            <ChoiceCardButton
-              key={strategy.value}
-              onClick={() =>
-                setFormData((prev) => ({
-                  ...prev,
-                  previewDatabaseStrategy: strategy.value,
-                }))
-              }
-              title={strategy.label}
-              description={strategy.description}
-              selected={formData.previewDatabaseStrategy === strategy.value}
-              disabled={strategy.value === 'isolated_clone' && Boolean(isolatedCloneBlockedMessage)}
-            />
-          ))}
-        </div>
-        {isolatedCloneBlockedMessage ? (
-          <p className="text-sm text-muted-foreground">{isolatedCloneBlockedMessage}</p>
-        ) : null}
-      </div>
+          <div className="space-y-3">
+            <SectionHeading title="预览库策略" />
+            <div className="grid gap-3 md:grid-cols-2">
+              {createPreviewDatabaseStrategies.map((strategy) => (
+                <ChoiceCardButton
+                  key={strategy.value}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      previewDatabaseStrategy: strategy.value,
+                    }))
+                  }
+                  title={strategy.label}
+                  description={strategy.description}
+                  selected={formData.previewDatabaseStrategy === strategy.value}
+                  disabled={
+                    strategy.value === 'isolated_clone' && Boolean(isolatedCloneBlockedMessage)
+                  }
+                />
+              ))}
+            </div>
+            {isolatedCloneBlockedMessage ? (
+              <p className="text-sm text-muted-foreground">{isolatedCloneBlockedMessage}</p>
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
       <DisclosurePanel
         title="高级"
@@ -279,7 +300,7 @@ export function CreateProjectConfigStep({ controller }: CreateProjectConfigStepP
 
                   return (
                     <div key={variable._id} className={reviewSubtleClassName}>
-                      <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto_auto] md:items-start">
+                      <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_9rem_auto_auto] md:items-start">
                         <div className="space-y-2">
                           <Label>变量名</Label>
                           <Input
@@ -289,6 +310,24 @@ export function CreateProjectConfigStep({ controller }: CreateProjectConfigStepP
                             }
                             placeholder="AI_302_API_KEY"
                           />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>注入阶段</Label>
+                          <Select
+                            value={variable.injectionType}
+                            onValueChange={(value: 'runtime' | 'build') =>
+                              updateVariable({ injectionType: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="runtime">运行时</SelectItem>
+                              <SelectItem value="build">构建时</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="space-y-2">

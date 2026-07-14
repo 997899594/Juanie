@@ -21,6 +21,7 @@ detect:
     paths:
       - services.json
       - service-names.json
+      - target-names.json
       - deliverables.json
 
 build:
@@ -38,8 +39,8 @@ build:
     - |
       set -euo pipefail
 
-      if [ "$(cat services.json)" = '[]' ]; then
-        echo 'No affected services'
+      if [ "$(cat services.json)" = '[]' ] && [ "$(cat target-names.json)" = '[]' ]; then
+        echo 'No affected workloads or build targets'
         exit 0
       fi
 
@@ -51,6 +52,7 @@ build:
       export JUANIE_EXTERNAL_RUN_ID="$CI_PIPELINE_ID"
       export JUANIE_TOKEN="$CI_JOB_TOKEN"
       export JUANIE_SELECTED_SERVICES_JSON="$(cat service-names.json)"
+      export JUANIE_SELECTED_TARGETS_JSON="$(cat target-names.json)"
 
       bash .juanie/build-run.sh start
       bash .juanie/build-run.sh build-all
@@ -58,12 +60,14 @@ build:
 
       cp .juanie/build-run/release-id .juanie-release-id
       cp .juanie/build-run/release-services.json .juanie-release-services.json
+      cp .juanie/build-run/build-outputs.json .juanie-build-outputs.json
       cp .juanie/build-run/artifacts-ready .juanie-artifacts-ready
       cp -r .juanie/build-run .juanie-build-run
   artifacts:
     paths:
       - .juanie-release-id
       - .juanie-release-services.json
+      - .juanie-build-outputs.json
       - .juanie-artifacts-ready
       - .juanie-build-run
   rules:
@@ -103,7 +107,7 @@ deliver:
         JUANIE_TOKEN="$CI_JOB_TOKEN" \
           JUANIE_RELEASE_ID="$(cat .juanie-release-id)" \
           JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
-          JUANIE_RELEASE_SERVICES_JSON="$(cat .juanie-release-services.json)" \
+          JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie-build-outputs.json)" \
           JUANIE_DELIVERABLES_FILE=.juanie-deliverables.json \
           bash .juanie/delivery-artifacts.sh
       done

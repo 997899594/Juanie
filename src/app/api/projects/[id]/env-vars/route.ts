@@ -45,6 +45,7 @@ const createEnvVarSchema = z.object({
     .regex(/^[A-Z0-9_]+$/i, 'Key must be alphanumeric with underscores'),
   value: z.string(),
   isSecret: z.boolean().default(false),
+  injectionType: z.enum(['runtime', 'build']).default('runtime'),
   environmentId: z.string().uuid().nullable().optional(),
   serviceId: z.string().uuid().nullable().optional(),
   restartRuntime: z.boolean().default(false),
@@ -63,13 +64,15 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    const { key, value, isSecret, environmentId, serviceId, restartRuntime } = payload.data;
+    const { key, value, isSecret, injectionType, environmentId, serviceId, restartRuntime } =
+      payload.data;
     const created = await createEnvironmentVariableForProject({
       projectId,
       userId: session.user.id,
       key,
       value,
       isSecret,
+      injectionType,
       environmentId,
       serviceId,
       restartRuntime,

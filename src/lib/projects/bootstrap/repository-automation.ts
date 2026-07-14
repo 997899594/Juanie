@@ -2,9 +2,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
+import type { DeliveryGraphWorkload } from '@/lib/delivery-graph/model';
 import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
 import {
+  renderManagedBuildTargetDockerfile,
+  renderManagedRuntimeDockerfile,
+} from '@/lib/projects/bootstrap/delivery-build';
+import {
+  getProjectBuildTargetsConfig,
   getProjectDeliverablesConfig,
   getProjectMonorepoConfig,
   getProjectServiceAppDir,
@@ -13,6 +19,7 @@ import {
   inferSchemaConfig,
   type MonorepoAffectedRules,
   type MonorepoCiAffectedRules,
+  type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigServiceEntry,
   type ProjectInitRenderContext,
@@ -30,6 +37,7 @@ export {
   getProjectConfigJson,
   getProjectServiceConfigMap,
   inferSchemaConfig,
+  type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigMonorepoEntry,
   type ProjectInitRenderContext,
@@ -44,6 +52,50 @@ export const JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH = '.juanie/affected-workspace
 export const JUANIE_MANAGED_DOC_PATH = 'JUANIE.md';
 
 const TEMPLATES_DIR = join(process.cwd(), 'templates');
+
+function readRequiredTemplate(...segments: string[]): string {
+  const templatePath = join(TEMPLATES_DIR, ...segments);
+  if (!existsSync(templatePath)) {
+    throw new Error(`Required template file not found at ${templatePath}`);
+  }
+  return readFileSync(templatePath, 'utf-8');
+}
+
+export function renderManagedWorkloadDockerfile(input: {
+  workload: DeliveryGraphWorkload;
+  packageManager: RepoAutomationContextLike['packageManager'];
+  secretNames: string[];
+}): string {
+  const template = readRequiredTemplate(
+    'runtime',
+    input.workload.runtimeKind === 'static' ? 'static-web.Dockerfile' : 'bun-workload.Dockerfile'
+  );
+  return renderManagedRuntimeDockerfile({
+    template,
+    packageManager: input.packageManager,
+    appDir: input.workload.appDir,
+    buildCommand: input.workload.buildCommand ?? `${input.packageManager} run build`,
+    startCommand: input.workload.startCommand,
+    port: input.workload.port ?? 3000,
+    secretNames: input.secretNames,
+  });
+}
+
+export function renderManagedArtifactTargetDockerfile(input: {
+  packageManager: RepoAutomationContextLike['packageManager'];
+  buildCommand: string;
+  outputPath: string;
+  secretNames: string[];
+}): string {
+  return renderManagedBuildTargetDockerfile({
+    template: readRequiredTemplate('runtime', 'build-target.Dockerfile'),
+    ...input,
+  });
+}
+
+export function renderStaticNginxConfig(): string {
+  return readRequiredTemplate('runtime', 'static-nginx.conf');
+}
 
 function resolveBakeTarget(
   service: typeof services.$inferSelect,
@@ -139,6 +191,14 @@ function buildServiceBuildLines(
 }
 
 function appendBuildPackagingLines(lines: string[], build?: ProjectConfigServiceEntry['build']) {
+  if (build?.secrets?.length) {
+    lines.push(
+      '      # secrets lists BuildKit secret ids; values are fetched just-in-time from Juanie.',
+      '      secrets:',
+      ...build.secrets.map((secret) => `        - ${secret}`)
+    );
+  }
+
   if (build?.package) {
     lines.push(
       '      # package controls service runtime packaging before the image is built.',
@@ -331,19 +391,19 @@ function buildServiceRuntimeLines(serviceConfig?: ProjectConfigServiceEntry): st
 function buildDeliverablesReferenceLines(): string[] {
   return [
     '',
-    '# deliverables are customer-downloadable artifacts extracted from verified service images.',
-    '# Uncomment this section when the image contains SDKs, offline assets, or bare-metal bundles.',
+    '# deliverables are customer-downloadable outputs produced by buildTargets.',
+    '# Uncomment this section when a build target emits an SDK, documentation, or offline bundle.',
     '# deliverables:',
     '#   # name is the product name shown on the Release detail download list.',
     '#   - name: app-baremetal',
     '#     type: baremetal',
     '#     source:',
-    '#       # service binds this artifact to the verified deployable image used by the Release.',
-    '#       service: web',
+    '#       # target binds this artifact to a first-class build target output.',
+    '#       target: sdk',
     '#     variants:',
     '#       - name: linux-amd64',
     '#         platform: linux/amd64',
-    '#         # extract copies files out of the verified image digest; no second source build runs.',
+    '#         # extract copies files out of the immutable target output image.',
     '#         extract:',
     '#           from: /app/dist',
     '#           to: .',
@@ -354,6 +414,38 @@ function buildDeliverablesReferenceLines(): string[] {
   ];
 }
 
+function buildConfiguredBuildTargetsLines(targets: ProjectConfigBuildTargetEntry[]): string[] {
+  if (targets.length === 0) return [];
+
+  const lines = [
+    '',
+    '# buildTargets are build-only graph nodes. They never become runtime services.',
+    'buildTargets:',
+  ];
+  for (const target of targets) {
+    lines.push(
+      `  - name: ${target.name}`,
+      `    kind: ${target.kind}`,
+      '    monorepo:',
+      `      appDir: ${target.monorepo.appDir}`,
+      ...(target.monorepo.packageName
+        ? [`      packageName: "${target.monorepo.packageName}"`]
+        : []),
+      '    build:',
+      `      strategy: ${target.build.strategy ?? 'dockerfile'}`,
+      ...(target.build.command ? [`      command: ${target.build.command}`] : []),
+      ...(target.build.dockerfile ? [`      dockerfile: ${target.build.dockerfile}`] : []),
+      `      context: ${target.build.context ?? '.'}`,
+      ...(target.build.secrets?.length
+        ? ['      secrets:', ...target.build.secrets.map((secret) => `        - ${secret}`)]
+        : []),
+      '    output:',
+      `      path: ${target.output.path}`
+    );
+  }
+  return lines;
+}
+
 function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverableEntry[]): string[] {
   if (deliverables.length === 0) {
     return buildDeliverablesReferenceLines();
@@ -361,7 +453,7 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
 
   const lines = [
     '',
-    '# deliverables are customer-downloadable artifacts extracted from verified service images.',
+    '# deliverables are customer-downloadable artifacts emitted by first-class build targets.',
     'deliverables:',
   ];
 
@@ -381,13 +473,11 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
       );
     }
 
-    if (deliverable.source?.service) {
-      lines.push(
-        '    # source.service binds this artifact to a verified deployable service image.',
-        '    source:',
-        `      service: ${deliverable.source.service}`
-      );
-    }
+    lines.push(
+      '    # source.target binds this artifact to an immutable build target output.',
+      '    source:',
+      `      target: ${deliverable.source.target}`
+    );
 
     lines.push(
       '    # variants model selectable extracts of the same deliverable.',
@@ -407,7 +497,7 @@ function buildConfiguredDeliverablesLines(deliverables: ProjectConfigDeliverable
       }
 
       lines.push(
-        '        # extract copies files from the verified image digest into the package stage.',
+        '        # extract copies files from the target output image into the package stage.',
         '        extract:',
         `          from: ${variant.extract.from}`,
         `          to: ${variant.extract.to ?? '.'}`
@@ -460,7 +550,7 @@ export function renderJuanieConfig(
   const lines: string[] = [
     '# juanie.yaml',
     '# This file is the source of truth for Juanie build, deploy, verification, and delivery.',
-    '# Keep runtime services under services; put customer-downloadable packages under deliverables.',
+    '# Keep runtime services, build-only targets, and customer deliverables as separate graph nodes.',
     '',
     '# name is the stable project slug displayed in Juanie.',
     `name: ${project.slug}`,
@@ -576,6 +666,7 @@ export function renderJuanieConfig(
     }
   }
 
+  lines.push(...buildConfiguredBuildTargetsLines(getProjectBuildTargetsConfig(project)));
   lines.push(...buildConfiguredDeliverablesLines(getProjectDeliverablesConfig(project)));
 
   if (logicalDatabases.length > 0) {
@@ -726,7 +817,8 @@ interface MonorepoCiDeliverableEntry {
   name: string;
   type: 'package' | 'baremetal' | 'archive';
   appDir: string;
-  sourceService?: string;
+  packageName?: string;
+  sourceTarget: string;
   variant: {
     name: string;
     platform?: string;
@@ -782,12 +874,18 @@ export function buildMonorepoCiServices(
 export function buildMonorepoCiDeliverables(
   project: Pick<typeof projects.$inferSelect, 'configJson'>
 ): MonorepoCiDeliverableEntry[] {
-  return getProjectDeliverablesConfig(project).flatMap((deliverable) =>
-    deliverable.variants.map((variant) => ({
+  const targetByName = new Map(
+    getProjectBuildTargetsConfig(project).map((target) => [target.name, target])
+  );
+  return getProjectDeliverablesConfig(project).flatMap((deliverable) => {
+    const sourceTarget = deliverable.source.target;
+    const target = targetByName.get(sourceTarget);
+    return deliverable.variants.map((variant) => ({
       name: deliverable.name,
       type: deliverable.type,
-      appDir: deliverable.monorepo?.appDir ?? '.',
-      sourceService: deliverable.source?.service,
+      appDir: target?.monorepo.appDir ?? deliverable.monorepo?.appDir ?? '.',
+      packageName: target?.monorepo.packageName,
+      sourceTarget,
       variant: {
         name: variant.name,
         platform: variant.platform ?? variant.package.platform,
@@ -801,8 +899,8 @@ export function buildMonorepoCiDeliverables(
         },
         checks: variant.checks ?? [],
       },
-    }))
-  );
+    }));
+  });
 }
 
 export function selectMonorepoCiWork(input: {
@@ -818,30 +916,16 @@ export function selectMonorepoCiWork(input: {
           (file) => file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
         )
       );
-  const sourceServicesForDeliverables = new Set(
-    selectedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
-  );
   const selectedServices = input.shouldBuildAll
     ? input.services
-    : input.services.filter(
-        (service) =>
-          sourceServicesForDeliverables.has(service.name) ||
-          input.changedFiles.some(
-            (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
-          )
+    : input.services.filter((service) =>
+        input.changedFiles.some(
+          (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
+        )
       );
-  const selectedServiceNames = new Set(selectedServices.map((service) => service.name));
-  const deliverablesForSelectedServices = input.shouldBuildAll
-    ? input.deliverables
-    : input.deliverables.filter(
-        (deliverable) =>
-          selectedDeliverables.includes(deliverable) ||
-          (deliverable.sourceService && selectedServiceNames.has(deliverable.sourceService))
-      );
-
   return {
     services: selectedServices,
-    deliverables: deliverablesForSelectedServices,
+    deliverables: selectedDeliverables,
   };
 }
 

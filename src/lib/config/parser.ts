@@ -66,6 +66,11 @@ const checkSchema = z
   })
   .strict();
 
+const buildSecretNameSchema = z
+  .string()
+  .regex(/^[A-Z_][A-Z0-9_]*$/u, 'build secret names must be environment variable keys')
+  .max(255);
+
 const buildSchema = z
   .object({
     strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
@@ -74,6 +79,7 @@ const buildSchema = z
     context: z.string().optional(),
     target: z.string().optional(),
     definition: z.string().optional(),
+    secrets: z.array(buildSecretNameSchema).max(50).optional(),
     package: buildPackageSchema.optional(),
   })
   .strict();
@@ -227,29 +233,31 @@ const deliverableSchema = z
       .optional(),
     source: z
       .object({
-        service: z.string().min(1).max(100),
+        target: z.string().min(1).max(100),
       })
-      .optional(),
+      .strict(),
     variants: z.array(deliverableVariantSchema).min(1).max(50),
   })
-  .strict()
-  .superRefine((deliverable, ctx) => {
-    if (deliverable.type === 'baremetal' && !deliverable.source?.service) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'baremetal deliverables must declare source.service',
-        path: ['source', 'service'],
-      });
-    }
+  .strict();
 
-    if (!deliverable.source?.service) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'deliverables must declare source.service for image-derived extraction',
-        path: ['source', 'service'],
-      });
-    }
-  });
+const buildTargetSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    kind: z.enum(['package', 'documentation', 'bundle']),
+    monorepo: z
+      .object({
+        appDir: z.string().min(1),
+        packageName: z.string().min(1).max(214).optional(),
+      })
+      .strict(),
+    build: buildSchema,
+    output: z
+      .object({
+        path: pathPatternSchema,
+      })
+      .strict(),
+  })
+  .strict();
 
 export const juanieConfigSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -257,6 +265,7 @@ export const juanieConfigSchema = z.object({
   monorepo: monorepoConfigSchema.optional(),
 
   services: z.array(serviceSchema).min(1).max(20),
+  buildTargets: z.array(buildTargetSchema).max(50).optional(),
   deliverables: z.array(deliverableSchema).max(50).optional(),
   databases: z.array(databaseSchema).max(10).optional(),
   environments: z.record(z.string(), environmentSchema).optional(),
@@ -265,6 +274,7 @@ export const juanieConfigSchema = z.object({
 });
 
 export type ServiceConfig = z.infer<typeof serviceSchema>;
+export type BuildTargetConfig = z.infer<typeof buildTargetSchema>;
 export type DeliverableConfig = z.infer<typeof deliverableSchema>;
 export type DatabaseConfig = z.infer<typeof databaseSchema>;
 export type EnvironmentConfig = z.infer<typeof environmentSchema>;
@@ -310,6 +320,26 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
 
   const config = result.data;
 
+  const buildTargetNames = new Set<string>();
+  for (const target of config.buildTargets ?? []) {
+    if (buildTargetNames.has(target.name)) {
+      errors.push(`Build target "${target.name}" is declared more than once`);
+    }
+    buildTargetNames.add(target.name);
+    if (!['dockerfile', 'bake'].includes(target.build.strategy ?? 'dockerfile')) {
+      errors.push(
+        `Build target "${target.name}" must use dockerfile or bake to produce an immutable output`
+      );
+    }
+  }
+  for (const deliverable of config.deliverables ?? []) {
+    if (!buildTargetNames.has(deliverable.source.target)) {
+      errors.push(
+        `Deliverable "${deliverable.name}" references unknown build target "${deliverable.source.target}"`
+      );
+    }
+  }
+
   if (config.services.some((s) => s.type === 'cron' && !s.schedule)) {
     warnings.push('Cron services should have a schedule defined');
   }
@@ -325,6 +355,14 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   }
 
   for (const service of config.services) {
+    if (
+      service.build?.secrets?.length &&
+      !['dockerfile', 'bake'].includes(service.build.strategy ?? '')
+    ) {
+      errors.push(
+        `Service "${service.name}" declares build secrets but does not use dockerfile or bake`
+      );
+    }
     if (service.schema && (service.databases?.length ?? 0) > 0) {
       warnings.push(
         `Service "${service.name}" defines both service-level schema and databases[].schema; service-level schema will only be used when no database bindings are defined`

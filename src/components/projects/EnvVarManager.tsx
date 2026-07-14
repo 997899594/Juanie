@@ -46,6 +46,13 @@ import {
   FormSection,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import { cn } from '@/lib/utils';
@@ -59,6 +66,7 @@ interface EnvVar {
   key: string;
   value: string | null; // null 表示 secret（只写不读）
   isSecret: boolean;
+  injectionType: 'runtime' | 'build';
   environmentId: string | null;
   serviceId: string | null;
   createdAt: string;
@@ -104,6 +112,7 @@ interface EnvVarFormData {
   key: string;
   value: string;
   isSecret: boolean;
+  injectionType: 'runtime' | 'build';
 }
 
 interface EnvVarDialogProps {
@@ -161,6 +170,7 @@ function EnvVarDialog({
       key: editTarget?.key ?? '',
       value: '',
       isSecret: editTarget?.isSecret ?? false,
+      injectionType: editTarget?.injectionType ?? 'runtime',
     } satisfies EnvVarFormData,
     onSubmit: async ({ value }) => {
       const url = isEdit
@@ -172,7 +182,8 @@ function EnvVarDialog({
         key: value.key.trim(),
         value: value.value,
         isSecret: value.isSecret,
-        restartRuntime: restartRuntimeRef.current,
+        injectionType: value.injectionType,
+        restartRuntime: value.injectionType === 'runtime' && restartRuntimeRef.current,
       };
 
       if (!isEdit) {
@@ -225,6 +236,7 @@ function EnvVarDialog({
         key: editTarget?.key ?? '',
         value: '',
         isSecret: editTarget?.isSecret ?? false,
+        injectionType: editTarget?.injectionType ?? 'runtime',
       });
       setShowValue(false);
     }
@@ -366,6 +378,27 @@ function EnvVarDialog({
                 )}
               </form.Field>
 
+              <form.Field name="injectionType">
+                {(field) => (
+                  <FormField>
+                    <FormLabel>注入阶段</FormLabel>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value: 'runtime' | 'build') => field.handleChange(value)}
+                      disabled={disabled}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="runtime">运行时</SelectItem>
+                        <SelectItem value="build">构建时</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                )}
+              </form.Field>
+
               {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
             </FormSection>
           </DialogBody>
@@ -378,9 +411,10 @@ function EnvVarDialog({
               selector={(state) => ({
                 canSubmit: state.canSubmit,
                 isSubmitting: state.isSubmitting,
+                injectionType: state.values.injectionType,
               })}
             >
-              {({ canSubmit, isSubmitting }) => {
+              {({ canSubmit, isSubmitting, injectionType }) => {
                 const submittingSave = isSubmitting && submitMode === 'save';
                 const submittingRestart = isSubmitting && submitMode === 'save-and-restart';
 
@@ -400,7 +434,7 @@ function EnvVarDialog({
                     <DialogFooterAction
                       type="button"
                       variant="outline"
-                      disabled={!canSubmit || disabled || isSubmitting}
+                      disabled={!canSubmit || disabled || isSubmitting || injectionType === 'build'}
                       onClick={() => submitWithRestart(true)}
                     >
                       {submittingRestart ? (
@@ -471,6 +505,9 @@ function EnvVarRow({
         <div className="flex min-w-0 items-center gap-2">
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
+          <span className="inline-flex shrink-0 rounded-full bg-secondary px-2 py-1 text-[11px] text-muted-foreground">
+            {envVar.injectionType === 'build' ? '构建' : '运行'}
+          </span>
           {envVar.isSecret && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgba(243,240,233,0.7)] px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.62)_inset]">
               <KeyRound className="h-3 w-3" />
@@ -555,6 +592,9 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
         <div className="flex min-w-0 items-center gap-2">
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
+          <span className="inline-flex shrink-0 rounded-full bg-secondary px-2 py-1 text-[11px] text-muted-foreground">
+            {envVar.injectionType === 'build' ? '构建' : '运行'}
+          </span>
           {envVar.isSecret && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgba(243,240,233,0.7)] px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.62)_inset]">
               <KeyRound className="h-3 w-3" />

@@ -11,6 +11,7 @@ import {
   reviewSubtleClassName,
   SectionHeading,
 } from '@/components/projects/create-project-form-ui';
+import { DeliveryGraphSummaryView } from '@/components/projects/delivery-graph-summary';
 import type { CreateProjectFormController } from '@/components/projects/use-create-project-form';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,6 +112,13 @@ export function CreateProjectReviewStep({ controller }: CreateProjectReviewStepP
         </div>
       </div>
 
+      {formData.mode === 'import' && formData.deliveryGraph && formData.deliveryGraphSummary ? (
+        <DeliveryGraphSummaryView
+          graph={formData.deliveryGraph}
+          summary={formData.deliveryGraphSummary}
+        />
+      ) : null}
+
       <DisclosurePanel
         title="变量明细"
         meta={`${readyInitialVariables.length} 个项目级变量`}
@@ -131,7 +139,12 @@ export function CreateProjectReviewStep({ controller }: CreateProjectReviewStepP
                 <div className="font-mono text-sm font-medium">
                   {normalizeVariableKey(variable.key)}
                 </div>
-                <Badge variant="secondary">{variable.isSecret ? 'Secret' : 'Config'}</Badge>
+                <div className="flex gap-2">
+                  <Badge variant="secondary">
+                    {variable.injectionType === 'build' ? 'Build' : 'Runtime'}
+                  </Badge>
+                  <Badge variant="secondary">{variable.isSecret ? 'Secret' : 'Config'}</Badge>
+                </div>
               </div>
             ))}
           </div>

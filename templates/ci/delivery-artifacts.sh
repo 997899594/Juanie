@@ -4,7 +4,7 @@ set -euo pipefail
 : "${JUANIE_TOKEN:?JUANIE_TOKEN is required}"
 : "${JUANIE_RELEASE_ID:?JUANIE_RELEASE_ID is required}"
 : "${JUANIE_REPOSITORY:?JUANIE_REPOSITORY is required}"
-: "${JUANIE_RELEASE_SERVICES_JSON:?JUANIE_RELEASE_SERVICES_JSON is required}"
+: "${JUANIE_BUILD_OUTPUTS_JSON:?JUANIE_BUILD_OUTPUTS_JSON is required}"
 : "${JUANIE_BASE_URL:=https://juanie.art}"
 
 deliverables_file="${JUANIE_DELIVERABLES_FILE:-.juanie-deliverables.json}"
@@ -29,8 +29,8 @@ config = YAML.load_file('juanie.yaml') || {}
 deliverables = Array(config['deliverables'])
 
 result = deliverables.flat_map do |deliverable|
-  source = deliverable.dig('source', 'service').to_s.strip
-  raise "deliverable #{deliverable['name']} must declare source.service" if source.empty?
+  source = deliverable.dig('source', 'target').to_s.strip
+  raise "deliverable #{deliverable['name']} must declare source.target" if source.empty?
 
   Array(deliverable['variants']).map do |variant|
     extract = variant['extract'] || {}
@@ -42,7 +42,7 @@ result = deliverables.flat_map do |deliverable|
     {
       name: deliverable['name'],
       type: deliverable['type'],
-      sourceService: source,
+      sourceTarget: source,
       variant: {
         name: variant['name'],
         platform: variant['platform'] || variant.dig('package', 'platform') || 'any',
@@ -78,16 +78,16 @@ fi
 while IFS= read -r deliverable; do
   name="$(jq -r '.name' <<<"$deliverable")"
   kind="$(jq -r '.type' <<<"$deliverable")"
-  source_service="$(jq -r '.sourceService' <<<"$deliverable")"
+  source_target="$(jq -r '.sourceTarget' <<<"$deliverable")"
   variant="$(jq -r '.variant.name' <<<"$deliverable")"
   platform="$(jq -r '.variant.platform // "any"' <<<"$deliverable")"
   format="$(jq -r '.variant.package.format // "tgz"' <<<"$deliverable")"
   extract_from="$(jq -r '.variant.extract.from' <<<"$deliverable")"
   extract_to="$(jq -r '.variant.extract.to // "."' <<<"$deliverable")"
 
-  image="$(jq -r --arg name "$source_service" '.[] | select(.name == $name) | .image' <<<"$JUANIE_RELEASE_SERVICES_JSON")"
+  image="$(jq -r --arg name "$source_target" '.[] | select(.target == $name) | .image' <<<"$JUANIE_BUILD_OUTPUTS_JSON")"
   if [ -z "$image" ] || [ "$image" = "null" ]; then
-    echo "No built image found for deliverable source service: ${source_service}"
+    echo "No immutable output found for deliverable source target: ${source_target}"
     exit 1
   fi
 
@@ -182,7 +182,6 @@ while IFS= read -r deliverable; do
       --arg format "$format" \
       --arg path "$archive" \
       --arg checksum "sha256:${checksum}" \
-      --arg sourceService "$source_service" \
       --arg sourceImageUri "$image" \
       --arg sourceImageDigest "$digest" \
       --arg sourceImagePlatform "$platform" \
@@ -197,7 +196,6 @@ while IFS= read -r deliverable; do
           path: $path,
           checksum: $checksum,
           sizeBytes: $sizeBytes,
-          sourceService: $sourceService,
           sourceImageUri: $sourceImageUri,
           sourceImageDigest: $sourceImageDigest,
           sourceImagePlatform: $sourceImagePlatform
@@ -249,7 +247,6 @@ while IFS= read -r deliverable; do
       --arg format "$format" \
       --arg uri "$artifact_uri" \
       --arg checksum "sha256:${checksum}" \
-      --arg sourceService "$source_service" \
       --arg sourceImageUri "$image" \
       --arg sourceImageDigest "$digest" \
       --arg sourceImagePlatform "$platform" \
@@ -266,7 +263,6 @@ while IFS= read -r deliverable; do
             uri: $uri,
             checksum: $checksum,
             sizeBytes: $sizeBytes,
-            sourceService: $sourceService,
             sourceImageUri: $sourceImageUri,
             sourceImageDigest: $sourceImageDigest,
             sourceImagePlatform: $sourceImagePlatform

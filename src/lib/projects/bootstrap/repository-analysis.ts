@@ -116,6 +116,7 @@ export type ProjectConfigServiceEntry = {
     context?: string;
     target?: string;
     definition?: string;
+    secrets?: string[];
     package?: {
       strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
     };
@@ -135,8 +136,8 @@ export type ProjectConfigDeliverableEntry = {
   monorepo?: {
     appDir?: string;
   };
-  source?: {
-    service: string;
+  source: {
+    target: string;
   };
   variants: Array<{
     name: string;
@@ -154,6 +155,19 @@ export type ProjectConfigDeliverableEntry = {
       command: string;
     }>;
   }>;
+};
+
+export type ProjectConfigBuildTargetEntry = {
+  name: string;
+  kind: 'package' | 'documentation' | 'bundle';
+  monorepo: {
+    appDir: string;
+    packageName?: string;
+  };
+  build: NonNullable<ProjectConfigServiceEntry['build']>;
+  output: {
+    path: string;
+  };
 };
 
 export interface MonorepoAffectedRules {
@@ -206,6 +220,15 @@ export function getProjectDeliverablesConfig(
   const config = getProjectConfigJson(project);
   return Array.isArray(config.deliverables)
     ? (config.deliverables as ProjectConfigDeliverableEntry[])
+    : [];
+}
+
+export function getProjectBuildTargetsConfig(
+  project: Pick<typeof projects.$inferSelect, 'configJson'>
+): ProjectConfigBuildTargetEntry[] {
+  const config = getProjectConfigJson(project);
+  return Array.isArray(config.buildTargets)
+    ? (config.buildTargets as ProjectConfigBuildTargetEntry[])
     : [];
 }
 

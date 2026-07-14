@@ -8,6 +8,7 @@ build_run_file="${state_dir}/build-run.json"
 units_file="${state_dir}/units.json"
 groups_file="${state_dir}/groups.json"
 release_services_file="${state_dir}/release-services.json"
+build_outputs_file="${state_dir}/build-outputs.json"
 release_file="${state_dir}/release.json"
 artifacts_ready_file="${state_dir}/artifacts-ready"
 
@@ -37,6 +38,61 @@ request_json() {
   curl -fsSL -X "$method" "${juanie_base_url}${path}" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${JUANIE_TOKEN}"
+}
+
+request_json_with_token() {
+  local method="$1"
+  local path="$2"
+  local token="$3"
+  curl -fsSL -X "$method" "${juanie_base_url}${path}" \
+    -H "Authorization: Bearer ${token}"
+}
+
+load_build_secrets() {
+  local build_run_id="$1"
+  local unit="$2"
+  local secret_names
+  local unit_key
+  unit_key="$(jq -r '.id' <<<"$unit")"
+  secret_names="$(jq -r '.secrets[]?' <<<"$unit")"
+  [ -n "$secret_names" ] || return 0
+
+  local response
+  local capability_token
+  capability_token="$(cat "${state_dir}/secret-access-token")"
+  response="$(
+    request_json_with_token \
+      GET \
+      "/api/build-runs/${build_run_id}/secrets?unitKey=${unit_key}" \
+      "$capability_token"
+  )"
+  while IFS= read -r encoded; do
+    [ -n "$encoded" ] || continue
+    local entry
+    local key
+    local value
+    entry="$(printf '%s' "$encoded" | base64 -d)"
+    key="$(jq -r '.key' <<<"$entry")"
+    value="$(jq -r '.value' <<<"$entry")"
+    export "${key}=${value}"
+  done < <(jq -r '.secrets | to_entries[] | @base64' <<<"$response")
+
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    if [ -z "${!key+x}" ]; then
+      echo "Required build secret ${key} was not returned by Juanie"
+      return 1
+    fi
+  done <<<"$secret_names"
+}
+
+append_docker_secret_args() {
+  local unit="$1"
+  local -n result="$2"
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    result+=(--secret "id=${key},env=${key}")
+  done < <(jq -r '.secrets[]?' <<<"$unit")
 }
 
 wait_for_image() {
@@ -107,6 +163,7 @@ build_unit() {
   image="$(jq -r '.outputs[0].image' <<<"$unit")"
 
   report_unit "$build_run_id" "$unit_key" running "$image" || return 1
+  load_build_secrets "$build_run_id" "$unit" || return 1
 
   if [ "$strategy" = 'bake' ] && [ -n "$bake_definition" ]; then
     local target="$bake_target"
@@ -127,6 +184,8 @@ build_unit() {
   elif [ "$strategy" = 'dockerfile' ]; then
     [ -n "$dockerfile" ] || dockerfile='Dockerfile'
     local docker_cache_args=()
+    local docker_secret_args=()
+    append_docker_secret_args "$unit" docker_secret_args
     if [ "${JUANIE_DOCKER_CACHE_BACKEND:-}" = 'gha' ]; then
       docker_cache_args=(
         --cache-from type=gha,scope="juanie-${service_name}"
@@ -137,10 +196,15 @@ build_unit() {
       --file "$dockerfile" \
       --tag "$image" \
       --build-arg "GIT_SHA=${JUANIE_SOURCE_SHA}" \
+      "${docker_secret_args[@]}" \
       "${docker_cache_args[@]}" \
       --push \
       "$context" || return 1
   else
+    if [ "$(jq '.secrets | length' <<<"$unit")" -gt 0 ]; then
+      echo "Build unit ${unit_key} requires BuildKit secrets and must use dockerfile or bake"
+      return 1
+    fi
     docker run --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v "$PWD:/workspace" \
@@ -192,12 +256,17 @@ build_bake_group() {
     image="$(jq -r '.outputs[0].image' <<<"$unit")"
 
     report_unit "$build_run_id" "$unit_key" running "$image" || return 1
+    load_build_secrets "$build_run_id" "$unit" || return 1
     targets+=("$target")
     images+=("${unit_key}|${image}")
     bake_set_args+=(
       --set "$target.tags=$image"
       --set "$target.args.GIT_SHA=${JUANIE_SOURCE_SHA}"
     )
+    while IFS= read -r key; do
+      [ -n "$key" ] || continue
+      bake_set_args+=(--set "$target.secret+=id=${key},env=${key}")
+    done < <(jq -r '.secrets[]?' <<<"$unit")
     if [ "${JUANIE_DOCKER_CACHE_BACKEND:-}" = 'gha' ]; then
       bake_set_args+=(
         --set "$target.cache-from=type=gha"
@@ -270,7 +339,8 @@ start_build_run() {
 
   mkdir -p "$state_dir"
 
-  local selected_services_json="${JUANIE_SELECTED_SERVICES_JSON:-[]}"
+  local selected_services_json="${JUANIE_SELECTED_SERVICES_JSON:-}"
+  local selected_targets_json="${JUANIE_SELECTED_TARGETS_JSON:-}"
   local payload
   payload="$(
     jq -cn \
@@ -280,26 +350,38 @@ start_build_run() {
       --arg registry "$JUANIE_IMAGE_REGISTRY" \
       --arg provider "$JUANIE_PROVIDER" \
       --arg externalRunId "${JUANIE_EXTERNAL_RUN_ID:-}" \
-      --argjson services "$selected_services_json" \
+      --arg servicesJson "$selected_services_json" \
+      --arg targetsJson "$selected_targets_json" \
       '{
         repository: $repository,
         sha: $sha,
         ref: $ref,
         registry: $registry,
         provider: $provider,
-        externalRunId: (if $externalRunId == "" then null else $externalRunId end),
-        services: $services
-      }'
+        externalRunId: (if $externalRunId == "" then null else $externalRunId end)
+      }
+      + (if $servicesJson == "" then {} else {services: ($servicesJson | fromjson)} end)
+      + (if $targetsJson == "" then {} else {targets: ($targetsJson | fromjson)} end)'
   )"
 
   local response
   response="$(request_json POST /api/build-runs "$payload")"
-  printf '%s\n' "$response" | tee "$build_run_file"
+  local secret_access_token
+  secret_access_token="$(jq -r '.secretAccessToken // empty' <<<"$response")"
+  [ -n "$secret_access_token" ] || {
+    echo 'Juanie did not return a build secret capability'
+    exit 1
+  }
+  printf '%s' "$secret_access_token" > "${state_dir}/secret-access-token"
+  chmod 600 "${state_dir}/secret-access-token"
+  jq 'del(.secretAccessToken)' <<<"$response" | tee "$build_run_file"
 
   jq -c '.plan.units' "$build_run_file" > "$units_file"
   jq -c '.plan.groups' "$build_run_file" > "$groups_file"
-  jq -c '.plan.units | map({name: .service, image: .outputs[0].image})' "$build_run_file" \
+  jq -c '[.plan.units[].outputs[] | select(.kind == "image") | {name: .service, image}]' "$build_run_file" \
     > "$release_services_file"
+  jq -c '[.plan.units[].outputs[] | {name, kind, service, target, image}]' "$build_run_file" \
+    > "$build_outputs_file"
 
   local build_run_id
   build_run_id="$(jq -r '.buildRun.id' "$build_run_file")"

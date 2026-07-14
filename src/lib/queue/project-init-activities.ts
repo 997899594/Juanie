@@ -9,6 +9,7 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import type { DeliveryGraph } from '@/lib/delivery-graph/model';
 import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { ensureEnvironmentNamespace, reconcileEnvironmentState } from '@/lib/environments/service';
@@ -26,6 +27,12 @@ import {
   type RepositoryTopologyService,
 } from '@/lib/monorepo';
 import {
+  buildDeliveryBuildTargets,
+  buildDeliveryDeliverables,
+  getDeliveryBuildSecretNames,
+  getManagedBuildFileStem,
+} from '@/lib/projects/bootstrap/delivery-build';
+import {
   detectPackageManager,
   extractAtlasSchemaSourcePaths,
   getProjectConfigJson,
@@ -34,6 +41,7 @@ import {
   JUANIE_BUILD_RUN_SCRIPT_PATH,
   JUANIE_DELIVERY_SCRIPT_PATH,
   JUANIE_MANAGED_DOC_PATH,
+  type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigMonorepoEntry,
   type ProjectInitRenderContext,
@@ -48,6 +56,9 @@ import {
   renderGitLabCIMonorepo,
   renderJuanieConfig,
   renderJuanieManagedDoc,
+  renderManagedArtifactTargetDockerfile,
+  renderManagedWorkloadDockerfile,
+  renderStaticNginxConfig,
   resolveManagedMigrationScriptPaths,
   resolveMonorepoAffectedRules,
 } from '@/lib/projects/bootstrap/repository-automation';
@@ -284,7 +295,9 @@ export async function pushCicdConfig(
   const migrationScriptContents: Record<string, string> = {};
   let packageJson: RepoAutomationContext['packageJson'] = null;
   let topologyServices: RepositoryTopologyService[] = [];
+  let deliveryGraph: DeliveryGraph | null = null;
   let configMonorepo: ProjectConfigMonorepoEntry | null = null;
+  let configBuildTargets: ProjectConfigBuildTargetEntry[] = [];
   let configDeliverables: ProjectConfigDeliverableEntry[] = [];
   let managedJuanieConfigContent: string | null = null;
 
@@ -306,6 +319,7 @@ export async function pushCicdConfig(
     bakeTargets = topology.bakeTargets;
     packageJson = topology.rootPackageJson;
     topologyServices = topology.services;
+    deliveryGraph = topology.deliveryGraph;
     configMonorepo = topology.configMonorepo
       ? {
           enabled: topology.monorepoType !== 'none',
@@ -314,6 +328,7 @@ export async function pushCicdConfig(
           affected: topology.configMonorepo.affected,
         }
       : null;
+    configBuildTargets = topology.configBuildTargets ?? [];
     configDeliverables = topology.configDeliverables ?? [];
     managedJuanieConfigContent = topology.managedConfigContent ?? null;
     scopedLogger.info('Detected repository topology for CI/CD config', {
@@ -448,8 +463,42 @@ export async function pushCicdConfig(
   };
   const existingConfig = getProjectConfigJson(project);
   const existingServiceConfigMap = getProjectServiceConfigMap(project);
+  const packageManager = detectPackageManager(rootFiles, packageJson);
+  const buildSecretNames = getDeliveryBuildSecretNames(deliveryGraph);
+  const effectiveBuildTargets =
+    configBuildTargets.length > 0
+      ? configBuildTargets
+      : buildDeliveryBuildTargets({ graph: deliveryGraph, secretNames: buildSecretNames });
+  const usesGeneratedBuildTargets = configBuildTargets.length === 0;
+  const effectiveDeliverables =
+    configDeliverables.length > 0 ? configDeliverables : buildDeliveryDeliverables(deliveryGraph);
+  const inferredWorkloadByName = new Map(
+    (deliveryGraph?.workloads ?? []).map((workload) => [workload.name, workload])
+  );
   const nextServiceConfigMap = { ...existingServiceConfigMap };
   for (const service of topologyServices) {
+    const workload = inferredWorkloadByName.get(service.name);
+    const managedDockerfile =
+      workload?.confidence === 'high' && !workload.hasDockerfile
+        ? `.juanie/runtime/${getManagedBuildFileStem(service.name)}.Dockerfile`
+        : null;
+    const build = service.build
+      ? {
+          ...service.build,
+          ...(managedDockerfile
+            ? { strategy: 'dockerfile' as const, dockerfile: managedDockerfile, context: '.' }
+            : {}),
+          ...(buildSecretNames.length > 0 ? { secrets: buildSecretNames } : {}),
+        }
+      : managedDockerfile
+        ? {
+            strategy: 'dockerfile' as const,
+            dockerfile: managedDockerfile,
+            context: '.',
+            command: workload?.buildCommand,
+            secrets: buildSecretNames,
+          }
+        : undefined;
     nextServiceConfigMap[service.name] = {
       ...(existingServiceConfigMap[service.name] ?? {}),
       ...(service.appDir && service.appDir !== '.'
@@ -461,7 +510,7 @@ export async function pushCicdConfig(
           }
         : {}),
       ...(service.runtime ? { runtime: service.runtime } : {}),
-      ...(service.build ? { build: service.build } : {}),
+      ...(build ? { build } : {}),
     };
   }
   const projectWithTopology = {
@@ -470,13 +519,15 @@ export async function pushCicdConfig(
       ...existingConfig,
       services: nextServiceConfigMap,
       ...(configMonorepo ? { monorepo: configMonorepo } : {}),
-      ...(configDeliverables.length > 0 ? { deliverables: configDeliverables } : {}),
+      ...(effectiveBuildTargets.length > 0 ? { buildTargets: effectiveBuildTargets } : {}),
+      ...(effectiveDeliverables.length > 0 ? { deliverables: effectiveDeliverables } : {}),
+      ...(deliveryGraph ? { deliveryGraph } : {}),
     },
   };
   const automationContext: RepoAutomationContext = {
     monorepoType,
     rootFiles,
-    packageManager: detectPackageManager(rootFiles, packageJson),
+    packageManager,
     bakeDefinition,
     bakeTargets,
     atlasConfigPath,
@@ -510,6 +561,25 @@ export async function pushCicdConfig(
   files[JUANIE_BUILD_RUN_SCRIPT_PATH] = renderBuildRunScript();
   files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
   files[JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH] = renderAffectedWorkspaceScript();
+  for (const workload of deliveryGraph?.workloads ?? []) {
+    if (workload.confidence !== 'high' || workload.hasDockerfile) continue;
+    files[`.juanie/runtime/${getManagedBuildFileStem(workload.name)}.Dockerfile`] =
+      renderManagedWorkloadDockerfile({ workload, packageManager, secretNames: buildSecretNames });
+  }
+  if ((deliveryGraph?.workloads ?? []).some((workload) => workload.runtimeKind === 'static')) {
+    files['.juanie/runtime/static-nginx.conf'] = renderStaticNginxConfig();
+  }
+  for (const target of usesGeneratedBuildTargets ? effectiveBuildTargets : []) {
+    files[
+      target.build.dockerfile ??
+        `.juanie/build-targets/${getManagedBuildFileStem(target.name)}.Dockerfile`
+    ] = renderManagedArtifactTargetDockerfile({
+      packageManager,
+      buildCommand: target.build.command ?? `${packageManager} run build`,
+      outputPath: target.output.path,
+      secretNames: target.build.secrets ?? [],
+    });
+  }
 
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
@@ -531,10 +601,12 @@ export async function pushCicdConfig(
           ...(configMonorepo ?? {}),
           enabled: isMonorepo,
           type: monorepoType,
-          packageManager: detectPackageManager(rootFiles, packageJson),
+          packageManager,
           affected: resolveMonorepoAffectedRules(projectWithTopology, automationContext),
         },
-        ...(configDeliverables.length > 0 ? { deliverables: configDeliverables } : {}),
+        ...(effectiveBuildTargets.length > 0 ? { buildTargets: effectiveBuildTargets } : {}),
+        ...(effectiveDeliverables.length > 0 ? { deliverables: effectiveDeliverables } : {}),
+        ...(deliveryGraph ? { deliveryGraph } : {}),
       },
     })
     .where(eq(projects.id, project.id));

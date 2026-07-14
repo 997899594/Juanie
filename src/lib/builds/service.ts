@@ -1,5 +1,10 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
+import {
+  issueBuildSecretCapability,
+  verifyBuildSecretCapability,
+} from '@/lib/builds/secret-capability';
+import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import {
   type BuildArtifactKind,
@@ -8,14 +13,19 @@ import {
   buildArtifacts,
   buildRuns,
   buildUnits,
+  deliveryRules,
+  environments,
+  environmentVariables,
   projects,
   releases,
   repositories,
   services,
 } from '@/lib/db/schema';
+import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
+import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 
 export class BuildRunError extends Error {
   constructor(
@@ -32,6 +42,7 @@ export interface StartBuildRunInput {
   sha: string;
   registry?: string;
   services?: string[];
+  targets?: string[];
   provider?: string;
   externalRunId?: string | null;
   authHeader: string | null;
@@ -98,9 +109,31 @@ function getProjectConfigForBuildPlan(
     typeof configJson.monorepo === 'object'
       ? (configJson.monorepo as { type: 'turborepo' })
       : undefined;
+  const buildTargets =
+    configJson &&
+    typeof configJson === 'object' &&
+    'buildTargets' in configJson &&
+    Array.isArray(configJson.buildTargets)
+      ? configJson.buildTargets
+      : [];
 
   return {
     monorepo,
+    buildTargets: buildTargets as Array<{
+      name: string;
+      kind: 'package' | 'documentation' | 'bundle';
+      monorepo: { appDir: string; packageName?: string };
+      build: {
+        strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
+        command?: string;
+        dockerfile?: string;
+        context?: string;
+        target?: string;
+        definition?: string;
+        secrets?: string[];
+      };
+      output: { path: string };
+    }>,
     services: project.services.map((service) => {
       const serviceConfig = serviceConfigMap[service.name] ?? {};
       const startCommand = service.startCommand?.trim();
@@ -121,6 +154,7 @@ function getProjectConfigForBuildPlan(
               context?: string;
               target?: string;
               definition?: string;
+              secrets?: string[];
             }
           | undefined,
         run: {
@@ -217,6 +251,7 @@ export async function startBuildRun(input: StartBuildRunInput) {
       return {
         buildRun: existingBuildRun,
         plan: existingBuildRun.plan as BuildPlan,
+        secretAccessToken: issueBuildSecretCapability(existingBuildRun.id),
       };
     }
   }
@@ -228,6 +263,7 @@ export async function startBuildRun(input: StartBuildRunInput) {
     sha: input.sha,
     registry: input.registry,
     selectedServices: input.services,
+    selectedTargets: input.targets,
   });
   const now = new Date();
   const serviceByName = new Map(project.services.map((service) => [service.name, service]));
@@ -293,6 +329,7 @@ export async function startBuildRun(input: StartBuildRunInput) {
   return {
     buildRun,
     plan: buildRun.plan as BuildPlan,
+    secretAccessToken: issueBuildSecretCapability(buildRun.id),
   };
 }
 
@@ -312,6 +349,99 @@ async function loadBuildRunForMutation(buildRunId: string, authHeader: string | 
   await verifyRepositoryAccess(buildRun.sourceRepository, authHeader);
 
   return buildRun;
+}
+
+async function readBuildVariableValue(
+  variable: typeof environmentVariables.$inferSelect
+): Promise<string | null> {
+  if (!variable.isSecret) return variable.value;
+  if (variable.encryptedValue && variable.iv && variable.authTag) {
+    return decrypt(variable.encryptedValue, variable.iv, variable.authTag);
+  }
+  return variable.value;
+}
+
+export async function getBuildRunSecrets(input: {
+  buildRunId: string;
+  unitKey: string;
+  capabilityToken: string;
+}): Promise<Record<string, string>> {
+  if (
+    !verifyBuildSecretCapability({
+      token: input.capabilityToken,
+      buildRunId: input.buildRunId,
+    })
+  ) {
+    throw new BuildRunError('Invalid or expired build secret capability', 401);
+  }
+  const buildRun = await db.query.buildRuns.findFirst({
+    where: eq(buildRuns.id, input.buildRunId),
+  });
+  if (!buildRun) throw new BuildRunError('Build run not found', 404);
+  if (!['pending', 'running'].includes(buildRun.status)) {
+    throw new BuildRunError(`Build run no longer accepts secret reads: ${buildRun.status}`, 409);
+  }
+  const plan = buildRun.plan as BuildPlan;
+  const unit = assertUnitBelongsToPlan(plan, input.unitKey);
+  const requiredNames = [...new Set(unit.secrets ?? [])].sort();
+  if (requiredNames.length === 0) return {};
+
+  const [environmentList, ruleList] = await Promise.all([
+    db.query.environments.findMany({ where: eq(environments.projectId, buildRun.projectId) }),
+    db.query.deliveryRules.findMany({ where: eq(deliveryRules.projectId, buildRun.projectId) }),
+  ]);
+  const route = resolveEnvironmentRoute({
+    ref: buildRun.sourceRef,
+    environments: environmentList,
+    deliveryRules: ruleList,
+  });
+  const lineage = route.environment ? await getEnvironmentLineage(route.environment.id) : [];
+  const lineageIds = lineage.map((environment) => environment.id);
+  const scopeOrder = new Map(lineageIds.map((id, index) => [id, index]));
+  const candidates = await db.query.environmentVariables.findMany({
+    where: and(
+      eq(environmentVariables.projectId, buildRun.projectId),
+      eq(environmentVariables.injectionType, 'build'),
+      isNull(environmentVariables.serviceId),
+      lineageIds.length > 0
+        ? or(
+            isNull(environmentVariables.environmentId),
+            inArray(environmentVariables.environmentId, lineageIds)
+          )
+        : isNull(environmentVariables.environmentId)
+    ),
+  });
+  candidates.sort((left, right) => {
+    const leftScope = left.environmentId ? (scopeOrder.get(left.environmentId) ?? -1) : -1;
+    const rightScope = right.environmentId ? (scopeOrder.get(right.environmentId) ?? -1) : -1;
+    if (leftScope !== rightScope) return leftScope - rightScope;
+    return left.updatedAt.getTime() - right.updatedAt.getTime();
+  });
+
+  const selected = new Map<string, typeof environmentVariables.$inferSelect>();
+  for (const variable of candidates) {
+    if (requiredNames.includes(variable.key)) selected.set(variable.key, variable);
+  }
+
+  const missing = requiredNames.filter((name) => !selected.has(name));
+  if (missing.length > 0) {
+    throw new BuildRunError(
+      `Missing build variables in Juanie: ${missing.join(', ')}. Add them with injection type build.`,
+      409
+    );
+  }
+
+  const values: Record<string, string> = {};
+  for (const name of requiredNames) {
+    const variable = selected.get(name);
+    if (!variable) continue;
+    const value = await readBuildVariableValue(variable);
+    if (value === null) {
+      throw new BuildRunError(`Build variable ${name} has no value`, 409);
+    }
+    values[name] = value;
+  }
+  return values;
 }
 
 export async function completeBuildUnit(input: CompleteBuildUnitInput) {
@@ -601,6 +731,9 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
       services: servicesWithDigests,
       triggeredBy: 'api',
       summary: `构建发布 · ${buildRun.sourceCommitSha.slice(0, 7)}`,
+      artifactOnly:
+        servicesWithDigests.length === 0 &&
+        plan.units.some((unit) => unit.outputs.some((output) => output.kind !== 'image')),
     });
 
     if (!createdRelease) {

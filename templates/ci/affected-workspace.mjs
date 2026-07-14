@@ -144,24 +144,12 @@ function selectByPath({ services, deliverables, changedFiles, shouldBuildAll }) 
     : deliverables.filter((deliverable) =>
         changedFiles.some((file) => isInsideAppDir(file, deliverable.appDir))
       );
-  const sourceServicesForDeliverables = new Set(
-    changedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
-  );
   const selectedServices = shouldBuildAll
     ? services
-    : services.filter(
-        (service) =>
-          sourceServicesForDeliverables.has(service.name) ||
-          changedFiles.some((file) => isInsideAppDir(file, service.appDir))
+    : services.filter((service) =>
+        changedFiles.some((file) => isInsideAppDir(file, service.appDir))
       );
-  const selectedServiceNames = new Set(selectedServices.map((service) => service.name));
-  const selectedDeliverables = shouldBuildAll
-    ? deliverables
-    : deliverables.filter(
-        (deliverable) =>
-          changedDeliverables.includes(deliverable) ||
-          (deliverable.sourceService && selectedServiceNames.has(deliverable.sourceService))
-      );
+  const selectedDeliverables = shouldBuildAll ? deliverables : changedDeliverables;
 
   return { services: selectedServices, deliverables: selectedDeliverables };
 }
@@ -230,22 +218,13 @@ function selectByTurboGraph({ services, deliverables, packageNames, changedFiles
   }
 
   const affectedPackages = new Set(packageNames);
-  const changedDeliverables = deliverables.filter((deliverable) =>
-    changedFiles.some((file) => isInsideAppDir(file, deliverable.appDir))
+  const selectedServices = services.filter((service) =>
+    affectedPackages.has(service.packageName || service.name)
   );
-  const sourceServicesForDeliverables = new Set(
-    changedDeliverables.map((deliverable) => deliverable.sourceService).filter(Boolean)
-  );
-  const selectedServices = services.filter(
-    (service) =>
-      affectedPackages.has(service.packageName || service.name) ||
-      sourceServicesForDeliverables.has(service.name)
-  );
-  const selectedServiceNames = new Set(selectedServices.map((service) => service.name));
   const selectedDeliverables = deliverables.filter(
     (deliverable) =>
-      changedDeliverables.includes(deliverable) ||
-      (deliverable.sourceService && selectedServiceNames.has(deliverable.sourceService))
+      affectedPackages.has(deliverable.packageName || deliverable.sourceTarget) ||
+      changedFiles.some((file) => isInsideAppDir(file, deliverable.appDir))
   );
 
   return { services: selectedServices, deliverables: selectedDeliverables };
@@ -266,6 +245,11 @@ function writeGitHubOutputs(result) {
     `service_names=${JSON.stringify(result.services.map((service) => service.name))}\n`,
     { flag: 'a' }
   );
+  writeFileSync(
+    githubOutput,
+    `target_names=${JSON.stringify([...new Set(result.deliverables.map((item) => item.sourceTarget))])}\n`,
+    { flag: 'a' }
+  );
 }
 
 function writeGitLabArtifacts(result) {
@@ -275,6 +259,10 @@ function writeGitLabArtifacts(result) {
     JSON.stringify(result.services.map((service) => service.name))
   );
   writeFileSync('deliverables.json', JSON.stringify(result.deliverables));
+  writeFileSync(
+    'target-names.json',
+    JSON.stringify([...new Set(result.deliverables.map((item) => item.sourceTarget))])
+  );
 }
 
 function main() {

@@ -19,6 +19,7 @@ import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
+import { assertExternalResourceBindingsResolved } from '@/lib/releases/resource-admission';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
@@ -47,6 +48,7 @@ export interface CreateRepositoryReleaseInput {
   triggeredBy?: 'api' | 'manual';
   triggeredByUserId?: string | null;
   summary?: string | null;
+  artifactOnly?: boolean;
 }
 
 export interface CreateProjectReleaseInput {
@@ -133,9 +135,17 @@ async function persistRelease(
     triggeredBy?: 'api' | 'manual';
     triggeredByUserId?: string | null;
     summary?: string | null;
+    artifactOnly?: boolean;
   }
 ) {
-  if (requestedServices.length === 0) {
+  if (!meta.artifactOnly) {
+    await assertExternalResourceBindingsResolved({
+      project,
+      environmentId: environment.id,
+    });
+  }
+
+  if (requestedServices.length === 0 && !meta.artifactOnly) {
     throw new Error('At least one release artifact is required');
   }
 
@@ -177,7 +187,7 @@ async function persistRelease(
         sourceCommitSha: meta.sourceCommitSha ?? null,
         configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
         sourceReleaseId: meta.sourceReleaseId ?? null,
-        status: 'admission_running',
+        status: meta.artifactOnly ? 'succeeded' : 'admission_running',
         triggeredBy: meta.triggeredBy ?? 'api',
         triggeredByUserId: meta.triggeredByUserId ?? null,
         summary:
@@ -243,13 +253,27 @@ async function persistRelease(
       },
       correlationId: traceId,
     });
-    await enqueueOutboxMessage(tx, {
-      topic: 'release.requested',
-      aggregateType: 'release',
-      aggregateId: createdRelease.id,
-      commandId: 'initial',
-      payload: { traceId },
-    });
+    if (meta.artifactOnly) {
+      await appendReleaseEvent(tx, {
+        releaseId: createdRelease.id,
+        projectId: project.id,
+        environmentId: environment.id,
+        actorUserId: meta.triggeredByUserId ?? null,
+        eventKey: 'artifact-only-completed',
+        type: 'release.status.changed',
+        data: { from: 'admission_running', to: 'succeeded', artifactOnly: true },
+        correlationId: traceId,
+        causationId: 'created',
+      });
+    } else {
+      await enqueueOutboxMessage(tx, {
+        topic: 'release.requested',
+        aggregateType: 'release',
+        aggregateId: createdRelease.id,
+        commandId: 'initial',
+        payload: { traceId },
+      });
+    }
 
     return createdRelease;
   });
@@ -390,6 +414,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
         triggeredBy: input.triggeredBy,
         triggeredByUserId: input.triggeredByUserId ?? null,
         summary: input.summary ?? null,
+        artifactOnly: input.artifactOnly,
       }
     );
   } catch (error) {

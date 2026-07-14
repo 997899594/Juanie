@@ -3,6 +3,16 @@
  * Provides utilities for detecting monorepo types and calculating affected services
  */
 
+export {
+  type DeliveryGraph,
+  type DeliveryGraphArtifact,
+  type DeliveryGraphLibrary,
+  type DeliveryGraphResource,
+  type DeliveryGraphSummary,
+  type DeliveryGraphWarning,
+  type DeliveryGraphWorkload,
+  summarizeDeliveryGraph,
+} from '@/lib/delivery-graph/model';
 // Re-export all functions and types from affected.ts
 export {
   buildMonorepoServiceImageName,
