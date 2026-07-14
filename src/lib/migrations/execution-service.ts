@@ -2,12 +2,13 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
-import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   failMigrationRunWithoutThrow,
   isActiveMigrationRunStatus,
 } from '@/lib/migrations/run-state';
 import { executeMigrationRun } from '@/lib/migrations/runner';
+import { restoreMigrationSpecificationSnapshot } from '@/lib/migrations/specification-snapshot';
+import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
 import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
 import { buildTraceLogFields } from '@/lib/trace/context';
@@ -34,6 +35,9 @@ export async function executeMigrationRunInExecutionService(input: {
     with: {
       release: true,
       specification: true,
+      database: true,
+      service: true,
+      environment: true,
     },
   });
 
@@ -56,24 +60,23 @@ export async function executeMigrationRunInExecutionService(input: {
   const sourceCommitSha =
     run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha;
 
-  const specs = await resolveMigrationSpecifications(
-    run.projectId,
-    run.environmentId,
-    run.specification.phase,
-    {
-      serviceIds: [run.serviceId],
-      sourceRef,
-      sourceCommitSha,
-    }
-  );
-  const spec = specs.find((candidate) => candidate.specification.id === run.specificationId);
-
-  if (!spec) {
-    const errorMessage = 'Migration specification could not be resolved';
-    await failMigrationRunWithoutThrow(run.id, 'MIGRATION_SPEC_NOT_FOUND', errorMessage);
-    await resumeReleaseAfterMigrationProgress(run.id);
-    throw new Error(errorMessage);
-  }
+  const spec = {
+    specification: restoreMigrationSpecificationSnapshot(
+      run.specification,
+      run.specificationSnapshot
+    ),
+    database: run.database,
+    service: run.service,
+    environment: run.environment,
+    resolution: {
+      strategy: 'run_snapshot',
+      selector: {
+        bindingName: null,
+        bindingRole: null,
+        bindingDatabaseType: null,
+      },
+    },
+  } satisfies ResolvedMigrationSpec;
 
   try {
     migrationExecutionLogger.info('Executing migration run', traceFields);

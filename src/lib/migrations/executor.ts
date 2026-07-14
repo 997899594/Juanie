@@ -15,12 +15,15 @@ import { databaseMigrations } from '@/lib/db/schema';
 import {
   type AtlasSchemaApplyPlan,
   applyDesiredSchemaToDatabase,
+  buildAtlasMigrateApplyArgs,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
+  hasAtlasUserTables,
   isAtlasDatabaseTarget,
   planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
+  selectAtlasMigrationsThroughTarget,
 } from '@/lib/migrations/atlas';
 import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -570,6 +573,13 @@ export async function executeAtlasMigrationsForSpec(
       return 0;
     }
 
+    const targetVersion = spec.specification.targetVersion;
+    if (targetVersion && !declaredVersions.includes(targetVersion)) {
+      throw new Error(
+        `Atlas release stage ${spec.specification.releaseStage} targets undeclared version ${targetVersion}`
+      );
+    }
+
     if (
       normalizeDatabaseCapabilities(resolvedCapabilities).join(',') !==
       normalizeDatabaseCapabilities(spec.database.capabilities).join(',')
@@ -581,14 +591,22 @@ export async function executeAtlasMigrationsForSpec(
     }
 
     const beforeVersions = await getAppliedAtlasVersions(executionDatabase);
+    const baselineVersion =
+      beforeVersions.length === 0 && (await hasAtlasUserTables(executionDatabase))
+        ? spec.specification.baselineVersion
+        : null;
     await log(
-      `🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${declaredVersions.length} 个声明版本)`,
+      `🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${selectAtlasMigrationsThroughTarget(workspace.files, targetVersion).length} 个阶段内版本)`,
       'info'
     );
 
     try {
       await runAtlasCommand(
-        ['migrate', 'apply', '--dir', 'file://migrations', '--url', databaseUrl],
+        buildAtlasMigrateApplyArgs({
+          databaseUrl,
+          targetVersion,
+          baselineVersion,
+        }),
         {
           cwd: workspace.dir,
           onOutputLine: (line, stream) => {

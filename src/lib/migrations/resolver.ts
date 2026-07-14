@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { parseJuanieConfig } from '@/lib/config/parser';
 import {
   isSchemaManagedDatabaseType,
@@ -14,6 +14,11 @@ import {
 import { requireProjectRepositoryContext } from '@/lib/projects/context';
 import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { isPlatformManagedMigrationTool } from './platform-managed';
+import {
+  type AtlasReleaseGraphConfig,
+  expandAtlasReleaseGraph,
+  getMigrationReleaseStageOrder,
+} from './release-graph';
 import {
   buildPlatformInternalCommand,
   getDefaultSchemaConfigPath,
@@ -35,6 +40,7 @@ interface ServiceDatabaseBindingConfig {
     lockStrategy?: 'platform' | 'db_advisory';
     compatibility?: 'backward_compatible' | 'breaking';
     approvalPolicy?: 'auto' | 'manual_in_production';
+    releaseGraph?: AtlasReleaseGraphConfig;
   };
 }
 
@@ -322,48 +328,70 @@ export async function syncMigrationSpecificationsFromRepo(
         binding.schema.config ?? getDefaultSchemaConfigPath(binding.schema.source);
       const migrationPath =
         executionTool === 'atlas' && binding.schema.source === 'atlas' ? null : undefined;
-      const [specification] = await db
-        .insert(migrationSpecifications)
-        .values({
-          projectId,
-          serviceId: serviceRecord.id,
-          environmentId,
-          databaseId: databaseRecord.id,
-          source: binding.schema.source,
-          tool: executionTool,
-          phase: binding.schema.phase ?? 'preDeploy',
-          executionMode: binding.schema.executionMode,
-          sourceConfigPath,
-          migrationPath: migrationPath ?? null,
-          command: buildPlatformInternalCommand(binding.schema.source, executionTool),
-          lockStrategy: binding.schema.lockStrategy ?? 'platform',
-          compatibility: binding.schema.compatibility ?? 'backward_compatible',
-          approvalPolicy: binding.schema.approvalPolicy ?? 'auto',
-        })
-        .onConflictDoUpdate({
-          target: [
-            migrationSpecifications.serviceId,
-            migrationSpecifications.environmentId,
-            migrationSpecifications.databaseId,
-          ],
-          set: {
+      const stages = binding.schema.releaseGraph
+        ? expandAtlasReleaseGraph(binding.schema.releaseGraph)
+        : [
+            {
+              releaseStage: 'standard' as const,
+              stageOrder: getMigrationReleaseStageOrder('standard'),
+              targetVersion: null,
+              baselineVersion: null,
+              phase: binding.schema.phase ?? ('preDeploy' as const),
+            },
+          ];
+
+      for (const stage of stages) {
+        const [specification] = await db
+          .insert(migrationSpecifications)
+          .values({
+            projectId,
+            serviceId: serviceRecord.id,
+            environmentId,
+            databaseId: databaseRecord.id,
             source: binding.schema.source,
             tool: executionTool,
-            phase: binding.schema.phase ?? 'preDeploy',
+            phase: stage.phase,
             executionMode: binding.schema.executionMode,
+            releaseStage: stage.releaseStage,
+            stageOrder: stage.stageOrder,
+            targetVersion: stage.targetVersion,
+            baselineVersion: stage.baselineVersion,
             sourceConfigPath,
             migrationPath: migrationPath ?? null,
             command: buildPlatformInternalCommand(binding.schema.source, executionTool),
             lockStrategy: binding.schema.lockStrategy ?? 'platform',
             compatibility: binding.schema.compatibility ?? 'backward_compatible',
             approvalPolicy: binding.schema.approvalPolicy ?? 'auto',
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+          })
+          .onConflictDoUpdate({
+            target: [
+              migrationSpecifications.serviceId,
+              migrationSpecifications.environmentId,
+              migrationSpecifications.databaseId,
+              migrationSpecifications.releaseStage,
+            ],
+            set: {
+              source: binding.schema.source,
+              tool: executionTool,
+              phase: stage.phase,
+              executionMode: binding.schema.executionMode,
+              stageOrder: stage.stageOrder,
+              targetVersion: stage.targetVersion,
+              baselineVersion: stage.baselineVersion,
+              sourceConfigPath,
+              migrationPath: migrationPath ?? null,
+              command: buildPlatformInternalCommand(binding.schema.source, executionTool),
+              lockStrategy: binding.schema.lockStrategy ?? 'platform',
+              compatibility: binding.schema.compatibility ?? 'backward_compatible',
+              approvalPolicy: binding.schema.approvalPolicy ?? 'auto',
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
 
-      upsertedIds.push(specification.id);
-      resolutionBySpecId.set(specification.id, resolved.resolution);
+        upsertedIds.push(specification.id);
+        resolutionBySpecId.set(specification.id, resolved.resolution);
+      }
     }
   }
 
@@ -402,37 +430,11 @@ export async function resolveMigrationSpecifications(
   }
 ): Promise<ResolvedMigrationSpec[]> {
   const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, environmentId, options);
-  const syncedResolutionBySpecId = new Map(
-    syncedSpecs.map((spec) => [spec.specification.id, spec.resolution])
-  );
-
-  const specList = await db.query.migrationSpecifications.findMany({
-    where: options?.serviceIds?.length
-      ? and(
-          eq(migrationSpecifications.projectId, projectId),
-          eq(migrationSpecifications.environmentId, environmentId),
-          eq(migrationSpecifications.phase, phase),
-          inArray(migrationSpecifications.serviceId, options.serviceIds)
-        )
-      : and(
-          eq(migrationSpecifications.projectId, projectId),
-          eq(migrationSpecifications.environmentId, environmentId),
-          eq(migrationSpecifications.phase, phase)
-        ),
-    with: {
-      service: true,
-      database: true,
-      environment: true,
-    },
-  });
-
-  return specList
-    .filter((specification) => isSchemaManagedDatabaseType(specification.database.type))
-    .map((specification) => ({
-      specification,
-      service: specification.service,
-      database: specification.database,
-      environment: specification.environment,
-      resolution: syncedResolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
-    }));
+  return syncedSpecs
+    .filter((spec) => spec.specification.phase === phase)
+    .filter(
+      (spec) =>
+        !options?.serviceIds?.length || options.serviceIds.includes(spec.specification.serviceId)
+    )
+    .sort((left, right) => left.specification.stageOrder - right.specification.stageOrder);
 }

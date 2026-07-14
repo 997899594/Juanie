@@ -20,6 +20,86 @@ services:
     expect(parsed.services[0]?.schema?.executionMode).toBe('automatic');
   });
 
+  it('accepts a complete monotonic Atlas release graph', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: bun start
+      port: 3000
+    schema:
+      source: atlas
+      config: atlas.hcl
+      releaseGraph:
+        baselineVersion: "2026071400"
+        expand:
+          targetVersion: "2026071401"
+        backfill:
+          targetVersion: "2026071402"
+        verify:
+          targetVersion: "2026071403"
+        cutover: deployment
+        contract:
+          targetVersion: "2026071404"
+databases:
+  - name: primary
+    type: postgresql
+`);
+
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.services[0]?.schema?.releaseGraph?.verify.targetVersion).toBe('2026071403');
+    expect(parsed.services[0]?.schema?.releaseGraph?.baselineVersion).toBe('2026071400');
+  });
+
+  it('rejects non-monotonic Atlas release graph versions', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: bun start
+      port: 3000
+    schema:
+      source: atlas
+      releaseGraph:
+        expand: { targetVersion: "2026071401" }
+        backfill: { targetVersion: "2026071403" }
+        verify: { targetVersion: "2026071402" }
+        cutover: deployment
+        contract: { targetVersion: "2026071404" }
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors.some((error) => error.includes('must increase by stage order'))).toBe(
+      true
+    );
+  });
+
+  it('rejects release graphs that bypass the Atlas migration chain', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: bun start
+      port: 3000
+    schema:
+      source: drizzle
+      releaseGraph:
+        expand: { targetVersion: "2026071401" }
+        backfill: { targetVersion: "2026071402" }
+        verify: { targetVersion: "2026071403" }
+        cutover: deployment
+        contract: { targetVersion: "2026071404" }
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors.some((error) => error.includes('requires schema.source=atlas'))).toBe(
+      true
+    );
+  });
+
   it('rejects legacy migrate config blocks', () => {
     const parsed = parseJuanieConfig(`
 services:

@@ -131,6 +131,15 @@ export type MigrationTool = (typeof migrationTools)[number];
 export const migrationPhases = ['preDeploy', 'postDeploy', 'manual'] as const;
 export type MigrationPhase = (typeof migrationPhases)[number];
 
+export const migrationReleaseStages = [
+  'standard',
+  'expand',
+  'backfill',
+  'verify',
+  'contract',
+] as const;
+export type MigrationReleaseStage = (typeof migrationReleaseStages)[number];
+
 export const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 export type MigrationExecutionMode = (typeof migrationExecutionModes)[number];
 
@@ -158,6 +167,23 @@ export type MigrationCompatibility = (typeof migrationCompatibilities)[number];
 
 export const migrationApprovalPolicies = ['auto', 'manual_in_production'] as const;
 export type MigrationApprovalPolicy = (typeof migrationApprovalPolicies)[number];
+
+export interface MigrationSpecificationSnapshot {
+  source: MigrationTool;
+  tool: MigrationTool;
+  phase: MigrationPhase;
+  executionMode: MigrationExecutionMode;
+  releaseStage: MigrationReleaseStage;
+  stageOrder: number;
+  targetVersion: string | null;
+  baselineVersion: string | null;
+  sourceConfigPath: string | null;
+  migrationPath: string | null;
+  command: string;
+  lockStrategy: MigrationLockStrategy;
+  compatibility: MigrationCompatibility;
+  approvalPolicy: MigrationApprovalPolicy;
+}
 
 export const initStepStatuses = ['pending', 'running', 'completed', 'failed', 'skipped'] as const;
 export type InitStepStatus = (typeof initStepStatuses)[number];
@@ -252,6 +278,7 @@ export const aiTaskKindEnum = pgEnum('aiTaskKind', aiTaskKinds);
 export const aiTaskStatusEnum = pgEnum('aiTaskStatus', aiTaskStatuses);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
+export const migrationReleaseStageEnum = pgEnum('migrationReleaseStage', migrationReleaseStages);
 export const migrationExecutionModeEnum = pgEnum('migrationExecutionMode', migrationExecutionModes);
 export const migrationRunStatusEnum = pgEnum('migrationRunStatus', migrationRunStatuses);
 export const migrationRunnerTypeEnum = pgEnum('migrationRunnerType', migrationRunnerTypes);
@@ -859,6 +886,10 @@ export const migrationSpecifications = pgTable(
     tool: migrationToolEnum('tool').notNull(),
     phase: migrationPhaseEnum('phase').notNull().default('preDeploy'),
     executionMode: migrationExecutionModeEnum('executionMode').notNull(),
+    releaseStage: migrationReleaseStageEnum('releaseStage').notNull().default('standard'),
+    stageOrder: integer('stageOrder').notNull().default(0),
+    targetVersion: varchar('targetVersion', { length: 100 }),
+    baselineVersion: varchar('baselineVersion', { length: 100 }),
 
     sourceConfigPath: varchar('sourceConfigPath', { length: 500 }),
     migrationPath: varchar('migrationPath', { length: 500 }),
@@ -877,10 +908,11 @@ export const migrationSpecifications = pgTable(
     serviceIdIdx: index('migrationSpecification_serviceId_idx').on(table.serviceId),
     environmentIdIdx: index('migrationSpecification_environmentId_idx').on(table.environmentId),
     databaseIdIdx: index('migrationSpecification_databaseId_idx').on(table.databaseId),
-    uniqueBinding: unique('migrationSpecification_service_env_db_unique').on(
+    uniqueBindingStage: unique('migrationSpecification_service_env_db_stage_unique').on(
       table.serviceId,
       table.environmentId,
-      table.databaseId
+      table.databaseId,
+      table.releaseStage
     ),
   })
 );
@@ -913,6 +945,14 @@ export const migrationRuns = pgTable(
     }),
     sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
     sourceCommitMessage: text('sourceCommitMessage'),
+
+    releaseStage: migrationReleaseStageEnum('releaseStage').notNull().default('standard'),
+    stageOrder: integer('stageOrder').notNull().default(0),
+    targetVersion: varchar('targetVersion', { length: 100 }),
+    baselineVersion: varchar('baselineVersion', { length: 100 }),
+    specificationSnapshot: jsonb('specificationSnapshot')
+      .$type<MigrationSpecificationSnapshot>()
+      .notNull(),
 
     status: migrationRunStatusEnum('status').notNull().default('queued'),
     runnerType: migrationRunnerTypeEnum('runnerType').notNull().default('worker'),
