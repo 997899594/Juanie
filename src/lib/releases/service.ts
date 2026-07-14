@@ -75,9 +75,10 @@ async function attachReleaseMigrationFilePreviews<
       projectId: release.projectId,
       specification: run.specification
         ? {
-            tool: run.specification.tool,
-            migrationPath: run.specification.migrationPath,
-            sourceConfigPath: run.specification.sourceConfigPath,
+            tool: run.specificationSnapshot.tool,
+            migrationPath: run.specificationSnapshot.migrationPath,
+            sourceConfigPath: run.specificationSnapshot.sourceConfigPath,
+            targetVersion: run.targetVersion,
           }
         : null,
       database: run.database
@@ -116,6 +117,7 @@ async function attachReleaseMigrationFilePreviews<
         ...run,
         specification: {
           ...run.specification,
+          ...run.specificationSnapshot,
           filePreview,
         },
       };

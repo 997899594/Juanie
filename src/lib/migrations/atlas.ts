@@ -53,6 +53,30 @@ export interface AtlasSchemaApplyPlan {
   planSql: string;
 }
 
+export function buildAtlasMigrateApplyArgs(input: {
+  databaseUrl: string;
+  targetVersion?: string | null;
+  baselineVersion?: string | null;
+}): string[] {
+  const args = [
+    'migrate',
+    'apply',
+    '--dir',
+    'file://migrations',
+    '--url',
+    input.databaseUrl,
+    '--revisions-schema',
+    'public',
+  ];
+  if (input.targetVersion) {
+    args.push('--to-version', input.targetVersion);
+  }
+  if (input.baselineVersion) {
+    args.push('--baseline', input.baselineVersion);
+  }
+  return args;
+}
+
 export function parseAtlasMigrationDir(configContent: string | null | undefined): string | null {
   if (!configContent) {
     return null;
@@ -79,6 +103,20 @@ export function getAtlasDeclaredVersions(files: Array<{ name: string }>): string
   return files
     .map((file) => extractAtlasMigrationVersion(file.name))
     .filter((version): version is string => Boolean(version));
+}
+
+export function selectAtlasMigrationsThroughTarget<T extends { name: string }>(
+  files: T[],
+  targetVersion: string | null | undefined
+): T[] {
+  if (!targetVersion) {
+    return files;
+  }
+
+  return files.filter((file) => {
+    const version = extractAtlasMigrationVersion(file.name);
+    return version !== null && BigInt(version) <= BigInt(targetVersion);
+  });
 }
 
 export function resolveAtlasDatabaseUrl(database: AtlasDatabaseTarget): string | null {

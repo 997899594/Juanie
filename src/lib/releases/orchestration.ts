@@ -251,6 +251,7 @@ async function driveReleaseMigrationPhaseForward(
     id: string;
     status: MigrationRunStatus;
     createdAt: Date;
+    stageOrder: number;
     errorMessage?: string | null;
   }>
 ): Promise<ReleaseMigrationPhaseProgressResult> {
@@ -500,7 +501,7 @@ async function loadLatestReleaseMigrationRuns(
   const latestRunsByTarget = new Map<string, (typeof runs)[number]>();
 
   for (const run of runs) {
-    if (run.specification.phase !== phase) {
+    if (run.specificationSnapshot.phase !== phase) {
       continue;
     }
 
@@ -510,7 +511,9 @@ async function loadLatestReleaseMigrationRuns(
     }
   }
 
-  return Array.from(latestRunsByTarget.values());
+  return Array.from(latestRunsByTarget.values()).sort(
+    (left, right) => left.stageOrder - right.stageOrder
+  );
 }
 
 export async function resumeReleaseAfterMigrationProgress(runId: string) {
@@ -539,7 +542,7 @@ export async function resumeReleaseAfterMigrationProgress(runId: string) {
     return { resumed: false, reason: 'release_missing' as const };
   }
 
-  const phase = run.specification.phase;
+  const phase = run.specificationSnapshot.phase;
   if (phase === 'manual') {
     return { resumed: false, reason: 'manual_phase_not_supported' as const };
   }

@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import { getMigrationReleaseStageLabel } from '@/lib/migrations/release-graph';
 import {
   getDeliveryReleaseArtifacts,
   getDeployableReleaseArtifacts,
@@ -123,7 +124,10 @@ function getRuntimeMigrationDiffItems(release: ReleasePageData['release']) {
       runId: run.id,
       serviceName: run.serviceName,
       databaseName: run.database.name,
-      phaseLabel: getMigrationPhaseLabel(run.specification.phase),
+      phaseLabel:
+        run.specification.releaseStage !== 'standard'
+          ? getMigrationReleaseStageLabel(run.specification.releaseStage)
+          : getMigrationPhaseLabel(run.specification.phase),
       tool: run.specification.tool,
       preview: run.specification.filePreview!,
     }));
@@ -353,7 +357,10 @@ function ReleaseMigrationReviewSection({
       <div className="space-y-3">
         {migrationItems.map((run, index) => {
           const filePreview = run.specification.filePreview;
-          const phaseLabel = getMigrationPhaseLabel(run.specification.phase);
+          const phaseLabel =
+            run.specification.releaseStage !== 'standard'
+              ? getMigrationReleaseStageLabel(run.specification.releaseStage)
+              : getMigrationPhaseLabel(run.specification.phase);
           const meta = [
             run.serviceName,
             run.database.name,

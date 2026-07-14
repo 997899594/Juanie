@@ -7,6 +7,7 @@ export interface SchemaLedgerClassificationInput {
   hasUserTables: boolean;
   driftDetected: boolean;
   driftSummary?: string | null;
+  baselineVersion?: string | null;
 }
 
 export interface SchemaLedgerClassificationResult {
@@ -73,6 +74,21 @@ export function classifySchemaLedgerState(
       summary: `仓库中没有可追踪的 ${toolLabel} 迁移账本`,
       hasLedger,
       hasUserTables: input.hasUserTables,
+    };
+  }
+
+  if (
+    input.kind === 'atlas' &&
+    input.baselineVersion &&
+    input.actualEntries.length === 0 &&
+    input.hasUserTables &&
+    input.expectedEntries.includes(input.baselineVersion)
+  ) {
+    return {
+      status: 'pending_migrations',
+      summary: `数据库将从声明的 Atlas baseline ${input.baselineVersion} 接管，并通过正常发布补齐迁移链`,
+      hasLedger: false,
+      hasUserTables: true,
     };
   }
 

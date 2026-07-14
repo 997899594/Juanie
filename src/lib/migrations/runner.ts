@@ -31,7 +31,6 @@ import { isPlatformManagedMigrationSpec } from '@/lib/migrations/platform-manage
 import {
   appendMigrationRunLog,
   getMigrationRunStartedAt,
-  isActiveMigrationRunStatus,
   markMigrationRunFailed,
   reconcileStaleActiveMigrationRun,
 } from '@/lib/migrations/run-state';
@@ -266,7 +265,7 @@ export async function executeMigrationRun(
   });
 
   for (const run of activeRuns) {
-    if (run.id === runId) {
+    if (run.id === runId || run.status === 'queued') {
       continue;
     }
 
@@ -289,7 +288,7 @@ export async function executeMigrationRun(
     Boolean(approvedFilePreview.executionPlan.content.trim());
 
   const conflictingRun = activeRuns.find(
-    (run) => run.id !== runId && isActiveMigrationRunStatus(run.status)
+    (run) => run.id !== runId && (run.status === 'planning' || run.status === 'running')
   );
   if (conflictingRun) {
     await markMigrationRunFailed(

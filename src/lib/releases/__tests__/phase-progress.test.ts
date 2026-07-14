@@ -88,4 +88,23 @@ describe('release phase progress', () => {
       ])
     ).toEqual({ kind: 'blocked', runId: 'run-2', status: 'failed' });
   });
+
+  it('never starts a later release graph stage after an earlier stage fails', () => {
+    expect(
+      resolveMigrationPhaseNextAction([
+        {
+          id: 'verify',
+          status: 'queued',
+          stageOrder: 30,
+          createdAt: baseTime,
+        },
+        {
+          id: 'backfill',
+          status: 'failed',
+          stageOrder: 20,
+          createdAt: new Date(baseTime.getTime() + 1000),
+        },
+      ])
+    ).toEqual({ kind: 'blocked', runId: 'backfill', status: 'failed' });
+  });
 });

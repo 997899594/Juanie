@@ -4,6 +4,7 @@ export interface ReleaseMigrationPhaseRunProgress {
   id: string;
   status: MigrationRunStatus;
   createdAt: Date;
+  stageOrder?: number;
 }
 
 export type ReleaseMigrationPhaseNextAction =
@@ -34,55 +35,44 @@ export type ReleaseMigrationPhaseNextAction =
 export function resolveMigrationPhaseNextAction(
   runs: ReleaseMigrationPhaseRunProgress[]
 ): ReleaseMigrationPhaseNextAction {
-  const ordered = [...runs].sort(
-    (left, right) => left.createdAt.getTime() - right.createdAt.getTime()
-  );
+  const ordered = [...runs].sort((left, right) => {
+    const stageDifference = (left.stageOrder ?? 0) - (right.stageOrder ?? 0);
+    return stageDifference || left.createdAt.getTime() - right.createdAt.getTime();
+  });
 
   const active = ordered.find((run) => run.status === 'planning' || run.status === 'running');
   if (active) {
     return { kind: 'running' };
   }
 
-  const queued = ordered.find((run) => run.status === 'queued');
-  if (queued) {
-    return { kind: 'start_run', runId: queued.id };
-  }
-
-  const awaitingApproval = ordered.find((run) => run.status === 'awaiting_approval');
-  if (awaitingApproval) {
-    return {
-      kind: 'awaiting_approval',
-      runId: awaitingApproval.id,
-    };
-  }
-
-  const awaitingExternalCompletion = ordered.find(
-    (run) => run.status === 'awaiting_external_completion'
-  );
-  if (awaitingExternalCompletion) {
-    return {
-      kind: 'awaiting_external_completion',
-      runId: awaitingExternalCompletion.id,
-    };
-  }
-
   const terminalCompletionStates: MigrationRunStatus[] = ['success', 'skipped'];
+  const next = ordered.find((run) => !terminalCompletionStates.includes(run.status));
 
-  if (
-    ordered.length === 0 ||
-    ordered.every((run) => terminalCompletionStates.includes(run.status))
-  ) {
+  if (!next) {
     return { kind: 'completed' };
   }
 
-  const blocked = ordered.find((run) => !terminalCompletionStates.includes(run.status));
-  if (blocked) {
+  if (next.status === 'queued') {
+    return { kind: 'start_run', runId: next.id };
+  }
+
+  if (next.status === 'awaiting_approval') {
     return {
-      kind: 'blocked',
-      runId: blocked.id,
-      status: blocked.status,
+      kind: 'awaiting_approval',
+      runId: next.id,
     };
   }
 
-  return { kind: 'completed' };
+  if (next.status === 'awaiting_external_completion') {
+    return {
+      kind: 'awaiting_external_completion',
+      runId: next.id,
+    };
+  }
+
+  return {
+    kind: 'blocked',
+    runId: next.id,
+    status: next.status,
+  };
 }

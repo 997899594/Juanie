@@ -12,6 +12,7 @@ import {
   extractAtlasMigrationVersion,
   getAppliedAtlasVersions,
   isAtlasDatabaseTarget,
+  selectAtlasMigrationsThroughTarget,
 } from '@/lib/migrations/atlas';
 import { exportDesiredSchemaFromRepository } from '@/lib/migrations/desired-schema';
 import {
@@ -73,6 +74,7 @@ interface MigrationFilePreviewRunLike {
     tool?: string | null;
     migrationPath?: string | null;
     sourceConfigPath?: string | null;
+    targetVersion?: string | null;
   } | null;
   database?: {
     id?: string | null;
@@ -514,9 +516,10 @@ function createDeclaredPreviewCacheKey(input: {
   migrationPath: string;
   revision: string;
   includeFileDetails: boolean;
+  targetVersion?: string | null;
 }): string {
   const detailMode = input.includeFileDetails ? 'details' : 'names';
-  return `${input.projectId}:${input.tool}:${input.migrationPath}:${input.revision}:${detailMode}`;
+  return `${input.projectId}:${input.tool}:${input.migrationPath}:${input.revision}:${input.targetVersion ?? 'latest'}:${detailMode}`;
 }
 
 export function invalidateMigrationFilePreviewCache(input?: { projectId?: string | null }): void {
@@ -745,14 +748,18 @@ async function resolveAtlasDeclaredPreview(
   projectId: string,
   migrationPath: string,
   revision: string,
-  includeFileDetails: boolean
+  includeFileDetails: boolean,
+  targetVersion?: string | null
 ): Promise<DeclaredMigrationPreview> {
   const files = await withTimeout(
     fetchMigrationFilesFromRepoPath(projectId, migrationPath, revision),
     '读取 Atlas 迁移目录'
   );
 
-  const sqlFiles = files.filter((file) => file.name.endsWith('.sql'));
+  const sqlFiles = selectAtlasMigrationsThroughTarget(
+    files.filter((file) => file.name.endsWith('.sql')),
+    targetVersion
+  );
   return buildDeclaredPreview(
     'Atlas 目录',
     sqlFiles.map((file) => file.name),
@@ -778,7 +785,13 @@ async function resolveDeclaredPreviewForRun(
     return resolveSqlDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
   }
   if (tool === 'atlas') {
-    return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision, includeFileDetails);
+    return resolveAtlasDeclaredPreview(
+      run.projectId,
+      migrationPath,
+      revision,
+      includeFileDetails,
+      run.specification?.targetVersion
+    );
   }
   if (tool === 'drizzle') {
     return resolveDrizzleDeclaredPreview();
@@ -1171,6 +1184,7 @@ async function resolveDeclaredPreviewWithCache(input: {
     tool: input.tool,
     migrationPath: input.migrationPath,
     revision: input.revision,
+    targetVersion: input.run.specification?.targetVersion,
     includeFileDetails: input.includeFileDetails,
   });
 
@@ -1260,6 +1274,7 @@ export async function buildMigrationFilePreviewByRunId(
       tool,
       migrationPath,
       revision,
+      targetVersion: run.specification?.targetVersion,
       includeFileDetails: includeDetailsForRun,
     });
 
@@ -1379,6 +1394,7 @@ export async function inspectResolvedMigrationSpecPendingState(
           tool: spec.specification.tool,
           migrationPath: spec.specification.migrationPath,
           sourceConfigPath: spec.specification.sourceConfigPath,
+          targetVersion: spec.specification.targetVersion,
         },
         database: {
           id: spec.database.id,
