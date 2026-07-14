@@ -20,6 +20,7 @@ import {
   getAtlasDeclaredVersions,
   hasAtlasUserTables,
   isAtlasDatabaseTarget,
+  isAtlasTargetVersionApplied,
   planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
@@ -591,6 +592,14 @@ export async function executeAtlasMigrationsForSpec(
     }
 
     const beforeVersions = await getAppliedAtlasVersions(executionDatabase);
+    if (isAtlasTargetVersionApplied(beforeVersions, targetVersion)) {
+      await log(
+        `✅ ${spec.database.name}: Atlas stage target ${targetVersion} 已由先前发布完成`,
+        'info'
+      );
+      return 0;
+    }
+
     const baselineVersion =
       beforeVersions.length === 0 && (await hasAtlasUserTables(executionDatabase))
         ? spec.specification.baselineVersion

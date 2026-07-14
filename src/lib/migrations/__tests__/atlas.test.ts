@@ -4,6 +4,7 @@ import {
   getAtlasSchemaDiffExcludePatterns,
   getAtlasSchemaDiffScopeArgs,
   getPostgresSchemaNamesFromDatabaseUrl,
+  isAtlasTargetVersionApplied,
   selectAtlasMigrationsThroughTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
@@ -48,6 +49,16 @@ describe('atlas migration helpers', () => {
 
     expect(selectAtlasMigrationsThroughTarget(files, '2026071402')).toEqual(files.slice(0, 2));
   });
+
+  it('recognizes release graph stages completed by an earlier release', () => {
+    const appliedVersions = ['2026071401', '2026071402', '2026071403'];
+
+    expect(isAtlasTargetVersionApplied(appliedVersions, '2026071401')).toBe(true);
+    expect(isAtlasTargetVersionApplied(appliedVersions, '2026071403')).toBe(true);
+    expect(isAtlasTargetVersionApplied(appliedVersions, '2026071404')).toBe(false);
+    expect(isAtlasTargetVersionApplied(appliedVersions, null)).toBe(false);
+  });
+
   it('keeps docker dev urls as the last-resort fallback', () => {
     expect(getDefaultAtlasDevUrl('postgresql')).toBe('docker://postgres/16/dev');
     expect(getDefaultAtlasDevUrl('mysql')).toBe('docker://mysql/8/dev');
