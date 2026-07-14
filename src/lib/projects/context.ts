@@ -18,7 +18,7 @@ export async function getProjectRepositoryContext(
     },
   });
 
-  if (!project || !project.repositoryId || !project.repository) {
+  if (!project?.repositoryId || !project.repository) {
     return null;
   }
 

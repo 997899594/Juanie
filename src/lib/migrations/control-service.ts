@@ -17,8 +17,9 @@ import {
 import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
 import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { addMigrationJob } from '@/lib/queue';
+import { appendReleaseEvent } from '@/lib/releases/events';
 import {
   persistReleaseRecapSafely,
   resumeReleaseAfterMigrationProgress,
@@ -380,13 +381,8 @@ export async function createMigrationRunForDatabase(input: {
     triggeredByUserId: input.userId,
     initialStatus,
     filePreview,
+    dispatch: initialStatus === 'queued',
   });
-
-  if (initialStatus === 'queued') {
-    await addMigrationJob(run.id, {
-      allowApprovalBypass: false,
-    });
-  }
 
   return {
     message: getRunCreatedMessage(initialStatus),
@@ -457,15 +453,41 @@ export async function executeMigrationRunActionForActor(input: {
       throw new MigrationControlError(400, '审批确认无效，请刷新后重试');
     }
 
-    await db
-      .update(migrationRuns)
-      .set({
-        status: 'queued',
-        errorCode: null,
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(migrationRuns.id, run.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(migrationRuns)
+        .set({
+          status: 'queued',
+          errorCode: null,
+          errorMessage: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(migrationRuns.id, run.id));
+
+      if (run.releaseId && run.release) {
+        await appendReleaseEvent(tx, {
+          releaseId: run.releaseId,
+          projectId: input.projectId,
+          environmentId: run.environmentId,
+          actorUserId: input.actorUserId,
+          eventKey: `approval:${run.id}:${run.updatedAt.getTime()}`,
+          type: 'release.approval.received',
+          data: { migrationRunId: run.id },
+          correlationId: run.releaseId,
+          causationId: run.id,
+        });
+      }
+      await enqueueOutboxMessage(tx, {
+        topic: 'migration.requested',
+        aggregateType: 'migration',
+        aggregateId: run.id,
+        commandId: `approval-${run.updatedAt.getTime()}`,
+        payload: {
+          allowApprovalBypass: true,
+          traceId: run.releaseId ?? run.id,
+        },
+      });
+    });
 
     if (run.releaseId && run.release) {
       const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
@@ -474,10 +496,6 @@ export async function executeMigrationRunActionForActor(input: {
         await updateReleaseStatus(run.releaseId, nextReleaseStatus);
       }
     }
-
-    await addMigrationJob(run.id, {
-      allowApprovalBypass: true,
-    });
 
     return {
       message: '迁移审批已通过，已重新加入队列',
@@ -583,6 +601,7 @@ export async function executeMigrationRunActionForActor(input: {
     sourceCommitMessage: run.sourceCommitMessage,
     initialStatus,
     filePreview,
+    dispatch: initialStatus === 'queued',
   });
 
   if (run.releaseId) {
@@ -590,12 +609,6 @@ export async function executeMigrationRunActionForActor(input: {
     if (nextReleaseStatus) {
       await updateReleaseStatus(run.releaseId, nextReleaseStatus);
     }
-  }
-
-  if (initialStatus === 'queued') {
-    await addMigrationJob(retryRun.id, {
-      allowApprovalBypass: false,
-    });
   }
 
   return {

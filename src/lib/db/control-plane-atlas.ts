@@ -9,15 +9,18 @@ import {
   normalizeAtlasDatabaseUrl,
   runAtlasCommand,
 } from '@/lib/atlas/cli';
+import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
+import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 
 const MIGRATIONS_DIR_URL = 'file://migrations';
 const REVISIONS_SCHEMA = 'public';
-const DEFAULT_DEV_URL = 'docker://postgres/16/dev?search_path=public';
 const DRIZZLE_SCHEMA_CONFIG_PATH = 'drizzle.schema.config.ts';
 const EXPORTED_SCHEMA_PATH = path.join('.atlas', 'control-plane.sql');
 const ATLAS_REVISIONS_TABLE = 'atlas_schema_revisions';
 const LEGACY_MIGRATIONS_TABLE = '_migrations';
+const CREDENTIAL_ENVELOPE_VERSION = '20260713120000';
+const PLAINTEXT_CREDENTIAL_REMOVAL_VERSION = '20260713121000';
 
 type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply';
 
@@ -117,6 +120,26 @@ async function hasLegacyMigrationState(databaseUrl: string): Promise<boolean> {
     `;
 
     return Number(rows[0]?.count ?? 0) > 0;
+  } finally {
+    await sql.end();
+  }
+}
+
+async function isAtlasRevisionApplied(databaseUrl: string, version: string): Promise<boolean> {
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const tableName = `${REVISIONS_SCHEMA}.${ATLAS_REVISIONS_TABLE}`;
+    const [table] = await sql<{ regclass: string | null }[]>`
+      select to_regclass(${tableName}) as regclass
+    `;
+    if (!table?.regclass) {
+      return false;
+    }
+    const rows = await sql.unsafe(
+      `select exists(select 1 from "${REVISIONS_SCHEMA}"."${ATLAS_REVISIONS_TABLE}" where version = $1) as applied`,
+      [version]
+    );
+    return Boolean(rows[0]?.applied);
   } finally {
     await sql.end();
   }
@@ -229,17 +252,22 @@ export async function generateControlPlaneMigration(name: string | undefined): P
   await exportDesiredSchema();
 
   if (hasLocalAtlas()) {
-    await runAtlas([
-      'migrate',
-      'diff',
-      normalizedName,
-      '--dir',
-      MIGRATIONS_DIR_URL,
-      '--dev-url',
-      DEFAULT_DEV_URL,
-      '--to',
-      `file://${EXPORTED_SCHEMA_PATH}`,
-    ]);
+    const devDatabase = await prepareAtlasDevDatabaseSession('postgresql');
+    try {
+      await runAtlas([
+        'migrate',
+        'diff',
+        normalizedName,
+        '--dir',
+        MIGRATIONS_DIR_URL,
+        '--dev-url',
+        devDatabase.url,
+        '--to',
+        `file://${EXPORTED_SCHEMA_PATH}`,
+      ]);
+    } finally {
+      await devDatabase.cleanup();
+    }
     return;
   }
 
@@ -265,14 +293,19 @@ export async function validateControlPlaneMigrations(): Promise<void> {
   await exportDesiredSchema();
 
   if (hasLocalAtlas()) {
-    await runAtlas([
-      'migrate',
-      'validate',
-      '--dir',
-      MIGRATIONS_DIR_URL,
-      '--dev-url',
-      DEFAULT_DEV_URL,
-    ]);
+    const devDatabase = await prepareAtlasDevDatabaseSession('postgresql');
+    try {
+      await runAtlas([
+        'migrate',
+        'validate',
+        '--dir',
+        MIGRATIONS_DIR_URL,
+        '--dev-url',
+        devDatabase.url,
+      ]);
+    } finally {
+      await devDatabase.cleanup();
+    }
     return;
   }
 
@@ -294,6 +327,87 @@ export async function printControlPlaneMigrationStatus(): Promise<void> {
     '--revisions-schema',
     REVISIONS_SCHEMA,
   ]);
+}
+
+async function migrateCredentialEnvelopes(databaseUrl: string): Promise<void> {
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const plaintextGrants = await sql<
+      {
+        id: string;
+        accessToken: string;
+        refreshToken: string | null;
+      }[]
+    >`
+      select id, "accessToken", "refreshToken"
+      from "integration_grant"
+      where "accessToken" is not null
+        and "accessTokenEncrypted" is null
+    `;
+
+    const encryptedGrants = await Promise.all(
+      plaintextGrants.map(async (grant) => ({
+        id: grant.id,
+        credentials: await encryptGrantCredentials({
+          grantId: grant.id,
+          accessToken: grant.accessToken,
+          refreshToken: grant.refreshToken,
+        }),
+      }))
+    );
+
+    await sql.begin(async (transaction) => {
+      for (const grant of encryptedGrants) {
+        const credentials = grant.credentials;
+        await transaction`
+          update "integration_grant"
+          set "accessTokenEncrypted" = ${credentials.accessTokenEncrypted},
+              "accessTokenIv" = ${credentials.accessTokenIv},
+              "accessTokenAuthTag" = ${credentials.accessTokenAuthTag},
+              "refreshTokenEncrypted" = ${credentials.refreshTokenEncrypted},
+              "refreshTokenIv" = ${credentials.refreshTokenIv},
+              "refreshTokenAuthTag" = ${credentials.refreshTokenAuthTag},
+              "encryptionKeyVersion" = ${credentials.encryptionKeyVersion},
+              "accessToken" = null,
+              "refreshToken" = null,
+              "updatedAt" = now()
+          where id = ${grant.id}
+        `;
+      }
+
+      await transaction`
+        update "account"
+        set access_token = null,
+            refresh_token = null,
+            id_token = null
+        where access_token is not null
+           or refresh_token is not null
+           or id_token is not null
+      `;
+    });
+
+    const [unencryptedActiveGrant] = await sql<{ id: string }[]>`
+      select id
+      from "integration_grant"
+      where "revokedAt" is null
+        and (
+          "accessTokenEncrypted" is null
+          or "accessTokenIv" is null
+          or "accessTokenAuthTag" is null
+          or "encryptionKeyVersion" is null
+        )
+      limit 1
+    `;
+    if (unencryptedActiveGrant) {
+      throw new Error(
+        `Active integration grant ${unencryptedActiveGrant.id} has no encrypted credentials`
+      );
+    }
+
+    console.log(`[db:push] encrypted ${encryptedGrants.length} integration grant(s)`);
+  } finally {
+    await sql.end();
+  }
 }
 
 async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
@@ -330,8 +444,11 @@ async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
 }
 
 export async function applyControlPlaneMigrations(): Promise<void> {
-  const databaseUrl = getDatabaseUrl();
+  await applyControlPlaneExpandMigrations();
+  await applyControlPlaneContractMigrations();
+}
 
+async function ensureAtlasBaseline(databaseUrl: string): Promise<void> {
   const atlasRevisionCount = await getAtlasRevisionCount(databaseUrl);
   if (atlasRevisionCount === 0) {
     const hasLegacyState = await hasLegacyMigrationState(databaseUrl);
@@ -351,7 +468,41 @@ export async function applyControlPlaneMigrations(): Promise<void> {
       ]);
     }
   }
+}
 
+export async function applyControlPlaneExpandMigrations(): Promise<void> {
+  const databaseUrl = getDatabaseUrl();
+  await ensureAtlasBaseline(databaseUrl);
+
+  const plaintextCredentialsRemoved = await isAtlasRevisionApplied(
+    databaseUrl,
+    PLAINTEXT_CREDENTIAL_REMOVAL_VERSION
+  );
+  if (!plaintextCredentialsRemoved) {
+    const envelopeMigrationApplied = await isAtlasRevisionApplied(
+      databaseUrl,
+      CREDENTIAL_ENVELOPE_VERSION
+    );
+    if (!envelopeMigrationApplied) {
+      await runAtlas([
+        'migrate',
+        'apply',
+        '--to-version',
+        CREDENTIAL_ENVELOPE_VERSION,
+        '--dir',
+        MIGRATIONS_DIR_URL,
+        '--url',
+        databaseUrl,
+        '--revisions-schema',
+        REVISIONS_SCHEMA,
+      ]);
+    }
+    await migrateCredentialEnvelopes(databaseUrl);
+    return;
+  }
+
+  // Once the contract revision is present, every later migration is required to be
+  // backward-compatible and can run in the pre-upgrade phase.
   await runAtlas([
     'migrate',
     'apply',
@@ -363,6 +514,40 @@ export async function applyControlPlaneMigrations(): Promise<void> {
     REVISIONS_SCHEMA,
   ]);
 
+  await runPostMigrationTasks(databaseUrl);
+}
+
+export async function applyControlPlaneContractMigrations(): Promise<void> {
+  const databaseUrl = getDatabaseUrl();
+  await ensureAtlasBaseline(databaseUrl);
+
+  const plaintextCredentialsRemoved = await isAtlasRevisionApplied(
+    databaseUrl,
+    PLAINTEXT_CREDENTIAL_REMOVAL_VERSION
+  );
+  if (plaintextCredentialsRemoved) {
+    return;
+  }
+
+  const envelopeMigrationApplied = await isAtlasRevisionApplied(
+    databaseUrl,
+    CREDENTIAL_ENVELOPE_VERSION
+  );
+  if (!envelopeMigrationApplied) {
+    throw new Error('Control-plane expand migrations must complete before contract migrations');
+  }
+
+  await migrateCredentialEnvelopes(databaseUrl);
+  await runAtlas([
+    'migrate',
+    'apply',
+    '--dir',
+    MIGRATIONS_DIR_URL,
+    '--url',
+    databaseUrl,
+    '--revisions-schema',
+    REVISIONS_SCHEMA,
+  ]);
   await runPostMigrationTasks(databaseUrl);
 }
 

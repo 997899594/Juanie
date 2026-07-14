@@ -11,19 +11,22 @@ Juanie is a modern AI-driven DevOps platform built with:
 - **Auth**: NextAuth.js (GitHub/GitLab OAuth)
 - **UI**: Tailwind CSS + Radix UI components
 - **K8s SDK**: @kubernetes/client-node
-- **Queue**: BullMQ + Redis
+- **Durable execution**: Restate OSS + PostgreSQL transactional outbox
+- **Short-task queue**: BullMQ + Redis（仅 AI 等可重建短任务）
 - **Runtime**: Bun
 
 ## Build/Lint/Test Commands
 
 ```bash
-# Development (同时启动 Web + Worker + Scheduler)
-bun run dev              # 启动开发服务器 (web:3001) + 队列 worker + scheduler
+# Development
+bun run dev              # Web + Restate services + outbox dispatcher + short-task worker + scheduler
 
 # 单独启动
 bun run dev:web          # 只启动 Next.js 开发服务器
 bun run dev:worker       # 只启动队列 worker (热重载)
 bun run dev:scheduler    # 只启动 cron scheduler (热重载)
+bun run dev:restate-services # 只启动 Restate service endpoint
+bun run dev:outbox       # 只启动 transactional outbox dispatcher
 bun run dev:redis        # 启动 Redis Docker 容器
 
 # Build
@@ -33,6 +36,8 @@ bun run build            # Build for production
 bun run start            # 启动 Next.js 生产服务器
 bun run start:worker     # 启动队列 worker (生产模式)
 bun run start:scheduler  # 启动 cron scheduler (生产模式)
+bun run start:restate-services # 启动 Restate service endpoint
+bun run start:outbox     # 启动 outbox dispatcher
 
 # Linting & Formatting
 bun run lint             # Run Biome linter
@@ -58,11 +63,11 @@ bun run db:seed          # Run seed script
 ```
 创建项目 API (POST /api/projects)
     ↓
-插入 projectInitSteps (pending)
+同一 PostgreSQL 事务插入 projectInitSteps + outboxMessage
     ↓
-添加 BullMQ Job
+Outbox Dispatcher one-way send 到 Restate
     ↓
-Worker 处理 (project-init queue)
+ProjectInitializationWorkflow durable execution
     ↓
 SSE 推送进度
 ```
@@ -89,11 +94,9 @@ SSE 推送进度
 ```
 创建部署 API (POST /api/projects/[id]/deployments)
     ↓
-插入 deployment (status: queued)
+同一 PostgreSQL 事务插入 deployment + outboxMessage
     ↓
-添加 BullMQ Job (deployment queue)
-    ↓
-Worker 处理
+Restate DeploymentWorkflow durable execution
     ↓
 更新 deployment status
 ```
@@ -109,13 +112,15 @@ CI 上传 deploy/k8s/charts/juanie 到服务器
     ↓
 CI 执行 helm upgrade --install juanie
     ↓
-Helm pre-upgrade schema-runner command 执行控制面 Atlas 迁移
+Helm pre-install/pre-upgrade schema-runner 执行 expand 迁移与凭据回填
     ↓
-Helm chart 同步 Web / Worker / Scheduler
+Helm chart 同步 Web / Restate / Dispatcher / Worker / Scheduler
+    ↓
+Helm post-install/post-upgrade schema-runner 执行 destructive contract 迁移
 ```
 
-平台自身发布不再走 Argo CD GitOps；CI 是唯一发布入口。不要恢复 `values-gitops.yaml` / `juanie-platform` 这条第二发布路径；如需排障，优先看 GitHub Actions deploy-platform job、Helm release、schema-sync Job 和 Web / Worker rollout。
-worker、scheduler、schema-runner 共享同一个 Bun runtime 镜像，通过 command 区分入口，避免推送/拉取重复运行时镜像。
+平台自身发布不再走 Argo CD GitOps；CI 是唯一发布入口。不要恢复 `values-gitops.yaml` / `juanie-platform` 这条第二发布路径；如需排障，优先看 GitHub Actions deploy-platform job、Helm release、schema-expand/schema-contract Job 和 Web / Worker rollout。
+Restate services、outbox dispatcher、worker、scheduler、schema-runner 共享同一个 Bun runtime 镜像，通过 command 区分入口。Web、controller、worker、scheduler、schema-runner 使用独立 ServiceAccount；Web/worker/schema-runner 不挂载 Kubernetes token。
 
 ## Code Style Guidelines
 
@@ -218,21 +223,18 @@ const result = await db
   .innerJoin(teams, eq(teams.id, projects.teamId))
 ```
 
-### Queue (BullMQ)
+### Durable Execution (Restate + Outbox)
 
-- Queue definitions: `src/lib/queue/index.ts`
-- Project init processor: `src/lib/queue/project-init.ts`
-- Deployment processor: `src/lib/queue/deployment.ts`
-- Worker entry point: `src/lib/queue/worker.ts`
-- Scheduler entry point: `src/lib/queue/scheduler.ts`
+- Outbox persistence: `src/lib/outbox/service.ts`
+- Dispatcher: `src/lib/outbox/dispatcher.ts`
+- Restate contracts/registration: `src/lib/restate/`
+- Domain workflows: bounded-context `workflows/` directories under projects, releases,
+  deployments, migrations, environments and schema-management
+- Durable activities: `src/lib/queue/project-init.ts`, `deployment.ts`, `migration.ts`, `release.ts`, `project-delete.ts`
+- BullMQ registry: `src/lib/queue/index.ts`（只允许可重建、非权威短任务）
+- Scheduler entry point: `src/lib/queue/scheduler.ts`（Kubernetes Lease 选主）
 
-```typescript
-// Add job to queue
-import { addProjectInitJob, addDeploymentJob } from '@/lib/queue'
-
-await addProjectInitJob(projectId, 'import')
-await addDeploymentJob(deploymentId, projectId, environmentId)
-```
+业务 command 必须在修改 aggregate 的同一数据库事务中调用 `enqueueOutboxMessage(tx, ...)`。禁止在提交后调用 `queue.add` 或直接调用 Restate ingress。Virtual Object command 由 dispatcher 使用 outbox id 作为 Restate idempotency key；Workflow command 使用包含 command id 的 workflow key 作为 Restate 原生幂等边界（Restate 禁止 Workflow handler 携带 idempotency key header）。
 
 ### 团队集成绑定（Team Integration Binding）
 
@@ -278,7 +280,7 @@ await createNamespace('my-namespace')
 ### Trace
 
 - `src/lib/trace/context.ts` 统一生成 W3C 风格 `traceId` / `traceparent`
-- release 创建后使用 release id 派生稳定 trace，并透传到 release/deployment/migration BullMQ job
+- release 创建后使用 release id 派生稳定 trace，并通过 outbox/Restate command 透传
 - 新增发布链路日志时应带 `buildTraceLogFields(...)`，避免只靠 releaseId 或 jobId 手工拼排障线索
 
 ### API 访问控制与错误处理
@@ -386,7 +388,9 @@ src/
 │   ├── integrations/      # OAuth/Grant/团队绑定控制面
 │   ├── config/
 │   │   └── parser.ts      # juanie.yaml 解析器（Zod 校验）
-│   ├── queue/             # BullMQ 队列
+│   ├── queue/             # Remaining short-task BullMQ worker and transitional activity adapters
+│   ├── outbox/            # Transactional outbox + dispatcher
+│   ├── restate/           # Durable service contracts and endpoint
 │   ├── auth.ts            # NextAuth configuration
 │   ├── k8s.ts             # Kubernetes client
 │   ├── argocd.ts          # Argo CD / Argo Rollouts helpers
@@ -431,7 +435,7 @@ GITLAB_CLIENT_ID=xxx
 GITLAB_CLIENT_SECRET=xxx
 GITLAB_URL=https://gitlab.com  # 自托管时填写自定义地址
 
-# Redis (BullMQ)
+# Redis (realtime + non-authoritative short tasks)
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
@@ -459,7 +463,7 @@ SMTP_PASS=xxx
    - Run `bun run dev:redis` to start Redis (首次需要)
    - Run `bun run db:push` to apply Atlas migrations
 
-2. **Development**: Run `bun run dev` (启动 Web + Worker + Scheduler)
+2. **Development**: Run Restate Server locally, then `bun run dev`
 
 3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:generate <name>`, `bun run db:hash`, and `bun run db:validate`
 

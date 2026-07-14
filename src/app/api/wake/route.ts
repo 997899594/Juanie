@@ -3,10 +3,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { domains, services } from '@/lib/db/schema';
 import { isProductionEnvironment } from '@/lib/environments/model';
-import {
-  getEnvironmentRuntimeState,
-  setEnvironmentRuntimeState,
-} from '@/lib/environments/runtime-control';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
+import { checkRateLimit } from '@/lib/rate-limit/redis';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +19,7 @@ function normalizeHostname(value: string | null): string | null {
 
 function getReturnPath(url: URL): string {
   const path = url.searchParams.get('path');
-  if (!path || !path.startsWith('/') || path.startsWith('//')) {
+  if (!path?.startsWith('/') || path.startsWith('//')) {
     const rewrittenPath = url.pathname.startsWith('/api/wake/')
       ? url.pathname.slice('/api/wake'.length)
       : null;
@@ -173,6 +171,49 @@ export async function GET(request: Request) {
     );
   }
 
+  const clientIdentity =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown';
+  try {
+    const rateLimit = await checkRateLimit({
+      namespace: 'wake',
+      identity: `${hostname}:${clientIdentity}`,
+      limit: 20,
+      windowSeconds: 300,
+    });
+    if (!rateLimit.allowed) {
+      return new NextResponse(
+        buildWakePage({
+          hostname,
+          returnPath: '/',
+          title: '唤醒请求过于频繁',
+          summary: '请稍后再试，环境唤醒请求已经在处理中。',
+          status: 'blocked',
+        }),
+        {
+          status: 429,
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'no-store',
+            'retry-after': String(rateLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
+  } catch {
+    return html(
+      buildWakePage({
+        hostname,
+        returnPath: '/',
+        title: '唤醒入口暂时不可用',
+        summary: '请求保护服务当前不可用，请稍后再试。',
+        status: 'blocked',
+      }),
+      503
+    );
+  }
+
   const domain = await db.query.domains.findFirst({
     where: eq(domains.hostname, hostname),
     with: {
@@ -243,65 +284,24 @@ export async function GET(request: Request) {
     );
   }
 
-  let runtimeState = await getEnvironmentRuntimeState({
-    project: domain.project,
-    environment: domain.environment,
-    services: serviceList,
+  await enqueueOutboxMessage(db, {
+    topic: 'environment.runtime.requested',
+    aggregateType: 'environment',
+    aggregateId: domain.environment.id,
+    commandId: `wake-${Math.floor(Date.now() / 60_000)}`,
+    payload: {
+      action: 'wake',
+      projectId: domain.project.id,
+      hostname,
+    },
   });
-
-  if (runtimeState.state !== 'not_deployed' && runtimeState.state !== 'unknown') {
-    try {
-      runtimeState = await setEnvironmentRuntimeState({
-        project: domain.project,
-        environment: domain.environment,
-        action: 'wake',
-        waitForReadyMs: 2_000,
-      });
-    } catch (error) {
-      return html(
-        buildWakePage({
-          hostname,
-          returnPath,
-          title: '自动唤醒失败',
-          summary: error instanceof Error ? error.message : '环境运行态暂时不可控。',
-          status: 'blocked',
-        }),
-        500
-      );
-    }
-  }
-
-  if (runtimeState.state === 'running') {
-    return html(
-      buildWakePage({
-        hostname,
-        returnPath,
-        title: '环境已经唤醒',
-        summary: '正在把流量切回应用服务，页面会自动进入原链接。',
-        status: 'ready',
-      })
-    );
-  }
-
-  if (runtimeState.state === 'not_deployed' || runtimeState.state === 'unknown') {
-    return html(
-      buildWakePage({
-        hostname,
-        returnPath,
-        title: '环境暂时不能自动唤醒',
-        summary: runtimeState.summary,
-        status: 'blocked',
-      }),
-      409
-    );
-  }
 
   return html(
     buildWakePage({
       hostname,
       returnPath,
       title: '正在唤醒环境',
-      summary: `${runtimeState.summary}。Juanie 会保留数据库与配置，只恢复应用工作负载。`,
+      summary: 'Juanie 会保留数据库与配置，只恢复应用工作负载。',
       status: 'waking',
     })
   );

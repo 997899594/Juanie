@@ -215,7 +215,7 @@ function buildPreviewApplicationSetElement(input: {
           ? input.serviceList.find((candidate) => candidate.id === domain.serviceId)
           : undefined) ?? defaultPublicService;
 
-      if (!service || service.type !== 'web' || service.isPublic === false) {
+      if (service?.type !== 'web' || service.isPublic === false) {
         return null;
       }
 

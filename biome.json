@@ -1,7 +1,20 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
   "files": {
-    "includes": ["src/**/*.ts", "src/**/*.tsx", "!src/app/api/_examples"]
+    "includes": [
+      "*.ts",
+      "*.mjs",
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "tests/**/*.ts",
+      "scripts/**/*.ts",
+      "templates/**/*.ts",
+      "templates/**/*.tsx",
+      "templates/**/*.js",
+      "templates/**/*.mjs",
+      "!next-env.d.ts",
+      "!src/app/api/_examples"
+    ]
   },
   "linter": {
     "enabled": true,

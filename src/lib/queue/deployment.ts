@@ -1,4 +1,3 @@
-import { Job, Worker } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
@@ -9,7 +8,6 @@ import {
   appendDeploymentRealtimeLogs,
   updateDeploymentRealtimeState,
 } from '@/lib/realtime/deployments';
-import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
   shouldUseArgoRolloutsForService,
   supportsArgoRolloutsDeploymentStrategy,
@@ -20,10 +18,16 @@ import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/r
 import { buildServiceVerificationPlan, cleanupCandidateResources } from '@/lib/releases/workloads';
 import { buildTraceLogFields } from '@/lib/trace/context';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
-import type { DeploymentJobData } from './index';
 
 const deploymentWorkerLogger = logger.child({ component: 'deployment-worker' });
 const SIBLING_CANCEL_REASON_MAX_CHARS = 500;
+
+export interface DeploymentCommand {
+  deploymentId: string;
+  projectId: string;
+  environmentId: string;
+  traceId?: string;
+}
 
 function classifyDeploymentFailureStatus(message: string) {
   const verificationSignals = [
@@ -176,21 +180,21 @@ async function cancelSiblingAwaitingRolloutDeployments(input: {
   });
 }
 
-export async function processDeployment(job: Job<DeploymentJobData>) {
+export async function runDeploymentCommand(data: DeploymentCommand, jobId?: string) {
   const traceFields = buildTraceLogFields({
-    traceId: job.data.traceId,
-    projectId: job.data.projectId,
-    environmentId: job.data.environmentId,
-    deploymentId: job.data.deploymentId,
-    jobId: job.id,
-    queue: 'deployment',
+    traceId: data.traceId,
+    projectId: data.projectId,
+    environmentId: data.environmentId,
+    deploymentId: data.deploymentId,
+    jobId,
+    queue: jobId ? 'deployment' : 'restate-deployment',
   });
   const deployment = await db.query.deployments.findFirst({
-    where: eq(deployments.id, job.data.deploymentId),
+    where: eq(deployments.id, data.deploymentId),
   });
 
   if (!deployment) {
-    throw new Error(`Deployment ${job.data.deploymentId} not found`);
+    throw new Error(`Deployment ${data.deploymentId} not found`);
   }
 
   deploymentWorkerLogger.info('Processing deployment job', {
@@ -200,9 +204,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
   });
 
   try {
-    await executeDeploymentWorkload(deployment.id, async (value) => {
-      await job.updateProgress(value);
-    });
+    await executeDeploymentWorkload(deployment.id);
     await resumeReleaseAfterDeploymentProgress(deployment.id);
     return { success: true };
   } catch (error) {
@@ -273,13 +275,4 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
     throw error;
   }
-}
-
-export function createDeploymentWorker() {
-  return new Worker<DeploymentJobData>('deployment', processDeployment, {
-    connection: resolveRedisConnectionOptions({
-      maxRetriesPerRequest: null,
-    }),
-    concurrency: 10,
-  });
 }

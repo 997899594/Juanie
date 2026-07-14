@@ -1,13 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
-import { addProjectDeleteJob } from '@/lib/queue';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { publishProjectRealtimeSnapshot } from '@/lib/realtime/projects';
 
 export interface ProjectDeletionRequestResult {
   status: 'deleting';
   alreadyDeleting: boolean;
+  commandId: string | null;
   statusMessage: string | null;
 }
 
@@ -30,7 +32,6 @@ export async function requestProjectDeletion(
   }
 
   if (project.status === 'deleting') {
-    await addProjectDeleteJob(projectId);
     await publishProjectRealtimeSnapshot(projectId).catch((error) => {
       projectDeleteServiceLogger.warn('Failed to publish deleting project snapshot', {
         projectId,
@@ -40,32 +41,29 @@ export async function requestProjectDeletion(
     return {
       status: 'deleting',
       alreadyDeleting: true,
+      commandId: null,
       statusMessage: project.statusMessage ?? null,
     };
   }
 
-  const previousStatus = project.status ?? 'active';
-  await db
-    .update(projects)
-    .set({
-      status: 'deleting',
-      statusMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(projects.id, projectId));
-
-  try {
-    await addProjectDeleteJob(projectId);
-  } catch (error) {
-    await db
+  const commandId = randomUUID();
+  await db.transaction(async (tx) => {
+    await tx
       .update(projects)
       .set({
-        status: previousStatus,
+        status: 'deleting',
+        statusMessage: null,
         updatedAt: new Date(),
       })
       .where(eq(projects.id, projectId));
-    throw error;
-  }
+    await enqueueOutboxMessage(tx, {
+      topic: 'project.delete.requested',
+      aggregateType: 'project',
+      aggregateId: projectId,
+      commandId,
+      payload: { deletionAttemptId: commandId },
+    });
+  });
 
   await publishProjectRealtimeSnapshot(projectId).catch((error) => {
     projectDeleteServiceLogger.warn('Failed to publish deleting project snapshot', {
@@ -77,6 +75,7 @@ export async function requestProjectDeletion(
   return {
     status: 'deleting',
     alreadyDeleting: false,
+    commandId,
     statusMessage: null,
   };
 }

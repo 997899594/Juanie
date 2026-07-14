@@ -11,6 +11,7 @@ import {
   type TeamRole,
   teamMembers,
   teams,
+  users,
 } from '@/lib/db/schema';
 import { pickDefaultEnvironment } from '@/lib/environments/model';
 import { isUuid } from '@/lib/uuid';
@@ -25,6 +26,24 @@ export async function requireSession(): Promise<Session & { user: { id: string }
   }
 
   return session as Session & { user: { id: string } };
+}
+
+export function isPlatformOperator(role: string | null | undefined): boolean {
+  return role === 'operator';
+}
+
+export async function requirePlatformOperator(): Promise<Session & { user: { id: string } }> {
+  const session = await requireSession();
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, session.user.id),
+    columns: { platformRole: true },
+  });
+
+  if (!isPlatformOperator(user?.platformRole)) {
+    throw accessError('forbidden', 'Platform operator access required');
+  }
+
+  return session;
 }
 
 export async function getTeamAccessOrThrow(teamId: string, userId: string) {

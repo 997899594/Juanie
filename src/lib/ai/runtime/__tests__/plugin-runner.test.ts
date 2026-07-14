@@ -5,6 +5,8 @@ import type { AIPlugin } from '@/lib/ai/runtime/types';
 const recordAIRunTelemetryMock = mock(() => undefined);
 const recordAIPluginUsageMock = mock(async () => undefined);
 const createAuditLogMock = mock(async () => undefined);
+const reserveAITokensMock = mock(async () => 'reservation-1');
+const settleAITokenReservationMock = mock(async () => undefined);
 
 mock.module('@/lib/ai/core/telemetry', () => ({
   recordAIRunTelemetry: recordAIRunTelemetryMock,
@@ -12,6 +14,11 @@ mock.module('@/lib/ai/core/telemetry', () => ({
 
 mock.module('@/lib/ai/runtime/usage-service', () => ({
   recordAIPluginUsage: recordAIPluginUsageMock,
+}));
+
+mock.module('@/lib/ai/runtime/token-budget', () => ({
+  reserveAITokens: reserveAITokensMock,
+  settleAITokenReservation: settleAITokenReservationMock,
 }));
 
 mock.module('@/lib/audit', () => ({

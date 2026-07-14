@@ -20,7 +20,7 @@ function normalizeSchemaRepairGeneratedArtifacts(
     | null
     | undefined
 ): SchemaRepairGeneratedArtifacts {
-  if (!input || input.status !== 'succeeded') {
+  if (input?.status !== 'succeeded') {
     return {
       files: {},
       generatedFiles: [],

@@ -8,6 +8,7 @@ import {
 } from '@/lib/db/schema';
 import { integrationErrors, toIntegrationError } from '@/lib/integrations/domain/errors';
 import type { Capability } from '@/lib/integrations/domain/models';
+import { decryptGrantAccessToken } from '@/lib/integrations/service/grant-credentials';
 
 export type IntegrationSession = {
   integrationId: string;
@@ -84,6 +85,7 @@ export const createIntegrationSession = async ({
 
   const capabilities = snapshotRows.map((row) => row.capability) as Capability[];
   assertCapabilities(capabilities, requiredCapabilities);
+  const accessToken = await decryptGrantAccessToken(grant);
 
   return {
     integrationId,
@@ -91,7 +93,7 @@ export const createIntegrationSession = async ({
     serverUrl: identity.serverUrl,
     teamId,
     grantId: grant.id,
-    accessToken: grant.accessToken,
+    accessToken,
     capabilities,
     bindingId: binding?.id,
     bindingAuthMode: binding?.authMode,

@@ -1,40 +1,43 @@
-{{- if .Values.schemaSync.enabled }}
+{{- define "juanie.schemaSyncJob" -}}
+{{- $root := .root -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Chart.Name }}-schema-sync
-  namespace: {{ .Values.namespace }}
+  name: {{ $root.Chart.Name }}-schema-{{ .phase }}
+  namespace: {{ $root.Values.namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/component: schema-sync
+    app.kubernetes.io/name: {{ $root.Chart.Name }}
+    app.kubernetes.io/component: schema-{{ .phase }}
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook: {{ .hook }}
+    helm.sh/hook-weight: {{ .weight | quote }}
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
-  backoffLimit: {{ .Values.schemaSync.backoffLimit }}
-  ttlSecondsAfterFinished: {{ .Values.schemaSync.ttlSecondsAfterFinished }}
+  backoffLimit: {{ $root.Values.schemaSync.backoffLimit }}
+  ttlSecondsAfterFinished: {{ $root.Values.schemaSync.ttlSecondsAfterFinished }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ .Chart.Name }}
-        app.kubernetes.io/component: schema-sync
+        app.kubernetes.io/name: {{ $root.Chart.Name }}
+        app.kubernetes.io/component: schema-{{ .phase }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ $root.Chart.Name }}-schema-runner
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
-          imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
+          image: {{ include "juanie.image" $root.Values.images.busybox | quote }}
+          imagePullPolicy: {{ $root.Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
       containers:
-        - name: schema-sync
-          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
-          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
-          command: ["./schema-runner", "control-plane-apply"]
+        - name: schema-{{ .phase }}
+          image: {{ include "juanie.image" $root.Values.images.runtime | quote }}
+          imagePullPolicy: {{ $root.Values.images.runtime.pullPolicy }}
+          command: ["./schema-runner", "control-plane-{{ .phase }}"]
           env:
             - name: HOME
               value: /tmp
@@ -42,9 +45,9 @@ spec:
               value: /tmp/.cache
           envFrom:
             - configMapRef:
-                name: {{ .Chart.Name }}-config
+                name: {{ $root.Chart.Name }}-config
             - secretRef:
-                name: {{ include "juanie.secretName" . }}
+                name: {{ include "juanie.effectiveSecretName" $root }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -56,4 +59,10 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+{{- end }}
+
+{{- if .Values.schemaSync.enabled }}
+{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "expand" "hook" "pre-install,pre-upgrade" "weight" "-10") }}
+---
+{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "contract" "hook" "post-install,post-upgrade" "weight" "10") }}
 {{- end }}

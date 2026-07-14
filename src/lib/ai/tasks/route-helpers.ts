@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { toAIRouteErrorResponse } from '@/lib/ai/http/route-response';
 import { AI_TASK_ENQUEUED_SUMMARY, aiTaskRequestSchema } from '@/lib/ai/tasks/catalog';
 import type { GenericAITaskRecord } from '@/lib/ai/tasks/generic-task-service';
+import { logger } from '@/lib/logger';
+
+const aiTaskRouteLogger = logger.child({ component: 'ai-task-route' });
 
 export async function handleAIAsyncTaskPost(input: {
   request: Request;
@@ -18,7 +21,13 @@ export async function handleAIAsyncTaskPost(input: {
     }
 
     const task = await input.createTask(parsed.data.question);
-    await input.enqueueTask(task);
+    await input.enqueueTask(task).catch((error) => {
+      aiTaskRouteLogger.warn('Immediate AI task dispatch failed; scheduler will rebuild it', {
+        taskId: task.id,
+        kind: task.kind,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     return NextResponse.json({
       taskId: task.id,

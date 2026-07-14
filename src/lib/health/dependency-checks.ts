@@ -8,6 +8,7 @@ interface HealthResponse {
     database: HealthCheck;
     redis?: HealthCheck;
     kubernetes?: HealthCheck;
+    restate?: HealthCheck;
   };
 }
 
@@ -58,6 +59,19 @@ async function checkRedis(): Promise<HealthCheck> {
   } finally {
     redis.disconnect();
   }
+}
+
+async function checkRestate(): Promise<HealthCheck> {
+  const start = Date.now();
+  const adminUrl = (process.env.RESTATE_ADMIN_URL ?? 'http://localhost:9070').replace(/\/$/u, '');
+  const response = await fetch(`${adminUrl}/health`, {
+    signal: AbortSignal.timeout(2_000),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(`Restate health check returned HTTP ${response.status}`);
+  }
+  return { status: 'pass', latency: Date.now() - start };
 }
 
 async function checkKubernetes(): Promise<HealthCheck> {
@@ -150,6 +164,16 @@ export async function getHealthResponse() {
     }
   }
 
+  try {
+    checks.restate = await checkRestate();
+  } catch (error) {
+    checks.restate = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Restate connection failed',
+    };
+    overallStatus = 'unhealthy';
+  }
+
   if (isKubernetesCheckEnabled()) {
     try {
       checks.kubernetes = await checkKubernetes();
@@ -204,6 +228,17 @@ export async function getReadinessResponse() {
         message: error instanceof Error ? error.message : 'Redis connection failed',
       };
     }
+  }
+
+  try {
+    response.checks.restate = await checkRestate();
+  } catch (error) {
+    response.status = 'unhealthy';
+    response.checks.restate = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Restate connection failed',
+    };
+    return failJson(response, startTime);
   }
 
   return okJson(response, startTime);

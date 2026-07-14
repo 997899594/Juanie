@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: postgres
-          image: "{{ .Values.images.postgres.repository }}:{{ .Values.images.postgres.tag }}"
+          image: {{ include "juanie.image" .Values.images.postgres | quote }}
           imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
           ports:
             - containerPort: 5432
@@ -43,7 +43,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Chart.Name }}-secret
+                  name: {{ include "juanie.effectiveSecretName" . }}
                   key: DATABASE_PASSWORD
           volumeMounts:
             - name: postgres-data

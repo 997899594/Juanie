@@ -44,8 +44,7 @@ export async function syncReleaseGitTracking(releaseId: string): Promise<{
   });
 
   if (
-    !release ||
-    release.status !== 'succeeded' ||
+    release?.status !== 'succeeded' ||
     !release.sourceCommitSha ||
     !release.project.repository ||
     isPreviewEnvironment(release.environment)

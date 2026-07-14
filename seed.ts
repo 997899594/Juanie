@@ -1,7 +1,15 @@
 import 'dotenv/config';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from './src/lib/db/index.js';
-import { gitProviders, teamMembers, teams, users } from './src/lib/db/schema.js';
-import { eq } from 'drizzle-orm';
+import {
+  integrationGrants,
+  integrationIdentities,
+  teamMembers,
+  teams,
+  users,
+} from './src/lib/db/schema.js';
+import { upsertGrantFromOAuth } from './src/lib/integrations/service/grant-service.js';
+import { backfillOwnerBindingForTeam } from './src/lib/integrations/service/team-binding-service.js';
 
 const DEV_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -20,11 +28,20 @@ async function seed() {
         id: DEV_USER_ID,
         name: 'Dev User',
         email: 'dev@localhost',
+        platformRole: 'operator',
       })
       .returning();
     devUser = created;
     console.log('✅ Created dev user');
   } else {
+    if (devUser.platformRole !== 'operator') {
+      const [updated] = await db
+        .update(users)
+        .set({ platformRole: 'operator', updatedAt: new Date() })
+        .where(eq(users.id, DEV_USER_ID))
+        .returning();
+      devUser = updated;
+    }
     console.log('✅ Dev user already exists');
   }
 
@@ -63,22 +80,37 @@ async function seed() {
     console.log('✅ Dev user already in team');
   }
 
-  // Create mock git provider
-  const existingProvider = await db.query.gitProviders.findFirst({
-    where: eq(gitProviders.userId, devUser.id),
+  // Create an encrypted development integration grant.
+  const existingIdentity = await db.query.integrationIdentities.findFirst({
+    where: and(
+      eq(integrationIdentities.userId, devUser.id),
+      eq(integrationIdentities.provider, 'github')
+    ),
   });
+  const existingGrant = existingIdentity
+    ? await db.query.integrationGrants.findFirst({
+        where: and(
+          eq(integrationGrants.integrationIdentityId, existingIdentity.id),
+          isNull(integrationGrants.revokedAt)
+        ),
+      })
+    : null;
 
-  if (!existingProvider) {
-    await db.insert(gitProviders).values({
+  if (!existingGrant) {
+    if (!process.env.ENCRYPTION_MASTER_KEY) {
+      throw new Error('ENCRYPTION_MASTER_KEY is required to seed encrypted integration grants');
+    }
+    await upsertGrantFromOAuth({
       userId: devUser.id,
-      name: 'GitHub',
-      type: 'github',
+      provider: 'github',
       accessToken: 'mock-token-for-development',
+      scopeRaw: 'repo workflow read:packages',
     });
-    console.log('✅ Created mock git provider');
+    console.log('✅ Created encrypted mock integration grant');
   } else {
-    console.log('✅ Git provider already exists');
+    console.log('✅ Integration grant already exists');
   }
+  await backfillOwnerBindingForTeam(devTeam.id);
 
   console.log('\n🎉 Seed complete!');
   console.log('You can now log in with "Dev User" credentials');

@@ -14,14 +14,27 @@ images:
     repository: busybox
     pullPolicy: IfNotPresent
     tag: "1.36"
+    digest: "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
   postgres:
     repository: pgvector/pgvector
     pullPolicy: IfNotPresent
     tag: "pg16"
+    digest: "sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
   redis:
     repository: redis
     pullPolicy: IfNotPresent
     tag: "7-alpine"
+    digest: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+  restate:
+    repository: docker.io/restatedev/restate
+    pullPolicy: IfNotPresent
+    tag: "1.7.2"
+    digest: "sha256:1b87ca71fafcf8af350e59d9e0164e1f5161a313fc4e65f3ee4143d0a4eac400"
+  curl:
+    repository: curlimages/curl
+    pullPolicy: IfNotPresent
+    tag: "8.16.0"
+    digest: "sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6"
 
 imagePullSecrets: []
 
@@ -32,9 +45,10 @@ replicaCount:
   web: 1
   worker: 1
   scheduler: 1
+  restateServices: 1
+  outboxDispatcher: 1
 
 worker:
-  runScheduler: false
   insecureSkipTlsVerify: false
 
 scheduler:
@@ -44,6 +58,25 @@ schemaSync:
   enabled: false
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
+
+restate:
+  storage: "10Gi"
+  registration:
+    enabled: true
+    backoffLimit: 12
+
+backup:
+  postgresql:
+    enabled: false
+    schedule: "17 2 * * *"
+    bucket: ""
+    prefix: "backups/control-plane"
+    retentionDays: 30
+  restateSnapshot:
+    enabled: false
+    schedule: "47 2 * * *"
+    volumeSnapshotClassName: ""
+    retentionCount: 7
 
 rbac:
   create: true
@@ -74,9 +107,27 @@ resources:
     requests:
       cpu: 100m
       memory: 256Mi
+  restateServices:
+    requests:
+      cpu: 100m
+      memory: 256Mi
     limits:
       cpu: 1000m
       memory: 1Gi
+  outboxDispatcher:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  restate:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
   worker:
     requests:
       cpu: 100m
@@ -103,6 +154,10 @@ env:
   DATABASE_NAME: "juanie"
   DATABASE_USER: "postgres"
   DATABASE_SSL_MODE: "disable"
+  RESTATE_INGRESS_URL: "http://juanie-restate:8080"
+  RESTATE_ADMIN_URL: "http://juanie-restate:9070"
+  RESTATE_SERVICE_PORT: "9080"
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
   AUTH_TRUST_HOST: "true"
   # Trust the Kubernetes ServiceAccount CA so Node-based platform workers can
   # verify the in-cluster Kubernetes API certificate without disabling TLS.
@@ -153,6 +208,9 @@ env:
   DBGATE_MEMORY_LIMIT: "512Mi"
   DBGATE_IDLE_TTL_MINUTES: "60"
   DBGATE_CONSOLE_CLEANUP_SCHEDULE: "*/15 * * * *"
+  AI_TASK_RECONCILIATION_SCHEDULE: "* * * * *"
+  OUTBOX_DELIVERED_RETENTION_DAYS: "14"
+  OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS: "30"
 
 # Gateway 配置
 hostname: "juanie.art"
@@ -178,6 +236,9 @@ secret:
   existingSecret: "juanie-secret"
   databasePassword: ""
   nextauthSecret: ""
+  encryptionMasterKey: ""
+  encryptionMasterKeyVersion: "1"
+  metricsBearerToken: ""
   githubClientId: ""
   githubClientSecret: ""
   gitlabClientId: ""
@@ -200,3 +261,9 @@ externalSecret:
   targetName: ""
   data: []
   dataFrom: []
+
+monitoring:
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}

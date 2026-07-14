@@ -7,7 +7,7 @@ COPY . /app
 # ============================================
 # Stage 2: Dependencies
 # ============================================
-FROM oven/bun:1.3.9 AS deps
+FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS deps
 WORKDIR /app
 ENV CI=true
 ENV LEFTHOOK=0
@@ -44,11 +44,15 @@ COPY --from=source /app ./
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
 RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
 RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=schema-runner
+RUN bun build ./src/lib/restate/server.ts --compile --outfile=restate-services
+RUN bun build ./src/lib/outbox/dispatcher.ts --compile --outfile=outbox-dispatcher
+RUN bun build ./src/lib/backups/control-plane-uploader.ts --compile --outfile=control-plane-backup-uploader
+RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-snapshot
 
 # ============================================
 # Stage 5: Runtime Postgres Dependencies
 # ============================================
-FROM oven/bun:1.3.9 AS runtime-postgres-deps
+FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS runtime-postgres-deps
 WORKDIR /migrate
 ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
@@ -71,7 +75,7 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 # Stage 6: Web Runner
 # ============================================
 # Web 保持 Next standalone 的 Node server 语义；Bun 作为构建、测试、worker 与 schema-runner 基线。
-FROM node:24-bookworm-slim AS web
+FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS web
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -94,7 +98,7 @@ CMD ["node", "server.js"]
 # ============================================
 # Stage 7: Runtime Runner
 # ============================================
-FROM oven/bun:1.3.9 AS runtime
+FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -105,10 +109,18 @@ ENV XDG_CACHE_HOME=/tmp/.cache
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG ATLAS_VERSION=1.2.0
+ARG ATLAS_SHA256_AMD64=c12b889e3349f0e5610aec32fe327e5a6911a0e472754a0c381c30c7c0630e88
+ARG ATLAS_SHA256_ARM64=b76308f558d50d006add507f3ab86afc1147644519dd327f7f5fac6d02d4f595
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git curl ca-certificates bash \
   && curl -sSfL "https://atlasbinaries.com/atlas/atlas-${TARGETOS}-${TARGETARCH}-v${ATLAS_VERSION}" -o /usr/local/bin/atlas \
+  && case "${TARGETARCH}" in \
+       amd64) atlas_sha256="${ATLAS_SHA256_AMD64}" ;; \
+       arm64) atlas_sha256="${ATLAS_SHA256_ARM64}" ;; \
+       *) echo "Unsupported Atlas architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+     esac \
+  && echo "${atlas_sha256}  /usr/local/bin/atlas" | sha256sum -c - \
   && chmod +x /usr/local/bin/atlas \
   && atlas version \
   && rm -rf /var/lib/apt/lists/*
@@ -116,6 +128,10 @@ RUN apt-get update \
 COPY --from=worker-builder /app/worker ./worker
 COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=worker-builder /app/schema-runner ./schema-runner
+COPY --from=worker-builder /app/restate-services ./restate-services
+COPY --from=worker-builder /app/outbox-dispatcher ./outbox-dispatcher
+COPY --from=worker-builder /app/control-plane-backup-uploader ./control-plane-backup-uploader
+COPY --from=worker-builder /app/restate-snapshot ./restate-snapshot
 COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations
 COPY --from=runtime-postgres-deps /migrate/package.json ./package.json
@@ -127,5 +143,9 @@ RUN mkdir -p /tmp/.cache
 RUN chmod +x ./worker
 RUN chmod +x ./scheduler
 RUN chmod +x ./schema-runner
+RUN chmod +x ./restate-services
+RUN chmod +x ./outbox-dispatcher
+RUN chmod +x ./control-plane-backup-uploader
+RUN chmod +x ./restate-snapshot
 
 CMD ["./worker"]

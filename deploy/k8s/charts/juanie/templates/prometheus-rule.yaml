@@ -1,0 +1,44 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Chart.Name }}-control-plane
+  namespace: {{ .Values.monitoring.prometheusRule.namespace | default .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    {{- with .Values.monitoring.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: juanie-control-plane
+      rules:
+        - alert: JuanieOutboxDeadLetter
+          expr: juanie_outbox_messages{status="dead_letter"} > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Juanie has unresolved outbox dead letters
+        - alert: JuanieOutboxDispatchLag
+          expr: juanie_outbox_oldest_pending_seconds > 300
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Juanie durable commands are not reaching Restate
+        - alert: JuanieAITaskBacklog
+          expr: juanie_ai_task_oldest_queued_seconds > 600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Juanie rebuildable AI tasks are not being consumed
+        - alert: JuanieWorkflowProjectionStale
+          expr: juanie_stale_workflow_projections > 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: Juanie control-plane workflow projections are stale
+{{- end }}

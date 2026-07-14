@@ -1,27 +1,10 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import {
-  getProjectAccessOrThrow,
-  getProjectEnvironmentOrThrow,
-  getProjectServiceOrThrow,
-  requireSession,
-} from '@/lib/api/access';
+import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import {
-  deployments,
-  environments,
-  migrationRuns,
-  projects,
-  releases,
-  services,
-} from '@/lib/db/schema';
-import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { deployments, environments, migrationRuns, services } from '@/lib/db/schema';
 import { canReadProjectRuntime } from '@/lib/policies/runtime-access';
-import { getProjectSourceRef } from '@/lib/projects/refs';
-import { createProjectRelease } from '@/lib/releases';
-import { ReleaseAdmissionError } from '@/lib/releases/admission';
-import { buildProjectReleasePlan } from '@/lib/releases/planning';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -95,134 +78,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
-    }
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const session = await requireSession();
-    const { project, member } = await getProjectAccessOrThrow(id, session.user.id);
-    const projectWithRepository = await db.query.projects.findFirst({
-      where: eq(projects.id, id),
-      with: {
-        repository: true,
-      },
-    });
-
-    const {
-      environmentId,
-      commitSha,
-      commitMessage,
-      ref,
-      serviceId,
-      serviceName,
-      image,
-      services: releaseServices,
-      sourceReleaseId,
-      dryRun,
-    } = await request.json();
-
-    if (!environmentId) {
-      return NextResponse.json({ error: 'Environment ID is required' }, { status: 400 });
-    }
-
-    const environment = await getProjectEnvironmentOrThrow(id, environmentId);
-    if (!canManageEnvironment(member.role, environment)) {
-      return NextResponse.json({ error: getEnvironmentGuardReason(environment) }, { status: 403 });
-    }
-
-    if (serviceId) {
-      await getProjectServiceOrThrow(id, serviceId);
-    }
-
-    const requestedServices =
-      Array.isArray(releaseServices) && releaseServices.length > 0
-        ? releaseServices
-        : image
-          ? [
-              {
-                id: serviceId,
-                name: serviceName,
-                image,
-              },
-            ]
-          : [];
-
-    const requestedServiceIds = Array.from(
-      new Set(
-        requestedServices
-          .map((candidate) => candidate?.id)
-          .filter((candidate): candidate is string => Boolean(candidate))
-      )
-    );
-
-    await Promise.all(
-      requestedServiceIds.map((candidateId) => getProjectServiceOrThrow(id, candidateId))
-    );
-
-    if (typeof sourceReleaseId === 'string') {
-      const sourceRelease = await db.query.releases.findFirst({
-        where: eq(releases.id, sourceReleaseId),
-        columns: {
-          id: true,
-          projectId: true,
-        },
-      });
-
-      if (!sourceRelease || sourceRelease.projectId !== id) {
-        return NextResponse.json({ error: '来源发布不属于当前项目' }, { status: 400 });
-      }
-    }
-
-    if (requestedServices.length === 0) {
-      return NextResponse.json(
-        { error: 'Releases require image metadata. Provide image or services[]' },
-        { status: 400 }
-      );
-    }
-
-    if (dryRun) {
-      const plan = await buildProjectReleasePlan({
-        projectId: id,
-        environmentId,
-        services: requestedServices,
-        sourceRef: ref ?? getProjectSourceRef({ branch: environment.branch, ...project }),
-        sourceCommitSha: commitSha ?? null,
-        entryPoint: 'manual_release',
-        requestSchemaRefresh: true,
-      });
-
-      return NextResponse.json({ plan });
-    }
-
-    const release = await createProjectRelease({
-      projectId: id,
-      environmentId,
-      services: requestedServices,
-      sourceRepository: projectWithRepository?.repository?.fullName ?? project.name,
-      sourceRef: ref ?? getProjectSourceRef({ branch: environment.branch, ...project }),
-      sourceCommitSha: commitSha ?? null,
-      configCommitSha: commitSha ?? null,
-      sourceReleaseId: typeof sourceReleaseId === 'string' ? sourceReleaseId : null,
-      triggeredBy: 'manual',
-      triggeredByUserId: session.user.id,
-      summary: commitMessage ?? null,
-      entryPoint: 'manual_release',
-    });
-
-    return NextResponse.json(release, { status: 202 });
-  } catch (error) {
-    if (isAccessError(error)) {
-      return toAccessErrorResponse(error);
-    }
-
-    if (error instanceof ReleaseAdmissionError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

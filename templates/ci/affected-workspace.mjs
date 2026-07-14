@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 function decodeJsonEnv(name, fallback) {
@@ -23,8 +23,7 @@ function readInputs() {
       '',
     sourceSha: process.env.JUANIE_SOURCE_SHA || process.env.GITHUB_SHA || process.env.CI_COMMIT_SHA,
     forceFullBuild:
-      process.env.JUANIE_FORCE_FULL_BUILD === 'true' ||
-      process.env.JUANIE_FORCE_FULL_BUILD === '1',
+      process.env.JUANIE_FORCE_FULL_BUILD === 'true' || process.env.JUANIE_FORCE_FULL_BUILD === '1',
   };
 }
 
@@ -173,15 +172,7 @@ function runTurboQueryAffected({ beforeSha, sourceSha, affectedRules }) {
   }
 
   const turbo = getTurboCommand(affectedRules);
-  const args = [
-    'query',
-    'affected',
-    '--base',
-    beforeSha,
-    '--head',
-    sourceSha,
-    '--no-color',
-  ];
+  const args = ['query', 'affected', '--base', beforeSha, '--head', sourceSha, '--no-color'];
 
   if (affectedRules.useTaskInputs) {
     args.push('--tasks', affectedRules.task || 'build');

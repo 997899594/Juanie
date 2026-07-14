@@ -14,6 +14,7 @@ import {
   requiresManualArgoRolloutPromotion,
   shouldUseArgoRolloutsForService,
 } from '@/lib/releases/argo-rollouts';
+import { appendReleaseEvent } from '@/lib/releases/events';
 import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import {
   completeReleaseAfterRolloutIfReady,
@@ -334,6 +335,8 @@ export async function buildDeploymentRolloutPlan(input: {
 export async function finalizeDeploymentRollout(input: {
   projectId: string;
   deploymentId: string;
+  actorUserId?: string | null;
+  commandId?: string;
 }) {
   const rollout = await buildDeploymentRolloutPlan(input);
 
@@ -428,6 +431,20 @@ export async function finalizeDeploymentRollout(input: {
     });
 
     if (deployment.releaseId) {
+      await appendReleaseEvent(db, {
+        releaseId: deployment.releaseId,
+        projectId: project.id,
+        environmentId: environment.id,
+        actorUserId: input.actorUserId ?? null,
+        eventKey: `rollout-completed:${input.commandId ?? deployment.id}`,
+        type: 'release.rollout.received',
+        data: {
+          deploymentId: deployment.id,
+          serviceId: service.id,
+          strategy: environment.deploymentStrategy,
+        },
+        correlationId: input.commandId ?? deployment.releaseId,
+      });
       await completeReleaseAfterRolloutIfReady(deployment.releaseId);
     }
 

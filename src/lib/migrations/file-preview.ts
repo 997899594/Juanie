@@ -1,12 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { Client as PgClient } from 'pg';
 import { db } from '@/lib/db';
-import {
-  databaseMigrations,
-  type MigrationRunStatus,
-  migrationRunStatuses,
-  migrationRuns,
-} from '@/lib/db/schema';
+import { databaseMigrations, migrationRuns } from '@/lib/db/schema';
 import {
   diffDatabaseSchemaAgainstDesiredSchema,
   extractAtlasMigrationVersion,
@@ -19,20 +14,43 @@ import {
   listRepositoryDirectoryFromRepoPath,
   readRepositoryFileFromRepoPath,
 } from '@/lib/migrations/fetch';
+import {
+  asSupportedDatabaseType,
+  asSupportedMigrationTool,
+  buildDeclaredPreview,
+  buildFilePreviewDetail,
+  buildPendingSnapshot,
+  buildRunStatusPreviewFromStoredSnapshot,
+  type DeclaredMigrationPreview,
+  type ExecutionStateSnapshot,
+  MAX_PREVIEW_FILES,
+  type MigrationFilePreviewRunLike,
+  type MigrationPendingInspection,
+  normalizeFileList,
+  normalizeRefValue,
+  normalizeStoredMigrationFilePreviewSnapshot,
+  now,
+  resolveMigrationPendingState,
+  resolveRevision,
+  resolveRunStatusExecutionState,
+  type SupportedMigrationTool,
+} from '@/lib/migrations/file-preview-model';
 import type {
-  MigrationFileExecutionPlan,
   MigrationFilePreviewDetail,
   MigrationFilePreviewSnapshot,
 } from '@/lib/migrations/file-preview-types';
 import { getDefaultMigrationPath } from '@/lib/migrations/path';
+
+export {
+  type MigrationPendingInspection,
+  type MigrationPendingState,
+  normalizeMigrationFilePreviewSnapshot,
+  resolveMigrationPendingState,
+} from '@/lib/migrations/file-preview-model';
+
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
 const FILE_EXTENSIONS = ['.sql', '.js', '.ts', '.mjs', '.cjs'];
-const MAX_PREVIEW_FILES = 12;
-const MAX_PREVIEW_CONTENT_BYTES = Math.max(
-  Number(process.env.MIGRATION_PREVIEW_CONTENT_BYTES ?? '16384'),
-  1024
-);
 const MAX_PRISMA_DIRS = 24;
 const PREVIEW_CACHE_TTL_MS = Math.max(
   Number(process.env.MIGRATION_PREVIEW_CACHE_TTL_MS ?? '45000'),
@@ -46,57 +64,8 @@ const PREVIEW_CACHE_MAX_ENTRIES = Math.max(
   Number(process.env.MIGRATION_PREVIEW_CACHE_MAX_ENTRIES ?? '500'),
   50
 );
-const SUPPORTED_MIGRATION_TOOLS = [
-  'atlas',
-  'drizzle',
-  'prisma',
-  'knex',
-  'typeorm',
-  'sql',
-  'custom',
-] as const;
-const SUPPORTED_DATABASE_TYPES = ['postgresql', 'mysql', 'redis', 'mongodb'] as const;
 
 export type { MigrationFilePreviewDetail, MigrationFilePreviewSnapshot };
-
-export type MigrationPendingState = 'pending' | 'none' | 'unknown';
-
-export interface MigrationPendingInspection {
-  state: MigrationPendingState;
-  preview: MigrationFilePreviewSnapshot | null;
-}
-
-interface MigrationFilePreviewRunLike {
-  id: string;
-  projectId: string;
-  specification?: {
-    tool?: string | null;
-    migrationPath?: string | null;
-    sourceConfigPath?: string | null;
-  } | null;
-  database?: {
-    id?: string | null;
-    type?: string | null;
-    connectionString?: string | null;
-    capabilities?: readonly string[] | null;
-  } | null;
-  status?: string | null;
-  filePreview?: MigrationFilePreviewSnapshot | null;
-  release?: {
-    sourceRef?: string | null;
-    sourceCommitSha?: string | null;
-  } | null;
-  environment?: {
-    branch?: string | null;
-  } | null;
-}
-
-interface DeclaredMigrationPreview {
-  sourceLabel: string;
-  declaredFiles: string[];
-  declaredFileDetails?: Map<string, MigrationFilePreviewDetail>;
-  warning?: string | null;
-}
 
 interface BuildPreviewOptions {
   forceRefresh?: boolean;
@@ -104,22 +73,9 @@ interface BuildPreviewOptions {
   includeFileDetails?: boolean;
 }
 
-type SupportedMigrationTool = (typeof SUPPORTED_MIGRATION_TOOLS)[number];
-type SupportedDatabaseType = (typeof SUPPORTED_DATABASE_TYPES)[number];
-
 interface CachedPreviewEntry {
   value: DeclaredMigrationPreview | null;
   expiresAt: number;
-}
-
-interface ExecutionStateSnapshot {
-  mode: 'names' | 'versions' | 'desired_schema' | 'unknown';
-  executedNames?: Set<string>;
-  executedVersions?: Set<string>;
-  desiredSchemaAligned?: boolean;
-  desiredSchemaPlan?: MigrationFileExecutionPlan | null;
-  desiredSchemaPlanDetail?: MigrationFilePreviewDetail | null;
-  warning?: string | null;
 }
 
 function isMissingPostgresRelation(error: unknown, tableName: string): boolean {
@@ -148,347 +104,6 @@ class PreviewTimeoutError extends Error {
 
 const previewCache = new Map<string, CachedPreviewEntry>();
 const previewInFlight = new Map<string, Promise<DeclaredMigrationPreview | null>>();
-
-function asSupportedMigrationTool(value?: string | null): SupportedMigrationTool | null {
-  if (!value) return null;
-  return SUPPORTED_MIGRATION_TOOLS.includes(value as SupportedMigrationTool)
-    ? (value as SupportedMigrationTool)
-    : null;
-}
-
-function asSupportedDatabaseType(value?: string | null): SupportedDatabaseType | null {
-  if (!value) return null;
-  return SUPPORTED_DATABASE_TYPES.includes(value as SupportedDatabaseType)
-    ? (value as SupportedDatabaseType)
-    : null;
-}
-
-function asMigrationRunStatus(value?: string | null): MigrationRunStatus | null {
-  if (!value) return null;
-  return migrationRunStatuses.includes(value as MigrationRunStatus)
-    ? (value as MigrationRunStatus)
-    : null;
-}
-
-function now(): number {
-  return Date.now();
-}
-
-function normalizeRefValue(value?: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function resolveRevision(run: MigrationFilePreviewRunLike): string {
-  return (
-    normalizeRefValue(run.release?.sourceCommitSha) ??
-    normalizeRefValue(run.release?.sourceRef) ??
-    normalizeRefValue(run.environment?.branch) ??
-    'main'
-  );
-}
-
-function mergeWarnings(...warnings: Array<string | null | undefined>): string | null {
-  const values = warnings
-    .map((value) => (typeof value === 'string' ? value.trim() : ''))
-    .filter((value) => value.length > 0);
-
-  if (values.length === 0) {
-    return null;
-  }
-
-  return Array.from(new Set(values)).join('；');
-}
-
-function normalizeFileList(files: string[]): string[] {
-  const uniqueFiles: string[] = [];
-  const seen = new Set<string>();
-
-  for (const file of files) {
-    const normalized = file.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    uniqueFiles.push(normalized);
-  }
-
-  return uniqueFiles;
-}
-
-function buildDeclaredPreview(
-  sourceLabel: string,
-  files: string[],
-  warning?: string | null,
-  details?: Array<{ path: string; content: string }>
-): DeclaredMigrationPreview {
-  const declaredFiles = normalizeFileList(files);
-  const declaredFileDetails = details
-    ? new Map(
-        details.map((detail) => {
-          const normalizedPath = detail.path.trim();
-          return [normalizedPath, buildFilePreviewDetail(normalizedPath, detail.content)];
-        })
-      )
-    : undefined;
-
-  return {
-    sourceLabel,
-    declaredFiles,
-    declaredFileDetails,
-    warning: warning ?? null,
-  };
-}
-
-function getPreviewLanguage(pathname: string): MigrationFilePreviewDetail['language'] {
-  if (pathname.endsWith('.sql')) return 'sql';
-  if (pathname.endsWith('.ts')) return 'typescript';
-  if (pathname.endsWith('.js') || pathname.endsWith('.mjs') || pathname.endsWith('.cjs')) {
-    return 'javascript';
-  }
-  return 'text';
-}
-
-function truncatePreviewContent(content: string): { content: string; truncated: boolean } {
-  const bytes = Buffer.byteLength(content, 'utf8');
-  if (bytes <= MAX_PREVIEW_CONTENT_BYTES) {
-    return { content, truncated: false };
-  }
-
-  let size = 0;
-  let index = 0;
-  for (const char of content) {
-    const nextSize = size + Buffer.byteLength(char, 'utf8');
-    if (nextSize > MAX_PREVIEW_CONTENT_BYTES) {
-      break;
-    }
-    size = nextSize;
-    index += char.length;
-  }
-
-  return {
-    content: content.slice(0, index),
-    truncated: true,
-  };
-}
-
-function buildFilePreviewDetail(pathname: string, content: string): MigrationFilePreviewDetail {
-  const truncated = truncatePreviewContent(content);
-  return {
-    path: pathname,
-    content: truncated.content,
-    truncated: truncated.truncated,
-    language: getPreviewLanguage(pathname),
-  };
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-}
-
-function normalizeNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function normalizeFilePreviewDetail(value: unknown): MigrationFilePreviewDetail | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const detail = value as Partial<MigrationFilePreviewDetail>;
-  if (typeof detail.path !== 'string' || typeof detail.content !== 'string') {
-    return null;
-  }
-
-  return {
-    path: detail.path,
-    content: detail.content,
-    truncated: detail.truncated === true,
-    language:
-      detail.language === 'sql' ||
-      detail.language === 'javascript' ||
-      detail.language === 'typescript' ||
-      detail.language === 'text'
-        ? detail.language
-        : getPreviewLanguage(detail.path),
-  };
-}
-
-function normalizeFilePreviewDetails(value: unknown): MigrationFilePreviewDetail[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const details = value
-    .map((item) => normalizeFilePreviewDetail(item))
-    .filter((item): item is MigrationFilePreviewDetail => Boolean(item));
-  return details.length > 0 ? details : undefined;
-}
-
-function normalizeExecutionPlan(value: unknown): MigrationFileExecutionPlan | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const plan = value as Partial<MigrationFileExecutionPlan>;
-  if (typeof plan.path !== 'string' || typeof plan.content !== 'string') {
-    return null;
-  }
-
-  return {
-    path: plan.path,
-    content: plan.content,
-    language: 'sql',
-  };
-}
-
-function normalizeStoredMigrationFilePreviewSnapshot(
-  value: unknown
-): MigrationFilePreviewSnapshot | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const snapshot = value as Partial<MigrationFilePreviewSnapshot>;
-  if (typeof snapshot.sourceLabel !== 'string') {
-    return null;
-  }
-
-  const sourceLabel = snapshot.sourceLabel;
-  const isDesiredSchemaPreview = sourceLabel === 'Desired schema';
-
-  return {
-    sourceLabel,
-    files: normalizeStringArray(snapshot.files),
-    fileDetails: isDesiredSchemaPreview
-      ? undefined
-      : normalizeFilePreviewDetails(snapshot.fileDetails),
-
-    executionPlan: normalizeExecutionPlan(snapshot.executionPlan),
-    total: normalizeNumber(snapshot.total),
-    declaredTotal: normalizeNumber(snapshot.declaredTotal),
-    executedTotal: normalizeNumber(snapshot.executedTotal),
-    truncated: snapshot.truncated === true,
-    warning: typeof snapshot.warning === 'string' ? snapshot.warning : null,
-  };
-}
-
-export function normalizeMigrationFilePreviewSnapshot(
-  value: unknown
-): MigrationFilePreviewSnapshot | null {
-  return normalizeStoredMigrationFilePreviewSnapshot(value);
-}
-
-function buildRunStatusPreviewFromStoredSnapshot(input: {
-  run: MigrationFilePreviewRunLike;
-  storedPreview: MigrationFilePreviewSnapshot;
-}): MigrationFilePreviewSnapshot {
-  const status = asMigrationRunStatus(input.run.status);
-  if (status !== 'success' && status !== 'skipped') {
-    return input.storedPreview;
-  }
-
-  const declaredTotal = Math.max(
-    input.storedPreview.declaredTotal,
-    input.storedPreview.executedTotal
-  );
-  const keepAuditableContent =
-    input.storedPreview.sourceLabel !== 'Desired schema' &&
-    (Boolean(input.storedPreview.executionPlan?.content?.trim()) ||
-      (input.storedPreview.fileDetails?.length ?? 0) > 0 ||
-      input.storedPreview.files.length > 0);
-
-  return {
-    ...input.storedPreview,
-    files: keepAuditableContent ? input.storedPreview.files : [],
-    fileDetails: keepAuditableContent ? input.storedPreview.fileDetails : undefined,
-    executionPlan: keepAuditableContent ? input.storedPreview.executionPlan : null,
-    total: 0,
-    declaredTotal,
-    executedTotal: declaredTotal,
-  };
-}
-
-function buildPendingSnapshot(input: {
-  declaredPreview: DeclaredMigrationPreview;
-  pendingFiles: string[];
-  executedTotal: number;
-  warning?: string | null;
-  executionPlan?: MigrationFileExecutionPlan | null;
-}): MigrationFilePreviewSnapshot {
-  const declaredTotal = input.declaredPreview.declaredFiles.length;
-  const normalizedPending = normalizeFileList(input.pendingFiles);
-
-  const pendingPreviewFiles = normalizedPending.slice(0, MAX_PREVIEW_FILES);
-  const fileDetails = input.declaredPreview.declaredFileDetails
-    ? pendingPreviewFiles
-        .map((file) => input.declaredPreview.declaredFileDetails?.get(file))
-        .filter((detail): detail is MigrationFilePreviewDetail => Boolean(detail))
-    : undefined;
-
-  return {
-    sourceLabel: input.declaredPreview.sourceLabel,
-    files: pendingPreviewFiles,
-    fileDetails,
-    executionPlan: input.executionPlan ?? null,
-    total: normalizedPending.length,
-    declaredTotal,
-    executedTotal: Math.min(Math.max(input.executedTotal, 0), declaredTotal),
-    truncated: normalizedPending.length > MAX_PREVIEW_FILES,
-    warning: mergeWarnings(input.declaredPreview.warning, input.warning),
-  };
-}
-
-function resolveRunStatusExecutionState(input: {
-  run: MigrationFilePreviewRunLike;
-  declaredPreview: DeclaredMigrationPreview;
-}): ExecutionStateSnapshot | null {
-  const status = asMigrationRunStatus(input.run.status);
-  if (!status) {
-    return null;
-  }
-
-  return {
-    mode: 'names',
-    executedNames: new Set(
-      status === 'success' || status === 'skipped' ? input.declaredPreview.declaredFiles : []
-    ),
-  };
-}
-
-export function resolveMigrationPendingState(
-  preview: MigrationFilePreviewSnapshot | null
-): MigrationPendingState {
-  if (!preview) {
-    return 'unknown';
-  }
-
-  if (preview.executionPlan?.content?.trim()) {
-    return 'pending';
-  }
-
-  if (isDegradedEmptyPreview(preview)) {
-    return 'unknown';
-  }
-
-  return preview.total > 0 ? 'pending' : 'none';
-}
-
-function isDegradedEmptyPreview(preview: MigrationFilePreviewSnapshot): boolean {
-  return (
-    preview.total === 0 &&
-    preview.declaredTotal === 0 &&
-    preview.executedTotal === 0 &&
-    Boolean(preview.warning?.trim())
-  );
-}
 
 function prunePreviewCache(): void {
   const current = now();

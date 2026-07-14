@@ -14,7 +14,7 @@ import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
-import { addReleaseJob } from '@/lib/queue';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
@@ -23,6 +23,7 @@ import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 import { getDeliveryReleaseArtifacts, getDeployableReleaseArtifacts } from './artifacts';
+import { appendReleaseEvent } from './events';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
@@ -165,45 +166,37 @@ async function persistRelease(
   const deployableArtifacts = getDeployableReleaseArtifacts(artifacts);
   const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
 
-  const [release] = await db
-    .insert(releases)
-    .values({
-      projectId: project.id,
-      environmentId: environment.id,
-      sourceRepository: meta.sourceRepository,
-      sourceRef: meta.sourceRef,
-      sourceCommitSha: meta.sourceCommitSha ?? null,
-      configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
-      sourceReleaseId: meta.sourceReleaseId ?? null,
-      status: 'admission_running',
-      triggeredBy: meta.triggeredBy ?? 'api',
-      triggeredByUserId: meta.triggeredByUserId ?? null,
-      summary:
-        meta.summary ??
-        buildDefaultReleaseSummary({
-          sourceRef: meta.sourceRef,
-          sourceCommitSha: meta.sourceCommitSha ?? null,
-          environment,
-        }),
-    })
-    .returning();
-
-  const failReleaseCreation = async (errorMessage: string) => {
-    await db
-      .update(releases)
-      .set({
-        status: 'failed',
-        errorMessage,
-        updatedAt: new Date(),
+  const release = await db.transaction(async (tx) => {
+    const [createdRelease] = await tx
+      .insert(releases)
+      .values({
+        projectId: project.id,
+        environmentId: environment.id,
+        sourceRepository: meta.sourceRepository,
+        sourceRef: meta.sourceRef,
+        sourceCommitSha: meta.sourceCommitSha ?? null,
+        configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
+        sourceReleaseId: meta.sourceReleaseId ?? null,
+        status: 'admission_running',
+        triggeredBy: meta.triggeredBy ?? 'api',
+        triggeredByUserId: meta.triggeredByUserId ?? null,
+        summary:
+          meta.summary ??
+          buildDefaultReleaseSummary({
+            sourceRef: meta.sourceRef,
+            sourceCommitSha: meta.sourceCommitSha ?? null,
+            environment,
+          }),
       })
-      .where(eq(releases.id, release.id));
-    await publishReleaseRealtimeSnapshot(release.id);
-  };
+      .returning();
 
-  try {
-    await db.insert(releaseArtifacts).values([
+    if (!createdRelease) {
+      throw new Error('Failed to persist release');
+    }
+
+    await tx.insert(releaseArtifacts).values([
       ...artifacts.map((artifact) => ({
-        releaseId: release.id,
+        releaseId: createdRelease.id,
         serviceId: artifact.service.id,
         kind: artifact.kind,
         name: artifact.name,
@@ -213,7 +206,7 @@ async function persistRelease(
         imageDigest: artifact.imageDigest,
       })),
       ...sourceDeliveryArtifacts.map((artifact) => ({
-        releaseId: release.id,
+        releaseId: createdRelease.id,
         serviceId: null,
         kind: artifact.kind,
         name: artifact.name,
@@ -234,11 +227,32 @@ async function persistRelease(
         sourceImagePlatform: artifact.sourceImagePlatform,
       })),
     ]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await failReleaseCreation(message);
-    throw error;
-  }
+
+    const traceId = createTraceId(createdRelease.id);
+    await appendReleaseEvent(tx, {
+      releaseId: createdRelease.id,
+      projectId: project.id,
+      environmentId: environment.id,
+      actorUserId: meta.triggeredByUserId ?? null,
+      eventKey: 'created',
+      type: 'release.created',
+      data: {
+        sourceRef: meta.sourceRef,
+        sourceCommitSha: meta.sourceCommitSha ?? null,
+        serviceCount: artifacts.length,
+      },
+      correlationId: traceId,
+    });
+    await enqueueOutboxMessage(tx, {
+      topic: 'release.requested',
+      aggregateType: 'release',
+      aggregateId: createdRelease.id,
+      commandId: 'initial',
+      payload: { traceId },
+    });
+
+    return createdRelease;
+  });
 
   const traceId = createTraceId(release.id);
   releaseServiceLogger.info('Release admission queued', {
@@ -252,7 +266,6 @@ async function persistRelease(
     artifactCount: artifacts.length,
   });
 
-  await addReleaseJob(release.id, { traceId });
   await publishReleaseRealtimeSnapshot(release.id);
 
   void (async () => {
@@ -493,6 +506,9 @@ export async function getReleaseById(releaseId: string) {
           specification: true,
           items: true,
         },
+      },
+      events: {
+        orderBy: (event, { asc }) => [asc(event.sequence)],
       },
     },
   });

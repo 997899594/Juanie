@@ -1,5 +1,6 @@
 import { initK8sClient } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
+import { startAITaskReconciliation } from './ai-task-reconciliation';
 import { startDbGateConsoleCleanup } from './dbgate-console-cleanup';
 import { startEnvironmentIdleSleep } from './environment-idle-sleep';
 import { startEnvironmentRouteReconciliation } from './environment-route-reconciliation';
@@ -26,6 +27,9 @@ export function startSchedulerRuntime(): string[] {
   schedulerLogger.info('Starting Juanie scheduler runtime');
 
   const enabledTasks: string[] = [];
+
+  startAITaskReconciliation();
+  enabledTasks.push('ai-task-reconciliation');
 
   if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
     startPreviewEnvironmentCleanup();

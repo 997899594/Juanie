@@ -1,5 +1,9 @@
 import { closeDb } from '@/lib/db';
-import { applyControlPlaneMigrations } from '@/lib/db/control-plane-atlas';
+import {
+  applyControlPlaneContractMigrations,
+  applyControlPlaneExpandMigrations,
+  applyControlPlaneMigrations,
+} from '@/lib/db/control-plane-atlas';
 import { executeMigrationRunInExecutionService } from '@/lib/migrations/execution-service';
 import { closeQueues } from '@/lib/queue';
 import { shutdownSchemaRepairRealtimePublisher } from '@/lib/realtime/schema-repairs';
@@ -69,6 +73,16 @@ export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
   try {
     if (mode === 'control-plane-apply') {
       await applyControlPlaneMigrations();
+      return;
+    }
+
+    if (mode === 'control-plane-expand') {
+      await applyControlPlaneExpandMigrations();
+      return;
+    }
+
+    if (mode === 'control-plane-contract') {
+      await applyControlPlaneContractMigrations();
       return;
     }
 

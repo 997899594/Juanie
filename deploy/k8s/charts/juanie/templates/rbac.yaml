@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-controller
 rules:
   # Namespace management (for project namespaces)
   - apiGroups: [""]
@@ -65,13 +65,66 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-controller
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ .Chart.Name }}
+    name: {{ .Chart.Name }}-controller
+    namespace: {{ .Values.namespace }}
+  - kind: ServiceAccount
+    name: {{ .Chart.Name }}-scheduler
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Chart.Name }}-scheduler-leader-election
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Chart.Name }}-scheduler-leader-election
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Chart.Name }}-scheduler-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Chart.Name }}-scheduler
+    namespace: {{ .Values.namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.backup.restateSnapshot.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Chart.Name }}-restate-snapshot
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Chart.Name }}-restate-snapshot
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Chart.Name }}-restate-snapshot
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Chart.Name }}-backup
     namespace: {{ .Values.namespace }}
 {{- end }}

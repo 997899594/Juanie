@@ -3,8 +3,38 @@ import {
   resolveDrizzleExportOptionsFromConfig,
   validateDesiredSchemaSqlOutput,
 } from '@/lib/migrations/desired-schema';
+import { parseStaticDrizzleConfig } from '@/lib/migrations/drizzle-config-parser';
 
 describe('desired schema export helpers', () => {
+  it('parses static TypeScript config without executing repository code', () => {
+    expect(
+      parseStaticDrizzleConfig(
+        `
+          import { defineConfig } from 'drizzle-kit';
+          const dialect = 'postgresql';
+          export default defineConfig({
+            dialect,
+            schema: ['./src/db/schema.ts', './src/auth/schema.ts'],
+            dbCredentials: { url: process.env.DATABASE_URL },
+          });
+        `,
+        'drizzle.config.ts'
+      )
+    ).toEqual({
+      dialect: 'postgresql',
+      schema: ['./src/db/schema.ts', './src/auth/schema.ts'],
+    });
+  });
+
+  it('rejects dynamic schema paths instead of executing config expressions', () => {
+    expect(() =>
+      parseStaticDrizzleConfig(
+        `export default { dialect: 'postgresql', schema: process.env.SCHEMA_PATH };`,
+        'drizzle.config.ts'
+      )
+    ).toThrow(/static string literals/);
+  });
+
   it('uses schema and dialect from drizzle config without db credentials', () => {
     expect(
       resolveDrizzleExportOptionsFromConfig({

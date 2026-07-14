@@ -103,7 +103,7 @@ export function buildSchemaRunnerJob(input: SchemaRunnerJobInput): V1Job {
     name: input.jobName,
     component: 'schema-runner',
     labels: input.labels,
-    serviceAccountName: 'juanie',
+    automountServiceAccountToken: false,
     securityContext: {
       runAsNonRoot: true,
       runAsUser: 1001,

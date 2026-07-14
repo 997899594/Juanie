@@ -27,6 +27,8 @@ export function startHistoryRetention(): void {
         deletedAIPluginSnapshots: result.deletedAIPluginSnapshots,
         deletedMigrationRuns: result.deletedMigrationRuns,
         deletedSchemaRepairAtlasRuns: result.deletedSchemaRepairAtlasRuns,
+        deletedDeliveredOutboxMessages: result.deletedDeliveredOutboxMessages,
+        deletedResolvedDeadLetterMessages: result.deletedResolvedDeadLetterMessages,
         policy,
       });
     } catch (error) {
@@ -43,5 +45,7 @@ export function startHistoryRetention(): void {
     aiPluginSnapshotDays: policy.aiPluginSnapshotDays,
     migrationRunDays: policy.migrationRunDays,
     schemaRepairAtlasRunDays: policy.schemaRepairAtlasRunDays,
+    outboxDeliveredDays: policy.outboxDeliveredDays,
+    outboxResolvedDeadLetterDays: policy.outboxResolvedDeadLetterDays,
   });
 }

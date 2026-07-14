@@ -189,7 +189,7 @@ export async function fetchManualReleasePlan(input: {
   summary?: string | null;
   services: ReleaseServiceInput[];
 }): Promise<ManualReleasePlanResponse> {
-  const response = await fetch(`/api/projects/${input.projectId}/deployments`, {
+  const response = await fetch(`/api/projects/${input.projectId}/releases`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -216,7 +216,7 @@ export async function createManualRelease(input: {
   summary?: string | null;
   services: ReleaseServiceInput[];
 }): Promise<{ id?: string; releasePath?: string | null }> {
-  const response = await fetch(`/api/projects/${input.projectId}/deployments`, {
+  const response = await fetch(`/api/projects/${input.projectId}/releases`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -1,0 +1,138 @@
+{{- if .Values.backup.postgresql.enabled }}
+{{- $backupBucket := .Values.backup.postgresql.bucket | default .Values.env.ARTIFACT_STORAGE_BUCKET -}}
+{{- if empty $backupBucket }}
+{{- fail "backup.postgresql.bucket or env.ARTIFACT_STORAGE_BUCKET is required when PostgreSQL backup is enabled" }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Chart.Name }}-control-plane-backup
+  namespace: {{ .Values.namespace }}
+spec:
+  schedule: {{ .Values.backup.postgresql.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ .Chart.Name }}
+            app.kubernetes.io/component: control-plane-backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Chart.Name }}-backup
+          automountServiceAccountToken: false
+          securityContext:
+            fsGroup: 1001
+          initContainers:
+            - name: pg-dump
+              image: {{ include "juanie.image" .Values.images.postgres | quote }}
+              imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
+              command: ["pg_dump"]
+              args:
+                - --host=postgres
+                - --username={{ .Values.env.DATABASE_USER }}
+                - --dbname={{ .Values.env.DATABASE_NAME }}
+                - --format=custom
+                - --file=/backup/control-plane.dump
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "juanie.effectiveSecretName" . }}
+                      key: DATABASE_PASSWORD
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          containers:
+            - name: upload
+              image: {{ include "juanie.image" .Values.images.runtime | quote }}
+              imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+              command: ["./control-plane-backup-uploader"]
+              envFrom:
+                - configMapRef:
+                    name: {{ .Chart.Name }}-config
+                - secretRef:
+                    name: {{ include "juanie.effectiveSecretName" . }}
+              env:
+                - name: CONTROL_PLANE_BACKUP_FILE
+                  value: /backup/control-plane.dump
+                - name: CONTROL_PLANE_BACKUP_BUCKET
+                  value: {{ $backupBucket | quote }}
+                - name: CONTROL_PLANE_BACKUP_PREFIX
+                  value: {{ .Values.backup.postgresql.prefix | quote }}
+                - name: CONTROL_PLANE_BACKUP_RETENTION_DAYS
+                  value: {{ .Values.backup.postgresql.retentionDays | quote }}
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 1001
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: backup
+              emptyDir: {}
+{{- end }}
+{{- if and .Values.backup.postgresql.enabled .Values.backup.restateSnapshot.enabled }}
+---
+{{- end }}
+{{- if .Values.backup.restateSnapshot.enabled }}
+{{- if empty .Values.backup.restateSnapshot.volumeSnapshotClassName }}
+{{- fail "backup.restateSnapshot.volumeSnapshotClassName is required when Restate snapshots are enabled" }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Chart.Name }}-restate-snapshot
+  namespace: {{ .Values.namespace }}
+spec:
+  schedule: {{ .Values.backup.restateSnapshot.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ .Chart.Name }}
+            app.kubernetes.io/component: restate-snapshot
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Chart.Name }}-backup
+          automountServiceAccountToken: true
+          containers:
+            - name: snapshot
+              image: {{ include "juanie.image" .Values.images.runtime | quote }}
+              imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+              command: ["./restate-snapshot"]
+              env:
+                - name: JUANIE_NAMESPACE
+                  value: {{ .Values.namespace | quote }}
+                - name: RESTATE_SNAPSHOT_PVC_NAME
+                  value: data-{{ .Chart.Name }}-restate-0
+                - name: RESTATE_SNAPSHOT_CLASS_NAME
+                  value: {{ .Values.backup.restateSnapshot.volumeSnapshotClassName | quote }}
+                - name: RESTATE_SNAPSHOT_RETENTION_COUNT
+                  value: {{ .Values.backup.restateSnapshot.retentionCount | quote }}
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 1001
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+{{- end }}

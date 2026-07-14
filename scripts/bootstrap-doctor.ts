@@ -8,7 +8,8 @@ interface CheckResult {
   detail: string;
 }
 
-const namespace = process.env.PLATFORM_NAMESPACE?.trim() || process.env.JUANIE_NAMESPACE?.trim() || 'juanie';
+const namespace =
+  process.env.PLATFORM_NAMESPACE?.trim() || process.env.JUANIE_NAMESPACE?.trim() || 'juanie';
 const certManagerNamespace = process.env.CERT_MANAGER_NAMESPACE?.trim() || 'cert-manager';
 const argocdNamespace = process.env.ARGOCD_NAMESPACE?.trim() || 'argocd';
 const argoRolloutsNamespace = process.env.ARGO_ROLLOUTS_NAMESPACE?.trim() || 'argo-rollouts';
@@ -55,7 +56,9 @@ function checkHelmRelease(name: string, release: string, releaseNamespace: strin
   add(
     `Helm ${name}`,
     result.ok ? 'ok' : 'fail',
-    result.ok ? `${releaseNamespace}/${release}` : result.output || `${releaseNamespace}/${release} 不存在`
+    result.ok
+      ? `${releaseNamespace}/${release}`
+      : result.output || `${releaseNamespace}/${release} 不存在`
   );
 }
 
@@ -127,8 +130,16 @@ if (hasKubectl) {
     ['get', 'gatewayclass', gatewayClassName],
     `${gatewayClassName} 已存在`
   );
-  checkKubectl('平台 ConfigMap', ['get', 'configmap', 'juanie-config', '-n', namespace], 'juanie-config 已存在');
-  checkKubectl('平台 Secret', ['get', 'secret', 'juanie-secret', '-n', namespace], 'juanie-secret 已存在');
+  checkKubectl(
+    '平台 ConfigMap',
+    ['get', 'configmap', 'juanie-config', '-n', namespace],
+    'juanie-config 已存在'
+  );
+  checkKubectl(
+    '平台 Secret',
+    ['get', 'secret', 'juanie-secret', '-n', namespace],
+    'juanie-secret 已存在'
+  );
 }
 
 if (hasHelm) {

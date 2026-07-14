@@ -471,4 +471,60 @@ echo "完成！"
 2. **证书包含两个域名** - `*.juanie.art` 和 `juanie.art`
 3. **设置 AUTH_TRUST_HOST=true** - NextAuth v5 必需
 4. **正确的数据库组件配置** - host/name/user/password/sslmode 必须一致
-5. **平台自身发布只走 CI Helm** - 排障从 GitHub Actions `deploy-platform`、Helm release 和 schema-sync Job 开始
+5. **平台自身发布只走 CI Helm** - 排障从 GitHub Actions `deploy-platform`、Helm release、schema-expand/schema-contract Job 开始
+# Control-plane backup and restore
+
+PostgreSQL is Juanie's product source of truth. Restate persists active execution journals. These
+stores are backed up independently so a database restore never silently claims to restore workflow
+history as well.
+
+Production targets:
+
+- PostgreSQL logical backup every 24 hours, retained for 30 days: RPO 24 hours, restore target 2 hours.
+- Restate CSI snapshot every 24 hours, seven retained snapshots: active-workflow RPO 24 hours.
+- A quarterly restore drill into an isolated namespace is required; a backup without a successful
+  restore drill is not considered usable.
+
+Enable backups with environment-specific storage names:
+
+```yaml
+backup:
+  postgresql:
+    enabled: true
+    bucket: juanie-production-backups
+    prefix: control-plane/postgresql
+    retentionDays: 30
+  restateSnapshot:
+    enabled: true
+    volumeSnapshotClassName: <cluster-csi-snapshot-class>
+    retentionCount: 7
+monitoring:
+  prometheusRule:
+    enabled: true
+```
+
+The PostgreSQL CronJob uses `ARTIFACT_STORAGE_*` credentials from the effective runtime Secret. It
+uploads PostgreSQL custom-format dumps and deletes objects older than the configured retention.
+Restate snapshots require the Kubernetes CSI snapshot CRDs and the named `VolumeSnapshotClass`.
+
+For a PostgreSQL restore, first download the chosen object to the operator workstation, then run:
+
+```bash
+CONFIRM_RESTORE=juanie/juanie \
+  deploy/k8s/charts/juanie/scripts/restore-control-plane.sh ./control-plane.dump
+```
+
+The restore script scales Juanie Deployments and Restate to zero and intentionally leaves them
+stopped. Re-run the normal production `helm upgrade --install` command so expand/contract schema
+jobs finish before traffic resumes. Restore Restate by creating a replacement PVC from the matching
+VolumeSnapshot before that Helm run. If no matching Restate snapshot exists, start Restate with an
+empty journal and replay only unresolved PostgreSQL commands through Outbox Operations; never mark
+active projections successful by editing status columns.
+
+Quarterly drill checklist:
+
+1. Restore PostgreSQL into an isolated namespace and run `bun run db:status`.
+2. Restore the matching Restate snapshot and register the durable service endpoint.
+3. Verify unresolved outbox messages dispatch and active projections converge.
+4. Run login, project creation, release, rollback, and deletion smoke tests.
+5. Record measured RPO/RTO and update the retention or schedule if either target is missed.

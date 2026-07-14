@@ -33,18 +33,14 @@ import {
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
-import { logger } from '@/lib/logger';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
 import {
   buildEnvironmentTopologyBlueprint,
   type CreateEnvironmentTemplate,
 } from '@/lib/projects/environment-topology';
-import { deleteCreatedProject, markProjectInitDispatchFailed } from '@/lib/projects/init-dispatch';
-import { addProjectInitJob } from '@/lib/queue';
 import { getRequiredCapabilitiesForProjectBootstrap } from '@/lib/queue/project-init-capabilities';
 import { buildProjectInitStepSeeds } from '@/lib/queue/project-init-steps';
-
-const createProjectServiceLogger = logger.child({ component: 'project-create-service' });
 
 export interface CreateProjectInput {
   userId: string;
@@ -79,8 +75,7 @@ export interface CreateProjectInitialVariable {
 type CreateProjectErrorCode =
   | 'project_create_failed'
   | 'team_scope_missing'
-  | 'repo_bootstrap_capability_missing'
-  | 'project_init_queue_failed';
+  | 'repo_bootstrap_capability_missing';
 
 export class CreateProjectError extends Error {
   constructor(
@@ -579,56 +574,19 @@ async function createProjectAggregate(input: {
       }))
     );
 
-    return createdProject;
-  });
-}
-
-async function enqueueProjectInitializationOrRollback(input: {
-  projectId: string;
-  mode: 'import' | 'create';
-  template?: string;
-}): Promise<void> {
-  try {
-    await addProjectInitJob(input.projectId, input.mode, input.template);
-  } catch (error) {
-    createProjectServiceLogger.error('Failed to queue project initialization', error, {
-      projectId: input.projectId,
-      mode: input.mode,
+    await enqueueOutboxMessage(tx, {
+      topic: 'project.init.requested',
+      aggregateType: 'project',
+      aggregateId: createdProject.id,
+      commandId: 'initial',
+      payload: {
+        mode,
+        template: template ?? null,
+      },
     });
 
-    const queueErrorMessage =
-      error instanceof Error ? error.message : '初始化任务创建失败，请稍后重试';
-
-    try {
-      await deleteCreatedProject(input.projectId);
-    } catch (rollbackError) {
-      createProjectServiceLogger.error(
-        'Failed to rollback project after queueing error',
-        rollbackError,
-        {
-          projectId: input.projectId,
-        }
-      );
-      await markProjectInitDispatchFailed({
-        projectId: input.projectId,
-        errorMessage: queueErrorMessage,
-      });
-
-      throw new CreateProjectError(
-        'project_init_queue_failed',
-        503,
-        '初始化任务创建失败，项目已保留为失败状态，可稍后重试',
-        queueErrorMessage
-      );
-    }
-
-    throw new CreateProjectError(
-      'project_init_queue_failed',
-      503,
-      '初始化任务创建失败，请稍后重试',
-      queueErrorMessage
-    );
-  }
+    return createdProject;
+  });
 }
 
 export async function createProjectWithBootstrap(input: CreateProjectInput) {
@@ -655,12 +613,6 @@ export async function createProjectWithBootstrap(input: CreateProjectInput) {
     },
     repositoryId,
     uniqueSlug: `${input.slug}-${nanoid(6).toLowerCase()}`,
-  });
-
-  await enqueueProjectInitializationOrRollback({
-    projectId: project.id,
-    mode: input.mode,
-    template: input.template,
   });
 
   return { project };

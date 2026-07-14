@@ -13,6 +13,12 @@ data:
   DATABASE_NAME: {{ .Values.env.DATABASE_NAME | quote }}
   DATABASE_USER: {{ .Values.env.DATABASE_USER | default "postgres" | quote }}
   DATABASE_SSL_MODE: {{ .Values.env.DATABASE_SSL_MODE | default "disable" | quote }}
+  RESTATE_INGRESS_URL: {{ .Values.env.RESTATE_INGRESS_URL | default (printf "http://%s-restate:8080" .Chart.Name) | quote }}
+  RESTATE_ADMIN_URL: {{ .Values.env.RESTATE_ADMIN_URL | default (printf "http://%s-restate:9070" .Chart.Name) | quote }}
+  RESTATE_SERVICE_PORT: {{ .Values.env.RESTATE_SERVICE_PORT | default "9080" | quote }}
+  {{- with .Values.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ . | quote }}
+  {{- end }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
   {{- with .Values.env.NODE_EXTRA_CA_CERTS }}
   NODE_EXTRA_CA_CERTS: {{ . | quote }}
@@ -79,6 +85,9 @@ data:
   DBGATE_MEMORY_LIMIT: {{ .Values.env.DBGATE_MEMORY_LIMIT | default "512Mi" | quote }}
   DBGATE_IDLE_TTL_MINUTES: {{ .Values.env.DBGATE_IDLE_TTL_MINUTES | default "60" | quote }}
   DBGATE_CONSOLE_CLEANUP_SCHEDULE: {{ .Values.env.DBGATE_CONSOLE_CLEANUP_SCHEDULE | default "*/15 * * * *" | quote }}
+  AI_TASK_RECONCILIATION_SCHEDULE: {{ .Values.env.AI_TASK_RECONCILIATION_SCHEDULE | default "* * * * *" | quote }}
+  OUTBOX_DELIVERED_RETENTION_DAYS: {{ .Values.env.OUTBOX_DELIVERED_RETENTION_DAYS | default "14" | quote }}
+  OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS: {{ .Values.env.OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS | default "30" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.runtime.repository | quote }}
   SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.runtime.tag | quote }}

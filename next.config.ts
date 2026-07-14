@@ -29,7 +29,7 @@ const serverRuntimeTraceIncludes = [
 const nextConfig: NextConfig = {
   // 生产环境 standalone 输出 (用于 Docker)
   output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
-  serverExternalPackages: ['@kubernetes/client-node'],
+  serverExternalPackages: ['@kubernetes/client-node', 'bullmq'],
   outputFileTracingIncludes: {
     '/**': serverRuntimeTraceIncludes,
   },

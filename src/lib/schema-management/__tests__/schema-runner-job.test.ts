@@ -44,7 +44,7 @@ describe('schema runner job', () => {
     ]);
     expect(job.spec?.template.spec?.containers?.[0]?.command).toEqual(['./schema-runner']);
     expect(job.metadata?.labels?.['app.kubernetes.io/component']).toBe('schema-runner');
-    expect(job.spec?.template.spec?.serviceAccountName).toBe('juanie');
+    expect(job.spec?.template.spec?.serviceAccountName).toBeUndefined();
     expect(job.spec?.template.spec?.automountServiceAccountToken).toBe(false);
   });
 

@@ -1,4 +1,5 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   generateEnvironmentCopilotReply,
   generateReleaseCopilotReply,
@@ -7,6 +8,7 @@ import { type AITaskKind, getAITaskDefinition } from '@/lib/ai/tasks/catalog';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { aiTasks, environments, releases } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 
 export interface GenericAITaskRecord {
   id: string;
@@ -22,18 +24,71 @@ export interface GenericAITaskRecord {
   completedAt: Date | null;
 }
 
+const AI_TASK_LEASE_DURATION_MS = 5 * 60_000;
+const AI_TASK_HEARTBEAT_INTERVAL_MS = 60_000;
+const aiTaskLogger = logger.child({ component: 'ai-task-execution' });
+
+export class AITaskLeaseLostError extends Error {
+  constructor(taskId: string) {
+    super(`AI task execution lease lost: ${taskId}`);
+    this.name = 'AITaskLeaseLostError';
+  }
+}
+
 const deepAnalysisSystemAppendix =
   '这是一个后台深度分析任务。输出请完整但克制，优先使用 3 段：当前状态、关键风险、处理建议。';
 
-async function markAITaskRunning(taskId: string): Promise<void> {
-  await db
+async function claimAITaskExecution(input: {
+  taskId: string;
+  kind: AITaskKind;
+  leaseToken: string;
+  now: Date;
+}): Promise<Awaited<ReturnType<typeof getQueuedAITaskOrThrow>> | null> {
+  const [task] = await db
     .update(aiTasks)
     .set({
       status: 'running',
-      startedAt: new Date(),
+      leaseToken: input.leaseToken,
+      leaseExpiresAt: new Date(input.now.getTime() + AI_TASK_LEASE_DURATION_MS),
+      heartbeatAt: input.now,
+      startedAt: sql`coalesce(${aiTasks.startedAt}, ${input.now})`,
+      completedAt: null,
       errorMessage: null,
+      updatedAt: input.now,
     })
-    .where(eq(aiTasks.id, taskId));
+    .where(
+      and(
+        eq(aiTasks.id, input.taskId),
+        eq(aiTasks.kind, input.kind),
+        or(
+          eq(aiTasks.status, 'queued'),
+          and(
+            eq(aiTasks.status, 'running'),
+            or(isNull(aiTasks.leaseExpiresAt), lte(aiTasks.leaseExpiresAt, input.now))
+          )
+        )
+      )
+    )
+    .returning();
+
+  return task ?? null;
+}
+
+async function heartbeatAITask(taskId: string, leaseToken: string): Promise<void> {
+  const now = new Date();
+  const [task] = await db
+    .update(aiTasks)
+    .set({
+      heartbeatAt: now,
+      leaseExpiresAt: new Date(now.getTime() + AI_TASK_LEASE_DURATION_MS),
+      updatedAt: now,
+    })
+    .where(
+      and(eq(aiTasks.id, taskId), eq(aiTasks.status, 'running'), eq(aiTasks.leaseToken, leaseToken))
+    )
+    .returning({ id: aiTasks.id });
+
+  if (!task) throw new AITaskLeaseLostError(taskId);
 }
 
 async function markAITaskSucceeded(input: {
@@ -43,6 +98,7 @@ async function markAITaskSucceeded(input: {
     provider: string | null;
     model: string | null;
   };
+  leaseToken: string;
 }): Promise<GenericAITaskRecord> {
   const [completedTask] = await db
     .update(aiTasks)
@@ -52,14 +108,29 @@ async function markAITaskSucceeded(input: {
       provider: input.reply.provider,
       model: input.reply.model,
       completedAt: new Date(),
+      leaseToken: null,
+      leaseExpiresAt: null,
+      heartbeatAt: null,
+      updatedAt: new Date(),
     })
-    .where(eq(aiTasks.id, input.taskId))
+    .where(
+      and(
+        eq(aiTasks.id, input.taskId),
+        eq(aiTasks.status, 'running'),
+        eq(aiTasks.leaseToken, input.leaseToken)
+      )
+    )
     .returning();
 
+  if (!completedTask) throw new AITaskLeaseLostError(input.taskId);
   return completedTask;
 }
 
-async function markAITaskFailed(taskId: string, error: unknown): Promise<GenericAITaskRecord> {
+async function markAITaskFailed(
+  taskId: string,
+  leaseToken: string,
+  error: unknown
+): Promise<GenericAITaskRecord> {
   const message = error instanceof Error ? error.message : 'AI 任务执行失败';
   const [failedTask] = await db
     .update(aiTasks)
@@ -67,10 +138,17 @@ async function markAITaskFailed(taskId: string, error: unknown): Promise<Generic
       status: 'failed',
       errorMessage: message,
       completedAt: new Date(),
+      leaseToken: null,
+      leaseExpiresAt: null,
+      heartbeatAt: null,
+      updatedAt: new Date(),
     })
-    .where(eq(aiTasks.id, taskId))
+    .where(
+      and(eq(aiTasks.id, taskId), eq(aiTasks.status, 'running'), eq(aiTasks.leaseToken, leaseToken))
+    )
     .returning();
 
+  if (!failedTask) throw new AITaskLeaseLostError(taskId);
   return failedTask;
 }
 
@@ -96,23 +174,45 @@ async function getQueuedAITaskOrThrow(taskId: string): Promise<
 
 async function executeDeepAnalysisTask(input: {
   taskId: string;
+  kind: AITaskKind;
   generateReply: (task: Awaited<ReturnType<typeof getQueuedAITaskOrThrow>>) => Promise<{
     message: string;
     provider: string | null;
     model: string | null;
   }>;
 }): Promise<GenericAITaskRecord> {
-  const task = await getQueuedAITaskOrThrow(input.taskId);
-  await markAITaskRunning(input.taskId);
+  const leaseToken = randomUUID();
+  const task = await claimAITaskExecution({
+    taskId: input.taskId,
+    kind: input.kind,
+    leaseToken,
+    now: new Date(),
+  });
+  if (!task) {
+    return getQueuedAITaskOrThrow(input.taskId);
+  }
+
+  const heartbeat = setInterval(() => {
+    heartbeatAITask(input.taskId, leaseToken).catch((error) => {
+      aiTaskLogger.warn('AI task heartbeat failed', {
+        taskId: input.taskId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, AI_TASK_HEARTBEAT_INTERVAL_MS);
 
   try {
     const reply = await input.generateReply(task);
     return markAITaskSucceeded({
       taskId: input.taskId,
       reply,
+      leaseToken,
     });
   } catch (error) {
-    return markAITaskFailed(input.taskId, error);
+    if (error instanceof AITaskLeaseLostError) throw error;
+    return markAITaskFailed(input.taskId, leaseToken, error);
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 
@@ -166,6 +266,7 @@ export async function executeEnvironmentDeepAnalysisTask(
 ): Promise<GenericAITaskRecord> {
   return executeDeepAnalysisTask({
     taskId,
+    kind: 'environment_deep_analysis',
     generateReply: async (task) => {
       if (!task.projectId || !task.environmentId) {
         throw new Error('AI 任务不存在');
@@ -187,6 +288,7 @@ export async function executeEnvironmentDeepAnalysisTask(
 export async function executeReleaseDeepAnalysisTask(taskId: string): Promise<GenericAITaskRecord> {
   return executeDeepAnalysisTask({
     taskId,
+    kind: 'release_deep_analysis',
     generateReply: async (task) => {
       if (!task.projectId || !task.releaseId) {
         throw new Error('AI 任务不存在');

@@ -10,7 +10,7 @@ import {
 import { clearEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
-import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { publishDeploymentRealtimeSnapshot } from '@/lib/realtime/deployments';
 import {
   publishReleaseRealtimeSnapshot,
@@ -19,6 +19,7 @@ import {
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
+import { appendReleaseEvent } from '@/lib/releases/events';
 import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
 import {
   inspectPreviewDatabaseGuardForRelease,
@@ -104,14 +105,48 @@ export async function updateReleaseStatus(
   status: ReleaseStatus,
   errorMessage?: string | null
 ) {
-  await db
-    .update(releases)
-    .set({
-      status,
-      errorMessage: errorMessage ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(releases.id, releaseId));
+  await db.transaction(async (tx) => {
+    const current = await tx.query.releases.findFirst({
+      where: eq(releases.id, releaseId),
+      columns: {
+        id: true,
+        projectId: true,
+        environmentId: true,
+        status: true,
+        updatedAt: true,
+      },
+    });
+    if (!current) {
+      throw new Error(`Release ${releaseId} not found`);
+    }
+    if (current.status === status && (errorMessage === undefined || errorMessage === null)) {
+      return;
+    }
+
+    const correlationId = createTraceId(releaseId);
+    await appendReleaseEvent(tx, {
+      releaseId,
+      projectId: current.projectId,
+      environmentId: current.environmentId,
+      eventKey: `status:${current.status}:${status}:${current.updatedAt.getTime()}`,
+      type: 'release.status.changed',
+      data: {
+        from: current.status,
+        to: status,
+        errorMessage: errorMessage ?? null,
+      },
+      correlationId,
+    });
+
+    await tx
+      .update(releases)
+      .set({
+        status,
+        errorMessage: errorMessage ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(releases.id, releaseId));
+  });
 
   await publishReleaseRealtimeSnapshot(releaseId);
 }
@@ -196,7 +231,7 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
       lt(releases.createdAt, target.createdAt),
       inArray(releases.status, supersedableReleaseStatuses)
     ),
-    columns: { id: true },
+    columns: { id: true, status: true },
   });
 
   if (candidates.length === 0) {
@@ -223,19 +258,34 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
       )
     );
 
-  await db
-    .update(releases)
-    .set({
-      status: 'canceled',
-      errorMessage: message,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        inArray(releases.id, candidateIds),
-        inArray(releases.status, [...supersedableReleaseStatuses])
-      )
-    );
+  await db.transaction(async (tx) => {
+    for (const candidate of candidates) {
+      await appendReleaseEvent(tx, {
+        releaseId: candidate.id,
+        projectId: target.projectId,
+        environmentId: target.environmentId,
+        eventKey: `superseded:${target.id}`,
+        type: 'release.status.changed',
+        data: { from: candidate.status, to: 'canceled', errorMessage: message },
+        correlationId: createTraceId(target.id),
+        causationId: target.id,
+      });
+    }
+
+    await tx
+      .update(releases)
+      .set({
+        status: 'canceled',
+        errorMessage: message,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          inArray(releases.id, candidateIds),
+          inArray(releases.status, [...supersedableReleaseStatuses])
+        )
+      );
+  });
 
   await publishReleaseRealtimeSnapshots(candidateIds);
 
@@ -266,9 +316,15 @@ async function driveReleaseMigrationPhaseForward(
           release.id,
       };
     case 'start_run':
-      await addMigrationJob(action.runId, {
-        allowApprovalBypass: false,
-        traceId: createTraceId(release.id),
+      await enqueueOutboxMessage(db, {
+        topic: 'migration.requested',
+        aggregateType: 'migration',
+        aggregateId: action.runId,
+        commandId: 'initial',
+        payload: {
+          allowApprovalBypass: false,
+          traceId: createTraceId(release.id),
+        },
       });
       return {
         kind: 'queued',
@@ -395,10 +451,11 @@ export async function startReleaseDeploymentStage(
     }
 
     const existingDeployment = deploymentsByServiceId.get(artifact.serviceId);
+    const traceId = createTraceId(release.id);
     const deployment =
       existingDeployment ??
-      (
-        await db
+      (await db.transaction(async (tx) => {
+        const [createdDeployment] = await tx
           .insert(deployments)
           .values({
             releaseId: release.id,
@@ -412,8 +469,23 @@ export async function startReleaseDeploymentStage(
             status: 'queued',
             deployedById: release.triggeredByUserId ?? null,
           })
-          .returning()
-      )[0];
+          .returning();
+        if (!createdDeployment) {
+          throw new Error('Failed to create deployment');
+        }
+        await enqueueOutboxMessage(tx, {
+          topic: 'deployment.requested',
+          aggregateType: 'deployment',
+          aggregateId: createdDeployment.id,
+          commandId: 'initial',
+          payload: {
+            projectId: release.projectId,
+            environmentId: release.environmentId,
+            traceId,
+          },
+        });
+        return createdDeployment;
+      }));
 
     await cancelSupersededDeployments(deployment);
 
@@ -421,9 +493,17 @@ export async function startReleaseDeploymentStage(
       await publishDeploymentRealtimeSnapshot(deployment.id);
     }
 
-    if (deployment.status === 'queued') {
-      await addDeploymentJob(deployment.id, release.projectId, release.environmentId, {
-        traceId: createTraceId(release.id),
+    if (existingDeployment?.status === 'queued') {
+      await enqueueOutboxMessage(db, {
+        topic: 'deployment.requested',
+        aggregateType: 'deployment',
+        aggregateId: deployment.id,
+        commandId: 'initial',
+        payload: {
+          projectId: release.projectId,
+          environmentId: release.environmentId,
+          traceId,
+        },
       });
     }
 

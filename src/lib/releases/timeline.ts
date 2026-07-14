@@ -135,17 +135,69 @@ export function buildReleaseTimeline(input: {
   const items: Array<ReleaseTimelineItem & { sortValue: number }> = [
     ...buildMigrationRetryTimelineItems(release, releaseHref),
   ];
+  const ledgerEvents = release.events ?? [];
 
-  items.push({
-    key: 'release-created',
-    type: 'release',
-    at: formatTimelineTimestamp(release.createdAt),
-    title: '创建发布',
-    description: getReleaseDisplayTitle(release),
-    tone: 'neutral',
-    href: releaseHref,
-    sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
-  });
+  if (ledgerEvents.length > 0) {
+    for (const event of ledgerEvents) {
+      const status = typeof event.data.to === 'string' ? event.data.to : null;
+      const errorMessage =
+        typeof event.data.errorMessage === 'string' ? event.data.errorMessage : null;
+      const eventPresentation =
+        event.type === 'release.created'
+          ? {
+              title: '创建发布',
+              description: getReleaseDisplayTitle(release),
+              tone: 'neutral' as const,
+            }
+          : event.type === 'release.approval.received'
+            ? {
+                title: '迁移审批通过',
+                description: '审批信号已被发布工作流接受',
+                tone: 'info' as const,
+              }
+            : event.type === 'release.rollout.requested'
+              ? {
+                  title: '请求推进放量',
+                  description: '放量命令已进入持久工作流',
+                  tone: 'warning' as const,
+                }
+              : event.type === 'release.rollout.received'
+                ? {
+                    title: '渐进式发布完成',
+                    description: '候选版本已切换为稳定版本',
+                    tone: 'success' as const,
+                  }
+                : status
+                  ? {
+                      title: getReleaseTimelineTitle(status),
+                      description: errorMessage ?? getReleaseDisplayTitle(release),
+                      tone: getTimelineTone(status, 'release'),
+                    }
+                  : null;
+
+      if (eventPresentation) {
+        items.push({
+          key: `release-event-${event.id}`,
+          type: 'release',
+          at: formatTimelineTimestamp(event.occurredAt),
+          ...eventPresentation,
+          href: releaseHref,
+          sortValue: new Date(event.occurredAt).getTime(),
+        });
+      }
+    }
+  } else {
+    items.push({
+      key: 'release-created',
+      type: 'release',
+      at: formatTimelineTimestamp(release.createdAt),
+      title: '创建发布',
+      description: getReleaseDisplayTitle(release),
+      tone: 'neutral',
+      href: releaseHref,
+      sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
+    });
+  }
 
   if (release.sourceRelease) {
     items.push({
@@ -242,7 +294,7 @@ export function buildReleaseTimeline(input: {
     });
   }
 
-  if (release.status !== 'queued') {
+  if (ledgerEvents.length === 0 && release.status !== 'queued') {
     items.push({
       key: 'release-result',
       type: 'release',

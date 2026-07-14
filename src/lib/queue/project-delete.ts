@@ -1,4 +1,3 @@
-import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
@@ -15,8 +14,6 @@ import {
   publishProjectDeletedRealtimeEvent,
   publishProjectRealtimeSnapshot,
 } from '@/lib/realtime/projects';
-import { resolveRedisConnectionOptions } from '@/lib/redis/config';
-import type { ProjectDeleteJobData } from './index';
 
 const JUANIE_BASE_REPOSITORY_FILES = [
   'juanie.yaml',
@@ -35,7 +32,7 @@ const JUANIE_GITLAB_CI_MARKERS = [
 ] as const;
 const projectDeleteLogger = logger.child({ component: 'project-delete' });
 
-type ProjectDeleteRecord = Pick<
+export type ProjectDeleteRecord = Pick<
   typeof projects.$inferSelect,
   'id' | 'slug' | 'status' | 'teamId' | 'productionBranch' | 'repositoryId'
 > & {
@@ -209,9 +206,17 @@ async function cleanupManagedDatabasesForProject(projectId: string): Promise<voi
   }
 }
 
-export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
+export interface ProjectDeletionPlan {
+  project: ProjectDeleteRecord;
+  namespaces: string[];
+  hasPreviewApplicationSet: boolean;
+}
+
+export async function prepareProjectDeletion(
+  projectId: string
+): Promise<ProjectDeletionPlan | null> {
   const project = await db.query.projects.findFirst({
-    where: eq(projects.id, job.data.projectId),
+    where: eq(projects.id, projectId),
     columns: {
       id: true,
       slug: true,
@@ -232,16 +237,16 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
   });
 
   if (!project) {
-    await publishProjectDeletedRealtimeEvent(job.data.projectId).catch((error) => {
+    await publishProjectDeletedRealtimeEvent(projectId).catch((error) => {
       projectDeleteLogger.warn(
         'Failed to publish project deleted realtime event for missing project',
         {
-          projectId: job.data.projectId,
+          projectId,
           errorMessage: error instanceof Error ? error.message : String(error),
         }
       );
     });
-    return { success: true, deleted: true, missing: true };
+    return null;
   }
 
   const environmentList = await db.query.environments.findMany({
@@ -259,68 +264,67 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
         .filter((namespace): namespace is string => Boolean(namespace))
     ),
   ];
-  const hasPreviewApplicationSet = shouldDeleteProjectPreviewApplicationSet(environmentList);
+  return {
+    project,
+    namespaces,
+    hasPreviewApplicationSet: shouldDeleteProjectPreviewApplicationSet(environmentList),
+  };
+}
 
-  try {
-    if (isK8sAvailable() && namespaces.length > 0) {
-      if (hasPreviewApplicationSet) {
-        await deleteProjectPreviewApplicationSet(project.slug);
-      }
+export async function deleteProjectRuntimeResources(plan: ProjectDeletionPlan): Promise<void> {
+  if (!isK8sAvailable() || plan.namespaces.length === 0) {
+    return;
+  }
 
-      await Promise.all(namespaces.map((namespace) => deleteNamespace(namespace)));
+  if (plan.hasPreviewApplicationSet) {
+    await deleteProjectPreviewApplicationSet(plan.project.slug);
+  }
 
-      const cleanupResults = await Promise.all(
-        namespaces.map(async (namespace) => ({
-          namespace,
-          deleted: await waitForNamespaceDeleted({ name: namespace }),
-        }))
-      );
-      const pendingNamespaces = cleanupResults
-        .filter((result) => !result.deleted)
-        .map((result) => result.namespace);
+  await Promise.all(plan.namespaces.map((namespace) => deleteNamespace(namespace)));
+  const cleanupResults = await Promise.all(
+    plan.namespaces.map(async (namespace) => ({
+      namespace,
+      deleted: await waitForNamespaceDeleted({ name: namespace }),
+    }))
+  );
+  const pendingNamespaces = cleanupResults
+    .filter((result) => !result.deleted)
+    .map((result) => result.namespace);
 
-      if (pendingNamespaces.length > 0) {
-        throw new Error(`Project resources are still cleaning up: ${pendingNamespaces.join(', ')}`);
-      }
-    }
-
-    await cleanupManagedDatabasesForProject(project.id);
-    await cleanupRepositoryArtifacts(project);
-
-    const repositoryId = project.repositoryId;
-    await db.delete(projects).where(eq(projects.id, project.id));
-    if (repositoryId) {
-      await cleanupOrphanRepositoryRecord(repositoryId);
-    }
-
-    await publishProjectDeletedRealtimeEvent(project.id).catch((error) => {
-      projectDeleteLogger.warn('Failed to publish project deleted realtime event', {
-        projectId: project.id,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    return { success: true, deleted: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const attempts = job.opts.attempts ?? 1;
-    const finalAttempt = job.attemptsMade + 1 >= attempts;
-
-    await updateProjectDeleteState({
-      projectId: project.id,
-      status: finalAttempt ? 'failed' : 'deleting',
-      statusMessage: finalAttempt ? `项目删除失败：${message}` : `项目删除重试中：${message}`,
-    });
-
-    throw error;
+  if (pendingNamespaces.length > 0) {
+    throw new Error(`Project resources are still cleaning up: ${pendingNamespaces.join(', ')}`);
   }
 }
 
-export function createProjectDeleteWorker() {
-  return new Worker<ProjectDeleteJobData>('project-delete', processProjectDelete, {
-    connection: resolveRedisConnectionOptions({
-      maxRetriesPerRequest: null,
-    }),
-    concurrency: 2,
+export async function deleteProjectManagedDatabases(projectId: string): Promise<void> {
+  await cleanupManagedDatabasesForProject(projectId);
+}
+
+export async function deleteProjectRepositoryArtifacts(
+  project: ProjectDeleteRecord
+): Promise<void> {
+  await cleanupRepositoryArtifacts(project);
+}
+
+export async function deleteProjectControlPlaneRecord(project: ProjectDeleteRecord): Promise<void> {
+  await db.delete(projects).where(eq(projects.id, project.id));
+  if (project.repositoryId) {
+    await cleanupOrphanRepositoryRecord(project.repositoryId);
+  }
+
+  await publishProjectDeletedRealtimeEvent(project.id).catch((error) => {
+    projectDeleteLogger.warn('Failed to publish project deleted realtime event', {
+      projectId: project.id,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
+export async function failProjectDeletion(projectId: string, error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  await updateProjectDeleteState({
+    projectId,
+    status: 'failed',
+    statusMessage: `项目删除失败，可重新发起删除：${message}`,
   });
 }

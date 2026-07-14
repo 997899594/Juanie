@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { parseDbGateConsoleHostname } from '@/lib/database-console/dbgate';
+import { buildSecurityHeaders } from '@/lib/security/headers';
 
 function normalizeHostname(value: string | null): string | null {
   const hostname = value?.split(',')[0]?.trim().toLowerCase();
@@ -48,18 +49,30 @@ function shouldBypass(pathname: string): boolean {
 
 export function proxy(request: NextRequest) {
   const hostname = normalizeHostname(request.headers.get('host'));
+  const security = buildSecurityHeaders();
+  const secure = (response: NextResponse): NextResponse => {
+    for (const [name, value] of Object.entries(security.headers)) {
+      response.headers.set(name, value);
+    }
+    return response;
+  };
 
   if (hostname && isDatabaseConsoleHost(hostname)) {
     const url = request.nextUrl.clone();
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-juanie-dbgate-path', request.nextUrl.pathname);
     requestHeaders.set('x-juanie-dbgate-search', request.nextUrl.search);
+    requestHeaders.set('x-nonce', security.nonce);
+    requestHeaders.set('Content-Security-Policy', security.headers['Content-Security-Policy']);
     url.pathname = `/api/database-console/host-proxy${request.nextUrl.pathname}`;
-    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    return secure(NextResponse.rewrite(url, { request: { headers: requestHeaders } }));
   }
 
   if (!hostname || !isManagedApplicationHost(hostname) || shouldBypass(request.nextUrl.pathname)) {
-    return NextResponse.next();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-nonce', security.nonce);
+    requestHeaders.set('Content-Security-Policy', security.headers['Content-Security-Policy']);
+    return secure(NextResponse.next({ request: { headers: requestHeaders } }));
   }
 
   const url = request.nextUrl.clone();
@@ -67,7 +80,10 @@ export function proxy(request: NextRequest) {
   url.search = '';
   url.searchParams.set('path', `${request.nextUrl.pathname}${request.nextUrl.search}`);
 
-  return NextResponse.rewrite(url);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', security.nonce);
+  requestHeaders.set('Content-Security-Policy', security.headers['Content-Security-Policy']);
+  return secure(NextResponse.rewrite(url, { request: { headers: requestHeaders } }));
 }
 
 export const config = {

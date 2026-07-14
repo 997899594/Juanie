@@ -56,6 +56,13 @@ export interface ReleaseViewLike {
   configCommitSha?: string | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
+  events?: Array<{
+    id: string;
+    sequence: number;
+    type: string;
+    data: Record<string, unknown>;
+    occurredAt: Date | string;
+  }>;
   sourceRelease?: {
     id: string;
     summary?: string | null;

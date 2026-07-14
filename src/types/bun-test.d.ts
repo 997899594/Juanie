@@ -24,8 +24,13 @@ declare module 'bun:test' {
     module(path: string, factory: () => Record<string, unknown>): void;
   }
 
+  interface TestFunction {
+    (name: string, fn: TestHandler, timeout?: number): void;
+    skip(name: string, fn: TestHandler, timeout?: number): void;
+  }
+
   export const describe: (name: string, fn: () => void) => void;
-  export const it: (name: string, fn: TestHandler) => void;
+  export const it: TestFunction;
   export const expect: (value: any) => ExpectMatchers;
   export const mock: MockFactory;
 }

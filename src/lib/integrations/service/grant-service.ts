@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -11,6 +12,7 @@ import {
   resolveGitLabCapabilities,
 } from '@/lib/integrations/domain/capability';
 import type { Capability } from '@/lib/integrations/domain/models';
+import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 
 type UpsertGrantFromOAuthInput = {
   userId: string;
@@ -81,40 +83,50 @@ export const upsertGrantFromOAuth = async ({
     identity = updated ?? identity;
   }
 
-  await db
-    .update(integrationGrants)
-    .set({
-      revokedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(integrationGrants.integrationIdentityId, identity.id),
-        isNull(integrationGrants.revokedAt)
-      )
-    );
-
-  const [grant] = await db
-    .insert(integrationGrants)
-    .values({
-      integrationIdentityId: identity.id,
-      accessToken,
-      refreshToken: refreshToken ?? null,
-      scopeRaw: scopeRaw ?? null,
-      expiresAt: expiresAt ?? null,
-    })
-    .returning();
-
   const capabilities = resolveCapabilities(provider, splitScopes(scopeRaw));
+  const grantId = randomUUID();
+  const encryptedCredentials = await encryptGrantCredentials({
+    grantId,
+    accessToken,
+    refreshToken,
+  });
 
-  if (capabilities.length > 0) {
-    await db.insert(integrationCapabilitySnapshots).values(
-      capabilities.map((capability) => ({
-        integrationGrantId: grant.id,
-        capability,
-      }))
-    );
-  }
+  const grant = await db.transaction(async (tx) => {
+    await tx
+      .update(integrationGrants)
+      .set({
+        revokedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(integrationGrants.integrationIdentityId, identity.id),
+          isNull(integrationGrants.revokedAt)
+        )
+      );
+
+    const [createdGrant] = await tx
+      .insert(integrationGrants)
+      .values({
+        id: grantId,
+        integrationIdentityId: identity.id,
+        ...encryptedCredentials,
+        scopeRaw: scopeRaw ?? null,
+        expiresAt: expiresAt ?? null,
+      })
+      .returning();
+
+    if (capabilities.length > 0) {
+      await tx.insert(integrationCapabilitySnapshots).values(
+        capabilities.map((capability) => ({
+          integrationGrantId: createdGrant.id,
+          capability,
+        }))
+      );
+    }
+
+    return createdGrant;
+  });
 
   return { identity, grant, capabilities };
 };

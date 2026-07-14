@@ -28,7 +28,8 @@ spec:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/component: web
     spec:
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ .Chart.Name }}-web
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -41,16 +42,16 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.images.web.repository }}:{{ .Values.images.web.tag }}"
+          image: {{ include "juanie.image" .Values.images.web | quote }}
           imagePullPolicy: {{ .Values.images.web.pullPolicy }}
           ports:
             - name: http
@@ -60,7 +61,7 @@ spec:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
             - secretRef:
-                name: {{ include "juanie.secretName" . }}
+                name: {{ include "juanie.effectiveSecretName" . }}
           resources:
             {{- toYaml .Values.resources.web | nindent 12 }}
           livenessProbe:
@@ -122,7 +123,8 @@ spec:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/component: worker
     spec:
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ .Chart.Name }}-worker
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -135,34 +137,28 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: worker
-          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          image: {{ include "juanie.image" .Values.images.runtime | quote }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./worker"]
-          {{- if or .Values.worker.insecureSkipTlsVerify .Values.worker.runScheduler }}
+          {{- if .Values.worker.insecureSkipTlsVerify }}
           env:
-            {{- if .Values.worker.insecureSkipTlsVerify }}
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
-            {{- end }}
-            {{- if .Values.worker.runScheduler }}
-            - name: JUANIE_WORKER_RUN_SCHEDULER
-              value: "true"
-            {{- end }}
           {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
             - secretRef:
-                name: {{ include "juanie.secretName" . }}
+                name: {{ include "juanie.effectiveSecretName" . }}
           resources:
             {{- toYaml .Values.resources.worker | nindent 12 }}
           securityContext:
@@ -196,7 +192,7 @@ spec:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/component: scheduler
     spec:
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ .Chart.Name }}-scheduler
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -209,12 +205,12 @@ spec:
         fsGroup: 1001
       initContainers:
         - name: wait-for-postgres
-          image: "{{ .Values.images.busybox.repository }}:{{ .Values.images.busybox.tag }}"
+          image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
       containers:
         - name: scheduler
-          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          image: {{ include "juanie.image" .Values.images.runtime | quote }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./scheduler"]
           {{- if .Values.scheduler.insecureSkipTlsVerify }}
@@ -226,7 +222,7 @@ spec:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
             - secretRef:
-                name: {{ include "juanie.secretName" . }}
+                name: {{ include "juanie.effectiveSecretName" . }}
           resources:
             {{- toYaml .Values.resources.scheduler | nindent 12 }}
           securityContext:

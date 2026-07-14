@@ -2,9 +2,11 @@ import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { eq } from 'drizzle-orm';
 import type { NextAuthConfig } from 'next-auth';
 import NextAuth from 'next-auth';
+import type { Adapter } from 'next-auth/adapters';
 import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
+import { sanitizePersistedAuthAccount } from '@/lib/auth/account-sanitization';
 import { FeishuProvider } from '@/lib/auth/feishu-provider';
 import { getDb } from '@/lib/db';
 import { type GitProviderType, users } from '@/lib/db/schema';
@@ -28,6 +30,21 @@ function isAllowedFeishuEmail(email?: string | null): boolean {
 
   const domain = email?.split('@')[1]?.toLowerCase();
   return Boolean(domain && allowedDomains.includes(domain));
+}
+
+function buildCredentialFreeAuthAdapter(): Adapter {
+  const adapter = DrizzleAdapter(getDb());
+
+  return {
+    ...adapter,
+    linkAccount(account) {
+      if (!adapter.linkAccount) {
+        throw new Error('Auth adapter does not support account linking');
+      }
+
+      return adapter.linkAccount(sanitizePersistedAuthAccount(account));
+    },
+  };
 }
 
 export const onOAuthGrantPersist = async ({
@@ -67,7 +84,7 @@ function buildAuthConfig(): NextAuthConfig {
   const gitLabProviderType = resolveGitLabProviderType(gitLabServerUrl);
 
   return {
-    adapter: DrizzleAdapter(getDb()),
+    adapter: buildCredentialFreeAuthAdapter(),
     session: {
       strategy: 'jwt',
     },
@@ -137,13 +154,7 @@ function buildAuthConfig(): NextAuthConfig {
         }
 
         if (account) {
-          if (account.provider === 'github' || account.provider === 'gitlab') {
-            token.accessToken = account.access_token;
-            token.provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
-          } else {
-            delete token.accessToken;
-            token.provider = account.provider;
-          }
+          token.provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
         }
 
         if (
@@ -170,8 +181,7 @@ function buildAuthConfig(): NextAuthConfig {
           session.user.id = token.id as string;
         }
 
-        if (token?.accessToken) {
-          session.accessToken = token.accessToken as string;
+        if (token?.provider) {
           session.provider = token.provider as string;
         }
 

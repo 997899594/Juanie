@@ -30,7 +30,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: redis
-          image: "{{ .Values.images.redis.repository }}:{{ .Values.images.redis.tag }}"
+          image: {{ include "juanie.image" .Values.images.redis | quote }}
           imagePullPolicy: {{ .Values.images.redis.pullPolicy }}
           ports:
             - containerPort: 6379

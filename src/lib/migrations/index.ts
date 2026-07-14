@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
 import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -81,32 +82,49 @@ export async function createMigrationRun(
     sourceCommitMessage?: string | null;
     initialStatus?: MigrationRunStatus;
     filePreview?: MigrationFilePreviewSnapshot | null;
+    dispatch?: boolean;
   }
 ) {
   const lockKey = `${spec.database.id}:${spec.environment.id}`;
 
-  const [run] = await db
-    .insert(migrationRuns)
-    .values({
-      projectId: spec.specification.projectId,
-      serviceId: spec.service.id,
-      environmentId: spec.environment.id,
-      databaseId: spec.database.id,
-      specificationId: spec.specification.id,
-      releaseId: input.releaseId ?? null,
-      deploymentId: input.deploymentId ?? null,
-      triggeredBy: input.triggeredBy,
-      triggeredByUserId: input.triggeredByUserId ?? null,
-      sourceCommitSha: input.sourceCommitSha ?? null,
-      sourceCommitMessage: input.sourceCommitMessage ?? null,
-      status: input.initialStatus ?? 'queued',
-      runnerType: spec.specification.executionMode === 'external' ? 'external' : 'schema_runner',
-      lockKey,
-      filePreview: input.filePreview ?? null,
-    })
-    .returning();
+  const persist = async (executor: Pick<typeof db, 'insert'>) => {
+    const [run] = await executor
+      .insert(migrationRuns)
+      .values({
+        projectId: spec.specification.projectId,
+        serviceId: spec.service.id,
+        environmentId: spec.environment.id,
+        databaseId: spec.database.id,
+        specificationId: spec.specification.id,
+        releaseId: input.releaseId ?? null,
+        deploymentId: input.deploymentId ?? null,
+        triggeredBy: input.triggeredBy,
+        triggeredByUserId: input.triggeredByUserId ?? null,
+        sourceCommitSha: input.sourceCommitSha ?? null,
+        sourceCommitMessage: input.sourceCommitMessage ?? null,
+        status: input.initialStatus ?? 'queued',
+        runnerType: spec.specification.executionMode === 'external' ? 'external' : 'schema_runner',
+        lockKey,
+        filePreview: input.filePreview ?? null,
+      })
+      .returning();
 
-  return run;
+    if (!run) {
+      throw new Error('Failed to create migration run');
+    }
+    if (input.dispatch) {
+      await enqueueOutboxMessage(executor, {
+        topic: 'migration.requested',
+        aggregateType: 'migration',
+        aggregateId: run.id,
+        commandId: 'initial',
+        payload: { allowApprovalBypass: false, traceId: run.releaseId ?? run.id },
+      });
+    }
+    return run;
+  };
+
+  return input.dispatch ? db.transaction(persist) : persist(db);
 }
 
 export async function resolveAndRunMigrations(

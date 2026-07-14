@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
+import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
@@ -150,74 +151,42 @@ export async function createSchemaRepairAtlasRun(input: {
       const jobName = activeRun.jobName ?? buildSchemaRepairJobName(activeRun.id);
       const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
 
-      await db
-        .update(schemaRepairPlans)
-        .set({
-          atlasExecutionStatus: 'queued',
-          atlasExecutionStartedAt: null,
-          atlasExecutionFinishedAt: null,
-          atlasExecutionLog: null,
-          errorMessage: null,
-          updatedAt: requeuedAt,
-        })
-        .where(eq(schemaRepairPlans.id, plan.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(schemaRepairPlans)
+          .set({
+            atlasExecutionStatus: 'queued',
+            atlasExecutionStartedAt: null,
+            atlasExecutionFinishedAt: null,
+            atlasExecutionLog: null,
+            errorMessage: null,
+            updatedAt: requeuedAt,
+          })
+          .where(eq(schemaRepairPlans.id, plan.id));
 
-      await db
-        .update(schemaRepairAtlasRuns)
-        .set({
-          status: 'queued',
-          jobName,
-          errorMessage: null,
-          log: null,
-          finishedAt: null,
-          updatedAt: requeuedAt,
-        })
-        .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+        await tx
+          .update(schemaRepairAtlasRuns)
+          .set({
+            status: 'queued',
+            jobName,
+            errorMessage: null,
+            log: null,
+            finishedAt: null,
+            updatedAt: requeuedAt,
+          })
+          .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+        await enqueueOutboxMessage(tx, {
+          topic: 'schema.repair.requested',
+          aggregateType: 'schemaRepair',
+          aggregateId: activeRun.id,
+          commandId: `retry-${requeuedAt.getTime()}`,
+          payload: { namespace, jobName, projectId: input.projectId, userId: input.userId },
+        });
+      });
       await publishSchemaRepairRealtimeSnapshot({
         projectId: input.projectId,
         databaseId: plan.databaseId,
       });
-
-      try {
-        await dispatchSchemaRepairDraftJob({
-          namespace,
-          jobName,
-          atlasRunId: activeRun.id,
-          projectId: input.projectId,
-          userId: input.userId,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const failedAt = new Date();
-
-        await db
-          .update(schemaRepairPlans)
-          .set({
-            atlasExecutionStatus: 'failed',
-            atlasExecutionFinishedAt: failedAt,
-            atlasExecutionLog: message,
-            errorMessage: message,
-            updatedAt: failedAt,
-          })
-          .where(eq(schemaRepairPlans.id, plan.id));
-
-        await db
-          .update(schemaRepairAtlasRuns)
-          .set({
-            status: 'failed',
-            log: message,
-            errorMessage: message,
-            finishedAt: failedAt,
-            updatedAt: failedAt,
-          })
-          .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
-        await publishSchemaRepairRealtimeSnapshot({
-          projectId: input.projectId,
-          databaseId: plan.databaseId,
-        });
-
-        throw error;
-      }
     }
 
     return activeRun;
@@ -226,83 +195,61 @@ export async function createSchemaRepairAtlasRun(input: {
   const queuedAt = new Date();
   const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
 
-  const [run] = await db
-    .insert(schemaRepairAtlasRuns)
-    .values({
-      planId: plan.id,
-      projectId: input.projectId,
-      environmentId: plan.environmentId,
-      databaseId: plan.databaseId,
-      status: 'queued',
-    })
-    .returning();
-  const jobName = buildSchemaRepairJobName(run.id);
+  const run = await db.transaction(async (tx) => {
+    const [createdRun] = await tx
+      .insert(schemaRepairAtlasRuns)
+      .values({
+        planId: plan.id,
+        projectId: input.projectId,
+        environmentId: plan.environmentId,
+        databaseId: plan.databaseId,
+        status: 'queued',
+      })
+      .returning();
+    if (!createdRun) {
+      throw new Error('Failed to create schema repair run');
+    }
+    const jobName = buildSchemaRepairJobName(createdRun.id);
 
-  await db
-    .update(schemaRepairAtlasRuns)
-    .set({
-      jobName,
-      updatedAt: queuedAt,
-    })
-    .where(eq(schemaRepairAtlasRuns.id, run.id));
-
-  await db
-    .update(schemaRepairPlans)
-    .set({
-      atlasExecutionStatus: 'queued',
-      atlasExecutionStartedAt: null,
-      atlasExecutionFinishedAt: null,
-      atlasExecutionLog: null,
-      updatedAt: queuedAt,
-    })
-    .where(eq(schemaRepairPlans.id, plan.id));
-
-  try {
-    await dispatchSchemaRepairDraftJob({
-      namespace,
-      jobName,
-      atlasRunId: run.id,
-      projectId: input.projectId,
-      userId: input.userId,
-    });
-    await publishSchemaRepairRealtimeSnapshot({
-      projectId: input.projectId,
-      databaseId: plan.databaseId,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const failedAt = new Date();
-
-    await db
+    await tx
+      .update(schemaRepairAtlasRuns)
+      .set({ jobName, updatedAt: queuedAt })
+      .where(eq(schemaRepairAtlasRuns.id, createdRun.id));
+    await tx
       .update(schemaRepairPlans)
       .set({
-        atlasExecutionStatus: 'failed',
-        atlasExecutionFinishedAt: failedAt,
-        atlasExecutionLog: message,
-        errorMessage: message,
-        updatedAt: failedAt,
+        atlasExecutionStatus: 'queued',
+        atlasExecutionStartedAt: null,
+        atlasExecutionFinishedAt: null,
+        atlasExecutionLog: null,
+        updatedAt: queuedAt,
       })
       .where(eq(schemaRepairPlans.id, plan.id));
-
-    await db
-      .update(schemaRepairAtlasRuns)
-      .set({
-        status: 'failed',
-        log: message,
-        errorMessage: message,
-        finishedAt: failedAt,
-        updatedAt: failedAt,
-      })
-      .where(eq(schemaRepairAtlasRuns.id, run.id));
-    await publishSchemaRepairRealtimeSnapshot({
-      projectId: input.projectId,
-      databaseId: plan.databaseId,
+    await enqueueOutboxMessage(tx, {
+      topic: 'schema.repair.requested',
+      aggregateType: 'schemaRepair',
+      aggregateId: createdRun.id,
+      commandId: 'initial',
+      payload: { namespace, jobName, projectId: input.projectId, userId: input.userId },
     });
-
-    throw error;
-  }
+    return { ...createdRun, jobName };
+  });
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: plan.databaseId,
+  });
 
   return run;
+}
+
+export async function dispatchSchemaRepairRunCommand(input: {
+  atlasRunId: string;
+  projectId: string;
+  userId: string | null;
+  namespace: string;
+  jobName: string;
+}): Promise<void> {
+  await dispatchSchemaRepairDraftJob(input);
 }
 
 export async function executeSchemaRepairAtlasRun(input: {

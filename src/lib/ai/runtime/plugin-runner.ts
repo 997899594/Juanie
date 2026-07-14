@@ -5,6 +5,7 @@ import {
   resolveAIPluginAuditResourceType,
   resolveAIPluginResourceId,
 } from '@/lib/ai/runtime/plugin-scope';
+import { reserveAITokens, settleAITokenReservation } from '@/lib/ai/runtime/token-budget';
 import { withAIToolTrace } from '@/lib/ai/runtime/tool-trace';
 import type { AIPlugin, AIPluginContext, AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
 import { recordAIPluginUsage } from '@/lib/ai/runtime/usage-service';
@@ -71,6 +72,7 @@ export async function runAIPlugin<TEvidence, TOutput>(input: {
     plugin: input.plugin,
     skillId: skill?.id ?? null,
   });
+  let tokenReservationId: string | null = null;
 
   try {
     const enabled = await input.plugin.isEnabled(input.context);
@@ -82,6 +84,11 @@ export async function runAIPlugin<TEvidence, TOutput>(input: {
     if (entitlementSummary) {
       throw new Error(entitlementSummary);
     }
+
+    tokenReservationId = await reserveAITokens({
+      teamId: input.context.teamId,
+      plan: input.plan,
+    });
 
     const tracedRun = await withAIToolTrace(async () => {
       const evidence = input.evidence ?? (await input.plugin.buildEvidence(input.context));
@@ -99,6 +106,7 @@ export async function runAIPlugin<TEvidence, TOutput>(input: {
     const result = tracedRun.result.result;
     const toolCalls = tracedRun.calls;
     const latencyMs = Date.now() - startedAt;
+    await settleAITokenReservation(tokenReservationId, result.usage?.totalTokens ?? 0);
 
     recordAIRunTelemetry({
       pluginId: input.plugin.manifest.id,
@@ -156,6 +164,9 @@ export async function runAIPlugin<TEvidence, TOutput>(input: {
       evidence,
     };
   } catch (error) {
+    if (tokenReservationId) {
+      await settleAITokenReservation(tokenReservationId, 0).catch(() => undefined);
+    }
     await recordAIPluginUsage({
       ...baseRun,
       provider: null,

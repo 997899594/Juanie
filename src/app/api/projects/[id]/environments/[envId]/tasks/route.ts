@@ -1,7 +1,7 @@
 import { createEnvironmentDeepAnalysisTask } from '@/lib/ai/tasks/generic-task-service';
+import { dispatchPersistedAITask } from '@/lib/ai/tasks/reconciler';
 import { handleAIAsyncTaskPost } from '@/lib/ai/tasks/route-helpers';
 import { getProjectEnvironmentAccessOrThrow, requireSession } from '@/lib/api/access';
-import { addAITaskJob } from '@/lib/queue';
 
 export async function POST(
   request: Request,
@@ -20,7 +20,7 @@ export async function POST(
         actorUserId: session.user.id,
         question,
       }),
-    enqueueTask: (task) => addAITaskJob(task.id, task.kind),
+    enqueueTask: (task) => dispatchPersistedAITask({ taskId: task.id, kind: task.kind }),
     fallbackMessage: '环境分析任务创建失败',
   });
 }

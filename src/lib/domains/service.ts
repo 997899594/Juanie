@@ -132,7 +132,7 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
         ? input.services.find((candidate) => candidate.id === domain.serviceId)
         : undefined) ?? pickDefaultPublicService(input.services);
 
-    if (!service || service.type !== 'web' || service.isPublic === false) {
+    if (service?.type !== 'web' || service.isPublic === false) {
       continue;
     }
 

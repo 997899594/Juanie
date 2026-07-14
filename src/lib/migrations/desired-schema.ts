@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
-import { access, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { hasExecutable } from '@/lib/atlas/cli';
+import { parseStaticDrizzleConfig } from '@/lib/migrations/drizzle-config-parser';
 import {
   drizzleSchemaConfigCandidates,
   resolveSpecificationSource,
@@ -163,10 +164,10 @@ async function loadDrizzleExportOptions(input: {
   sourceConfigPath: string;
 }): Promise<DrizzleExportOptions> {
   const configPath = path.join(input.repoDir, input.sourceConfigPath);
-  const configUrl = pathToFileURL(configPath);
-  configUrl.searchParams.set('t', Date.now().toString(36));
-  const configModule = await import(configUrl.toString());
-  return resolveDrizzleExportOptionsFromConfig(configModule);
+  const configSource = await readFile(configPath, 'utf8');
+  return resolveDrizzleExportOptionsFromConfig(
+    parseStaticDrizzleConfig(configSource, input.sourceConfigPath)
+  );
 }
 
 async function createSourceWorkspace(input: {

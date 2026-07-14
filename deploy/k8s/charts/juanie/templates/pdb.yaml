@@ -1,0 +1,17 @@
+{{- $components := dict "web" .Values.replicaCount.web "worker" .Values.replicaCount.worker "scheduler" .Values.replicaCount.scheduler "restate-services" .Values.replicaCount.restateServices "outbox-dispatcher" .Values.replicaCount.outboxDispatcher -}}
+{{- range $component, $replicas := $components }}
+{{- if gt (int $replicas) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Chart.Name }}-{{ $component }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $.Chart.Name }}
+      app.kubernetes.io/component: {{ $component }}
+---
+{{- end }}
+{{- end }}

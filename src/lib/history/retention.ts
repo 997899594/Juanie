@@ -7,6 +7,7 @@ import {
   deploymentDiagnostics,
   deploymentLogs,
 } from '@/lib/db/schema';
+import { cleanupOutboxHistory } from '@/lib/outbox/operations';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +27,8 @@ export interface HistoryRetentionPolicy {
   aiPluginSnapshotDays: number;
   migrationRunDays: number;
   schemaRepairAtlasRunDays: number;
+  outboxDeliveredDays: number;
+  outboxResolvedDeadLetterDays: number;
 }
 
 export interface HistoryRetentionResult {
@@ -36,6 +39,8 @@ export interface HistoryRetentionResult {
   deletedAIPluginSnapshots: number;
   deletedMigrationRuns: number;
   deletedSchemaRepairAtlasRuns: number;
+  deletedDeliveredOutboxMessages: number;
+  deletedResolvedDeadLetterMessages: number;
 }
 
 export function getHistoryRetentionPolicy(): HistoryRetentionPolicy {
@@ -47,6 +52,11 @@ export function getHistoryRetentionPolicy(): HistoryRetentionPolicy {
     migrationRunDays: parseRetentionDays(process.env.MIGRATION_RUN_RETENTION_DAYS, 30),
     schemaRepairAtlasRunDays: parseRetentionDays(
       process.env.SCHEMA_REPAIR_ATLAS_RUN_RETENTION_DAYS,
+      30
+    ),
+    outboxDeliveredDays: parseRetentionDays(process.env.OUTBOX_DELIVERED_RETENTION_DAYS, 14),
+    outboxResolvedDeadLetterDays: parseRetentionDays(
+      process.env.OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS,
       30
     ),
   };
@@ -74,6 +84,7 @@ export async function cleanupRetainedHistory(
     deletedAIPluginSnapshots,
     deletedMigrationRuns,
     deletedSchemaRepairAtlasRuns,
+    outboxCleanup,
   ] = await Promise.all([
     db
       .delete(deploymentLogs)
@@ -137,6 +148,10 @@ export async function cleanupRetainedHistory(
           returning run.id
         `)
       .then((rows) => rows.length),
+    cleanupOutboxHistory({
+      deliveredBefore: daysAgo(policy.outboxDeliveredDays),
+      resolvedDeadLettersBefore: daysAgo(policy.outboxResolvedDeadLetterDays),
+    }),
   ]);
 
   return {
@@ -147,5 +162,7 @@ export async function cleanupRetainedHistory(
     deletedAIPluginSnapshots,
     deletedMigrationRuns,
     deletedSchemaRepairAtlasRuns,
+    deletedDeliveredOutboxMessages: outboxCleanup.deletedDelivered,
+    deletedResolvedDeadLetterMessages: outboxCleanup.deletedResolvedDeadLetters,
   };
 }

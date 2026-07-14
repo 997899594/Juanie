@@ -18,7 +18,7 @@ import {
   renderJuanieConfig,
   resolvePackageScriptCommand,
   selectMonorepoCiWork,
-} from '@/lib/queue/project-init';
+} from '@/lib/projects/bootstrap/repository-automation';
 
 describe('project init migration inference', () => {
   it('renders generated CI through build-run aggregation instead of per-service releases', () => {

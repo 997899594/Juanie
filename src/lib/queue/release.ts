@@ -1,10 +1,7 @@
-import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
-import { scheduleReleaseJob } from '@/lib/queue';
-import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
   failReleaseForCurrentPhase,
@@ -15,54 +12,27 @@ import {
   startReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
-import { releaseStatusesRequiringFailureReconciliation } from '@/lib/releases/state-machine';
 import { buildTraceLogFields } from '@/lib/trace/context';
-import type { ReleaseJobData } from './index';
 
 const releaseWorkerLogger = logger.child({ component: 'release-worker' });
-const releaseWorkerLockDurationMs = 300_000;
-const releaseWorkerLockRenewTimeMs = 60_000;
 const schemaAdmissionRetryDelayMs = 10_000;
 
-export function shouldReconcileUnexpectedReleaseJobFailure(status: string): boolean {
-  return (releaseStatusesRequiringFailureReconciliation as readonly string[]).includes(status);
+export interface ReleaseCommand {
+  releaseId: string;
+  traceId?: string;
 }
 
-export async function reconcileUnexpectedReleaseJobFailure(releaseId: string, error: unknown) {
-  const release = await db.query.releases.findFirst({
-    where: eq(releases.id, releaseId),
-    columns: {
-      id: true,
-      status: true,
-    },
-  });
-
-  if (!release) {
-    return { reconciled: false, reason: 'release_missing' as const };
-  }
-
-  if (!shouldReconcileUnexpectedReleaseJobFailure(release.status)) {
-    return { reconciled: false, reason: 'release_state_not_match' as const };
-  }
-
-  const message = error instanceof Error ? error.message : String(error);
-  await failReleaseForCurrentPhase(release.id, message);
-  await persistReleaseRecapSafely(release.id);
-
-  return { reconciled: true, reason: 'release_updated' as const };
-}
-
-export async function processRelease(job: Job<ReleaseJobData>) {
+export async function runReleaseCommand(data: ReleaseCommand, jobId?: string) {
   const traceFields = buildTraceLogFields({
-    traceId: job.data.traceId,
-    releaseId: job.data.releaseId,
-    jobId: job.id,
-    queue: 'release',
+    traceId: data.traceId,
+    releaseId: data.releaseId,
+    jobId,
+    queue: jobId ? 'release' : 'restate-release',
   });
-  const release = await loadReleaseForOrchestration(job.data.releaseId);
+  const release = await loadReleaseForOrchestration(data.releaseId);
 
   if (!release) {
-    throw new Error(`Release ${job.data.releaseId} not found`);
+    throw new Error(`Release ${data.releaseId} not found`);
   }
 
   releaseWorkerLogger.info('Processing release job', {
@@ -100,10 +70,6 @@ export async function processRelease(job: Job<ReleaseJobData>) {
       const admission = await runReleaseAdmission(release);
 
       if (admission.kind === 'pending_schema_refresh') {
-        await scheduleReleaseJob(release.id, {
-          traceId: job.data.traceId,
-          delayMs: schemaAdmissionRetryDelayMs,
-        });
         return {
           success: true,
           terminal: false,
@@ -173,15 +139,4 @@ export async function processRelease(job: Job<ReleaseJobData>) {
 
     throw error;
   }
-}
-
-export function createReleaseWorker() {
-  return new Worker<ReleaseJobData>('release', processRelease, {
-    connection: resolveRedisConnectionOptions({
-      maxRetriesPerRequest: null,
-    }),
-    lockDuration: releaseWorkerLockDurationMs,
-    lockRenewTime: releaseWorkerLockRenewTimeMs,
-    concurrency: 5,
-  });
 }

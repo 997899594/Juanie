@@ -1,0 +1,27 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-juanie-images
+spec:
+  validationFailureAction: Enforce
+  background: true
+  webhookConfiguration:
+    failurePolicy: Fail
+  rules:
+    - name: verify-github-oidc-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [juanie]
+      verifyImages:
+        - imageReferences:
+            - ghcr.io/997899594/juanie*
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/997899594/Juanie/.github/workflows/ci.yml@refs/heads/main

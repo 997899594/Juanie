@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}-restate
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate
+spec:
+  clusterIP: None
+  ports:
+    - name: ingress
+      port: 8080
+      targetPort: ingress
+    - name: admin
+      port: 9070
+      targetPort: admin
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Chart.Name }}-restate
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate
+spec:
+  serviceName: {{ .Chart.Name }}-restate
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: restate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: restate
+    spec:
+      serviceAccountName: {{ .Chart.Name }}-restate
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: restate
+          image: {{ include "juanie.image" .Values.images.restate | quote }}
+          imagePullPolicy: {{ .Values.images.restate.pullPolicy }}
+          ports:
+            - name: ingress
+              containerPort: 8080
+            - name: admin
+              containerPort: 9070
+          volumeMounts:
+            - name: data
+              mountPath: /restate-data
+          resources:
+            {{- toYaml .Values.resources.restate | nindent 12 }}
+          startupProbe:
+            tcpSocket:
+              port: ingress
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: ingress
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: ingress
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.restate.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}-restate-services
+  namespace: {{ .Values.namespace }}
+spec:
+  ports:
+    - name: http
+      port: 9080
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate-services
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-restate-services
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate-services
+spec:
+  replicas: {{ .Values.replicaCount.restateServices }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: restate-services
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: restate-services
+    spec:
+      serviceAccountName: {{ .Chart.Name }}-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: restate-services
+          image: {{ include "juanie.image" .Values.images.runtime | quote }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command: ["./restate-services"]
+          ports:
+            - name: http
+              containerPort: 9080
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+            - secretRef:
+                name: {{ include "juanie.effectiveSecretName" . }}
+          resources:
+            {{- toYaml .Values.resources.restateServices | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-outbox-dispatcher
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: outbox-dispatcher
+spec:
+  replicas: {{ .Values.replicaCount.outboxDispatcher }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: outbox-dispatcher
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: outbox-dispatcher
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: {{ .Chart.Name }}-outbox
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: outbox-dispatcher
+          image: {{ include "juanie.image" .Values.images.runtime | quote }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command: ["./outbox-dispatcher"]
+          ports:
+            - name: metrics
+              containerPort: 9464
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+            - secretRef:
+                name: {{ include "juanie.effectiveSecretName" . }}
+          resources:
+            {{- toYaml .Values.resources.outboxDispatcher | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+{{- if .Values.restate.registration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Chart.Name }}-restate-register-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate-registration
+spec:
+  backoffLimit: {{ .Values.restate.registration.backoffLimit }}
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: restate-registration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Chart.Name }}-restate
+      automountServiceAccountToken: false
+      containers:
+        - name: register
+          image: {{ include "juanie.image" .Values.images.curl | quote }}
+          imagePullPolicy: {{ .Values.images.curl.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - >-
+              until curl --fail --silent http://{{ .Chart.Name }}-restate:9070/health; do sleep 2; done;
+              until curl --http2-prior-knowledge --fail --silent
+              http://{{ .Chart.Name }}-restate-services:9080/health; do sleep 2; done;
+              curl --fail-with-body --silent --show-error
+              -X POST http://{{ .Chart.Name }}-restate:9070/deployments
+              -H 'content-type: application/json'
+              -d '{"uri":"http://{{ .Chart.Name }}-restate-services:9080"}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+{{- end }}
