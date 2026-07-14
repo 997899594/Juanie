@@ -105,6 +105,13 @@ export function getAtlasDeclaredVersions(files: Array<{ name: string }>): string
     .filter((version): version is string => Boolean(version));
 }
 
+export function isAtlasTargetVersionApplied(
+  appliedVersions: readonly string[],
+  targetVersion: string | null | undefined
+): boolean {
+  return Boolean(targetVersion && appliedVersions.includes(targetVersion));
+}
+
 export function selectAtlasMigrationsThroughTarget<T extends { name: string }>(
   files: T[],
   targetVersion: string | null | undefined
