@@ -2,6 +2,9 @@
 {{- if not .Values.monitoring.prometheusRule.enabled }}
 {{- fail "production requires monitoring.prometheusRule.enabled=true" }}
 {{- end }}
+{{- if not .Values.monitoring.podMonitor.enabled }}
+{{- fail "production requires monitoring.podMonitor.enabled=true" }}
+{{- end }}
 {{- if eq .Values.production.durabilityMode "selfHosted" }}
 {{- if or (not .Values.postgres.enabled) (not .Values.restate.embeddedEnabled) }}
 {{- fail "self-hosted production requires embedded PostgreSQL and Restate" }}

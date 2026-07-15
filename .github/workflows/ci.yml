@@ -53,6 +53,7 @@ jobs:
             -f deploy/k8s/charts/juanie/values-prod.yaml)"
           test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
           test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
+          test "$(grep -c '^kind: PodMonitor$' <<<"$rendered")" -eq 1
           ! grep -q 'control-plane-contract' <<<"$rendered"
           schema_release="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \

@@ -15,6 +15,8 @@ ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
 ARGOCD_PROJECT_NAME="${ARGOCD_PROJECT_NAME:-juanie}"
 ARGOCD_ENABLED="${ARGOCD_ENABLED:-false}"
 ARGO_ROLLOUTS_NAMESPACE="${ARGO_ROLLOUTS_NAMESPACE:-argo-rollouts}"
+MONITORING_ENABLED="${MONITORING_ENABLED:-true}"
+MONITORING_NAMESPACE="${MONITORING_NAMESPACE:-monitoring}"
 CNPG_ENABLED="${CNPG_ENABLED:-false}"
 CNPG_NAMESPACE="${CNPG_NAMESPACE:-cnpg-system}"
 EXTERNAL_SECRETS_NAMESPACE="${EXTERNAL_SECRETS_NAMESPACE:-external-secrets}"
@@ -36,6 +38,7 @@ ARGOCD_REPO_SECRET_NAME="${ARGOCD_REPO_SECRET_NAME:-juanie-preview-source}"
 CERT_MANAGER_CHART_VERSION="${CERT_MANAGER_CHART_VERSION:-v1.20.2}"
 ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-9.5.20}"
 ARGO_ROLLOUTS_CHART_VERSION="${ARGO_ROLLOUTS_CHART_VERSION:-2.41.0}"
+PROMETHEUS_STACK_CHART_VERSION="${PROMETHEUS_STACK_CHART_VERSION:-87.16.1}"
 CNPG_CHART_VERSION="${CNPG_CHART_VERSION:-0.28.2}"
 EXTERNAL_SECRETS_CHART_VERSION="${EXTERNAL_SECRETS_CHART_VERSION:-2.6.0}"
 DNSPOD_WEBHOOK_CHART_VERSION="${DNSPOD_WEBHOOK_CHART_VERSION:-1.5.2}"
@@ -43,6 +46,7 @@ DNSPOD_WEBHOOK_CHART_VERSION="${DNSPOD_WEBHOOK_CHART_VERSION:-1.5.2}"
 CERT_MANAGER_CHART_REF="${CERT_MANAGER_CHART_REF:-jetstack/cert-manager}"
 ARGOCD_CHART_REF="${ARGOCD_CHART_REF:-argo/argo-cd}"
 ARGO_ROLLOUTS_CHART_REF="${ARGO_ROLLOUTS_CHART_REF:-argo/argo-rollouts}"
+PROMETHEUS_STACK_CHART_REF="${PROMETHEUS_STACK_CHART_REF:-prometheus-community/kube-prometheus-stack}"
 CNPG_CHART_REF="${CNPG_CHART_REF:-cnpg/cloudnative-pg}"
 EXTERNAL_SECRETS_CHART_REF="${EXTERNAL_SECRETS_CHART_REF:-external-secrets/external-secrets}"
 DNSPOD_WEBHOOK_CHART_REF="${DNSPOD_WEBHOOK_CHART_REF:-cert-manager-webhook-dnspod/cert-manager-webhook-dnspod}"
@@ -54,6 +58,7 @@ BOOTSTRAP_CHART_FORCE_DOWNLOAD="${BOOTSTRAP_CHART_FORCE_DOWNLOAD:-false}"
 CERT_MANAGER_CHART_URL="${CERT_MANAGER_CHART_URL:-https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_CHART_VERSION}.tgz}"
 ARGOCD_CHART_URL="${ARGOCD_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-cd-${ARGOCD_CHART_VERSION}/argo-cd-${ARGOCD_CHART_VERSION}.tgz}"
 ARGO_ROLLOUTS_CHART_URL="${ARGO_ROLLOUTS_CHART_URL:-https://github.com/argoproj/argo-helm/releases/download/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}/argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz}"
+PROMETHEUS_STACK_CHART_URL="${PROMETHEUS_STACK_CHART_URL:-https://github.com/prometheus-community/helm-charts/releases/download/kube-prometheus-stack-${PROMETHEUS_STACK_CHART_VERSION}/kube-prometheus-stack-${PROMETHEUS_STACK_CHART_VERSION}.tgz}"
 CNPG_CHART_URL="${CNPG_CHART_URL:-https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v${CNPG_CHART_VERSION}/cloudnative-pg-${CNPG_CHART_VERSION}.tgz}"
 EXTERNAL_SECRETS_CHART_URL="${EXTERNAL_SECRETS_CHART_URL:-https://github.com/external-secrets/external-secrets/releases/download/helm-chart-${EXTERNAL_SECRETS_CHART_VERSION}/external-secrets-${EXTERNAL_SECRETS_CHART_VERSION}.tgz}"
 DNSPOD_WEBHOOK_CHART_URL="${DNSPOD_WEBHOOK_CHART_URL:-https://github.com/imroc/cert-manager-webhook-dnspod/releases/download/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}/cert-manager-webhook-dnspod-${DNSPOD_WEBHOOK_CHART_VERSION}.tgz}"
@@ -209,6 +214,9 @@ resolve_chart_refs() {
         ARGOCD_CHART_REF="$(download_chart "argo-cd-${ARGOCD_CHART_VERSION}.tgz" "${ARGOCD_CHART_URL}")"
       fi
       ARGO_ROLLOUTS_CHART_REF="$(download_chart "argo-rollouts-${ARGO_ROLLOUTS_CHART_VERSION}.tgz" "${ARGO_ROLLOUTS_CHART_URL}")"
+      if [[ "${MONITORING_ENABLED}" == "true" ]]; then
+        PROMETHEUS_STACK_CHART_REF="$(download_chart "kube-prometheus-stack-${PROMETHEUS_STACK_CHART_VERSION}.tgz" "${PROMETHEUS_STACK_CHART_URL}")"
+      fi
       if [[ "${CNPG_ENABLED}" == "true" ]]; then
         CNPG_CHART_REF="$(download_chart "cloudnative-pg-${CNPG_CHART_VERSION}.tgz" "${CNPG_CHART_URL}")"
       fi
@@ -367,6 +375,19 @@ wait_for_labeled_statefulsets() {
   local statefulset
   for statefulset in "${statefulsets[@]}"; do
     wait_for_statefulset "${namespace}" "${statefulset}"
+  done
+}
+
+wait_for_labeled_daemonsets() {
+  local namespace="$1"
+  local selector="$2"
+  mapfile -t daemonsets < <(
+    kubectl get daemonsets -n "${namespace}" -l "${selector}" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+  )
+
+  local daemonset
+  for daemonset in "${daemonsets[@]}"; do
+    kubectl rollout status "daemonset/${daemonset}" -n "${namespace}" --timeout=10m
   done
 }
 
@@ -702,6 +723,9 @@ show_summary() {
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     summary_namespaces+=("${EXTERNAL_SECRETS_NAMESPACE}")
   fi
+  if [[ "${MONITORING_ENABLED}" == "true" ]]; then
+    summary_namespaces+=("${MONITORING_NAMESPACE}")
+  fi
   kubectl get ns "${summary_namespaces[@]}" >/dev/null
   kubectl get pods -n "${CERT_MANAGER_NAMESPACE}"
   if [[ "${ARGOCD_ENABLED}" == "true" ]]; then
@@ -713,6 +737,9 @@ show_summary() {
   fi
   if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]]; then
     kubectl get pods -n "${EXTERNAL_SECRETS_NAMESPACE}"
+  fi
+  if [[ "${MONITORING_ENABLED}" == "true" ]]; then
+    kubectl get pods -n "${MONITORING_NAMESPACE}"
   fi
   kubectl get gateway -n "${PLATFORM_NAMESPACE}" || true
   kubectl get certificate -n "${PLATFORM_NAMESPACE}" || true
@@ -758,6 +785,11 @@ fi
 
 if [[ "${EXTERNAL_SECRETS_ENABLED}" == "true" ]] && ! is_local_chart_ref "${EXTERNAL_SECRETS_CHART_REF}"; then
   helm_repo_add external-secrets https://charts.external-secrets.io
+  helm_repo_update_required='true'
+fi
+
+if [[ "${MONITORING_ENABLED}" == "true" ]] && ! is_local_chart_ref "${PROMETHEUS_STACK_CHART_REF}"; then
+  helm_repo_add prometheus-community https://prometheus-community.github.io/helm-charts
   helm_repo_update_required='true'
 fi
 
@@ -890,6 +922,21 @@ helm_upgrade_install \
   "${ARGO_ROLLOUTS_CHART_VERSION}" \
   "${argo_rollouts_args[@]}"
 wait_for_labeled_deployments "${ARGO_ROLLOUTS_NAMESPACE}" app.kubernetes.io/instance=argo-rollouts
+
+if [[ "${MONITORING_ENABLED}" == "true" ]]; then
+  log_section "安装 Prometheus 监控控制面"
+  helm_upgrade_install \
+    kube-prometheus-stack \
+    "${PROMETHEUS_STACK_CHART_REF}" \
+    "${MONITORING_NAMESPACE}" \
+    "${INFRA_DIR}/monitoring/values.yaml" \
+    "${PROMETHEUS_STACK_CHART_VERSION}"
+  wait_for_labeled_statefulsets "${MONITORING_NAMESPACE}" app.kubernetes.io/instance=kube-prometheus-stack
+  wait_for_labeled_deployments "${MONITORING_NAMESPACE}" app.kubernetes.io/instance=kube-prometheus-stack
+  wait_for_labeled_daemonsets "${MONITORING_NAMESPACE}" app.kubernetes.io/instance=kube-prometheus-stack
+else
+  log_info "Prometheus 监控控制面已关闭，生产 Juanie chart 将拒绝部署。"
+fi
 
 if [[ "${CNPG_ENABLED}" == "true" ]]; then
   log_section "安装 CloudNativePG"

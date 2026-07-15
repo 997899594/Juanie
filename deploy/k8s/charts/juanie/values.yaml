@@ -337,3 +337,8 @@ monitoring:
     enabled: false
     namespace: ""
     labels: {}
+  podMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    interval: 30s

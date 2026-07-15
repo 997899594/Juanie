@@ -94,3 +94,5 @@ env:
 monitoring:
   prometheusRule:
     enabled: true
+  podMonitor:
+    enabled: true
