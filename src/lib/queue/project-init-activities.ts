@@ -41,6 +41,7 @@ import {
   JUANIE_BUILD_RUN_SCRIPT_PATH,
   JUANIE_DELIVERY_SCRIPT_PATH,
   JUANIE_MANAGED_DOC_PATH,
+  JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH,
   type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigMonorepoEntry,
@@ -59,6 +60,7 @@ import {
   renderManagedArtifactTargetDockerfile,
   renderManagedWorkloadDockerfile,
   renderStaticNginxConfig,
+  renderWorkloadIdentityScript,
   resolveManagedMigrationScriptPaths,
   resolveMonorepoAffectedRules,
 } from '@/lib/projects/bootstrap/repository-automation';
@@ -560,6 +562,7 @@ export async function pushCicdConfig(
   files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
   files[JUANIE_BUILD_RUN_SCRIPT_PATH] = renderBuildRunScript();
   files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
+  files[JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH] = renderWorkloadIdentityScript();
   files[JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH] = renderAffectedWorkspaceScript();
   for (const workload of deliveryGraph?.workloads ?? []) {
     if (workload.confidence !== 'high' || workload.hasDockerfile) continue;

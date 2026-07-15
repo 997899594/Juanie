@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
+import { assertReleaseExecutionFence } from '@/lib/execution/ownership';
 import { logger } from '@/lib/logger';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import {
@@ -34,6 +35,8 @@ export async function runReleaseCommand(data: ReleaseCommand, jobId?: string) {
   if (!release) {
     throw new Error(`Release ${data.releaseId} not found`);
   }
+
+  await assertReleaseExecutionFence(release.id);
 
   releaseWorkerLogger.info('Processing release job', {
     ...traceFields,

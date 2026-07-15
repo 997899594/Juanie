@@ -1,17 +1,43 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ .Chart.Name }}-restate-internal
+  name: {{ .Chart.Name }}-restate-ingress
   namespace: {{ .Values.namespace }}
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/component
-        operator: In
-        values: [restate, restate-services]
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: restate
   policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/component: outbox-dispatcher
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/component: restate-registration
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Chart.Name }}-restate-services-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: restate-services
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/component: restate
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/component: restate-registration

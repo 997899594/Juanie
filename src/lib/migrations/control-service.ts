@@ -9,6 +9,7 @@ import {
   type ReleaseStatus,
   releaseMigrationPlans,
 } from '@/lib/db/schema';
+import { assertExecutionFence, buildMigrationExecutionKey } from '@/lib/execution/ownership';
 import {
   buildMigrationExecutionPlan,
   createMigrationRun,
@@ -465,6 +466,13 @@ export async function executeMigrationRunActionForActor(input: {
     }
 
     await db.transaction(async (tx) => {
+      if (run.executionGeneration) {
+        await assertExecutionFence(tx, {
+          scopeKey: buildMigrationExecutionKey(run.environmentId, run.databaseId),
+          ownerId: run.id,
+          generation: run.executionGeneration,
+        });
+      }
       await tx
         .update(migrationRuns)
         .set({
@@ -496,6 +504,7 @@ export async function executeMigrationRunActionForActor(input: {
         payload: {
           allowApprovalBypass: true,
           traceId: run.releaseId ?? run.id,
+          executionKey: run.lockKey,
         },
       });
     });
@@ -557,16 +566,25 @@ export async function executeMigrationRunActionForActor(input: {
         ? input.errorMessage.trim()
         : '外部迁移被人工标记为失败';
 
-    await db
-      .update(migrationRuns)
-      .set({
-        status: 'failed',
-        errorCode: 'external_marked_failed',
-        errorMessage: failureMessage,
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(migrationRuns.id, run.id));
+    await db.transaction(async (tx) => {
+      const failedAt = new Date();
+      await tx
+        .update(migrationRuns)
+        .set({
+          status: 'failed',
+          errorCode: 'external_marked_failed',
+          errorMessage: failureMessage,
+          finishedAt: failedAt,
+          updatedAt: failedAt,
+        })
+        .where(eq(migrationRuns.id, run.id));
+      if (run.releaseMigrationPlanId) {
+        await tx
+          .update(releaseMigrationPlans)
+          .set({ status: 'failed', updatedAt: failedAt })
+          .where(eq(releaseMigrationPlans.id, run.releaseMigrationPlanId));
+      }
+    });
 
     if (run.releaseId) {
       const failureStatus: ReleaseStatus =

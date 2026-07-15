@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { BuildRunError, completeBuildUnit } from '@/lib/builds/service';
 import type { BuildUnitStatus } from '@/lib/db/schema';
+import { isCiAccessError } from '@/lib/releases/api-access';
 
 const validStatuses = new Set<BuildUnitStatus>(['running', 'succeeded', 'failed']);
 
@@ -34,13 +35,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, buildRun });
   } catch (error) {
     const status =
-      error instanceof BuildRunError
-        ? error.statusCode
-        : error instanceof Error &&
-            (error.message.includes('Token does not have access') ||
-              error.message.includes('Missing bearer token'))
-          ? 401
-          : 400;
+      error instanceof BuildRunError ? error.statusCode : isCiAccessError(error) ? 401 : 400;
 
     return NextResponse.json(
       {

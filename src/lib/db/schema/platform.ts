@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -83,6 +85,10 @@ export const environmentVariables = pgTable(
   },
   (table) => ({
     projectIdIdx: index('environmentVariable_projectId_idx').on(table.projectId),
+    secretEnvelopeRequired: check(
+      'environmentVariable_secret_envelope_required',
+      sql`${table.isSecret} is not true or (${table.value} is null and ${table.encryptedValue} is not null and ${table.iv} is not null and ${table.authTag} is not null)`
+    ),
   })
 );
 

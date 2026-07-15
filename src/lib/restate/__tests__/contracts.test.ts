@@ -26,6 +26,18 @@ describe('Restate command contracts', () => {
     });
   });
 
+  it('serializes release and migration commands by their mutation scope', () => {
+    const release = resolveRestateTarget('release.requested', 'release-1', 'initial', {
+      executionKey: 'environment:env-1',
+    });
+    const migration = resolveRestateTarget('migration.requested', 'run-1', 'initial', {
+      executionKey: 'environment:env-1:database:db-1',
+    });
+
+    expect(release.key).toBe('environment:env-1');
+    expect(migration.key).toBe('environment:env-1:database:db-1');
+  });
+
   it('creates a new project deletion workflow for each explicit attempt', () => {
     const firstAttempt = resolveRestateTarget(
       'project.delete.requested',

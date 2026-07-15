@@ -102,7 +102,11 @@ export async function createManagedArtifactUpload(input: {
   }
 
   assertReleaseAcceptsDeliveryArtifacts(release);
-  await verifyRepositoryAccess(input.repository, input.authHeader);
+  await verifyRepositoryAccess(input.repository, input.authHeader, {
+    ref: release.sourceRef,
+    sha: release.sourceCommitSha,
+    externalRunId: release.externalRunId,
+  });
 
   return createSignedArtifactUpload({
     projectId: release.projectId,
@@ -127,7 +131,11 @@ export async function appendReleaseDeliveryArtifacts(input: {
   }
 
   assertReleaseAcceptsDeliveryArtifacts(release);
-  await verifyRepositoryAccess(input.repository, input.authHeader);
+  await verifyRepositoryAccess(input.repository, input.authHeader, {
+    ref: release.sourceRef,
+    sha: release.sourceCommitSha,
+    externalRunId: release.externalRunId,
+  });
 
   if (!Array.isArray(input.artifacts) || input.artifacts.length === 0) {
     throw accessError('invalid_scope', 'At least one artifact is required');

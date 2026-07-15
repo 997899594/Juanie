@@ -11,6 +11,9 @@ build:
   image: docker:24
   services:
     - docker:24-dind
+  id_tokens:
+    JUANIE_OIDC_TOKEN:
+      aud: juanie-ci
   before_script:
     - apk add --no-cache bash curl jq
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -24,7 +27,6 @@ build:
       export JUANIE_PROVIDER="gitlab"
       export JUANIE_IMAGE_REGISTRY="$CI_REGISTRY"
       export JUANIE_EXTERNAL_RUN_ID="$CI_PIPELINE_ID"
-      export JUANIE_TOKEN="$CI_JOB_TOKEN"
 
       bash .juanie/build-run.sh start
       bash .juanie/build-run.sh build-all
@@ -48,6 +50,9 @@ deliver:
   image: docker:24
   services:
     - docker:24-dind
+  id_tokens:
+    JUANIE_OIDC_TOKEN:
+      aud: juanie-ci
   needs:
     - job: build
       artifacts: true
@@ -63,10 +68,13 @@ deliver:
         exit 0
       fi
 
-      JUANIE_TOKEN="$CI_JOB_TOKEN" \
-        JUANIE_RELEASE_ID="$(cat .juanie-release-id)" \
-        JUANIE_REPOSITORY="$CI_PROJECT_PATH" \
-        JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie-build-outputs.json)" \
-        bash .juanie/delivery-artifacts.sh
+      export JUANIE_SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      export JUANIE_RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+      export JUANIE_REPOSITORY="$CI_PROJECT_PATH"
+      export JUANIE_PROVIDER="gitlab"
+      export JUANIE_EXTERNAL_RUN_ID="$CI_PIPELINE_ID"
+      export JUANIE_RELEASE_ID="$(cat .juanie-release-id)"
+      export JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie-build-outputs.json)"
+      bash .juanie/delivery-artifacts.sh
   rules:
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 const expandMigrationPath = 'migrations/20260713120000_control_plane_durability.sql';
 const contractMigrationPath = 'migrations/20260713121000_remove_plaintext_credentials.sql';
 const atlasRunnerPath = 'src/lib/db/control-plane-atlas.ts';
+const schemaJobPath = 'deploy/k8s/charts/juanie/templates/schema-sync-job.yaml';
 
 describe('control-plane expand and contract migrations', () => {
   it('keeps destructive credential and legacy-table changes out of the expand phase', async () => {
@@ -29,5 +30,13 @@ describe('control-plane expand and contract migrations', () => {
       "'apply',\n        '--to-version',\n        CREDENTIAL_ENVELOPE_VERSION"
     );
     expect(source).not.toContain("'apply',\n        '--to',\n        CREDENTIAL_ENVELOPE_VERSION");
+  });
+
+  it('keeps contract promotion out of the default Helm release', async () => {
+    const schemaJob = await readFile(schemaJobPath, 'utf8');
+    const source = await readFile(atlasRunnerPath, 'utf8');
+
+    expect(schemaJob).not.toContain('"phase" "contract"');
+    expect(source).toContain('Contract migration requires explicit promotion epoch');
   });
 });

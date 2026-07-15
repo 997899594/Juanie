@@ -9,6 +9,7 @@ import {
 } from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
+import { buildMigrationExecutionKey } from '@/lib/execution/ownership';
 import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import {
@@ -88,7 +89,7 @@ export async function createMigrationRun(
     allowApprovalBypass?: boolean;
   }
 ) {
-  const lockKey = `${spec.database.id}:${spec.environment.id}`;
+  const lockKey = buildMigrationExecutionKey(spec.environment.id, spec.database.id);
 
   const persist = async (executor: Pick<typeof db, 'insert'>) => {
     const [run] = await executor
@@ -130,6 +131,7 @@ export async function createMigrationRun(
         payload: {
           allowApprovalBypass: input.allowApprovalBypass ?? false,
           traceId: run.releaseId ?? run.id,
+          executionKey: lockKey,
         },
       });
     }

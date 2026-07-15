@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
+import { assertMigrationRunExecutionFence } from '@/lib/execution/ownership';
 import { appendMigrationRunLog, failMigrationRunWithoutThrow } from '@/lib/migrations/run-state';
 import { resumeReleaseAfterMigrationProgress } from '@/lib/releases/orchestration';
 import { replaceSchemaRunnerJob } from '@/lib/schema-management/schema-runner-job';
@@ -100,6 +101,7 @@ export async function dispatchMigrationRunToSchemaRunner(input: {
   });
 
   try {
+    await assertMigrationRunExecutionFence(run.id);
     await replaceSchemaRunnerJob({
       namespace,
       jobName,

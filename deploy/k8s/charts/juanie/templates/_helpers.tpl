@@ -8,6 +8,18 @@
 {{- end -}}
 {{- end -}}
 
+{{- define "juanie.secretEnv" -}}
+{{- $root := .root -}}
+{{- range .keys }}
+- name: {{ . }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "juanie.effectiveSecretName" $root }}
+      key: {{ . }}
+      optional: true
+{{- end }}
+{{- end -}}
+
 {{- define "juanie.image" -}}
 {{- if .digest -}}
 {{- printf "%s@%s" .repository .digest -}}

@@ -1,3 +1,4 @@
+{{- if .Values.restate.embeddedEnabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,6 +89,7 @@ spec:
           requests:
             storage: {{ .Values.restate.storage }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -138,8 +140,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
-            - secretRef:
-                name: {{ include "juanie.effectiveSecretName" . }}
+          env:
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateServices) | nindent 12 }}
           resources:
             {{- toYaml .Values.resources.restateServices | nindent 12 }}
           readinessProbe:
@@ -196,8 +198,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
-            - secretRef:
-                name: {{ include "juanie.effectiveSecretName" . }}
+          env:
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.outbox) | nindent 12 }}
           resources:
             {{- toYaml .Values.resources.outboxDispatcher | nindent 12 }}
           securityContext:
@@ -234,13 +236,12 @@ spec:
             - sh
             - -ec
             - >-
-              until curl --fail --silent http://{{ .Chart.Name }}-restate:9070/health; do sleep 2; done;
               until curl --http2-prior-knowledge --fail --silent
               http://{{ .Chart.Name }}-restate-services:9080/health; do sleep 2; done;
               curl --fail-with-body --silent --show-error
-              -X POST http://{{ .Chart.Name }}-restate:9070/deployments
+              -X POST {{ .Values.env.RESTATE_ADMIN_URL }}/deployments
               -H 'content-type: application/json'
-              -d '{"uri":"http://{{ .Chart.Name }}-restate-services:9080"}'
+              -d '{"uri":"{{ .Values.env.RESTATE_SERVICE_REGISTRATION_URL }}"}'
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

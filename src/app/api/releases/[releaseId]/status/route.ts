@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getReleaseById } from '@/lib/releases';
-import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { isCiAccessError, verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
@@ -19,7 +19,12 @@ export async function GET(
 
     await verifyRepositoryAccess(
       release.project?.repository?.fullName ?? release.sourceRepository ?? '',
-      request.headers.get('authorization')
+      request.headers.get('authorization'),
+      {
+        ref: release.sourceRef,
+        sha: release.sourceCommitSha,
+        externalRunId: release.externalRunId,
+      }
     );
 
     const lifecycle = resolveReleaseLifecycle(release);
@@ -50,10 +55,7 @@ export async function GET(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const status =
-      message.includes('Token does not have access') || message.includes('Missing bearer token')
-        ? 401
-        : 400;
+    const status = isCiAccessError(error) ? 401 : 400;
 
     return NextResponse.json(
       {

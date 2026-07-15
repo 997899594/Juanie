@@ -13,7 +13,7 @@
  */
 
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
-import { decrypt, encrypt } from '@/lib/crypto';
+import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
 import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
@@ -117,48 +117,16 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
 
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {
-        // 老格式：isSecret=true 但未加密（手动插入或旧版代码写入）
-        // 自愈迁移：就地加密并回写 DB，之后走正常解密路径
-        if (!v.value) {
-          envSyncLogger.warn('Secret variable is missing both encrypted and plaintext values', {
-            varId: v.id,
-            key: v.key,
-          });
-          continue;
-        }
-        try {
-          const encrypted = await encrypt(v.value);
-          await db
-            .update(environmentVariables)
-            .set({
-              value: null,
-              encryptedValue: encrypted.encryptedValue,
-              iv: encrypted.iv,
-              authTag: encrypted.authTag,
-              updatedAt: new Date(),
-            })
-            .where(eq(environmentVariables.id, v.id));
-          secrets[v.key] = v.value;
-          envSyncLogger.info('Migrated plaintext environment secret to encrypted form', {
-            varId: v.id,
-            key: v.key,
-          });
-        } catch (e) {
-          envSyncLogger.error('Failed to migrate plaintext environment secret', e, {
-            varId: v.id,
-            key: v.key,
-          });
-        }
-      } else {
-        try {
-          secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
-        } catch (e) {
-          envSyncLogger.error('Failed to decrypt environment variable', e, {
-            varId: v.id,
-            key: v.key,
-          });
-          throw new Error(`Failed to decrypt variable "${v.key}": ${(e as Error).message}`);
-        }
+        throw new Error(`Secret variable "${v.key}" has no encrypted credential envelope`);
+      }
+      try {
+        secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
+      } catch (e) {
+        envSyncLogger.error('Failed to decrypt environment variable', e, {
+          varId: v.id,
+          key: v.key,
+        });
+        throw new Error(`Failed to decrypt variable "${v.key}": ${(e as Error).message}`);
       }
     } else {
       configs[v.key] = v.value ?? '';
@@ -219,49 +187,16 @@ export async function syncServiceEnvVarsToK8s(
 
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {
-        if (!v.value) {
-          envSyncLogger.warn(
-            'Service secret variable is missing both encrypted and plaintext values',
-            {
-              varId: v.id,
-              key: v.key,
-            }
-          );
-          continue;
-        }
-        try {
-          const encrypted = await encrypt(v.value);
-          await db
-            .update(environmentVariables)
-            .set({
-              value: null,
-              encryptedValue: encrypted.encryptedValue,
-              iv: encrypted.iv,
-              authTag: encrypted.authTag,
-              updatedAt: new Date(),
-            })
-            .where(eq(environmentVariables.id, v.id));
-          secrets[v.key] = v.value;
-          envSyncLogger.info('Migrated plaintext service secret to encrypted form', {
-            varId: v.id,
-            key: v.key,
-          });
-        } catch (e) {
-          envSyncLogger.error('Failed to migrate plaintext service secret', e, {
-            varId: v.id,
-            key: v.key,
-          });
-        }
-      } else {
-        try {
-          secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
-        } catch (e) {
-          envSyncLogger.error('Failed to decrypt service environment variable', e, {
-            varId: v.id,
-            key: v.key,
-          });
-          throw new Error(`Failed to decrypt service variable "${v.key}": ${(e as Error).message}`);
-        }
+        throw new Error(`Service secret variable "${v.key}" has no encrypted credential envelope`);
+      }
+      try {
+        secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
+      } catch (e) {
+        envSyncLogger.error('Failed to decrypt service environment variable', e, {
+          varId: v.id,
+          key: v.key,
+        });
+        throw new Error(`Failed to decrypt service variable "${v.key}": ${(e as Error).message}`);
       }
     } else {
       configs[v.key] = v.value ?? '';

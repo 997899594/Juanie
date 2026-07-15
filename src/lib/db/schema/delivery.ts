@@ -153,9 +153,13 @@ export const releases = pgTable(
       .notNull()
       .references(() => environments.id, { onDelete: 'cascade' }),
 
+    executionKey: varchar('executionKey', { length: 255 }).notNull(),
+    executionGeneration: integer('executionGeneration').notNull(),
+
     sourceRepository: varchar('sourceRepository', { length: 255 }).notNull(),
     sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
     sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
+    externalRunId: varchar('externalRunId', { length: 255 }),
     configCommitSha: varchar('configCommitSha', { length: 100 }),
     sourceReleaseId: uuid('sourceReleaseId').references((): AnyPgColumn => releases.id, {
       onDelete: 'set null',
@@ -178,6 +182,22 @@ export const releases = pgTable(
     sourceReleaseIdIdx: index('release_sourceReleaseId_idx').on(table.sourceReleaseId),
     statusIdx: index('release_status_idx').on(table.status),
     sourceRepoIdx: index('release_sourceRepository_idx').on(table.sourceRepository),
+  })
+);
+
+export const executionOwnerships = pgTable(
+  'executionOwnership',
+  {
+    scopeKey: varchar('scopeKey', { length: 255 }).primaryKey(),
+    scopeType: varchar('scopeType', { length: 40 }).notNull(),
+    ownerType: varchar('ownerType', { length: 40 }).notNull(),
+    ownerId: uuid('ownerId').notNull(),
+    generation: integer('generation').notNull(),
+    acquiredAt: timestamp('acquiredAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    ownerIdx: index('executionOwnership_owner_idx').on(table.ownerType, table.ownerId),
   })
 );
 

@@ -40,6 +40,11 @@ imagePullSecrets: []
 
 namespace: juanie
 
+production:
+  enabled: false
+  durabilityMode: selfHosted
+  requireDisasterRecovery: false
+
 # 副本数
 replicaCount:
   web: 1
@@ -60,6 +65,7 @@ schemaSync:
   ttlSecondsAfterFinished: 600
 
 restate:
+  embeddedEnabled: true
   storage: "10Gi"
   registration:
     enabled: true
@@ -157,6 +163,7 @@ env:
   RESTATE_INGRESS_URL: "http://juanie-restate:8080"
   RESTATE_ADMIN_URL: "http://juanie-restate:9070"
   RESTATE_SERVICE_PORT: "9080"
+  RESTATE_SERVICE_REGISTRATION_URL: "http://juanie-restate-services:9080"
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
   AUTH_TRUST_HOST: "true"
   # Trust the Kubernetes ServiceAccount CA so Node-based platform workers can
@@ -226,6 +233,7 @@ gateway:
 
 # 数据库配置
 postgres:
+  enabled: true
   storage: "10Gi"
 
 redis:
@@ -251,6 +259,64 @@ secret:
   atlasDevUrl: ""
   atlasDevUrlPostgresql: ""
   atlasDevUrlMysql: ""
+  componentKeys:
+    web:
+      - DATABASE_PASSWORD
+      - NEXTAUTH_SECRET
+      - ENCRYPTION_MASTER_KEY
+      - ENCRYPTION_MASTER_KEY_VERSION
+      - METRICS_BEARER_TOKEN
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+      - GITLAB_CLIENT_ID
+      - GITLAB_CLIENT_SECRET
+      - FEISHU_CLIENT_ID
+      - FEISHU_CLIENT_SECRET
+      - AI_302_API_KEY
+      - ARTIFACT_STORAGE_ACCESS_KEY_ID
+      - ARTIFACT_STORAGE_SECRET_ACCESS_KEY
+    worker:
+      - DATABASE_PASSWORD
+      - ENCRYPTION_MASTER_KEY
+      - ENCRYPTION_MASTER_KEY_VERSION
+      - AI_302_API_KEY
+      - ARTIFACT_STORAGE_ACCESS_KEY_ID
+      - ARTIFACT_STORAGE_SECRET_ACCESS_KEY
+      - ATLAS_DEV_URL
+      - ATLAS_DEV_URL_POSTGRESQL
+      - ATLAS_DEV_URL_MYSQL
+    scheduler:
+      - DATABASE_PASSWORD
+      - ENCRYPTION_MASTER_KEY
+      - ENCRYPTION_MASTER_KEY_VERSION
+    restateServices:
+      - DATABASE_PASSWORD
+      - ENCRYPTION_MASTER_KEY
+      - ENCRYPTION_MASTER_KEY_VERSION
+      - GITHUB_CLIENT_ID
+      - GITHUB_CLIENT_SECRET
+      - GITLAB_CLIENT_ID
+      - GITLAB_CLIENT_SECRET
+      - ARTIFACT_STORAGE_ACCESS_KEY_ID
+      - ARTIFACT_STORAGE_SECRET_ACCESS_KEY
+      - ATLAS_DEV_URL
+      - ATLAS_DEV_URL_POSTGRESQL
+      - ATLAS_DEV_URL_MYSQL
+    outbox:
+      - DATABASE_PASSWORD
+    schemaRunner:
+      - DATABASE_PASSWORD
+      - ENCRYPTION_MASTER_KEY
+      - ENCRYPTION_MASTER_KEY_VERSION
+      - ARTIFACT_STORAGE_ACCESS_KEY_ID
+      - ARTIFACT_STORAGE_SECRET_ACCESS_KEY
+      - ATLAS_DEV_URL
+      - ATLAS_DEV_URL_POSTGRESQL
+      - ATLAS_DEV_URL_MYSQL
+    backup:
+      - DATABASE_PASSWORD
+      - ARTIFACT_STORAGE_ACCESS_KEY_ID
+      - ARTIFACT_STORAGE_SECRET_ACCESS_KEY
 
 externalSecret:
   enabled: false

@@ -14,6 +14,10 @@ import {
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRunItems, migrationRuns } from '@/lib/db/schema';
 import {
+  assertMigrationRunExecutionFence,
+  ExecutionFenceLostError,
+} from '@/lib/execution/ownership';
+import {
   executeAtlasMigrationsForSpec,
   executeDrizzleMigrationsForSpec,
   executeMigrationsForDatabase,
@@ -67,12 +71,14 @@ async function runSqlMigration(
   const logs: string[] = [];
 
   try {
+    await assertMigrationRunExecutionFence(runId);
     const summary = await executeMigrationsForDatabase(spec.database, files, async (message) => {
       logs.push(message);
       await appendMigrationRunLog(runId, message);
     });
 
     const finishedAt = new Date();
+    await assertMigrationRunExecutionFence(runId);
     const startedAt = await getMigrationRunStartedAt(runId);
     await db
       .update(migrationRunItems)
@@ -94,6 +100,7 @@ async function runSqlMigration(
       })
       .where(eq(migrationRuns.id, runId));
   } catch (error) {
+    if (error instanceof ExecutionFenceLostError) throw error;
     const finishedAt = new Date();
     const message = error instanceof Error ? error.message : String(error);
     await db
@@ -138,6 +145,7 @@ async function runDrizzleMigration(
       : null;
 
   try {
+    await assertMigrationRunExecutionFence(runId);
     const appliedCount = await executeDrizzleMigrationsForSpec(
       spec,
       revision,
@@ -149,6 +157,7 @@ async function runDrizzleMigration(
     );
 
     const finishedAt = new Date();
+    await assertMigrationRunExecutionFence(runId);
     const startedAt = await getMigrationRunStartedAt(runId);
     await db
       .update(migrationRunItems)
@@ -170,6 +179,7 @@ async function runDrizzleMigration(
       })
       .where(eq(migrationRuns.id, runId));
   } catch (error) {
+    if (error instanceof ExecutionFenceLostError) throw error;
     const finishedAt = new Date();
     const message = error instanceof Error ? error.message : String(error);
 
@@ -208,12 +218,14 @@ async function runAtlasMigration(
   const logs: string[] = [];
 
   try {
+    await assertMigrationRunExecutionFence(runId);
     const appliedCount = await executeAtlasMigrationsForSpec(spec, revision, async (message) => {
       logs.push(message);
       await appendMigrationRunLog(runId, message);
     });
 
     const finishedAt = new Date();
+    await assertMigrationRunExecutionFence(runId);
     const startedAt = await getMigrationRunStartedAt(runId);
     await db
       .update(migrationRunItems)
@@ -235,6 +247,7 @@ async function runAtlasMigration(
       })
       .where(eq(migrationRuns.id, runId));
   } catch (error) {
+    if (error instanceof ExecutionFenceLostError) throw error;
     const finishedAt = new Date();
     const message = error instanceof Error ? error.message : String(error);
 
@@ -257,6 +270,7 @@ export async function executeMigrationRun(
   spec: ResolvedMigrationSpec,
   options: ExecuteMigrationRunOptions = {}
 ): Promise<void> {
+  await assertMigrationRunExecutionFence(runId);
   let activeRuns = await db.query.migrationRuns.findMany({
     where: and(
       eq(migrationRuns.databaseId, spec.database.id),
@@ -316,6 +330,7 @@ export async function executeMigrationRun(
     const finishedAt = new Date();
     const startedAt = currentRun?.startedAt ?? finishedAt;
 
+    await assertMigrationRunExecutionFence(runId);
     await appendMigrationRunLog(runId, '未检测到待执行的 schema 变更，迁移已跳过。');
     await db
       .update(migrationRuns)
@@ -345,6 +360,7 @@ export async function executeMigrationRun(
   });
 
   if (policyDecision.requiresApproval) {
+    await assertMigrationRunExecutionFence(runId);
     await db
       .update(migrationRuns)
       .set({
@@ -360,6 +376,7 @@ export async function executeMigrationRun(
   const startedAt = currentRun?.startedAt ?? new Date();
   const updatedAt = new Date();
   const resumed = currentRun?.status === 'running' && Boolean(currentRun?.startedAt);
+  await assertMigrationRunExecutionFence(runId);
   await db
     .update(migrationRuns)
     .set({

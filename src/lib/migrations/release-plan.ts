@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns, releaseMigrationPlans, releases } from '@/lib/db/schema';
+import { assertExecutionFence, buildMigrationExecutionKey } from '@/lib/execution/ownership';
 import {
   extractAtlasMigrationVersion,
   getAppliedAtlasVersions,
@@ -383,7 +384,7 @@ export async function ensureReleaseMigrationPlan(input: {
           ? 'awaiting_external_completion'
           : 'queued',
       runnerType: stage.specification.executionMode === 'external' ? 'external' : 'schema_runner',
-      lockKey: `${stage.databaseId}:${input.release.environmentId}`,
+      lockKey: buildMigrationExecutionKey(input.release.environmentId, stage.databaseId),
       filePreview: stage.filePreview,
     }));
     await tx.insert(migrationRuns).values(runRecords);
@@ -484,6 +485,11 @@ export async function approveReleaseMigrationPlan(input: {
     ) {
       throw new ReleaseMigrationPlanError('发布 commit 与迁移计划不一致，不能审批');
     }
+    await assertExecutionFence(tx, {
+      scopeKey: plan.release.executionKey,
+      ownerId: plan.release.id,
+      generation: plan.release.executionGeneration,
+    });
     const now = new Date();
     const [approved] = await tx
       .update(releaseMigrationPlans)
@@ -522,7 +528,10 @@ export async function approveReleaseMigrationPlan(input: {
       aggregateType: 'release',
       aggregateId: plan.releaseId,
       commandId: `migration-plan-approved-${plan.digest}`,
-      payload: { traceId: plan.releaseId },
+      payload: {
+        traceId: plan.releaseId,
+        executionKey: `environment:${plan.environmentId}`,
+      },
     });
   });
 }

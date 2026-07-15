@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -12,6 +13,7 @@ import {
 import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
+import { buildReleaseExecutionKey, claimExecutionOwnership } from '@/lib/execution/ownership';
 import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
@@ -41,6 +43,7 @@ export interface CreateRepositoryReleaseInput {
   repository: string;
   ref: string;
   sha?: string | null;
+  externalRunId?: string | null;
   services?: ReleaseServiceInput[];
   serviceId?: string;
   serviceName?: string;
@@ -130,6 +133,7 @@ async function persistRelease(
     sourceRepository: string;
     sourceRef: string;
     sourceCommitSha?: string | null;
+    externalRunId?: string | null;
     configCommitSha?: string | null;
     sourceReleaseId?: string | null;
     triggeredBy?: 'api' | 'manual';
@@ -177,14 +181,28 @@ async function persistRelease(
   const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
 
   const release = await db.transaction(async (tx) => {
+    const releaseId = randomUUID();
+    const executionKey = meta.artifactOnly
+      ? `release:${releaseId}`
+      : buildReleaseExecutionKey(environment.id);
+    const fence = await claimExecutionOwnership(tx, {
+      scopeKey: executionKey,
+      scopeType: meta.artifactOnly ? 'release' : 'environment',
+      ownerType: 'release',
+      ownerId: releaseId,
+    });
     const [createdRelease] = await tx
       .insert(releases)
       .values({
+        id: releaseId,
         projectId: project.id,
         environmentId: environment.id,
+        executionKey,
+        executionGeneration: fence.generation,
         sourceRepository: meta.sourceRepository,
         sourceRef: meta.sourceRef,
         sourceCommitSha: meta.sourceCommitSha ?? null,
+        externalRunId: meta.externalRunId ?? null,
         configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
         sourceReleaseId: meta.sourceReleaseId ?? null,
         status: meta.artifactOnly ? 'succeeded' : 'admission_running',
@@ -271,7 +289,7 @@ async function persistRelease(
         aggregateType: 'release',
         aggregateId: createdRelease.id,
         commandId: 'initial',
-        payload: { traceId },
+        payload: { traceId, executionKey },
       });
     }
 
@@ -410,6 +428,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
         sourceRepository: input.repository,
         sourceRef: input.ref,
         sourceCommitSha: input.sha ?? null,
+        externalRunId: input.externalRunId ?? null,
         configCommitSha: input.sha ?? null,
         triggeredBy: input.triggeredBy,
         triggeredByUserId: input.triggeredByUserId ?? null,

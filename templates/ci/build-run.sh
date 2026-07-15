@@ -3,6 +3,9 @@ set -euo pipefail
 
 command="${1:-}"
 juanie_base_url="${JUANIE_BASE_URL:-https://juanie.art}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=workload-identity.sh
+source "${script_dir}/workload-identity.sh"
 state_dir="${JUANIE_BUILD_STATE_DIR:-.juanie/build-run}"
 build_run_file="${state_dir}/build-run.json"
 units_file="${state_dir}/units.json"
@@ -25,27 +28,7 @@ request_json() {
   local path="$2"
   local payload="${3:-}"
 
-  require_env JUANIE_TOKEN
-
-  if [ -n "$payload" ]; then
-    curl -fsSL -X "$method" "${juanie_base_url}${path}" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${JUANIE_TOKEN}" \
-      -d "$payload"
-    return
-  fi
-
-  curl -fsSL -X "$method" "${juanie_base_url}${path}" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer ${JUANIE_TOKEN}"
-}
-
-request_json_with_token() {
-  local method="$1"
-  local path="$2"
-  local token="$3"
-  curl -fsSL -X "$method" "${juanie_base_url}${path}" \
-    -H "Authorization: Bearer ${token}"
+  juanie_api_json "$method" "$path" "$payload"
 }
 
 load_build_secrets() {
@@ -58,14 +41,7 @@ load_build_secrets() {
   [ -n "$secret_names" ] || return 0
 
   local response
-  local capability_token
-  capability_token="$(cat "${state_dir}/secret-access-token")"
-  response="$(
-    request_json_with_token \
-      GET \
-      "/api/build-runs/${build_run_id}/secrets?unitKey=${unit_key}" \
-      "$capability_token"
-  )"
+  response="$(request_json GET "/api/build-runs/${build_run_id}/secrets?unitKey=${unit_key}")"
   while IFS= read -r encoded; do
     [ -n "$encoded" ] || continue
     local entry
@@ -366,15 +342,7 @@ start_build_run() {
 
   local response
   response="$(request_json POST /api/build-runs "$payload")"
-  local secret_access_token
-  secret_access_token="$(jq -r '.secretAccessToken // empty' <<<"$response")"
-  [ -n "$secret_access_token" ] || {
-    echo 'Juanie did not return a build secret capability'
-    exit 1
-  }
-  printf '%s' "$secret_access_token" > "${state_dir}/secret-access-token"
-  chmod 600 "${state_dir}/secret-access-token"
-  jq 'del(.secretAccessToken)' <<<"$response" | tee "$build_run_file"
+  printf '%s' "$response" | tee "$build_run_file"
 
   jq -c '.plan.units' "$build_run_file" > "$units_file"
   jq -c '.plan.groups' "$build_run_file" > "$groups_file"
@@ -436,10 +404,7 @@ finalize_build_run() {
 
   for _ in $(seq 1 270); do
     local status_response
-    status_response="$(
-      curl -fsSL "${juanie_base_url}/api/releases/${release_id}/status" \
-        -H "Authorization: Bearer ${JUANIE_TOKEN}"
-    )"
+    status_response="$(request_json GET "/api/releases/${release_id}/status")"
 
     local status
     local status_label

@@ -61,8 +61,25 @@ const attemptScopedWorkflowTopics = new Set<OutboxTopic>([
   'project.delete.requested',
 ]);
 
-export function resolveRestateTarget(topic: OutboxTopic, aggregateId: string, commandId: string) {
-  const key = attemptScopedWorkflowTopics.has(topic) ? `${aggregateId}:${commandId}` : aggregateId;
+export function resolveRestateTarget(
+  topic: OutboxTopic,
+  aggregateId: string,
+  commandId: string,
+  payload: Record<string, unknown> = {}
+) {
+  const executionKey = payload.executionKey;
+  const requiresExecutionKey =
+    topic === 'release.requested' ||
+    topic === 'release.rollout.requested' ||
+    topic === 'migration.requested';
+  if (requiresExecutionKey && (typeof executionKey !== 'string' || !executionKey)) {
+    throw new Error(`${topic} requires an executionKey`);
+  }
+  const key = attemptScopedWorkflowTopics.has(topic)
+    ? `${aggregateId}:${commandId}`
+    : requiresExecutionKey
+      ? (executionKey as string)
+      : aggregateId;
   return {
     ...topicTargets[topic],
     key,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { appendReleaseDeliveryArtifacts } from '@/lib/artifacts/upload-service';
+import { isCiAccessError } from '@/lib/releases/api-access';
 
 export async function POST(
   request: Request,
@@ -32,10 +33,7 @@ export async function POST(
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    const status =
-      message.includes('Token does not have access') || message.includes('Missing bearer token')
-        ? 401
-        : 400;
+    const status = isCiAccessError(error) ? 401 : 400;
 
     return NextResponse.json(
       {

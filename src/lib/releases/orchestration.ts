@@ -9,6 +9,7 @@ import {
   releases,
 } from '@/lib/db/schema';
 import { clearEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
+import { assertExecutionFence, assertReleaseExecutionFence } from '@/lib/execution/ownership';
 import { logger } from '@/lib/logger';
 import {
   completeReleaseMigrationPlan,
@@ -117,6 +118,8 @@ export async function updateReleaseStatus(
         id: true,
         projectId: true,
         environmentId: true,
+        executionKey: true,
+        executionGeneration: true,
         status: true,
         updatedAt: true,
       },
@@ -124,6 +127,11 @@ export async function updateReleaseStatus(
     if (!current) {
       throw new Error(`Release ${releaseId} not found`);
     }
+    await assertExecutionFence(tx, {
+      scopeKey: current.executionKey,
+      ownerId: current.id,
+      generation: current.executionGeneration,
+    });
     if (current.status === status && (errorMessage === undefined || errorMessage === null)) {
       return;
     }
@@ -312,6 +320,7 @@ async function driveReleaseMigrationPhaseForward(
     status: MigrationRunStatus;
     createdAt: Date;
     stageOrder: number;
+    lockKey: string;
     errorMessage?: string | null;
   }>
 ): Promise<ReleaseMigrationPhaseProgressResult> {
@@ -326,7 +335,9 @@ async function driveReleaseMigrationPhaseForward(
           runs[0]?.id ??
           release.id,
       };
-    case 'start_run':
+    case 'start_run': {
+      const run = runs.find((candidate) => candidate.id === action.runId);
+      if (!run) throw new Error(`Migration run ${action.runId} is missing its execution key`);
       await verifyReleaseMigrationPlanForRun(action.runId);
       await enqueueOutboxMessage(db, {
         topic: 'migration.requested',
@@ -336,12 +347,14 @@ async function driveReleaseMigrationPhaseForward(
         payload: {
           allowApprovalBypass: true,
           traceId: createTraceId(release.id),
+          executionKey: run.lockKey,
         },
       });
       return {
         kind: 'queued',
         runId: action.runId,
       };
+    }
     case 'awaiting_approval':
       await updateReleaseStatus(release.id, 'awaiting_approval');
       await cancelSupersededPendingReleases(release);
@@ -426,6 +439,7 @@ export async function startReleaseDeploymentStage(
   if (!release) {
     throw new Error(`Release ${releaseId} not found`);
   }
+  await assertReleaseExecutionFence(release.id);
 
   const deployableArtifacts = getDeployableReleaseArtifacts(release.artifacts);
 
@@ -469,6 +483,11 @@ export async function startReleaseDeploymentStage(
     const deployment =
       existingDeployment ??
       (await db.transaction(async (tx) => {
+        await assertExecutionFence(tx, {
+          scopeKey: release.executionKey,
+          ownerId: release.id,
+          generation: release.executionGeneration,
+        });
         const [createdDeployment] = await tx
           .insert(deployments)
           .values({

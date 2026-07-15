@@ -1,9 +1,5 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
-import {
-  issueBuildSecretCapability,
-  verifyBuildSecretCapability,
-} from '@/lib/builds/secret-capability';
 import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import {
@@ -233,7 +229,11 @@ function assertExistingBuildRunMatchesInput(
 }
 
 export async function startBuildRun(input: StartBuildRunInput) {
-  await verifyRepositoryAccess(input.repository, input.authHeader);
+  await verifyRepositoryAccess(input.repository, input.authHeader, {
+    ref: input.ref,
+    sha: input.sha,
+    externalRunId: input.externalRunId,
+  });
   const { repo, project } = await loadRepositoryProject(input.repository);
   const provider = input.provider ?? 'github';
 
@@ -251,7 +251,6 @@ export async function startBuildRun(input: StartBuildRunInput) {
       return {
         buildRun: existingBuildRun,
         plan: existingBuildRun.plan as BuildPlan,
-        secretAccessToken: issueBuildSecretCapability(existingBuildRun.id),
       };
     }
   }
@@ -329,7 +328,6 @@ export async function startBuildRun(input: StartBuildRunInput) {
   return {
     buildRun,
     plan: buildRun.plan as BuildPlan,
-    secretAccessToken: issueBuildSecretCapability(buildRun.id),
   };
 }
 
@@ -346,7 +344,11 @@ async function loadBuildRunForMutation(buildRunId: string, authHeader: string | 
     throw new BuildRunError('Build run not found', 404);
   }
 
-  await verifyRepositoryAccess(buildRun.sourceRepository, authHeader);
+  await verifyRepositoryAccess(buildRun.sourceRepository, authHeader, {
+    ref: buildRun.sourceRef,
+    sha: buildRun.sourceCommitSha,
+    externalRunId: buildRun.externalRunId,
+  });
 
   return buildRun;
 }
@@ -358,26 +360,23 @@ async function readBuildVariableValue(
   if (variable.encryptedValue && variable.iv && variable.authTag) {
     return decrypt(variable.encryptedValue, variable.iv, variable.authTag);
   }
-  return variable.value;
+  throw new BuildRunError(`Build secret ${variable.key} has no encrypted credential envelope`, 409);
 }
 
 export async function getBuildRunSecrets(input: {
   buildRunId: string;
   unitKey: string;
-  capabilityToken: string;
+  authHeader: string | null;
 }): Promise<Record<string, string>> {
-  if (
-    !verifyBuildSecretCapability({
-      token: input.capabilityToken,
-      buildRunId: input.buildRunId,
-    })
-  ) {
-    throw new BuildRunError('Invalid or expired build secret capability', 401);
-  }
   const buildRun = await db.query.buildRuns.findFirst({
     where: eq(buildRuns.id, input.buildRunId),
   });
   if (!buildRun) throw new BuildRunError('Build run not found', 404);
+  await verifyRepositoryAccess(buildRun.sourceRepository, input.authHeader, {
+    ref: buildRun.sourceRef,
+    sha: buildRun.sourceCommitSha,
+    externalRunId: buildRun.externalRunId,
+  });
   if (!['pending', 'running'].includes(buildRun.status)) {
     throw new BuildRunError(`Build run no longer accepts secret reads: ${buildRun.status}`, 409);
   }
@@ -728,6 +727,7 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
       repository: buildRun.sourceRepository,
       ref: buildRun.sourceRef,
       sha: buildRun.sourceCommitSha,
+      externalRunId: buildRun.externalRunId,
       services: servicesWithDigests,
       triggeredBy: 'api',
       summary: `构建发布 · ${buildRun.sourceCommitSha.slice(0, 7)}`,

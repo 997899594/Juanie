@@ -2,14 +2,24 @@ import { NextResponse } from 'next/server';
 import { PreviewCloneUnsupportedError } from '@/lib/databases/platform-support';
 import { createRepositoryRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
-import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { isCiAccessError, verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     const body = await request.json();
-    const { repository, sha, ref, services, serviceId, serviceName, image, summary } = body;
+    const {
+      repository,
+      sha,
+      ref,
+      externalRunId,
+      services,
+      serviceId,
+      serviceName,
+      image,
+      summary,
+    } = body;
 
     if (!repository || !ref || (!image && (!Array.isArray(services) || services.length === 0))) {
       return NextResponse.json(
@@ -21,12 +31,13 @@ export async function POST(request: Request) {
       );
     }
 
-    await verifyRepositoryAccess(repository, authHeader);
+    await verifyRepositoryAccess(repository, authHeader, { ref, sha, externalRunId });
 
     const release = await createRepositoryRelease({
       repository,
       ref,
       sha,
+      externalRunId,
       services,
       serviceId,
       serviceName,
@@ -52,7 +63,7 @@ export async function POST(request: Request) {
     const status =
       error instanceof PreviewCloneUnsupportedError || error instanceof ReleaseAdmissionError
         ? 409
-        : message.includes('Token does not have access') || message.includes('Missing bearer token')
+        : isCiAccessError(error)
           ? 401
           : 400;
     return NextResponse.json(

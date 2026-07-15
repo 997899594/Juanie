@@ -45,7 +45,12 @@ export async function dispatchOutboxMessage(
 
     try {
       const request = options.fetch ?? fetch;
-      const target = resolveRestateTarget(message.topic, message.aggregateId, message.commandId);
+      const target = resolveRestateTarget(
+        message.topic,
+        message.aggregateId,
+        message.commandId,
+        message.payload
+      );
       const response = await request(
         buildRestateInvocationUrl(options.ingressUrl ?? getRestateIngressUrl(), target),
         {

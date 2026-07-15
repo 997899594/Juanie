@@ -76,6 +76,7 @@ export async function POST(
           projectId: id,
           deploymentId: depId,
           actorUserId: session.user.id,
+          executionKey: `environment:${environment.id}`,
         },
       });
     });

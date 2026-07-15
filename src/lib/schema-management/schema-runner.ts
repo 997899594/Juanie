@@ -82,7 +82,7 @@ export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
     }
 
     if (mode === 'control-plane-contract') {
-      await applyControlPlaneContractMigrations();
+      await applyControlPlaneContractMigrations(process.env.CONTROL_PLANE_CONTRACT_PROMOTION);
       return;
     }
 

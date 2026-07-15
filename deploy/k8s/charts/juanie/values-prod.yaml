@@ -1,4 +1,9 @@
 # 生产环境覆盖配置
+production:
+  enabled: true
+  durabilityMode: selfHosted
+  requireDisasterRecovery: false
+
 replicaCount:
   web: 2
   worker: 2
@@ -85,3 +90,7 @@ env:
   DATABASE_CONSOLE_ROUTE_NAMESPACE: "juanie"
   DATABASE_CONSOLE_GATEWAY_SERVICE_NAME: "juanie-web"
   DBGATE_HOSTNAME_BASE_DOMAIN: "juanie.art"
+
+monitoring:
+  prometheusRule:
+    enabled: true

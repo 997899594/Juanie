@@ -1,6 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
+import {
+  assertMigrationRunExecutionFence,
+  ExecutionFenceLostError,
+} from '@/lib/execution/ownership';
 import { logger } from '@/lib/logger';
 import { verifyReleaseMigrationPlanForRun } from '@/lib/migrations/release-plan';
 import {
@@ -81,6 +85,7 @@ export async function executeMigrationRunInExecutionService(input: {
 
   try {
     migrationExecutionLogger.info('Executing migration run', traceFields);
+    await assertMigrationRunExecutionFence(run.id);
     if (run.releaseMigrationPlanId) {
       await verifyReleaseMigrationPlanForRun(run.id);
     }
@@ -89,6 +94,7 @@ export async function executeMigrationRunInExecutionService(input: {
       sourceRef,
       sourceCommitSha,
     });
+    await assertMigrationRunExecutionFence(run.id);
     await inspectEnvironmentSchemaStateLocally({
       projectId: run.projectId,
       databaseId: spec.database.id,
@@ -105,6 +111,13 @@ export async function executeMigrationRunInExecutionService(input: {
     });
     await resumeReleaseAfterMigrationProgress(run.id);
   } catch (error) {
+    if (error instanceof ExecutionFenceLostError) {
+      migrationExecutionLogger.warn('Stopped stale migration execution after fence loss', {
+        ...traceFields,
+        errorMessage: error.message,
+      });
+      return { success: false, skipped: true };
+    }
     const latestRun = await db.query.migrationRuns.findFirst({
       where: eq(migrationRuns.id, run.id),
       columns: {

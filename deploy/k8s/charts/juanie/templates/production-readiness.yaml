@@ -1,0 +1,39 @@
+{{- if .Values.production.enabled }}
+{{- if not .Values.monitoring.prometheusRule.enabled }}
+{{- fail "production requires monitoring.prometheusRule.enabled=true" }}
+{{- end }}
+{{- if eq .Values.production.durabilityMode "selfHosted" }}
+{{- if or (not .Values.postgres.enabled) (not .Values.restate.embeddedEnabled) }}
+{{- fail "self-hosted production requires embedded PostgreSQL and Restate" }}
+{{- end }}
+{{- if .Values.production.requireDisasterRecovery }}
+{{- if not .Values.backup.postgresql.enabled }}
+{{- fail "self-hosted production requires backup.postgresql.enabled=true" }}
+{{- end }}
+{{- if empty (.Values.backup.postgresql.bucket | default .Values.env.ARTIFACT_STORAGE_BUCKET) }}
+{{- fail "self-hosted production requires a PostgreSQL backup bucket" }}
+{{- end }}
+{{- if not .Values.backup.restateSnapshot.enabled }}
+{{- fail "self-hosted production requires backup.restateSnapshot.enabled=true" }}
+{{- end }}
+{{- if empty .Values.backup.restateSnapshot.volumeSnapshotClassName }}
+{{- fail "self-hosted production requires a Restate VolumeSnapshotClass" }}
+{{- end }}
+{{- end }}
+{{- else if eq .Values.production.durabilityMode "external" }}
+{{- if or .Values.postgres.enabled .Values.restate.embeddedEnabled }}
+{{- fail "external production durability must disable embedded PostgreSQL and Restate" }}
+{{- end }}
+{{- if or (eq .Values.env.DATABASE_HOST "postgres") (eq .Values.env.RESTATE_INGRESS_URL "http://juanie-restate:8080") (eq .Values.env.RESTATE_SERVICE_REGISTRATION_URL "http://juanie-restate-services:9080") }}
+{{- fail "external production durability requires external PostgreSQL and Restate endpoints" }}
+{{- end }}
+{{- else }}
+{{- fail "production.durabilityMode must be selfHosted or external" }}
+{{- end }}
+{{- if lt (int .Values.replicaCount.web) 2 }}
+{{- fail "production requires at least two web replicas" }}
+{{- end }}
+{{- if lt (int .Values.replicaCount.restateServices) 2 }}
+{{- fail "production requires at least two Restate service replicas" }}
+{{- end }}
+{{- end }}

@@ -35,8 +35,9 @@ jobs:
           version: ${{ env.ATLAS_ACTION_VERSION }}
 
       - run: bun install --frozen-lockfile
+      - run: bun audit --production
       - run: bun run db:hash
-      - run: git diff --exit-code -- migrations/atlas.sum
+      - run: git diff --exit-code -- migrations/atlas.sum migrations-contract/atlas.sum
       - run: bun run db:validate
       - run: bunx biome check
       - run: bun run lint
@@ -44,6 +45,48 @@ jobs:
       - run: bun run ai:eval
       - run: bun run test
       - run: bun run build
+      - name: Validate Production Helm Contract
+        run: |
+          helm lint deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml
+          rendered="$(helm template juanie deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml)"
+          test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
+          test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
+          ! grep -q 'control-plane-contract' <<<"$rendered"
+          disaster_recovery="$(helm template juanie deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            --set production.requireDisasterRecovery=true \
+            --set backup.postgresql.enabled=true \
+            --set backup.restateSnapshot.enabled=true \
+            --set-string backup.postgresql.bucket=ci-control-plane-backups \
+            --set-string backup.restateSnapshot.volumeSnapshotClassName=ci-snapshot-class)"
+          test "$(grep -c '^kind: CronJob$' <<<"$disaster_recovery")" -ge 2
+          external="$(helm template juanie deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            --set production.durabilityMode=external \
+            --set postgres.enabled=false \
+            --set restate.embeddedEnabled=false \
+            --set backup.postgresql.enabled=false \
+            --set backup.restateSnapshot.enabled=false \
+            --set-string env.DATABASE_HOST=postgres.example.internal \
+            --set-string env.RESTATE_INGRESS_URL=https://restate.example.com \
+            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com \
+            --set-string env.RESTATE_SERVICE_REGISTRATION_URL=https://restate-services.example.com)"
+          ! grep -q '^  name: postgres$' <<<"$external"
+          external_restate="$(helm template juanie deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            --show-only templates/restate.yaml \
+            --set production.durabilityMode=external \
+            --set postgres.enabled=false \
+            --set restate.embeddedEnabled=false \
+            --set backup.postgresql.enabled=false \
+            --set backup.restateSnapshot.enabled=false \
+            --set-string env.DATABASE_HOST=postgres.example.internal \
+            --set-string env.RESTATE_INGRESS_URL=https://restate.example.com \
+            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com \
+            --set-string env.RESTATE_SERVICE_REGISTRATION_URL=https://restate-services.example.com)"
+          ! grep -q '^kind: StatefulSet$' <<<"$external_restate"
 
       - name: Scan Source, Dependencies, And Secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

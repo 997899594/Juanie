@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import postgres from 'postgres';
 import {
@@ -9,20 +9,25 @@ import {
   normalizeAtlasDatabaseUrl,
   runAtlasCommand,
 } from '@/lib/atlas/cli';
+import { encrypt } from '@/lib/crypto';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 
 const MIGRATIONS_DIR_URL = 'file://migrations';
+const CONTRACT_MIGRATIONS_DIR_URL = 'file://migrations-contract';
 const REVISIONS_SCHEMA = 'public';
 const DRIZZLE_SCHEMA_CONFIG_PATH = 'drizzle.schema.config.ts';
 const EXPORTED_SCHEMA_PATH = path.join('.atlas', 'control-plane.sql');
 const ATLAS_REVISIONS_TABLE = 'atlas_schema_revisions';
+const CONTRACT_REVISIONS_SCHEMA = 'atlas_contract';
 const LEGACY_MIGRATIONS_TABLE = '_migrations';
 const CREDENTIAL_ENVELOPE_VERSION = '20260713120000';
 const PLAINTEXT_CREDENTIAL_REMOVAL_VERSION = '20260713121000';
+const LEGACY_CONTRACT_BOUNDARY_VERSION = PLAINTEXT_CREDENTIAL_REMOVAL_VERSION;
+const CONTROL_PLANE_CONTRACT_EPOCH = '20260715';
 
-type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply';
+type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply' | 'contract';
 
 async function runProcess(command: string, args: string[]): Promise<void> {
   const result = spawnSync(command, args, {
@@ -72,6 +77,19 @@ async function getMigrationFiles(): Promise<string[]> {
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
+}
+
+async function validateExpandMigrationSafety(): Promise<void> {
+  const destructiveDdl = /\b(drop\s+(table|column|type)|rename\s+(table|column))\b/iu;
+  for (const fileName of await getMigrationFiles()) {
+    if (extractVersion(fileName) <= LEGACY_CONTRACT_BOUNDARY_VERSION) continue;
+    const migration = await readFile(path.join(process.cwd(), 'migrations', fileName), 'utf8');
+    if (destructiveDdl.test(migration)) {
+      throw new Error(
+        `Expand migration ${fileName} contains destructive DDL; move it to migrations-contract/`
+      );
+    }
+  }
 }
 
 function extractVersion(fileName: string): string {
@@ -241,6 +259,7 @@ function normalizeMigrationName(value: string): string {
 
 export async function hashControlPlaneMigrations(): Promise<void> {
   await runAtlas(['migrate', 'hash', '--dir', MIGRATIONS_DIR_URL]);
+  await runAtlas(['migrate', 'hash', '--dir', CONTRACT_MIGRATIONS_DIR_URL]);
 }
 
 export async function generateControlPlaneMigration(name: string | undefined): Promise<void> {
@@ -290,6 +309,7 @@ export async function generateControlPlaneMigration(name: string | undefined): P
 }
 
 export async function validateControlPlaneMigrations(): Promise<void> {
+  await validateExpandMigrationSafety();
   await exportDesiredSchema();
 
   if (hasLocalAtlas()) {
@@ -303,6 +323,14 @@ export async function validateControlPlaneMigrations(): Promise<void> {
         '--dev-url',
         devDatabase.url,
       ]);
+      await runAtlas([
+        'migrate',
+        'validate',
+        '--dir',
+        CONTRACT_MIGRATIONS_DIR_URL,
+        '--dev-url',
+        devDatabase.url,
+      ]);
     } finally {
       await devDatabase.cleanup();
     }
@@ -313,6 +341,10 @@ export async function validateControlPlaneMigrations(): Promise<void> {
     await runAtlas(['migrate', 'validate', '--dir', MIGRATIONS_DIR_URL, '--dev-url', devUrl], {
       network: networkName,
     });
+    await runAtlas(
+      ['migrate', 'validate', '--dir', CONTRACT_MIGRATIONS_DIR_URL, '--dev-url', devUrl],
+      { network: networkName }
+    );
   });
 }
 
@@ -443,9 +475,42 @@ async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
   }
 }
 
+async function migrateEnvironmentSecretEnvelopes(databaseUrl: string): Promise<void> {
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    const variables = await sql<{ id: string; value: string | null }[]>`
+      select id, value
+      from "environmentVariable"
+      where "isSecret" = true
+        and ("encryptedValue" is null or iv is null or "authTag" is null or value is not null)
+    `;
+    for (const variable of variables) {
+      if (!variable.value) {
+        throw new Error(`Secret environment variable ${variable.id} has no encryptable value`);
+      }
+      const encrypted = await encrypt(variable.value);
+      await sql`
+        update "environmentVariable"
+        set value = null,
+            "encryptedValue" = ${encrypted.encryptedValue},
+            iv = ${encrypted.iv},
+            "authTag" = ${encrypted.authTag},
+            "updatedAt" = now()
+        where id = ${variable.id}
+      `;
+    }
+    await sql`
+      alter table "environmentVariable"
+      validate constraint "environmentVariable_secret_envelope_required"
+    `;
+    console.log(`[db:push] encrypted ${variables.length} environment secret(s)`);
+  } finally {
+    await sql.end();
+  }
+}
+
 export async function applyControlPlaneMigrations(): Promise<void> {
   await applyControlPlaneExpandMigrations();
-  await applyControlPlaneContractMigrations();
 }
 
 async function ensureAtlasBaseline(databaseUrl: string): Promise<void> {
@@ -498,7 +563,6 @@ export async function applyControlPlaneExpandMigrations(): Promise<void> {
       ]);
     }
     await migrateCredentialEnvelopes(databaseUrl);
-    return;
   }
 
   // Once the contract revision is present, every later migration is required to be
@@ -515,40 +579,29 @@ export async function applyControlPlaneExpandMigrations(): Promise<void> {
   ]);
 
   await runPostMigrationTasks(databaseUrl);
+  await migrateEnvironmentSecretEnvelopes(databaseUrl);
 }
 
-export async function applyControlPlaneContractMigrations(): Promise<void> {
+export async function applyControlPlaneContractMigrations(
+  promotedEpoch = process.env.CONTROL_PLANE_CONTRACT_PROMOTION
+): Promise<void> {
+  if (promotedEpoch !== CONTROL_PLANE_CONTRACT_EPOCH) {
+    throw new Error(
+      `Contract migration requires explicit promotion epoch ${CONTROL_PLANE_CONTRACT_EPOCH}`
+    );
+  }
   const databaseUrl = getDatabaseUrl();
   await ensureAtlasBaseline(databaseUrl);
-
-  const plaintextCredentialsRemoved = await isAtlasRevisionApplied(
-    databaseUrl,
-    PLAINTEXT_CREDENTIAL_REMOVAL_VERSION
-  );
-  if (plaintextCredentialsRemoved) {
-    return;
-  }
-
-  const envelopeMigrationApplied = await isAtlasRevisionApplied(
-    databaseUrl,
-    CREDENTIAL_ENVELOPE_VERSION
-  );
-  if (!envelopeMigrationApplied) {
-    throw new Error('Control-plane expand migrations must complete before contract migrations');
-  }
-
-  await migrateCredentialEnvelopes(databaseUrl);
   await runAtlas([
     'migrate',
     'apply',
     '--dir',
-    MIGRATIONS_DIR_URL,
+    CONTRACT_MIGRATIONS_DIR_URL,
     '--url',
     databaseUrl,
     '--revisions-schema',
-    REVISIONS_SCHEMA,
+    CONTRACT_REVISIONS_SCHEMA,
   ]);
-  await runPostMigrationTasks(databaseUrl);
 }
 
 export async function executeControlPlaneAtlasCommand(
@@ -571,9 +624,12 @@ export async function executeControlPlaneAtlasCommand(
     case 'apply':
       await applyControlPlaneMigrations();
       return;
+    case 'contract':
+      await applyControlPlaneContractMigrations(arg);
+      return;
     default:
       throw new Error(
-        'Usage: bun src/lib/db/control-plane-atlas.ts <generate|hash|validate|status|apply> [name]'
+        'Usage: bun src/lib/db/control-plane-atlas.ts <generate|hash|validate|status|apply|contract> [name-or-epoch]'
       );
   }
 }

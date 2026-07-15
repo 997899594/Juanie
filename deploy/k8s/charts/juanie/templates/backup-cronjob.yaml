@@ -34,7 +34,7 @@ spec:
               imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
               command: ["pg_dump"]
               args:
-                - --host=postgres
+                - --host={{ .Values.env.DATABASE_HOST }}
                 - --username={{ .Values.env.DATABASE_USER }}
                 - --dbname={{ .Values.env.DATABASE_NAME }}
                 - --format=custom
@@ -60,9 +60,8 @@ spec:
               envFrom:
                 - configMapRef:
                     name: {{ .Chart.Name }}-config
-                - secretRef:
-                    name: {{ include "juanie.effectiveSecretName" . }}
               env:
+                {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.backup) | nindent 16 }}
                 - name: CONTROL_PLANE_BACKUP_FILE
                   value: /backup/control-plane.dump
                 - name: CONTROL_PLANE_BACKUP_BUCKET

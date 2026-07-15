@@ -80,6 +80,8 @@ describe('project init migration inference', () => {
       expect(ci).toContain(
         `JUANIE_EXTERNAL_RUN_ID: ${githubRunIdExpression}-${githubRunAttemptExpression}`
       );
+      expect(ci).toContain('id-token: write');
+      expect(ci).not.toContain('JUANIE_TOKEN:');
       expect(ci).not.toContain('actions/checkout@v5');
       expect(ci).not.toContain('docker/setup-buildx-action@v4');
       expect(ci).not.toContain('docker/login-action@v4');
@@ -90,6 +92,7 @@ describe('project init migration inference', () => {
       'utf-8'
     );
     expect(buildRunScript).toContain('/api/build-runs');
+    expect(buildRunScript).not.toContain('secret-access-token');
   });
 
   it('prefers packageManager field over lockfiles', () => {

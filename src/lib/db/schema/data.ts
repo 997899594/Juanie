@@ -230,6 +230,7 @@ export const migrationRuns = pgTable(
     runnerType: migrationRunnerTypeEnum('runnerType').notNull().default('worker'),
     jobName: varchar('jobName', { length: 255 }),
     lockKey: varchar('lockKey', { length: 255 }).notNull(),
+    executionGeneration: integer('executionGeneration'),
 
     startedAt: timestamp('startedAt'),
     finishedAt: timestamp('finishedAt'),

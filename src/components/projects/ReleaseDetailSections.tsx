@@ -21,7 +21,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
-import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import {
+  getMigrationPhaseLabel,
+  getReleaseMigrationPlanStatusLabel,
+} from '@/lib/migrations/presentation';
 import { getMigrationReleaseStageLabel } from '@/lib/migrations/release-graph';
 import {
   getDeliveryReleaseArtifacts,
@@ -383,7 +386,7 @@ function ReleaseMigrationReviewSection({
             />
           ) : (
             <Badge variant="secondary">
-              {migrationPlan.status === 'completed' ? '已完成' : '计划已批准'}
+              {getReleaseMigrationPlanStatusLabel(migrationPlan.status)}
             </Badge>
           )}
         </div>

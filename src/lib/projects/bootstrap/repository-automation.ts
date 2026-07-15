@@ -48,6 +48,7 @@ export {
 
 export const JUANIE_BUILD_RUN_SCRIPT_PATH = '.juanie/build-run.sh';
 export const JUANIE_DELIVERY_SCRIPT_PATH = '.juanie/delivery-artifacts.sh';
+export const JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH = '.juanie/workload-identity.sh';
 export const JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH = '.juanie/affected-workspace.mjs';
 export const JUANIE_MANAGED_DOC_PATH = 'JUANIE.md';
 
@@ -762,6 +763,10 @@ export function renderBuildRunScript(): string {
   throw new Error(
     `Build run script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
   );
+}
+
+export function renderWorkloadIdentityScript(): string {
+  return readRequiredTemplate('ci', 'workload-identity.sh');
 }
 
 export function renderAffectedWorkspaceScript(): string {

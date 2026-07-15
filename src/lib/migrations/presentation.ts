@@ -1,3 +1,14 @@
+import type { ReleaseMigrationPlanStatus } from '@/lib/db/schema';
+
+export function getReleaseMigrationPlanStatusLabel(status: ReleaseMigrationPlanStatus): string {
+  if (status === 'awaiting_approval') return '待审批';
+  if (status === 'approved') return '已批准';
+  if (status === 'executing') return '执行中';
+  if (status === 'completed') return '已完成';
+  if (status === 'failed') return '执行失败';
+  return '已被后续发布取代';
+}
+
 export function getMigrationPhaseLabel(value?: string | null): string {
   if (value === 'preDeploy') return '部署前';
   if (value === 'postDeploy') return '部署后';

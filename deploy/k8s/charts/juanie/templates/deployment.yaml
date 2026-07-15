@@ -44,7 +44,7 @@ spec:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
-          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+          command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
@@ -60,8 +60,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
-            - secretRef:
-                name: {{ include "juanie.effectiveSecretName" . }}
+          env:
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.web) | nindent 12 }}
           resources:
             {{- toYaml .Values.resources.web | nindent 12 }}
           livenessProbe:
@@ -139,7 +139,7 @@ spec:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
-          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+          command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
         - name: wait-for-redis
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
@@ -149,16 +149,15 @@ spec:
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./worker"]
-          {{- if .Values.worker.insecureSkipTlsVerify }}
           env:
+          {{- if .Values.worker.insecureSkipTlsVerify }}
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
           {{- end }}
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.worker) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
-            - secretRef:
-                name: {{ include "juanie.effectiveSecretName" . }}
           resources:
             {{- toYaml .Values.resources.worker | nindent 12 }}
           securityContext:
@@ -207,22 +206,21 @@ spec:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
-          command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+          command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
       containers:
         - name: scheduler
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           command: ["./scheduler"]
-          {{- if .Values.scheduler.insecureSkipTlsVerify }}
           env:
+          {{- if .Values.scheduler.insecureSkipTlsVerify }}
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
           {{- end }}
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.scheduler) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
-            - secretRef:
-                name: {{ include "juanie.effectiveSecretName" . }}
           resources:
             {{- toYaml .Values.resources.scheduler | nindent 12 }}
           securityContext:

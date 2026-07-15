@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { BuildRunError, finalizeBuildRun } from '@/lib/builds/service';
+import { isCiAccessError } from '@/lib/releases/api-access';
 
 export async function POST(
   request: Request,
@@ -22,13 +23,7 @@ export async function POST(
     );
   } catch (error) {
     const status =
-      error instanceof BuildRunError
-        ? error.statusCode
-        : error instanceof Error &&
-            (error.message.includes('Token does not have access') ||
-              error.message.includes('Missing bearer token'))
-          ? 401
-          : 400;
+      error instanceof BuildRunError ? error.statusCode : isCiAccessError(error) ? 401 : 400;
 
     return NextResponse.json(
       {

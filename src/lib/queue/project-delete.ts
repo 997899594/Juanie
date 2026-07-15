@@ -19,6 +19,7 @@ const JUANIE_BASE_REPOSITORY_FILES = [
   'juanie.yaml',
   '.juanie/build-run.sh',
   '.juanie/delivery-artifacts.sh',
+  '.juanie/workload-identity.sh',
   '.juanie/affected-workspace.mjs',
   '.env.juanie.example',
   'JUANIE.md',
