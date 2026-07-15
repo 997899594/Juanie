@@ -12,8 +12,12 @@ out
 # IDE
 .vscode
 .idea
+.claude
 
 # Local env files
+.env
+.env.*
+!.env.example
 .env*.local
 
 # CI/CD

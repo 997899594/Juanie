@@ -91,6 +91,8 @@ COPY --from=builder --chown=1001:1001 /app/.next/static ./.next/static
 COPY --from=builder --chown=1001:1001 /app/public ./public
 RUN mkdir -p ./.next/cache && chown -R 1001:1001 ./.next/cache
 
+USER 1001:1001
+
 EXPOSE 3001
 
 CMD ["node", "server.js"]
@@ -147,5 +149,7 @@ RUN chmod +x ./restate-services
 RUN chmod +x ./outbox-dispatcher
 RUN chmod +x ./control-plane-backup-uploader
 RUN chmod +x ./restate-snapshot
+
+USER 1001:1001
 
 CMD ["./worker"]

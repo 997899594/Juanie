@@ -47,6 +47,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: restate
           image: {{ include "juanie.image" .Values.images.restate | quote }}
@@ -59,6 +61,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /restate-data
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.resources.restate | nindent 12 }}
           startupProbe:
@@ -78,8 +82,12 @@ spec:
             failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -129,6 +137,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: restate-services
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
@@ -154,8 +164,15 @@ spec:
             periodSeconds: 10
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -187,6 +204,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: outbox-dispatcher
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
@@ -204,8 +223,15 @@ spec:
             {{- toYaml .Values.resources.outboxDispatcher | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 {{- if .Values.restate.registration.enabled }}
 apiVersion: batch/v1
@@ -228,6 +254,10 @@ spec:
       restartPolicy: OnFailure
       serviceAccountName: {{ .Chart.Name }}-restate
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: register
           image: {{ include "juanie.image" .Values.images.curl | quote }}
@@ -244,6 +274,13 @@ spec:
               -d '{"uri":"{{ .Values.env.RESTATE_SERVICE_REGISTRATION_URL }}"}'
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

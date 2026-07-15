@@ -1,0 +1,13 @@
+misconfigurations:
+  - id: KSV-0109
+    paths:
+      - "deploy/k8s/charts/juanie/templates/configmap.yaml"
+    statement: DATABASE_CONSOLE_TOKEN_TTL_SECONDS is a duration, not credential material.
+  - id: KSV-0041
+    paths:
+      - "deploy/k8s/charts/juanie/templates/rbac.yaml"
+    statement: The controller provisions project-scoped secrets across dynamically created namespaces.
+  - id: KSV-0056
+    paths:
+      - "deploy/k8s/charts/juanie/templates/rbac.yaml"
+    statement: The controller owns workload services and routes across dynamically created namespaces.

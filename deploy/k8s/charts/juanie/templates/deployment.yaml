@@ -40,15 +40,27 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
         - name: wait-for-redis
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: {{ .Chart.Name }}
           image: {{ include "juanie.image" .Values.images.web | quote }}
@@ -89,8 +101,19 @@ spec:
             failureThreshold: 30
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache
+              mountPath: /app/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: next-cache
+          emptyDir: {}
       terminationGracePeriodSeconds: 30
 ---
 # Worker Deployment
@@ -135,15 +158,27 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
         - name: wait-for-redis
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: worker
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
@@ -162,8 +197,15 @@ spec:
             {{- toYaml .Values.resources.worker | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
       terminationGracePeriodSeconds: 30
 ---
 # Scheduler Deployment
@@ -202,11 +244,18 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: {{ include "juanie.image" .Values.images.busybox | quote }}
           imagePullPolicy: {{ .Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z {{ .Values.env.DATABASE_HOST }} {{ .Values.env.DATABASE_PORT }}; do echo waiting for postgres; sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: scheduler
           image: {{ include "juanie.image" .Values.images.runtime | quote }}
@@ -225,6 +274,13 @@ spec:
             {{- toYaml .Values.resources.scheduler | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
       terminationGracePeriodSeconds: 30
