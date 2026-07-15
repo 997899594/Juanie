@@ -105,7 +105,9 @@ Juanie self-deploy has one path:
 
 Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas is built
 from a checksum-verified source archive with a pinned Go toolchain and patched security dependency
-floor. Application images are signed with GitHub OIDC and deployed by verified digest.
+floor. Final application bases receive a fresh Debian security upgrade on every CI run; the
+resulting SBOM and immutable digest, rather than the upstream tag, are the deployed trust boundary.
+Application images are signed with GitHub OIDC and deployed by verified digest.
 
 Do not restore `values-gitops.yaml` or the retired `juanie-platform` Argo CD Application. Argo CD
 ApplicationSet remains optional for user preview scaffolding; Argo Rollouts owns progressive user

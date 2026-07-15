@@ -5,7 +5,26 @@ FROM scratch AS source
 COPY . /app
 
 # ============================================
-# Stage 2: Dependencies
+# Stage 2: Security-refreshed Final Bases
+# ============================================
+FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS bun-runtime-os
+ARG SECURITY_REFRESH=manual
+RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS node-runtime-os
+ARG SECURITY_REFRESH=manual
+RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# Stage 3: Dependencies
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS deps
 WORKDIR /app
@@ -20,7 +39,7 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
   && bun install --frozen-lockfile --no-cache --backend=copyfile --network-concurrency=8
 
 # ============================================
-# Stage 3: Builder (Next.js)
+# Stage 4: Builder (Next.js)
 # ============================================
 FROM deps AS builder
 WORKDIR /app
@@ -33,7 +52,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN mkdir -p public && bun run build
 
 # ============================================
-# Stage 4: Worker Builder
+# Stage 5: Worker Builder
 # ============================================
 FROM deps AS worker-builder
 WORKDIR /app
@@ -50,7 +69,7 @@ RUN bun build ./src/lib/backups/control-plane-uploader.ts --compile --outfile=co
 RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-snapshot
 
 # ============================================
-# Stage 5: Reproducible Atlas Builder
+# Stage 6: Reproducible Atlas Builder
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-builder
 WORKDIR /build
@@ -98,7 +117,7 @@ RUN cd /build/atlas \
   && /usr/local/bin/atlas version
 
 # ============================================
-# Stage 6: Schema Runner Postgres Dependencies
+# Stage 7: Schema Runner Postgres Dependencies
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS schema-runner-postgres-deps
 WORKDIR /migrate
@@ -120,10 +139,10 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
   && bun install --production --no-cache --backend=copyfile --network-concurrency=8
 
 # ============================================
-# Stage 7: Web Runner
+# Stage 8: Web Runner
 # ============================================
 # Web 保持 Next standalone 的 Node server 语义；Bun 作为构建、测试、worker 与 schema-runner 基线。
-FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS web
+FROM node-runtime-os AS web
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -146,9 +165,9 @@ EXPOSE 3001
 CMD ["node", "server.js"]
 
 # ============================================
-# Stage 8: Long-lived Runtime Runner
+# Stage 9: Long-lived Runtime Runner
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS runtime
+FROM bun-runtime-os AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -174,9 +193,9 @@ USER 1001:1001
 CMD ["./worker"]
 
 # ============================================
-# Stage 9: Ephemeral Schema Runner
+# Stage 10: Ephemeral Schema Runner
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS schema-runner
+FROM bun-runtime-os AS schema-runner
 WORKDIR /app
 
 ENV NODE_ENV=production

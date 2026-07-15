@@ -208,6 +208,7 @@ jobs:
       packages: write
       id-token: write
     strategy:
+      fail-fast: false
       matrix:
         target: [web, runtime, schema-runner]
     steps:
@@ -230,6 +231,7 @@ jobs:
           target: ${{ matrix.target }}
           build-args: |
             ATLAS_VERSION=${{ env.ATLAS_VERSION }}
+            SECURITY_REFRESH=${{ github.run_id }}
           push: true
           provenance: mode=max
           sbom: true
