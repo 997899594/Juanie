@@ -2,6 +2,9 @@
 {{- if not .Values.monitoring.prometheusRule.enabled }}
 {{- fail "production requires monitoring.prometheusRule.enabled=true" }}
 {{- end }}
+{{- if and .Values.schemaSync.enabled (empty .Values.schemaSync.contractPromotionEpoch) }}
+{{- fail "production schema sync requires an explicit contract promotion epoch" }}
+{{- end }}
 {{- if eq .Values.production.durabilityMode "selfHosted" }}
 {{- if or (not .Values.postgres.enabled) (not .Values.restate.embeddedEnabled) }}
 {{- fail "self-hosted production requires embedded PostgreSQL and Restate" }}

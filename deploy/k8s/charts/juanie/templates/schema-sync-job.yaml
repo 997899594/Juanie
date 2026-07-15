@@ -33,16 +33,25 @@ spec:
           image: {{ include "juanie.image" $root.Values.images.busybox | quote }}
           imagePullPolicy: {{ $root.Values.images.busybox.pullPolicy }}
           command: ['sh', '-c', 'until nc -z {{ $root.Values.env.DATABASE_HOST }} {{ $root.Values.env.DATABASE_PORT }}; do sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: schema-{{ .phase }}
-          image: {{ include "juanie.image" $root.Values.images.runtime | quote }}
-          imagePullPolicy: {{ $root.Values.images.runtime.pullPolicy }}
+          image: {{ include "juanie.image" $root.Values.images.schemaRunner | quote }}
+          imagePullPolicy: {{ $root.Values.images.schemaRunner.pullPolicy }}
           command: ["./schema-runner", "control-plane-{{ .phase }}"]
           env:
             - name: HOME
               value: /tmp
             - name: XDG_CACHE_HOME
               value: /tmp/.cache
+            {{- if eq .phase "contract" }}
+            - name: CONTROL_PLANE_CONTRACT_PROMOTION
+              value: {{ $root.Values.schemaSync.contractPromotionEpoch | quote }}
+            {{- end }}
             {{- include "juanie.secretEnv" (dict "root" $root "keys" $root.Values.secret.componentKeys.schemaRunner) | nindent 12 }}
           envFrom:
             - configMapRef:
@@ -62,4 +71,8 @@ spec:
 
 {{- if .Values.schemaSync.enabled }}
 {{ include "juanie.schemaSyncJob" (dict "root" . "phase" "expand" "hook" "pre-install,pre-upgrade" "weight" "-10") }}
+{{- if .Values.schemaSync.contractPromotionEpoch }}
+---
+{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "contract" "hook" "post-install,post-upgrade" "weight" "10") }}
+{{- end }}
 {{- end }}

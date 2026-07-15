@@ -1,6 +1,6 @@
 # 默认配置（开发环境）
-# images.web.tag / images.runtime.tag 是 chart 渲染占位值；生产或客户部署必须
-# 覆盖为 CI 已构建的完整 commit SHA tag，例如 web-${SHA} / runtime-${SHA}。
+# 应用镜像 tag 是 chart 渲染占位值；生产或客户部署必须覆盖为 CI 已构建的
+# 完整 commit SHA tag，例如 web-${SHA} / runtime-${SHA} / schema-runner-${SHA}。
 images:
   web:
     repository: ghcr.io/997899594/juanie
@@ -10,6 +10,10 @@ images:
     repository: ghcr.io/997899594/juanie
     pullPolicy: IfNotPresent
     tag: "runtime-sha-f12feba"
+  schemaRunner:
+    repository: ghcr.io/997899594/juanie
+    pullPolicy: IfNotPresent
+    tag: "schema-runner-sha-f12feba"
   busybox:
     repository: busybox
     pullPolicy: IfNotPresent
@@ -63,6 +67,7 @@ schemaSync:
   enabled: false
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
+  contractPromotionEpoch: ""
 
 restate:
   embeddedEnabled: true

@@ -106,7 +106,7 @@ Restate DeploymentWorkflow durable execution
 ```
 push main
     ↓
-CI quality + build web/runtime images
+CI quality + build web/runtime/schema-runner images
     ↓
 CI 上传 deploy/k8s/charts/juanie 到服务器
     ↓
@@ -120,7 +120,11 @@ Helm post-install/post-upgrade schema-runner 执行 destructive contract 迁移
 ```
 
 平台自身发布不再走 Argo CD GitOps；CI 是唯一发布入口。不要恢复 `values-gitops.yaml` / `juanie-platform` 这条第二发布路径；如需排障，优先看 GitHub Actions deploy-platform job、Helm release、schema-expand/schema-contract Job 和 Web / Worker rollout。
-Restate services、outbox dispatcher、worker、scheduler、schema-runner 共享同一个 Bun runtime 镜像，通过 command 区分入口。Web、controller、worker、scheduler、schema-runner 使用独立 ServiceAccount；Web/worker/schema-runner 不挂载 Kubernetes token。
+Restate services、outbox dispatcher、worker、scheduler 共享最小化 Bun runtime 镜像，通过
+command 区分入口。schema-runner 使用独立的短生命周期镜像，内含从固定源码和安全 Go
+工具链可复现构建的 Atlas CLI；不得把迁移工具链重新放入常驻 runtime 镜像。Web、
+controller、worker、scheduler、schema-runner 使用独立 ServiceAccount；
+Web/worker/schema-runner 不挂载 Kubernetes token。
 
 ## Code Style Guidelines
 

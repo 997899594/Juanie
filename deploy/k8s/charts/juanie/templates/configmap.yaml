@@ -89,5 +89,5 @@ data:
   OUTBOX_DELIVERED_RETENTION_DAYS: {{ .Values.env.OUTBOX_DELIVERED_RETENTION_DAYS | default "14" | quote }}
   OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS: {{ .Values.env.OUTBOX_RESOLVED_DEAD_LETTER_RETENTION_DAYS | default "30" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
-  SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.runtime.repository | quote }}
-  SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.runtime.tag | quote }}
+  SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.schemaRunner.repository | quote }}
+  SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.schemaRunner.tag | quote }}

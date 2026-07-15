@@ -92,7 +92,9 @@ for their context-specific detail.
 Juanie self-deploy has one path:
 
 1. GitHub Actions runs lint, typecheck, unit, integration, Restate contract and Playwright checks.
-2. BuildKit publishes web/runtime images with SBOM and maximum provenance.
+2. BuildKit publishes web/runtime/schema-runner images with SBOM and maximum provenance. The
+   long-lived runtime image excludes Atlas and schema-management utilities; the ephemeral
+   schema-runner image carries the migration toolchain.
 3. Cosign signs image digests through GitHub OIDC; Trivy scans source and images.
 4. The production environment gate verifies signatures and resolves immutable digests.
 5. CI uploads the Helm chart and runs `helm upgrade --install` over the current SSH deployment
@@ -101,9 +103,9 @@ Juanie self-deploy has one path:
 7. After every new pod is ready, a post-install/post-upgrade Job applies destructive contract
    migrations. Contract DDL must never run while N-1 pods are serving traffic.
 
-Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas binaries
-are checksum-verified per architecture. Application images are signed with GitHub OIDC and deployed
-by verified digest.
+Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas is built
+from a checksum-verified source archive with a pinned Go toolchain and patched security dependency
+floor. Application images are signed with GitHub OIDC and deployed by verified digest.
 
 Do not restore `values-gitops.yaml` or the retired `juanie-platform` Argo CD Application. Argo CD
 ApplicationSet remains optional for user preview scaffolding; Argo Rollouts owns progressive user

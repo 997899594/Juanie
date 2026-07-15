@@ -32,9 +32,14 @@ images:
     tag: "web-REPLACE_WITH_COMMIT_SHA"
     pullPolicy: IfNotPresent
   runtime:
-    # Mirrors ghcr.io/997899594/juanie. worker, scheduler and schema-runner share this image.
+    # Mirrors ghcr.io/997899594/juanie for long-lived runtime processes.
     repository: ghcr.1ms.run/997899594/juanie
     tag: "runtime-REPLACE_WITH_COMMIT_SHA"
+    pullPolicy: IfNotPresent
+  schemaRunner:
+    # Ephemeral migration and schema inspection toolchain.
+    repository: ghcr.1ms.run/997899594/juanie
+    tag: "schema-runner-REPLACE_WITH_COMMIT_SHA"
     pullPolicy: IfNotPresent
   busybox:
     repository: docker.1ms.run/library/busybox
