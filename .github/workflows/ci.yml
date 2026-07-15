@@ -18,7 +18,6 @@ env:
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
   ATLAS_VERSION: 1.2.0
   ATLAS_ACTION_VERSION: v1.2.0
-  CONTROL_PLANE_CONTRACT_EPOCH: '20260715'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -58,11 +57,10 @@ jobs:
           schema_release="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
             --show-only templates/schema-sync-job.yaml \
-            --set schemaSync.enabled=true \
-            --set-string schemaSync.contractPromotionEpoch="${CONTROL_PLANE_CONTRACT_EPOCH}")"
-          test "$(grep -c '^kind: Job$' <<<"$schema_release")" -eq 2
+            --set schemaSync.enabled=true)"
+          test "$(grep -c '^kind: Job$' <<<"$schema_release")" -eq 1
           grep -q 'control-plane-expand' <<<"$schema_release"
-          grep -q 'control-plane-contract' <<<"$schema_release"
+          ! grep -q 'control-plane-contract' <<<"$schema_release"
           grep -q 'schema-runner-sha-f12feba' <<<"$schema_release"
           disaster_recovery="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
@@ -365,12 +363,11 @@ jobs:
           WEB_IMAGE_TAG: ${{ env.WEB_IMAGE_TAG }}
           RUNTIME_IMAGE_TAG: ${{ env.RUNTIME_IMAGE_TAG }}
           SCHEMA_RUNNER_IMAGE_TAG: ${{ env.SCHEMA_RUNNER_IMAGE_TAG }}
-          CONTROL_PLANE_CONTRACT_EPOCH: ${{ env.CONTROL_PLANE_CONTRACT_EPOCH }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DEPLOY_CHART_DIR,GITHUB_SHA,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG,CONTROL_PLANE_CONTRACT_EPOCH
+          envs: DEPLOY_CHART_DIR,GITHUB_SHA,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG
           script_stop: true
           script: |
             set -euo pipefail
@@ -391,7 +388,6 @@ jobs:
               --set-string images.schemaRunner.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
               --set-string images.schemaRunner.tag="${SCHEMA_RUNNER_IMAGE_TAG}" \
               --set schemaSync.enabled=true \
-              --set-string schemaSync.contractPromotionEpoch="${CONTROL_PLANE_CONTRACT_EPOCH}" \
               --wait \
               --wait-for-jobs \
               --timeout 20m

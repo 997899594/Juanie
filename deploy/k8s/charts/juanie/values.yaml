@@ -67,7 +67,6 @@ schemaSync:
   enabled: false
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
-  contractPromotionEpoch: ""
 
 restate:
   embeddedEnabled: true

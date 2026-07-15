@@ -115,11 +115,11 @@ CI 执行 helm upgrade --install juanie
 Helm pre-install/pre-upgrade schema-runner 执行 expand 迁移与凭据回填
     ↓
 Helm chart 同步 Web / Restate / Dispatcher / Worker / Scheduler
-    ↓
-Helm post-install/post-upgrade schema-runner 执行 destructive contract 迁移
 ```
 
 平台自身发布不再走 Argo CD GitOps；CI 是唯一发布入口。不要恢复 `values-gitops.yaml` / `juanie-platform` 这条第二发布路径；如需排障，优先看 GitHub Actions deploy-platform job、Helm release、schema-expand/schema-contract Job 和 Web / Worker rollout。
+默认 Helm 发布不得执行 destructive contract migration。contract chain 必须在 N-1 回滚窗口结束后，
+通过独立的显式 promotion 命令执行。
 Restate services、outbox dispatcher、worker、scheduler 共享最小化 Bun runtime 镜像，通过
 command 区分入口。schema-runner 使用独立的短生命周期镜像，内含从固定源码和安全 Go
 工具链可复现构建的 Atlas CLI；不得把迁移工具链重新放入常驻 runtime 镜像。Web、

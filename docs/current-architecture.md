@@ -100,8 +100,8 @@ Juanie self-deploy has one path:
 5. CI uploads the Helm chart and runs `helm upgrade --install` over the current SSH deployment
    boundary.
 6. A Helm pre-install/pre-upgrade Job applies expand migrations and credential backfills.
-7. After every new pod is ready, a post-install/post-upgrade Job applies destructive contract
-   migrations. Contract DDL must never run while N-1 pods are serving traffic.
+7. Destructive contract migrations remain outside the default Helm release. Operators promote the
+   contract chain explicitly only after the N-1 rollback window closes.
 
 Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas is built
 from a checksum-verified source archive with a pinned Go toolchain and patched security dependency

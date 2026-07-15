@@ -48,10 +48,6 @@ spec:
               value: /tmp
             - name: XDG_CACHE_HOME
               value: /tmp/.cache
-            {{- if eq .phase "contract" }}
-            - name: CONTROL_PLANE_CONTRACT_PROMOTION
-              value: {{ $root.Values.schemaSync.contractPromotionEpoch | quote }}
-            {{- end }}
             {{- include "juanie.secretEnv" (dict "root" $root "keys" $root.Values.secret.componentKeys.schemaRunner) | nindent 12 }}
           envFrom:
             - configMapRef:
@@ -71,8 +67,4 @@ spec:
 
 {{- if .Values.schemaSync.enabled }}
 {{ include "juanie.schemaSyncJob" (dict "root" . "phase" "expand" "hook" "pre-install,pre-upgrade" "weight" "-10") }}
-{{- if .Values.schemaSync.contractPromotionEpoch }}
----
-{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "contract" "hook" "post-install,post-upgrade" "weight" "10") }}
-{{- end }}
 {{- end }}
