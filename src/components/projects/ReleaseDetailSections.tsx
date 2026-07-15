@@ -16,11 +16,13 @@ import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
+import { ReleaseMigrationPlanActions } from '@/components/projects/ReleaseMigrationPlanActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import { getMigrationReleaseStageLabel } from '@/lib/migrations/release-graph';
 import {
   getDeliveryReleaseArtifacts,
   getDeployableReleaseArtifacts,
@@ -123,7 +125,10 @@ function getRuntimeMigrationDiffItems(release: ReleasePageData['release']) {
       runId: run.id,
       serviceName: run.serviceName,
       databaseName: run.database.name,
-      phaseLabel: getMigrationPhaseLabel(run.specification.phase),
+      phaseLabel:
+        run.specification.releaseStage !== 'standard'
+          ? getMigrationReleaseStageLabel(run.specification.releaseStage)
+          : getMigrationPhaseLabel(run.specification.phase),
       tool: run.specification.tool,
       preview: run.specification.filePreview!,
     }));
@@ -324,12 +329,18 @@ function ReleaseRolloutActionSection({
 
 function ReleaseMigrationReviewSection({
   projectId,
+  releaseId,
   migrationItems,
+  migrationPlan,
+  migrationPlanApprovalToken,
   releaseActions,
   isDeliveryRole,
 }: {
   projectId: string;
+  releaseId: string;
   migrationItems: ReleaseMigrationItem[];
+  migrationPlan: ReleasePageData['release']['migrationPlan'];
+  migrationPlanApprovalToken?: string | null;
   releaseActions: ReleaseActionSnapshot;
   isDeliveryRole: boolean;
 }) {
@@ -350,10 +361,41 @@ function ReleaseMigrationReviewSection({
         meta={<Badge variant="secondary">{getMigrationReviewSummary(migrationItems)}</Badge>}
       />
 
+      {migrationPlan ? (
+        <div className="mb-3 flex flex-col gap-3 border-border/65 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">发布迁移计划</span>
+              <Badge variant="secondary">{migrationItems.length} 个阶段</Badge>
+              <Badge variant="outline">commit {migrationPlan.sourceCommitSha.slice(0, 12)}</Badge>
+            </div>
+            <div className="mt-2 font-mono text-[11px] text-muted-foreground">
+              SHA-256 {migrationPlan.digest.slice(0, 16)}
+            </div>
+          </div>
+          {migrationPlan.status === 'awaiting_approval' ? (
+            <ReleaseMigrationPlanActions
+              projectId={projectId}
+              releaseId={releaseId}
+              approvalToken={migrationPlanApprovalToken}
+              disabled={disabled}
+              disabledSummary={disabledSummary}
+            />
+          ) : (
+            <Badge variant="secondary">
+              {migrationPlan.status === 'completed' ? '已完成' : '计划已批准'}
+            </Badge>
+          )}
+        </div>
+      ) : null}
+
       <div className="space-y-3">
         {migrationItems.map((run, index) => {
           const filePreview = run.specification.filePreview;
-          const phaseLabel = getMigrationPhaseLabel(run.specification.phase);
+          const phaseLabel =
+            run.specification.releaseStage !== 'standard'
+              ? getMigrationReleaseStageLabel(run.specification.releaseStage)
+              : getMigrationPhaseLabel(run.specification.phase);
           const meta = [
             run.serviceName,
             run.database.name,
@@ -712,7 +754,10 @@ export function ReleaseExecutionSections({
 
       <ReleaseMigrationReviewSection
         projectId={projectId}
+        releaseId={releaseId}
         migrationItems={release.migrationItems}
+        migrationPlan={release.migrationPlan}
+        migrationPlanApprovalToken={release.migrationPlanApprovalToken}
         releaseActions={releaseActions}
         isDeliveryRole={isDeliveryRole}
       />

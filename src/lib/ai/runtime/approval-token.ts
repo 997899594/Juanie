@@ -10,6 +10,18 @@ interface MigrationApprovalTokenPayload {
   actorUserId: string;
 }
 
+interface ReleaseMigrationPlanApprovalTokenPayload {
+  kind: 'release-migration-plan-approval';
+  action: 'approve';
+  teamId: string;
+  projectId: string;
+  environmentId: string;
+  releaseId: string;
+  planId: string;
+  digest: string;
+  actorUserId: string;
+}
+
 function getApprovalTokenSecret(): string {
   const secret = process.env.AI_APPROVAL_TOKEN_SECRET ?? process.env.NEXTAUTH_SECRET;
 
@@ -20,7 +32,9 @@ function getApprovalTokenSecret(): string {
   return secret;
 }
 
-function encodePayload(payload: MigrationApprovalTokenPayload): string {
+function encodePayload(
+  payload: MigrationApprovalTokenPayload | ReleaseMigrationPlanApprovalTokenPayload
+): string {
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
 }
 
@@ -84,6 +98,63 @@ export function verifyMigrationApprovalToken(input: {
     parsed.projectId === input.projectId &&
     parsed.environmentId === input.environmentId &&
     parsed.runId === input.runId &&
+    parsed.actorUserId === input.actorUserId
+  );
+}
+
+export function createReleaseMigrationPlanApprovalToken(
+  payload: Omit<ReleaseMigrationPlanApprovalTokenPayload, 'kind' | 'action'>
+): string {
+  const normalizedPayload: ReleaseMigrationPlanApprovalTokenPayload = {
+    kind: 'release-migration-plan-approval',
+    action: 'approve',
+    ...payload,
+  };
+  const encodedPayload = encodePayload(normalizedPayload);
+  return `${encodedPayload}.${signPayload(encodedPayload)}`;
+}
+
+export function verifyReleaseMigrationPlanApprovalToken(input: {
+  token: string;
+  teamId: string;
+  projectId: string;
+  environmentId: string;
+  releaseId: string;
+  planId: string;
+  digest: string;
+  actorUserId: string;
+}): boolean {
+  const [encodedPayload, providedSignature] = input.token.split('.');
+  if (!encodedPayload || !providedSignature) return false;
+
+  const expectedSignature = signPayload(encodedPayload);
+  const providedBuffer = Buffer.from(providedSignature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    return false;
+  }
+
+  let parsed: ReleaseMigrationPlanApprovalTokenPayload;
+  try {
+    parsed = JSON.parse(
+      Buffer.from(encodedPayload, 'base64url').toString('utf8')
+    ) as ReleaseMigrationPlanApprovalTokenPayload;
+  } catch {
+    return false;
+  }
+
+  return (
+    parsed.kind === 'release-migration-plan-approval' &&
+    parsed.action === 'approve' &&
+    parsed.teamId === input.teamId &&
+    parsed.projectId === input.projectId &&
+    parsed.environmentId === input.environmentId &&
+    parsed.releaseId === input.releaseId &&
+    parsed.planId === input.planId &&
+    parsed.digest === input.digest &&
     parsed.actorUserId === input.actorUserId
   );
 }

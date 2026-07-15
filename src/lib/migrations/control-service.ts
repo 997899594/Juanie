@@ -7,6 +7,7 @@ import {
   migrationRuns,
   migrationSpecifications,
   type ReleaseStatus,
+  releaseMigrationPlans,
 } from '@/lib/db/schema';
 import {
   buildMigrationExecutionPlan,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/migrations';
 import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
+import { restoreMigrationSpecificationSnapshot } from '@/lib/migrations/specification-snapshot';
 import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -104,7 +106,10 @@ function buildResolvedSpecFromRun(
   run: NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>
 ) {
   return {
-    specification: run.specification,
+    specification: restoreMigrationSpecificationSnapshot(
+      run.specification,
+      run.specificationSnapshot
+    ),
     database: run.database,
     service: run.service,
     environment: run.environment,
@@ -125,8 +130,13 @@ function pickResolvedSpecForDatabase(
     return null;
   }
 
-  const serviceScoped = candidates.find((item) => item.database.serviceId === item.service.id);
-  return serviceScoped ?? candidates[0] ?? null;
+  const serviceScoped = candidates.filter((item) => item.database.serviceId === item.service.id);
+  const targetCandidates = serviceScoped.length > 0 ? serviceScoped : candidates;
+  return (
+    [...targetCandidates].sort(
+      (left, right) => right.specification.stageOrder - left.specification.stageOrder
+    )[0] ?? null
+  );
 }
 
 function requireResolvedSpec(resolvedSpec: ResolvedMigrationSpec | null): ResolvedMigrationSpec {
@@ -263,6 +273,7 @@ async function getMigrationDatabaseContext(input: {
           service: true,
           environment: true,
         },
+        orderBy: (specification, { desc }) => [desc(specification.stageOrder)],
       });
 
   const resolvedSpec = syncedSpec
@@ -490,7 +501,9 @@ export async function executeMigrationRunActionForActor(input: {
     });
 
     if (run.releaseId && run.release) {
-      const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
+      const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(
+        run.specificationSnapshot.phase
+      );
 
       if (nextReleaseStatus) {
         await updateReleaseStatus(run.releaseId, nextReleaseStatus);
@@ -557,7 +570,7 @@ export async function executeMigrationRunActionForActor(input: {
 
     if (run.releaseId) {
       const failureStatus: ReleaseStatus =
-        run.specification.phase === 'postDeploy' ? 'degraded' : 'migration_pre_failed';
+        run.specificationSnapshot.phase === 'postDeploy' ? 'degraded' : 'migration_pre_failed';
       await updateReleaseStatus(run.releaseId, failureStatus, failureMessage);
       await persistReleaseRecapSafely(run.releaseId);
     }
@@ -582,9 +595,15 @@ export async function executeMigrationRunActionForActor(input: {
   }
 
   const resolvedSpec = buildResolvedSpecFromRun(run);
-  const initialStatus = getInitialStatusForExecutionMode(run.specification.executionMode);
-  const filePreview =
-    initialStatus === 'queued'
+  const planBound = Boolean(run.releaseMigrationPlanId);
+  const initialStatus = planBound
+    ? run.specificationSnapshot.executionMode === 'external'
+      ? 'awaiting_external_completion'
+      : 'queued'
+    : getInitialStatusForExecutionMode(run.specificationSnapshot.executionMode);
+  const filePreview = planBound
+    ? run.filePreview
+    : initialStatus === 'queued'
       ? null
       : (
           await inspectResolvedMigrationSpecPendingState(resolvedSpec, {
@@ -592,8 +611,24 @@ export async function executeMigrationRunActionForActor(input: {
             includeFileDetails: true,
           })
         ).preview;
+  if (planBound && run.releaseMigrationPlanId) {
+    const [reopenedPlan] = await db
+      .update(releaseMigrationPlans)
+      .set({ status: 'approved', updatedAt: new Date() })
+      .where(
+        and(
+          eq(releaseMigrationPlans.id, run.releaseMigrationPlanId),
+          eq(releaseMigrationPlans.approvedDigest, releaseMigrationPlans.digest)
+        )
+      )
+      .returning({ id: releaseMigrationPlans.id });
+    if (!reopenedPlan) {
+      throw new MigrationControlError(409, '原迁移计划摘要已失效，不能重试');
+    }
+  }
   const retryRun = await createMigrationRun(resolvedSpec, {
     releaseId: run.releaseId,
+    releaseMigrationPlanId: run.releaseMigrationPlanId,
     deploymentId: run.deploymentId,
     triggeredBy: 'manual',
     triggeredByUserId: input.actorUserId,
@@ -602,10 +637,14 @@ export async function executeMigrationRunActionForActor(input: {
     initialStatus,
     filePreview,
     dispatch: initialStatus === 'queued',
+    allowApprovalBypass: planBound,
   });
 
   if (run.releaseId) {
-    const nextReleaseStatus = getReleaseStatusForPendingRun(run.specification.phase, initialStatus);
+    const nextReleaseStatus = getReleaseStatusForPendingRun(
+      run.specificationSnapshot.phase,
+      initialStatus
+    );
     if (nextReleaseStatus) {
       await updateReleaseStatus(run.releaseId, nextReleaseStatus);
     }

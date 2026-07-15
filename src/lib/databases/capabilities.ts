@@ -4,8 +4,8 @@ import { getNormalizedDatabaseUrlFromEnv } from '@/lib/db/connection-url';
 export const databaseCapabilities = ['vector', 'pg_trgm'] as const;
 export type DatabaseCapability = (typeof databaseCapabilities)[number];
 
-export const basePostgresImage = 'postgres:16-alpine';
-export const supersetPostgresImage = 'pgvector/pgvector:pg16';
+export const basePostgresImage = 'postgres:17-alpine';
+export const supersetPostgresImage = 'pgvector/pgvector:pg17';
 
 const postgresCapabilitySpecs: Record<
   DatabaseCapability,

@@ -1,4 +1,4 @@
-h1:0uwYgguvfGNAKRNHDayYinY9olivSgV0pcYPRacWnqU=
+h1:JyIx8PqU8NTF0WjKUYudaDnG/t3JPYBMO5XbNHfkQtM=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -28,3 +28,4 @@ h1:0uwYgguvfGNAKRNHDayYinY9olivSgV0pcYPRacWnqU=
 20260713121000_remove_plaintext_credentials.sql h1:9jBDjqRcM7j4ZJ72th6nCb6PqvTwApQ/dLE6KLEyiuk=
 20260714100000_ai_task_execution_leases.sql h1:bNt0tcrsJlQScZph/OJMJq50x4eZE1gafSto6VCJvTI=
 20260714110000_outbox_operations.sql h1:dicPuU3j7Lf3wGrA6Xx5+FYrlCD8ICtcXx35kE4WE7U=
+20260714120000_schema_release_graph.sql h1:1eTUwls6+RU4hRhq37iSwhywiFPdw6BhIgzHKrw3PgA=

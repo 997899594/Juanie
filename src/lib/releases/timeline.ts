@@ -1,5 +1,6 @@
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
+import { getMigrationReleaseStageLabel } from '@/lib/migrations/release-graph';
 import { getDeployableReleaseArtifacts } from '@/lib/releases/artifacts';
 import { resolveReleaseLifecycle } from '@/lib/releases/lifecycle';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -230,9 +231,12 @@ export function buildReleaseTimeline(input: {
       type: 'migration',
       at: formatTimelineTimestamp(run.createdAt),
       title: getMigrationTimelineTitle(run.status),
-      description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${getMigrationPhaseLabel(
-        run.specification?.phase ?? 'manual'
-      )}`,
+      description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${
+        (run.releaseStage ?? run.specification?.releaseStage) &&
+        (run.releaseStage ?? run.specification?.releaseStage) !== 'standard'
+          ? getMigrationReleaseStageLabel(run.releaseStage ?? run.specification?.releaseStage)
+          : getMigrationPhaseLabel(run.specification?.phase ?? 'manual')
+      }${run.targetVersion ? ` · ${run.targetVersion}` : ''}`,
       tone: getTimelineTone(run.status, 'migration'),
       href: releaseHref,
       sortValue: run.createdAt ? new Date(run.createdAt).getTime() : 0,

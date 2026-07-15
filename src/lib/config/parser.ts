@@ -19,6 +19,52 @@ const serviceRuntimeLanguages = ['node', 'bun', 'static', 'custom'] as const;
 const packageFormats = ['tgz', 'zip', 'tar.gz', 'directory'] as const;
 
 const pathPatternSchema = z.string().min(1).max(300);
+const atlasTargetVersionSchema = z.string().regex(/^\d{10,20}$/u, {
+  message: 'Atlas targetVersion must be a 10-20 digit monotonically increasing version',
+});
+
+const atlasReleaseGraphSchema = z
+  .object({
+    baselineVersion: atlasTargetVersionSchema.optional(),
+    expand: z.object({ targetVersion: atlasTargetVersionSchema }).strict(),
+    backfill: z.object({ targetVersion: atlasTargetVersionSchema }).strict(),
+    verify: z.object({ targetVersion: atlasTargetVersionSchema }).strict(),
+    cutover: z.literal('deployment'),
+    contract: z.object({ targetVersion: atlasTargetVersionSchema }).strict(),
+  })
+  .strict()
+  .superRefine((graph, ctx) => {
+    const versions = [
+      graph.expand.targetVersion,
+      graph.backfill.targetVersion,
+      graph.verify.targetVersion,
+      graph.contract.targetVersion,
+    ];
+
+    if (
+      graph.baselineVersion &&
+      BigInt(graph.baselineVersion) >= BigInt(graph.expand.targetVersion)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Atlas releaseGraph baselineVersion must precede the expand targetVersion',
+        path: ['baselineVersion'],
+      });
+    }
+
+    for (let index = 1; index < versions.length; index += 1) {
+      const previous = versions[index - 1];
+      const current = versions[index];
+      if (previous && current && BigInt(current) <= BigInt(previous)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Atlas releaseGraph targetVersion values must increase by stage order',
+          path: [],
+        });
+        return;
+      }
+    }
+  });
 
 const monorepoAffectedSchema = z
   .object({
@@ -88,7 +134,7 @@ const schemaConfigSchema = z
   .object({
     source: z.enum(schemaSources),
     config: z.string().min(1).optional(),
-    phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional().default('preDeploy'),
+    phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional(),
     executionMode: z.enum(migrationExecutionModes).optional().default('automatic'),
     lockStrategy: z.enum(['platform', 'db_advisory']).optional().default('platform'),
     compatibility: z
@@ -96,8 +142,34 @@ const schemaConfigSchema = z
       .optional()
       .default('backward_compatible'),
     approvalPolicy: z.enum(['auto', 'manual_in_production']).optional().default('auto'),
+    releaseGraph: atlasReleaseGraphSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((schema, ctx) => {
+    if (!schema.releaseGraph) {
+      return;
+    }
+
+    if (schema.source !== 'atlas') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'schema.releaseGraph requires schema.source=atlas',
+        path: ['releaseGraph'],
+      });
+    }
+
+    if (schema.phase) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'schema.phase is derived from releaseGraph stages and must be omitted',
+        path: ['phase'],
+      });
+    }
+  })
+  .transform((schema) => ({
+    ...schema,
+    phase: schema.phase ?? ('preDeploy' as const),
+  }));
 
 const serviceDatabaseBindingSchema = z
   .object({

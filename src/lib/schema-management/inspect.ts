@@ -142,8 +142,13 @@ function pickResolvedSpecForDatabase(
     return null;
   }
 
-  const serviceScoped = candidates.find((item) => item.database.serviceId === item.service.id);
-  return serviceScoped ?? candidates[0] ?? null;
+  const serviceScoped = candidates.filter((item) => item.database.serviceId === item.service.id);
+  const targetCandidates = serviceScoped.length > 0 ? serviceScoped : candidates;
+  return (
+    [...targetCandidates].sort(
+      (left, right) => right.specification.stageOrder - left.specification.stageOrder
+    )[0] ?? null
+  );
 }
 
 function buildResolvedSpec(
@@ -201,6 +206,7 @@ async function resolveSchemaInspectionSpec(
       service: true,
       environment: true,
     },
+    orderBy: (specification, { desc }) => [desc(specification.stageOrder)],
   });
 
   if (!persistedSpecification) {
@@ -717,6 +723,7 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       hasUserTables: ledgerInspection.snapshot.hasUserTables,
       driftDetected: atlasDiff.hasChanges === true,
       driftSummary: atlasDiff.driftSummary,
+      baselineVersion: resolvedSpec.specification.baselineVersion,
     });
 
     return upsertEnvironmentSchemaState({

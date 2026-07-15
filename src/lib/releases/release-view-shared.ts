@@ -48,6 +48,7 @@ import type { PlatformSignalSnapshot } from '@/lib/signals/platform';
 import { formatPlatformTimeContext } from '@/lib/time/format';
 
 export interface ReleaseViewLike {
+  migrationPlanApprovalToken?: string | null;
   id: string;
   projectId?: string;
   sourceRef?: string | null;
@@ -156,6 +157,10 @@ export interface ReleaseViewLike {
       type?: string | null;
     } | null;
     databaseId?: string;
+    releaseStage?: string | null;
+    stageOrder?: number | null;
+    targetVersion?: string | null;
+    baselineVersion?: string | null;
     specification?: {
       source?: string | null;
       tool?: string;
@@ -167,6 +172,10 @@ export interface ReleaseViewLike {
       lockStrategy?: string | null;
       compatibility?: string | null;
       approvalPolicy?: string | null;
+      releaseStage?: string | null;
+      stageOrder?: number | null;
+      targetVersion?: string | null;
+      baselineVersion?: string | null;
       filePreview?: MigrationFilePreviewSnapshot | null;
     } | null;
     status: string;
@@ -229,6 +238,7 @@ export interface ReleaseTimelineItem {
 }
 
 export interface ReleaseDetailDecorations {
+  migrationPlanApprovalToken?: string | null;
   previewSourceMeta: PreviewSourceMetadata;
   previewLifecycle: PreviewLifecycleSummary | null;
   platformSignals: PlatformSignalSnapshot;
@@ -285,6 +295,10 @@ export interface ReleaseDetailDecorations {
       source: string;
       tool: string;
       phase: string;
+      releaseStage: string;
+      stageOrder: number;
+      targetVersion: string | null;
+      baselineVersion: string | null;
       command: string;
       executionMode: string;
       sourceConfigPath: string | null;
@@ -508,6 +522,10 @@ export function buildMigrationItems(
       source: run.specification?.source ?? run.specification?.tool ?? 'custom',
       tool: run.specification?.tool ?? 'custom',
       phase: run.specification?.phase ?? 'manual',
+      releaseStage: run.releaseStage ?? run.specification?.releaseStage ?? 'standard',
+      stageOrder: run.stageOrder ?? run.specification?.stageOrder ?? 0,
+      targetVersion: run.targetVersion ?? run.specification?.targetVersion ?? null,
+      baselineVersion: run.specification?.baselineVersion ?? null,
       command: run.specification?.command ?? '未提供命令',
       executionMode: run.specification?.executionMode ?? 'automatic',
       sourceConfigPath: run.specification?.sourceConfigPath ?? null,

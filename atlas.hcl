@@ -11,7 +11,7 @@ data "external_schema" "drizzle" {
 env "juanie" {
   url = getenv("ATLAS_DATABASE_URL")
   src = data.external_schema.drizzle.url
-  dev = "docker://postgres/16/dev?search_path=public"
+  dev = "docker://postgres/17/dev?search_path=public"
 
   migration {
     dir = "file://migrations"

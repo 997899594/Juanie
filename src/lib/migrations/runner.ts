@@ -31,7 +31,6 @@ import { isPlatformManagedMigrationSpec } from '@/lib/migrations/platform-manage
 import {
   appendMigrationRunLog,
   getMigrationRunStartedAt,
-  isActiveMigrationRunStatus,
   markMigrationRunFailed,
   reconcileStaleActiveMigrationRun,
 } from '@/lib/migrations/run-state';
@@ -266,7 +265,7 @@ export async function executeMigrationRun(
   });
 
   for (const run of activeRuns) {
-    if (run.id === runId) {
+    if (run.id === runId || run.status === 'queued') {
       continue;
     }
 
@@ -283,13 +282,11 @@ export async function executeMigrationRun(
   const approvedFilePreview = options.allowApprovalBypass
     ? normalizeMigrationFilePreviewSnapshot(currentRun?.filePreview)
     : null;
-  const hasApprovedExecutionPlan =
-    spec.specification.tool === 'drizzle' &&
-    approvedFilePreview?.executionPlan?.path === 'atlas-schema-diff.sql' &&
-    Boolean(approvedFilePreview.executionPlan.content.trim());
-
+  const hasApprovedPlanSnapshot = Boolean(
+    currentRun?.releaseMigrationPlanId && approvedFilePreview
+  );
   const conflictingRun = activeRuns.find(
-    (run) => run.id !== runId && isActiveMigrationRunStatus(run.status)
+    (run) => run.id !== runId && (run.status === 'planning' || run.status === 'running')
   );
   if (conflictingRun) {
     await markMigrationRunFailed(
@@ -299,7 +296,7 @@ export async function executeMigrationRun(
     );
   }
 
-  const pendingInspection = hasApprovedExecutionPlan
+  const pendingInspection = hasApprovedPlanSnapshot
     ? {
         state: resolveMigrationPendingState(approvedFilePreview),
         preview: approvedFilePreview,
@@ -311,7 +308,7 @@ export async function executeMigrationRun(
         includeFileDetails: true,
       });
 
-  if (!hasApprovedExecutionPlan && pendingInspection.state !== 'none') {
+  if (!hasApprovedPlanSnapshot && pendingInspection.state !== 'none') {
     await persistMigrationRunFilePreview(runId, pendingInspection.preview);
   }
 
@@ -338,10 +335,7 @@ export async function executeMigrationRun(
   }
 
   if (pendingInspection.state === 'unknown') {
-    await appendMigrationRunLog(
-      runId,
-      '暂时无法确认是否存在待执行的 schema 变更，系统将按保守策略继续执行或等待审批。'
-    );
+    throw new Error('无法确认待执行的 schema 变更，迁移已阻断');
   }
 
   const policyDecision = evaluateMigrationPolicy({

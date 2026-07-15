@@ -5,11 +5,16 @@ import {
   type MigrationRunStatus,
   migrationRuns,
   type ReleaseStatus,
+  releaseMigrationPlans,
   releases,
 } from '@/lib/db/schema';
 import { clearEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
-import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
+import {
+  completeReleaseMigrationPlan,
+  ensureReleaseMigrationPlan,
+  verifyReleaseMigrationPlanForRun,
+} from '@/lib/migrations/release-plan';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
 import { publishDeploymentRealtimeSnapshot } from '@/lib/realtime/deployments';
 import {
@@ -258,6 +263,11 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
       )
     );
 
+  await db
+    .update(releaseMigrationPlans)
+    .set({ status: 'superseded', updatedAt: now })
+    .where(inArray(releaseMigrationPlans.releaseId, candidateIds));
+
   await db.transaction(async (tx) => {
     for (const candidate of candidates) {
       await appendReleaseEvent(tx, {
@@ -301,6 +311,7 @@ async function driveReleaseMigrationPhaseForward(
     id: string;
     status: MigrationRunStatus;
     createdAt: Date;
+    stageOrder: number;
     errorMessage?: string | null;
   }>
 ): Promise<ReleaseMigrationPhaseProgressResult> {
@@ -316,13 +327,14 @@ async function driveReleaseMigrationPhaseForward(
           release.id,
       };
     case 'start_run':
+      await verifyReleaseMigrationPlanForRun(action.runId);
       await enqueueOutboxMessage(db, {
         topic: 'migration.requested',
         aggregateType: 'migration',
         aggregateId: action.runId,
         commandId: 'initial',
         payload: {
-          allowApprovalBypass: false,
+          allowApprovalBypass: true,
           traceId: createTraceId(release.id),
         },
       });
@@ -365,22 +377,24 @@ export async function startReleaseMigrationPhase(
     phase,
   });
 
-  const createdRuns = await resolveAndCreateMigrationRuns(
-    release.projectId,
-    release.environmentId,
-    phase,
-    {
-      releaseId: release.id,
-      triggeredBy: 'deploy',
-      triggeredByUserId: release.triggeredByUserId ?? null,
-      sourceRef: release.sourceRef,
-      sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
-      sourceCommitMessage: release.summary,
-      serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
-        (artifact) => artifact.serviceId!
-      ),
-    }
-  );
+  const plan = await ensureReleaseMigrationPlan({
+    release,
+    serviceIds: getDeployableReleaseArtifacts(release.artifacts).map(
+      (artifact) => artifact.serviceId!
+    ),
+  });
+
+  if (!plan) {
+    return { kind: 'completed' };
+  }
+
+  if (plan.status === 'awaiting_approval') {
+    await updateReleaseStatus(release.id, 'awaiting_approval');
+    await cancelSupersededPendingReleases(release);
+    return { kind: 'awaiting_approval', runId: plan.id };
+  }
+
+  const createdRuns = await loadLatestReleaseMigrationRuns(release.id, phase);
 
   if (createdRuns.length === 0) {
     return { kind: 'completed' };
@@ -518,6 +532,7 @@ export async function startReleaseDeploymentStage(
 }
 
 async function completeSuccessfulRelease(releaseId: string) {
+  await completeReleaseMigrationPlan(releaseId);
   await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[2]);
   await syncReleaseGitTrackingSafely(releaseId);
   await persistReleaseRecapSafely(releaseId);
@@ -558,6 +573,11 @@ export async function failReleaseForCurrentPhase(releaseId: string, errorMessage
 
   await updateReleaseStatus(releaseId, resolveReleaseFailureStatus(current?.status), errorMessage);
 
+  await db
+    .update(releaseMigrationPlans)
+    .set({ status: 'failed', updatedAt: new Date() })
+    .where(eq(releaseMigrationPlans.releaseId, releaseId));
+
   await persistReleaseRecapSafely(releaseId);
 }
 
@@ -580,7 +600,7 @@ async function loadLatestReleaseMigrationRuns(
   const latestRunsByTarget = new Map<string, (typeof runs)[number]>();
 
   for (const run of runs) {
-    if (run.specification.phase !== phase) {
+    if (run.specificationSnapshot.phase !== phase) {
       continue;
     }
 
@@ -590,7 +610,9 @@ async function loadLatestReleaseMigrationRuns(
     }
   }
 
-  return Array.from(latestRunsByTarget.values());
+  return Array.from(latestRunsByTarget.values()).sort(
+    (left, right) => left.stageOrder - right.stageOrder
+  );
 }
 
 export async function resumeReleaseAfterMigrationProgress(runId: string) {
@@ -619,7 +641,7 @@ export async function resumeReleaseAfterMigrationProgress(runId: string) {
     return { resumed: false, reason: 'release_missing' as const };
   }
 
-  const phase = run.specification.phase;
+  const phase = run.specificationSnapshot.phase;
   if (phase === 'manual') {
     return { resumed: false, reason: 'manual_phase_not_supported' as const };
   }

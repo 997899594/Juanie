@@ -112,6 +112,15 @@ export type MigrationTool = (typeof migrationTools)[number];
 export const migrationPhases = ['preDeploy', 'postDeploy', 'manual'] as const;
 export type MigrationPhase = (typeof migrationPhases)[number];
 
+export const migrationReleaseStages = [
+  'standard',
+  'expand',
+  'backfill',
+  'verify',
+  'contract',
+] as const;
+export type MigrationReleaseStage = (typeof migrationReleaseStages)[number];
+
 export const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 export type MigrationExecutionMode = (typeof migrationExecutionModes)[number];
 
@@ -139,6 +148,33 @@ export type MigrationCompatibility = (typeof migrationCompatibilities)[number];
 
 export const migrationApprovalPolicies = ['auto', 'manual_in_production'] as const;
 export type MigrationApprovalPolicy = (typeof migrationApprovalPolicies)[number];
+
+export const releaseMigrationPlanStatuses = [
+  'awaiting_approval',
+  'approved',
+  'executing',
+  'completed',
+  'failed',
+  'superseded',
+] as const;
+export type ReleaseMigrationPlanStatus = (typeof releaseMigrationPlanStatuses)[number];
+
+export interface MigrationSpecificationSnapshot {
+  source: MigrationTool;
+  tool: MigrationTool;
+  phase: MigrationPhase;
+  executionMode: MigrationExecutionMode;
+  releaseStage: MigrationReleaseStage;
+  stageOrder: number;
+  targetVersion: string | null;
+  baselineVersion: string | null;
+  sourceConfigPath: string | null;
+  migrationPath: string | null;
+  command: string;
+  lockStrategy: MigrationLockStrategy;
+  compatibility: MigrationCompatibility;
+  approvalPolicy: MigrationApprovalPolicy;
+}
 
 export const initStepStatuses = ['pending', 'running', 'completed', 'failed', 'skipped'] as const;
 export type InitStepStatus = (typeof initStepStatuses)[number];
@@ -245,6 +281,7 @@ export const aiTaskKindEnum = pgEnum('aiTaskKind', aiTaskKinds);
 export const aiTaskStatusEnum = pgEnum('aiTaskStatus', aiTaskStatuses);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
+export const migrationReleaseStageEnum = pgEnum('migrationReleaseStage', migrationReleaseStages);
 export const migrationExecutionModeEnum = pgEnum('migrationExecutionMode', migrationExecutionModes);
 export const migrationRunStatusEnum = pgEnum('migrationRunStatus', migrationRunStatuses);
 export const migrationRunnerTypeEnum = pgEnum('migrationRunnerType', migrationRunnerTypes);
@@ -256,6 +293,10 @@ export const migrationCompatibilityEnum = pgEnum(
 export const migrationApprovalPolicyEnum = pgEnum(
   'migrationApprovalPolicy',
   migrationApprovalPolicies
+);
+export const releaseMigrationPlanStatusEnum = pgEnum(
+  'releaseMigrationPlanStatus',
+  releaseMigrationPlanStatuses
 );
 export const environmentDeploymentStrategyEnum = pgEnum(
   'environmentDeploymentStrategy',

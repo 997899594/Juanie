@@ -11,12 +11,17 @@ import {
   getMigrationPhaseLabel,
   getSchemaSourceLabel,
 } from '@/lib/migrations/presentation';
+import { getMigrationReleaseStageLabel } from '@/lib/migrations/release-graph';
 import { usesPlatformInternalCommand } from '@/lib/migrations/schema-source';
 
 export interface MigrationSpecDetailsValue {
   source?: string | null;
   tool: string;
   phase: string;
+  releaseStage?: string | null;
+  stageOrder?: number | null;
+  targetVersion?: string | null;
+  baselineVersion?: string | null;
   command: string;
   sourceConfigPath?: string | null;
   executionMode?: string | null;
@@ -77,7 +82,14 @@ export function MigrationSpecDetails({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-sm font-medium">{getSchemaSourceLabel(specification.source)}</div>
-        <Badge variant="secondary">{getMigrationPhaseLabel(specification.phase)}</Badge>
+        <Badge variant="secondary">
+          {specification.releaseStage && specification.releaseStage !== 'standard'
+            ? getMigrationReleaseStageLabel(specification.releaseStage)
+            : getMigrationPhaseLabel(specification.phase)}
+        </Badge>
+        {specification.targetVersion ? (
+          <Badge variant="outline">Atlas {specification.targetVersion}</Badge>
+        ) : null}
         <Badge variant="secondary">
           {getMigrationExecutionModeLabel(specification.executionMode)}
         </Badge>

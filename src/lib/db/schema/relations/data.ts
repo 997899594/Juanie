@@ -10,6 +10,7 @@ import {
   migrationRuns,
   migrationSpecifications,
   projects,
+  releaseMigrationPlans,
   releases,
   schemaRepairAtlasRuns,
   schemaRepairPlans,
@@ -97,6 +98,10 @@ export const migrationRunsRelations = relations(migrationRuns, ({ one, many }) =
     fields: [migrationRuns.releaseId],
     references: [releases.id],
   }),
+  releaseMigrationPlan: one(releaseMigrationPlans, {
+    fields: [migrationRuns.releaseMigrationPlanId],
+    references: [releaseMigrationPlans.id],
+  }),
   deployment: one(deployments, {
     fields: [migrationRuns.deploymentId],
     references: [deployments.id],
@@ -106,6 +111,26 @@ export const migrationRunsRelations = relations(migrationRuns, ({ one, many }) =
     references: [users.id],
   }),
   items: many(migrationRunItems),
+}));
+
+export const releaseMigrationPlansRelations = relations(releaseMigrationPlans, ({ one, many }) => ({
+  release: one(releases, {
+    fields: [releaseMigrationPlans.releaseId],
+    references: [releases.id],
+  }),
+  project: one(projects, {
+    fields: [releaseMigrationPlans.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [releaseMigrationPlans.environmentId],
+    references: [environments.id],
+  }),
+  approvedByUser: one(users, {
+    fields: [releaseMigrationPlans.approvedByUserId],
+    references: [users.id],
+  }),
+  runs: many(migrationRuns),
 }));
 
 export const migrationRunItemsRelations = relations(migrationRunItems, ({ one }) => ({

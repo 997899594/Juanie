@@ -2,6 +2,35 @@ import { describe, expect, it } from 'bun:test';
 import { buildInboxPageData } from '@/lib/inbox/service';
 
 describe('inbox service', () => {
+  it('surfaces one release migration plan instead of stage-level approvals', () => {
+    const result = buildInboxPageData({
+      filterState: 'approval',
+      migrationRuns: [],
+      migrationPlans: [
+        {
+          id: 'plan-1',
+          releaseId: 'release-1',
+          projectId: 'project-1',
+          environmentId: 'env-1',
+          sourceCommitSha: 'a'.repeat(40),
+          digest: 'd'.repeat(64),
+          stageCount: 4,
+          projectName: 'demo',
+          environmentName: 'production',
+        },
+      ],
+      schemaDatabases: [],
+    });
+
+    expect(result.migrationPlans.length).toBe(1);
+    expect(result.stats).toEqual([
+      { label: '全部', value: 1 },
+      { label: '迁移待办', value: 1 },
+      { label: '数据库状态', value: 0 },
+      { label: '需要我处理', value: 1 },
+    ]);
+  });
+
   it('surfaces migration attention and schema attention together', () => {
     const result = buildInboxPageData({
       filterState: 'all',

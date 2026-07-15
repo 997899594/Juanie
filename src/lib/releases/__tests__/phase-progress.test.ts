@@ -88,4 +88,38 @@ describe('release phase progress', () => {
       ])
     ).toEqual({ kind: 'blocked', runId: 'run-2', status: 'failed' });
   });
+
+  it('never starts a later release graph stage after an earlier stage fails', () => {
+    expect(
+      resolveMigrationPhaseNextAction([
+        {
+          id: 'verify',
+          status: 'queued',
+          stageOrder: 30,
+          createdAt: baseTime,
+        },
+        {
+          id: 'backfill',
+          status: 'failed',
+          stageOrder: 20,
+          createdAt: new Date(baseTime.getTime() + 1000),
+        },
+      ])
+    ).toEqual({ kind: 'blocked', runId: 'backfill', status: 'failed' });
+  });
+
+  it('executes an approved four-stage graph without per-stage approval states', () => {
+    const stages = ['expand', 'backfill', 'verify', 'contract'].map((id, index) => ({
+      id,
+      status: 'queued' as const,
+      stageOrder: (index + 1) * 10,
+      createdAt: new Date(baseTime.getTime() + index * 1000),
+    }));
+
+    expect(resolveMigrationPhaseNextAction(stages)).toEqual({
+      kind: 'start_run',
+      runId: 'expand',
+    });
+    expect(stages.map((stage) => stage.status)).toEqual(['queued', 'queued', 'queued', 'queued']);
+  });
 });

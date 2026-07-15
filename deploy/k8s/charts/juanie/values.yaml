@@ -18,7 +18,7 @@ images:
   postgres:
     repository: pgvector/pgvector
     pullPolicy: IfNotPresent
-    tag: "pg16"
+    tag: "pg17"
     digest: "sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
   redis:
     repository: redis

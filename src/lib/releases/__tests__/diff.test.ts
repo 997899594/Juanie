@@ -122,4 +122,30 @@ describe('release diff', () => {
     expect(diff.changedMigrations.length).toBe(2);
     expect(diff.changedMigrations.map((item) => item.change).sort()).toEqual(['added', 'removed']);
   });
+
+  it('keeps every release graph stage as a distinct migration change', () => {
+    const stages = ['expand', 'backfill', 'verify', 'contract'];
+    const diff = buildReleaseDiff(
+      {
+        artifacts: [],
+        migrationRuns: stages.map((releaseStage, index) => ({
+          databaseId: 'db-1',
+          serviceId: 'svc-1',
+          specification: {
+            tool: 'atlas',
+            phase: releaseStage === 'contract' ? 'postDeploy' : 'preDeploy',
+            command: 'juanie:platform:atlas:atlas',
+            releaseStage,
+            targetVersion: `20260715000${index + 1}`,
+          },
+          database: { name: 'primary' },
+          service: { name: 'api' },
+        })),
+      },
+      null
+    );
+
+    expect(diff.changedMigrations.length).toBe(4);
+    expect(new Set(diff.changedMigrations.map((item) => item.key)).size).toBe(4);
+  });
 });

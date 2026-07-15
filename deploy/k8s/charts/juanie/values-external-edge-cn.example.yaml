@@ -46,5 +46,5 @@ images:
     pullPolicy: IfNotPresent
   postgres:
     repository: docker.1ms.run/pgvector/pgvector
-    tag: "pg16"
+    tag: "pg17"
     pullPolicy: IfNotPresent

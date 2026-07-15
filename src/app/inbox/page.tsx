@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
+import { ReleaseMigrationPlanActions } from '@/components/projects/ReleaseMigrationPlanActions';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
@@ -39,13 +40,14 @@ export default async function InboxPage({
   });
 
   const teamIds = memberships.map((membership) => membership.teamId);
-  const { stats, attentionRuns, schemaItems } = await getInboxPageData({
+  const { stats, migrationPlans, attentionRuns, schemaItems } = await getInboxPageData({
     teamIds,
     filterState,
     actorUserId: session.user.id,
   });
   const shellClassName = 'console-panel';
-  const isEmpty = attentionRuns.length === 0 && schemaItems.length === 0;
+  const isEmpty =
+    migrationPlans.length === 0 && attentionRuns.length === 0 && schemaItems.length === 0;
 
   return (
     <PageShell size="wide">
@@ -79,6 +81,58 @@ export default async function InboxPage({
         <EmptyState icon={<AlertTriangle className="h-12 w-12" />} title="没有待处理事项" />
       ) : (
         <div className="space-y-5">
+          {migrationPlans.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold text-foreground">发布迁移计划</div>
+                <div className="text-xs text-muted-foreground">整份计划只审批一次</div>
+              </div>
+
+              {migrationPlans.map((plan) => (
+                <div key={plan.id} className={`${shellClassName} px-5 py-4`}>
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusIndicator status="warning" label="待审批" />
+                        <span className="text-sm font-semibold text-foreground">
+                          {plan.projectName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {plan.environmentName}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>{plan.stageCount} 个迁移阶段</span>
+                        <span>commit {plan.sourceCommitSha.slice(0, 12)}</span>
+                        <span className="font-mono">SHA-256 {plan.digest.slice(0, 16)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-stretch gap-2 sm:flex-row">
+                      <ReleaseMigrationPlanActions
+                        projectId={plan.projectId}
+                        releaseId={plan.releaseId}
+                        approvalToken={plan.approvalToken}
+                      />
+                      <Button asChild variant="secondary" size="sm" className="h-9 px-4 text-xs">
+                        <Link
+                          href={buildReleaseDetailPath(
+                            plan.projectId,
+                            plan.environmentId,
+                            plan.releaseId
+                          )}
+                        >
+                          查看内容
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
           {attentionRuns.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center gap-2 px-1">

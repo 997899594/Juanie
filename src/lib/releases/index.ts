@@ -532,6 +532,7 @@ export async function getReleaseById(releaseId: string) {
           items: true,
         },
       },
+      migrationPlan: true,
       events: {
         orderBy: (event, { asc }) => [asc(event.sequence)],
       },

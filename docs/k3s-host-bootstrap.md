@@ -208,7 +208,7 @@ for img in \
   "ghcr.1ms.run/997899594/juanie:runtime-${APP_SHA}" \
   "docker.1ms.run/library/busybox:1.36" \
   "docker.m.daocloud.io/library/redis:7-alpine" \
-  "docker.1ms.run/pgvector/pgvector:pg16"
+  "docker.1ms.run/pgvector/pgvector:pg17"
 do
   echo "== ${img}"
   timeout 180s crictl pull "${img}"

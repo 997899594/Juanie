@@ -6,6 +6,7 @@ import {
 } from '@/lib/migrations/file-preview';
 
 let drizzleExportCount = 0;
+let migrationFetchError: Error | null = null;
 const migrationFilesByPath = new Map<
   string,
   Array<{
@@ -15,8 +16,10 @@ const migrationFilesByPath = new Map<
 >();
 
 mock.module('@/lib/migrations/fetch', () => ({
-  fetchMigrationFilesFromRepoPath: async (_projectId: string, path: string) =>
-    migrationFilesByPath.get(path) ?? [],
+  fetchMigrationFilesFromRepoPath: async (_projectId: string, path: string) => {
+    if (migrationFetchError) throw migrationFetchError;
+    return migrationFilesByPath.get(path) ?? [];
+  },
   listRepositoryDirectoryFromRepoPath: async () => [],
   readRepositoryFileFromRepoPath: async () => null,
 }));
@@ -42,9 +45,32 @@ mock.module('@/lib/migrations/atlas', () => ({
   getAppliedAtlasVersions: async () => [],
   isAtlasDatabaseTarget: (database: { type: string }) =>
     database.type === 'postgresql' || database.type === 'mysql',
+  selectAtlasMigrationsThroughTarget: <T extends { name: string }>(files: T[]) => files,
 }));
 
 describe('migration file preview pending state', () => {
+  it('fails closed when migration contents cannot be read', async () => {
+    migrationFetchError = new Error('repository unavailable');
+    let errorMessage = '';
+    try {
+      await buildMigrationFilePreviewByRunId(
+        [
+          {
+            id: 'run-atlas-read-error',
+            projectId: 'project-1',
+            specification: { tool: 'atlas', migrationPath: 'migrations' },
+          },
+        ],
+        { executionStateMode: 'declared_only', forceRefresh: true, includeFileDetails: true }
+      );
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      migrationFetchError = null;
+    }
+    expect(errorMessage).toContain('repository unavailable');
+  });
+
   it('treats missing previews as unknown', () => {
     expect(resolveMigrationPendingState(null)).toBe('unknown');
   });

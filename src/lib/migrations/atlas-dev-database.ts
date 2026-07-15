@@ -27,8 +27,8 @@ export function getDefaultAtlasDevUrl(
   if (databaseType === 'postgresql') {
     const extensions = getPostgresCapabilityExtensions(capabilities);
     return extensions.includes('vector')
-      ? 'docker://pgvector/pgvector:pg16/dev'
-      : 'docker://postgres/16/dev';
+      ? 'docker://pgvector/pgvector:pg17/dev'
+      : 'docker://postgres/17/dev';
   }
 
   return 'docker://mysql/8/dev';

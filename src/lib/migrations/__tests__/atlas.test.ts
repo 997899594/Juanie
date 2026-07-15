@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildAtlasMigrateApplyArgs,
   getAtlasSchemaDiffExcludePatterns,
   getAtlasSchemaDiffScopeArgs,
   getPostgresSchemaNamesFromDatabaseUrl,
+  selectAtlasMigrationsThroughTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
 import {
@@ -13,8 +15,41 @@ import {
 } from '@/lib/migrations/atlas-dev-database';
 
 describe('atlas migration helpers', () => {
+  it('pins release graph execution to the declared stage target', () => {
+    expect(
+      buildAtlasMigrateApplyArgs({
+        databaseUrl: 'postgres://app:secret@db/app',
+        targetVersion: '2026071403',
+        baselineVersion: '2026071400',
+      })
+    ).toEqual([
+      'migrate',
+      'apply',
+      '--dir',
+      'file://migrations',
+      '--url',
+      'postgres://app:secret@db/app',
+      '--revisions-schema',
+      'public',
+      '--to-version',
+      '2026071403',
+      '--baseline',
+      '2026071400',
+    ]);
+  });
+
+  it('limits release graph previews to migrations at or before the stage target', () => {
+    const files = [
+      { name: '2026071401_expand.sql' },
+      { name: '2026071402_backfill.sql' },
+      { name: '2026071403_verify.sql' },
+      { name: '2026071404_contract.sql' },
+    ];
+
+    expect(selectAtlasMigrationsThroughTarget(files, '2026071402')).toEqual(files.slice(0, 2));
+  });
   it('keeps docker dev urls as the last-resort fallback', () => {
-    expect(getDefaultAtlasDevUrl('postgresql')).toBe('docker://postgres/16/dev');
+    expect(getDefaultAtlasDevUrl('postgresql')).toBe('docker://postgres/17/dev');
     expect(getDefaultAtlasDevUrl('mysql')).toBe('docker://mysql/8/dev');
   });
 

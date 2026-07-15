@@ -1,5 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
+import {
+  createMigrationApprovalToken,
+  createReleaseMigrationPlanApprovalToken,
+} from '@/lib/ai/runtime/approval-token';
 import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
@@ -75,9 +78,10 @@ async function attachReleaseMigrationFilePreviews<
       projectId: release.projectId,
       specification: run.specification
         ? {
-            tool: run.specification.tool,
-            migrationPath: run.specification.migrationPath,
-            sourceConfigPath: run.specification.sourceConfigPath,
+            tool: run.specificationSnapshot.tool,
+            migrationPath: run.specificationSnapshot.migrationPath,
+            sourceConfigPath: run.specificationSnapshot.sourceConfigPath,
+            targetVersion: run.targetVersion,
           }
         : null,
       database: run.database
@@ -116,6 +120,7 @@ async function attachReleaseMigrationFilePreviews<
         ...run,
         specification: {
           ...run.specification,
+          ...run.specificationSnapshot,
           filePreview,
         },
       };
@@ -127,16 +132,28 @@ function attachReleaseApprovalTokens<TRelease extends Awaited<ReturnType<typeof 
   release: TRelease,
   actorUserId?: string | null
 ) {
-  if (!release || !actorUserId) {
+  if (!release) {
     return release;
   }
 
   return {
     ...release,
+    migrationPlanApprovalToken:
+      release.migrationPlan?.status === 'awaiting_approval' && actorUserId
+        ? createReleaseMigrationPlanApprovalToken({
+            teamId: release.project.teamId,
+            projectId: release.projectId,
+            environmentId: release.environmentId,
+            releaseId: release.id,
+            planId: release.migrationPlan.id,
+            digest: release.migrationPlan.digest,
+            actorUserId,
+          })
+        : null,
     migrationRuns: release.migrationRuns.map((run) => ({
       ...run,
       approvalToken:
-        run.status === 'awaiting_approval'
+        run.status === 'awaiting_approval' && !run.releaseMigrationPlanId && actorUserId
           ? createMigrationApprovalToken({
               teamId: release.project.teamId,
               projectId: release.projectId,
@@ -146,6 +163,7 @@ function attachReleaseApprovalTokens<TRelease extends Awaited<ReturnType<typeof 
             })
           : null,
     })),
+    migrationPlan: release.migrationPlan,
   };
 }
 

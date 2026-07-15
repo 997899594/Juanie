@@ -35,6 +35,7 @@ export interface MigrationFilePreviewRunLike {
     tool?: string | null;
     migrationPath?: string | null;
     sourceConfigPath?: string | null;
+    targetVersion?: string | null;
   } | null;
   database?: {
     id?: string | null;

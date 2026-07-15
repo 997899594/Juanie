@@ -251,7 +251,7 @@ function buildLifecycleBlockingReason(issue: ReleaseLifecycleIssue): ReleaseBloc
     case 'approval_blocked':
       return {
         label: '迁移审批阻塞',
-        summary: '这次发布已经进入迁移环节，但存在待审批的迁移步骤，因此不会继续推进部署。',
+        summary: '这次发布已生成完整迁移计划，审批整份计划后才会继续推进部署。',
         nextActionLabel: '先处理迁移审批，再继续发布',
       };
     case 'external_completion_blocked':

@@ -78,6 +78,10 @@ export interface MigrationExecutionPlan {
     source: MigrationSpecificationRecord['source'];
     tool: MigrationSpecificationRecord['tool'];
     phase: MigrationSpecificationRecord['phase'];
+    releaseStage: MigrationSpecificationRecord['releaseStage'];
+    stageOrder: number;
+    targetVersion: string | null;
+    baselineVersion: string | null;
     executionMode: MigrationSpecificationRecord['executionMode'];
     sourceConfigPath: string | null;
     migrationPath: string | null;

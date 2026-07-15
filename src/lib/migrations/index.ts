@@ -22,6 +22,7 @@ import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationPath } from './path';
 import { resolveMigrationSpecifications } from './resolver';
+import { createMigrationSpecificationSnapshot } from './specification-snapshot';
 import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
 export { resolveMigrationSpecifications } from './resolver';
@@ -75,6 +76,7 @@ export async function createMigrationRun(
   spec: ResolvedMigrationSpec,
   input: {
     releaseId?: string | null;
+    releaseMigrationPlanId?: string | null;
     deploymentId?: string | null;
     triggeredBy: 'deploy' | 'manual' | 'api';
     triggeredByUserId?: string | null;
@@ -83,6 +85,7 @@ export async function createMigrationRun(
     initialStatus?: MigrationRunStatus;
     filePreview?: MigrationFilePreviewSnapshot | null;
     dispatch?: boolean;
+    allowApprovalBypass?: boolean;
   }
 ) {
   const lockKey = `${spec.database.id}:${spec.environment.id}`;
@@ -97,11 +100,17 @@ export async function createMigrationRun(
         databaseId: spec.database.id,
         specificationId: spec.specification.id,
         releaseId: input.releaseId ?? null,
+        releaseMigrationPlanId: input.releaseMigrationPlanId ?? null,
         deploymentId: input.deploymentId ?? null,
         triggeredBy: input.triggeredBy,
         triggeredByUserId: input.triggeredByUserId ?? null,
         sourceCommitSha: input.sourceCommitSha ?? null,
         sourceCommitMessage: input.sourceCommitMessage ?? null,
+        releaseStage: spec.specification.releaseStage,
+        stageOrder: spec.specification.stageOrder,
+        targetVersion: spec.specification.targetVersion,
+        baselineVersion: spec.specification.baselineVersion,
+        specificationSnapshot: createMigrationSpecificationSnapshot(spec.specification),
         status: input.initialStatus ?? 'queued',
         runnerType: spec.specification.executionMode === 'external' ? 'external' : 'schema_runner',
         lockKey,
@@ -118,7 +127,10 @@ export async function createMigrationRun(
         aggregateType: 'migration',
         aggregateId: run.id,
         commandId: 'initial',
-        payload: { allowApprovalBypass: false, traceId: run.releaseId ?? run.id },
+        payload: {
+          allowApprovalBypass: input.allowApprovalBypass ?? false,
+          traceId: run.releaseId ?? run.id,
+        },
       });
     }
     return run;
@@ -224,7 +236,10 @@ export async function resolveAndCreateMigrationRuns(
     skipped: 8,
   };
 
-  return runs.sort((left, right) => statusRank[left.status] - statusRank[right.status]);
+  return runs.sort(
+    (left, right) =>
+      left.stageOrder - right.stageOrder || statusRank[left.status] - statusRank[right.status]
+  );
 }
 
 export async function getMigrationRunById(runId: string) {
@@ -369,6 +384,10 @@ export async function buildMigrationExecutionPlan(
       source: spec.specification.source,
       tool: spec.specification.tool,
       phase: spec.specification.phase,
+      releaseStage: spec.specification.releaseStage,
+      stageOrder: spec.specification.stageOrder,
+      targetVersion: spec.specification.targetVersion,
+      baselineVersion: spec.specification.baselineVersion,
       executionMode: spec.specification.executionMode,
       sourceConfigPath: spec.specification.sourceConfigPath ?? null,
       migrationPath,

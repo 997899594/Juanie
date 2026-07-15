@@ -465,7 +465,7 @@ export function GlobalAIPanel() {
 
             setOpen(true);
           }}
-          className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(28,27,24,0.94)] text-[rgba(251,250,247,0.96)] shadow-[0_20px_36px_rgba(15,23,42,0.14)] transition duration-200 hover:scale-[1.02] hover:bg-[rgba(28,27,24,0.88)] lg:bottom-8 lg:right-8"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(28,27,24,0.94)] text-[rgba(251,250,247,0.96)] shadow-[0_20px_36px_rgba(15,23,42,0.14)] transition duration-200 hover:scale-[1.02] hover:bg-[rgba(28,27,24,0.88)] lg:bottom-8 lg:right-8"
           aria-label="打开 AI"
         >
           <Sparkles className="h-5 w-5" />

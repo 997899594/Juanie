@@ -7,7 +7,7 @@ services:
   # PostgreSQL Database
   # ============================================
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg17
     container_name: juanie-postgres
     environment:
       POSTGRES_USER: juanie

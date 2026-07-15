@@ -2,6 +2,20 @@ import { describe, expect, it } from 'bun:test';
 import { classifySchemaLedgerState } from '@/lib/schema-management/classification';
 
 describe('schema ledger classification', () => {
+  it('admits a tracked Atlas baseline for an existing database', () => {
+    const result = classifySchemaLedgerState({
+      kind: 'atlas',
+      expectedEntries: ['2026071400', '2026071401'],
+      actualEntries: [],
+      hasUserTables: true,
+      driftDetected: true,
+      baselineVersion: '2026071400',
+    });
+
+    expect(result.status).toBe('pending_migrations');
+    expect(result.summary).toContain('2026071400');
+  });
+
   it('marks matching ledger as aligned', () => {
     const result = classifySchemaLedgerState({
       kind: 'drizzle',

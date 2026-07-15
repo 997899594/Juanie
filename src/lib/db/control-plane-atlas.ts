@@ -200,7 +200,7 @@ async function withDockerDevDatabase<T>(
     'POSTGRES_PASSWORD=postgres',
     '-e',
     'POSTGRES_DB=dev',
-    'postgres:16-alpine',
+    'postgres:17-alpine',
   ]);
 
   try {

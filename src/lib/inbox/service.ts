@@ -1,4 +1,7 @@
-import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
+import {
+  createMigrationApprovalToken,
+  createReleaseMigrationPlanApprovalToken,
+} from '@/lib/ai/runtime/approval-token';
 import { type ApprovalRunLike, decorateApprovalRuns } from '@/lib/approvals/view';
 import { db } from '@/lib/db';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
@@ -26,7 +29,24 @@ function isSchemaBlocking(status: string): boolean {
 export function buildInboxPageData<
   TRun extends ApprovalRunLike,
   TDatabase extends SchemaAttentionDatabaseLike,
->(input: { migrationRuns: TRun[]; schemaDatabases: TDatabase[]; filterState: InboxFilterState }) {
+>(input: {
+  migrationRuns: TRun[];
+  migrationPlans?: Array<{
+    id: string;
+    releaseId: string;
+    projectId: string;
+    environmentId: string;
+    sourceCommitSha: string;
+    digest: string;
+    stageCount: number;
+    projectName: string;
+    environmentName: string;
+    approvalToken?: string | null;
+  }>;
+  schemaDatabases: TDatabase[];
+  filterState: InboxFilterState;
+}) {
+  const migrationPlans = input.migrationPlans ?? [];
   const unresolvedRuns = input.migrationRuns.filter((run) => !isResolvedBySchemaState(run));
   const migrationAttentionRuns = filterAttentionRuns(unresolvedRuns);
   const migrationStats = getAttentionStats(unresolvedRuns);
@@ -44,8 +64,8 @@ export function buildInboxPageData<
   const filteredSchemaItems =
     input.filterState === 'all' || input.filterState === 'schema' ? schemaItems : [];
   const stats = buildInboxStats({
-    migrationTotal: migrationStats.total,
-    approval: migrationStats.approval,
+    migrationTotal: migrationStats.total + migrationPlans.length,
+    approval: migrationStats.approval + migrationPlans.length,
     external: migrationStats.external,
     failed: migrationStats.failed,
     schema: schemaItems.length,
@@ -54,6 +74,8 @@ export function buildInboxPageData<
 
   return {
     stats,
+    migrationPlans:
+      input.filterState === 'all' || input.filterState === 'approval' ? migrationPlans : [],
     attentionRuns: decorateApprovalRuns(filteredMigrationRuns),
     schemaItems: filteredSchemaItems,
   };
@@ -86,7 +108,7 @@ export async function getInboxPageData(input: {
       : [];
   const projectIds = visibleProjects.map((project) => project.id);
 
-  const [runs, schemaDatabases] =
+  const [runs, schemaDatabases, migrationPlans] =
     projectIds.length > 0
       ? await Promise.all([
           db.query.migrationRuns.findMany({
@@ -123,8 +145,18 @@ export async function getInboxPageData(input: {
               schemaState: true,
             },
           }),
+          db.query.releaseMigrationPlans.findMany({
+            where: (plan, { and, eq, inArray }) =>
+              and(inArray(plan.projectId, projectIds), eq(plan.status, 'awaiting_approval')),
+            orderBy: (plan, { desc }) => [desc(plan.createdAt)],
+            with: {
+              project: true,
+              environment: true,
+              release: true,
+            },
+          }),
         ])
-      : [[], []];
+      : [[], [], []];
 
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
     projects: visibleProjects,
@@ -192,6 +224,28 @@ export async function getInboxPageData(input: {
             }
           : run.specification,
       previewReviewMetadata: previewReviewMetadataById.get(run.id) ?? null,
+    })),
+    migrationPlans: migrationPlans.map((plan) => ({
+      id: plan.id,
+      releaseId: plan.releaseId,
+      projectId: plan.projectId,
+      environmentId: plan.environmentId,
+      sourceCommitSha: plan.sourceCommitSha,
+      digest: plan.digest,
+      stageCount: plan.snapshot.stages.length,
+      projectName: plan.project.name,
+      environmentName: plan.environment.name,
+      approvalToken: input.actorUserId
+        ? createReleaseMigrationPlanApprovalToken({
+            teamId: plan.project.teamId,
+            projectId: plan.projectId,
+            environmentId: plan.environmentId,
+            releaseId: plan.releaseId,
+            planId: plan.id,
+            digest: plan.digest,
+            actorUserId: input.actorUserId,
+          })
+        : null,
     })),
     schemaDatabases,
     filterState: input.filterState,

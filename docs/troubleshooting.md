@@ -141,7 +141,7 @@ helm upgrade --install juanie deploy/k8s/charts/juanie \
 kubectl logs deployment/juanie-web -n juanie --tail=50
 
 # 检查数据库连接
-kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg16 -n juanie -- \
+kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg17 -n juanie -- \
   psql "postgres://postgres:postgres@postgres:5432/juanie" -c 'SELECT 1'
 ```
 
@@ -354,7 +354,7 @@ for img in \
   "ghcr.1ms.run/997899594/juanie:runtime-${APP_SHA}" \
   "docker.1ms.run/library/busybox:1.36" \
   "docker.m.daocloud.io/library/redis:7-alpine" \
-  "docker.1ms.run/pgvector/pgvector:pg16"
+  "docker.1ms.run/pgvector/pgvector:pg17"
 do
   echo "== ${img}"
   timeout 180s crictl pull "${img}"

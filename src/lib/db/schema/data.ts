@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { DatabaseCapability } from '@/lib/databases/capabilities';
 import { deployments, releases } from '@/lib/db/schema/delivery';
+import type { MigrationSpecificationSnapshot } from '@/lib/db/schema/enums';
 import {
   atlasExecutionStatusEnum,
   databasePlanEnum,
@@ -27,9 +28,11 @@ import {
   migrationExecutionModeEnum,
   migrationLockStrategyEnum,
   migrationPhaseEnum,
+  migrationReleaseStageEnum,
   migrationRunnerTypeEnum,
   migrationRunStatusEnum,
   migrationToolEnum,
+  releaseMigrationPlanStatusEnum,
   schemaRepairPlanKindEnum,
   schemaRepairPlanStatusEnum,
   schemaRepairReviewStateEnum,
@@ -37,6 +40,7 @@ import {
 import { users } from '@/lib/db/schema/identity';
 import { environments, projects, services } from '@/lib/db/schema/projects';
 import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview-types';
+import type { ReleaseMigrationPlanSnapshot } from '@/lib/migrations/release-plan-types';
 
 // ============================================
 // Database Tables (Managed Databases)
@@ -116,6 +120,10 @@ export const migrationSpecifications = pgTable(
     tool: migrationToolEnum('tool').notNull(),
     phase: migrationPhaseEnum('phase').notNull().default('preDeploy'),
     executionMode: migrationExecutionModeEnum('executionMode').notNull(),
+    releaseStage: migrationReleaseStageEnum('releaseStage').notNull().default('standard'),
+    stageOrder: integer('stageOrder').notNull().default(0),
+    targetVersion: varchar('targetVersion', { length: 100 }),
+    baselineVersion: varchar('baselineVersion', { length: 100 }),
 
     sourceConfigPath: varchar('sourceConfigPath', { length: 500 }),
     migrationPath: varchar('migrationPath', { length: 500 }),
@@ -134,11 +142,46 @@ export const migrationSpecifications = pgTable(
     serviceIdIdx: index('migrationSpecification_serviceId_idx').on(table.serviceId),
     environmentIdIdx: index('migrationSpecification_environmentId_idx').on(table.environmentId),
     databaseIdIdx: index('migrationSpecification_databaseId_idx').on(table.databaseId),
-    uniqueBinding: unique('migrationSpecification_service_env_db_unique').on(
+    uniqueBindingStage: unique('migrationSpecification_service_env_db_stage_unique').on(
       table.serviceId,
       table.environmentId,
-      table.databaseId
+      table.databaseId,
+      table.releaseStage
     ),
+  })
+);
+
+export const releaseMigrationPlans = pgTable(
+  'releaseMigrationPlan',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    releaseId: uuid('releaseId')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }).notNull(),
+    digest: varchar('digest', { length: 64 }).notNull(),
+    snapshot: jsonb('snapshot').$type<ReleaseMigrationPlanSnapshot>().notNull(),
+    status: releaseMigrationPlanStatusEnum('status').notNull(),
+    requiresApproval: boolean('requiresApproval').notNull(),
+    approvedDigest: varchar('approvedDigest', { length: 64 }),
+    approvedByUserId: uuid('approvedByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approvedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    releaseUnique: unique('releaseMigrationPlan_release_unique').on(table.releaseId),
+    projectIdIdx: index('releaseMigrationPlan_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('releaseMigrationPlan_environmentId_idx').on(table.environmentId),
+    statusIdx: index('releaseMigrationPlan_status_idx').on(table.status),
   })
 );
 
@@ -162,6 +205,10 @@ export const migrationRuns = pgTable(
       .notNull()
       .references(() => migrationSpecifications.id, { onDelete: 'cascade' }),
     releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    releaseMigrationPlanId: uuid('releaseMigrationPlanId').references(
+      () => releaseMigrationPlans.id,
+      { onDelete: 'restrict' }
+    ),
     deploymentId: uuid('deploymentId').references(() => deployments.id, { onDelete: 'set null' }),
 
     triggeredBy: varchar('triggeredBy', { length: 20 }).notNull(),
@@ -170,6 +217,14 @@ export const migrationRuns = pgTable(
     }),
     sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
     sourceCommitMessage: text('sourceCommitMessage'),
+
+    releaseStage: migrationReleaseStageEnum('releaseStage').notNull().default('standard'),
+    stageOrder: integer('stageOrder').notNull().default(0),
+    targetVersion: varchar('targetVersion', { length: 100 }),
+    baselineVersion: varchar('baselineVersion', { length: 100 }),
+    specificationSnapshot: jsonb('specificationSnapshot')
+      .$type<MigrationSpecificationSnapshot>()
+      .notNull(),
 
     status: migrationRunStatusEnum('status').notNull().default('queued'),
     runnerType: migrationRunnerTypeEnum('runnerType').notNull().default('worker'),
@@ -197,6 +252,9 @@ export const migrationRuns = pgTable(
     environmentIdIdx: index('migrationRun_environmentId_idx').on(table.environmentId),
     databaseIdIdx: index('migrationRun_databaseId_idx').on(table.databaseId),
     releaseIdIdx: index('migrationRun_releaseId_idx').on(table.releaseId),
+    releaseMigrationPlanIdIdx: index('migrationRun_releaseMigrationPlanId_idx').on(
+      table.releaseMigrationPlanId
+    ),
     deploymentIdIdx: index('migrationRun_deploymentId_idx').on(table.deploymentId),
     statusIdx: index('migrationRun_status_idx').on(table.status),
   })

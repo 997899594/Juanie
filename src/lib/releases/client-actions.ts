@@ -181,6 +181,22 @@ export interface MigrationRunActionResponse {
   runId: string;
 }
 
+export async function approveReleaseMigrationPlan(input: {
+  projectId: string;
+  releaseId: string;
+  approvalToken: string;
+}): Promise<{ message: string; planId: string }> {
+  const response = await fetch(
+    `/api/projects/${input.projectId}/releases/${input.releaseId}/migration-plan`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', approvalToken: input.approvalToken }),
+    }
+  );
+  return parseJsonResponse(response, '迁移计划审批失败');
+}
+
 export async function fetchManualReleasePlan(input: {
   projectId: string;
   environmentId: string;

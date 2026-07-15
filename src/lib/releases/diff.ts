@@ -21,6 +21,8 @@ interface ReleaseMigrationLike {
         tool?: string;
         phase?: string;
         command?: string;
+        releaseStage?: string | null;
+        targetVersion?: string | null;
       }
     | null
     | undefined;
@@ -97,6 +99,8 @@ function normalizeMigrationKey(run: ReleaseMigrationLike): string | null {
     run.serviceId ?? run.service?.id ?? run.service?.name ?? 'project',
     run.specification.tool,
     run.specification.phase,
+    run.specification.releaseStage ?? 'standard',
+    run.specification.targetVersion ?? 'latest',
     run.specification.command,
   ].join('::');
 }
@@ -106,8 +110,9 @@ function buildMigrationLabel(run: ReleaseMigrationLike): string {
   const serviceName = run.service?.name ?? '项目';
   const tool = run.specification?.tool ?? 'custom';
   const phase = run.specification?.phase ?? 'manual';
+  const releaseStage = run.specification?.releaseStage;
 
-  return `${databaseName} · ${serviceName} · ${tool} · ${phase}`;
+  return `${databaseName} · ${serviceName} · ${tool} · ${releaseStage && releaseStage !== 'standard' ? releaseStage : phase}`;
 }
 
 export function buildReleaseDiff(
