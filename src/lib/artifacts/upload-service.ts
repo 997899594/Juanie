@@ -103,6 +103,8 @@ export async function createManagedArtifactUpload(input: {
 
   assertReleaseAcceptsDeliveryArtifacts(release);
   await verifyRepositoryAccess(input.repository, input.authHeader, {
+    projectId: release.projectId,
+    repositoryId: release.project.repository?.id,
     ref: release.sourceRef,
     sha: release.sourceCommitSha,
     externalRunId: release.externalRunId,
@@ -132,6 +134,8 @@ export async function appendReleaseDeliveryArtifacts(input: {
 
   assertReleaseAcceptsDeliveryArtifacts(release);
   await verifyRepositoryAccess(input.repository, input.authHeader, {
+    projectId: release.projectId,
+    repositoryId: release.project.repository?.id,
     ref: release.sourceRef,
     sha: release.sourceCommitSha,
     externalRunId: release.externalRunId,

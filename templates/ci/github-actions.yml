@@ -1,8 +1,8 @@
-name: Juanie CI
+name: Juanie
 
 on:
   push:
-    branches: [main, master]
+    branches: [{{PRODUCTION_BRANCH}}]
   workflow_dispatch:
     inputs:
       juanie_source_sha:
@@ -10,189 +10,27 @@ on:
         required: false
         type: string
       juanie_release_ref:
-        description: Logical release ref to send back to Juanie
+        description: Logical release ref
         required: false
         type: string
       juanie_force_full_build:
-        description: Reserved for preview bootstrap compatibility
+        description: Build the complete declared graph
         required: false
-        type: string
+        default: false
+        type: boolean
 
-env:
-  IMAGE_REGISTRY: ghcr.io
-  JUANIE_REPOSITORY: ${{ github.repository }}
-  JUANIE_PROVIDER: github
-  JUANIE_EXTERNAL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-  JUANIE_SOURCE_SHA: ${{ inputs.juanie_source_sha || github.sha }}
-  JUANIE_RELEASE_REF: ${{ inputs.juanie_release_ref || github.ref }}
+permissions:
+  contents: read
 
 jobs:
-  quality-gate:
-    name: Lint & Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.JUANIE_SOURCE_SHA }}
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - run: bun install --frozen-lockfile
-      - run: bun run lint
-      - run: bun run typecheck
-
-  plan:
-    needs: quality-gate
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      build_run_id: ${{ steps.plan.outputs.build_run_id }}
-      groups: ${{ steps.plan.outputs.groups }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.JUANIE_SOURCE_SHA }}
-
-      - name: Start Juanie Build Run
-        id: plan
-        env:
-          JUANIE_IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-        run: |
-          set -euo pipefail
-
-          bash .juanie/build-run.sh start
-
-          echo "build_run_id=$(cat .juanie/build-run/build-run-id)" >> "$GITHUB_OUTPUT"
-          {
-            echo 'groups<<JUANIE_BUILD_GROUPS'
-            cat .juanie/build-run/groups.json
-            echo 'JUANIE_BUILD_GROUPS'
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload Juanie Build Plan
-        uses: actions/upload-artifact@v4
-        with:
-          name: juanie-build-run-${{ steps.plan.outputs.build_run_id }}
-          path: .juanie/build-run
-          if-no-files-found: error
-          retention-days: 1
-
-  build:
-    needs: plan
-    if: ${{ needs.plan.outputs.groups != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        group: ${{ fromJson(needs.plan.outputs.groups) }}
-    runs-on: ubuntu-latest
+  delivery:
     permissions:
       contents: read
       id-token: write
       packages: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.JUANIE_SOURCE_SHA }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
-          path: .juanie/build-run
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Group
-        env:
-          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
-          JUANIE_BUILD_GROUP_JSON: ${{ toJson(matrix.group) }}
-          JUANIE_DOCKER_CACHE_BACKEND: gha
-        run: bash .juanie/build-run.sh build-group
-
-  release:
-    needs:
-      - plan
-      - build
-    if: ${{ always() && needs.plan.outputs.build_run_id != '' && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      packages: read
-    outputs:
-      release_id: ${{ steps.release.outputs.release_id }}
-      artifacts_ready: ${{ steps.release.outputs.artifacts_ready }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.JUANIE_SOURCE_SHA }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
-          path: .juanie/build-run
-
-      - name: Finalize Juanie Build Run
-        id: release
-        env:
-          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
-        run: |
-          set -euo pipefail
-
-          bash .juanie/build-run.sh finalize
-
-          echo "release_id=$(cat .juanie/build-run/release-id)" >> "$GITHUB_OUTPUT"
-          echo "artifacts_ready=$(cat .juanie/build-run/artifacts-ready)" >> "$GITHUB_OUTPUT"
-
-      - name: Extract and Register Delivery Artifacts
-        id: delivery
-        if: ${{ steps.release.outputs.artifacts_ready == 'true' }}
-        env:
-          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
-          JUANIE_DELIVERY_STORAGE_MODE: github_actions
-        run: |
-          set -euo pipefail
-          export JUANIE_BUILD_OUTPUTS_JSON="$(cat .juanie/build-run/build-outputs.json)"
-          bash .juanie/delivery-artifacts.sh
-
-      - name: Upload Delivery Artifacts
-        id: upload-delivery
-        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: juanie-delivery-${{ steps.release.outputs.release_id }}
-          path: ${{ steps.delivery.outputs.upload_dir }}
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Register GitHub Delivery Artifacts
-        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
-        env:
-          JUANIE_RELEASE_ID: ${{ steps.release.outputs.release_id }}
-          JUANIE_ARTIFACT_URL: ${{ steps.upload-delivery.outputs.artifact-url }}
-          JUANIE_DELIVERY_MANIFEST: ${{ steps.delivery.outputs.manifest }}
-        run: |
-          set -euo pipefail
-
-          register_payload="$(
-            jq -cn \
-              --arg repository "$JUANIE_REPOSITORY" \
-              --arg artifactUrl "$JUANIE_ARTIFACT_URL" \
-              --slurpfile manifest "$JUANIE_DELIVERY_MANIFEST" \
-              '{
-                repository: $repository,
-                artifacts: ($manifest[0] | map(. + { uri: $artifactUrl } | del(.path)))
-              }'
-          )"
-
-          source .juanie/workload-identity.sh
-          juanie_api_json POST "/api/releases/${JUANIE_RELEASE_ID}/artifacts" "$register_payload"
+    uses: {{JUANIE_GITHUB_REPOSITORY}}/.github/workflows/application-delivery.yml@{{JUANIE_GITHUB_REVISION}}
+    with:
+      juanie_base_url: {{JUANIE_BASE_URL}}
+      source_sha: ${{ inputs.juanie_source_sha || github.sha }}
+      release_ref: ${{ inputs.juanie_release_ref || github.ref }}
+      force_full_build: ${{ inputs.juanie_force_full_build }}

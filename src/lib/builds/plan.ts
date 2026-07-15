@@ -1,4 +1,14 @@
-import type { BuildTargetConfig, JuanieConfig, ServiceConfig } from '@/lib/config/parser';
+import {
+  type ManagedPackageManager,
+  renderManagedBuildTargetDockerfile,
+  renderManagedServiceDockerfile,
+} from '@/lib/builds/managed-dockerfile';
+import type {
+  BuildTargetConfig,
+  DeliverableConfig,
+  JuanieConfig,
+  ServiceConfig,
+} from '@/lib/config/parser';
 import {
   createTurborepoWorkspaceGraph,
   getTurborepoAppDir,
@@ -6,7 +16,13 @@ import {
 } from '@/lib/monorepo';
 
 export type BuildArtifactKind = 'image' | 'package' | 'static' | 'function';
-export type BuildStrategy = 'dockerfile' | 'bake' | 'buildpacks' | 'custom' | 'external';
+export type BuildStrategy =
+  | 'managed'
+  | 'dockerfile'
+  | 'bake'
+  | 'buildpacks'
+  | 'custom'
+  | 'external';
 export type BuildGroupMode = 'bake_group' | 'service_matrix' | 'affected_matrix' | 'external';
 
 export interface BuildArtifactOutput {
@@ -26,6 +42,7 @@ export interface BuildUnit {
   dockerfile: string | null;
   bakeTarget: string | null;
   bakeDefinition: string | null;
+  generatedDockerfile: string | null;
   secrets: string[];
   workspace?: {
     type: 'turborepo';
@@ -49,13 +66,37 @@ export interface BuildPlan {
     repository: string;
     ref: string;
     sha: string;
+    configPath: 'juanie.yaml';
+    configDigest: string;
   };
   units: BuildUnit[];
   groups: BuildGroup[];
+  deliverables: PlannedDeliverable[];
   release: {
     mode: 'aggregate';
     requiredUnits: string[];
   };
+}
+
+export interface BuildChangeSet {
+  changedFiles: string[];
+  affectedPackages?: string[];
+  forceFullBuild?: boolean;
+}
+
+export interface PlannedDeliverable {
+  name: string;
+  type: DeliverableConfig['type'];
+  appDir: string;
+  packageName?: string;
+  sourceTarget: string;
+  variant: DeliverableConfig['variants'][number];
+}
+
+interface SelectedBuildScope {
+  services: ServiceConfig[];
+  targets: BuildTargetConfig[];
+  deliverables: PlannedDeliverable[];
 }
 
 function normalizeBuildStrategy(
@@ -65,7 +106,12 @@ function normalizeBuildStrategy(
       : never
     : never
 ): BuildStrategy {
-  if (strategy === 'bake' || strategy === 'dockerfile' || strategy === 'buildpacks') {
+  if (
+    strategy === 'managed' ||
+    strategy === 'bake' ||
+    strategy === 'dockerfile' ||
+    strategy === 'buildpacks'
+  ) {
     return strategy;
   }
 
@@ -125,6 +171,7 @@ function buildUnit(input: {
   sha: string;
   multiImage: boolean;
   workspace?: BuildUnit['workspace'];
+  packageManager: ManagedPackageManager;
 }): BuildUnit {
   const strategy = normalizeBuildStrategy(input.service.build?.strategy ?? 'auto');
   const serviceName = input.service.name;
@@ -138,6 +185,18 @@ function buildUnit(input: {
     dockerfile: getDockerfile(input.service, strategy),
     bakeTarget: getBakeTarget(input.service),
     bakeDefinition: getBuildDefinition(input.service),
+    generatedDockerfile:
+      strategy === 'managed'
+        ? renderManagedServiceDockerfile({
+            packageManager: input.packageManager,
+            appDir: input.service.monorepo?.appDir ?? '.',
+            buildCommand: input.service.build?.command ?? `${input.packageManager} run build`,
+            startCommand: input.service.run.command,
+            port: input.service.run.port ?? 3000,
+            runtimeLanguage: input.service.runtime?.language,
+            secretNames: input.service.build?.secrets ?? [],
+          })
+        : null,
     secrets: input.service.build?.secrets ?? [],
     ...(input.workspace ? { workspace: input.workspace } : {}),
     outputs: [
@@ -161,6 +220,7 @@ function buildTargetUnit(input: {
   imageRepository: string;
   sha: string;
   multiImage: boolean;
+  packageManager: ManagedPackageManager;
 }): BuildUnit {
   const strategy = normalizeBuildStrategy(input.target.build.strategy ?? 'dockerfile');
   const targetName = input.target.name;
@@ -174,6 +234,15 @@ function buildTargetUnit(input: {
     dockerfile: input.target.build.dockerfile?.trim() || null,
     bakeTarget: input.target.build.target?.trim() || null,
     bakeDefinition: input.target.build.definition?.trim() || null,
+    generatedDockerfile:
+      strategy === 'managed'
+        ? renderManagedBuildTargetDockerfile({
+            packageManager: input.packageManager,
+            buildCommand: input.target.build.command ?? `${input.packageManager} run build`,
+            outputPath: input.target.output.path,
+            secretNames: input.target.build.secrets ?? [],
+          })
+        : null,
     secrets: input.target.build.secrets ?? [],
     workspace: {
       type: 'turborepo',
@@ -247,54 +316,123 @@ function buildGroups(units: BuildUnit[], monorepo: boolean): BuildGroup[] {
   return groups;
 }
 
+function isInsideAppDir(file: string, appDir: string): boolean {
+  const normalized = appDir.replace(/^\.\//u, '').replace(/\/$/u, '');
+  if (!normalized || normalized === '.') return true;
+  return file === normalized || file.startsWith(`${normalized}/`);
+}
+
+function matchesInput(file: string, pattern: string): boolean {
+  if (pattern.endsWith('/**')) return file.startsWith(pattern.slice(0, -2));
+  if (pattern.endsWith('/*')) {
+    const prefix = pattern.slice(0, -1);
+    return file.startsWith(prefix) && !file.slice(prefix.length).includes('/');
+  }
+  if (pattern.endsWith('/')) return file.startsWith(pattern);
+  return file === pattern;
+}
+
+function flattenDeliverables(config: Pick<JuanieConfig, 'buildTargets' | 'deliverables'>) {
+  const targetByName = new Map((config.buildTargets ?? []).map((target) => [target.name, target]));
+
+  return (config.deliverables ?? []).flatMap((deliverable) => {
+    const target = targetByName.get(deliverable.source.target);
+    return deliverable.variants.map((variant) => ({
+      name: deliverable.name,
+      type: deliverable.type,
+      appDir: target?.monorepo.appDir ?? deliverable.monorepo?.appDir ?? '.',
+      ...(target?.monorepo.packageName ? { packageName: target.monorepo.packageName } : {}),
+      sourceTarget: deliverable.source.target,
+      variant,
+    }));
+  });
+}
+
+export function selectBuildScope(
+  config: Pick<JuanieConfig, 'services' | 'monorepo' | 'buildTargets' | 'deliverables'>,
+  changes?: BuildChangeSet
+): SelectedBuildScope {
+  const services = config.services;
+  const targets = config.buildTargets ?? [];
+  const deliverables = flattenDeliverables(config);
+  const affected = config.monorepo?.affected ?? {
+    strategy: 'turbo' as const,
+    task: 'build',
+    useTaskInputs: false,
+    global: [],
+    inputs: [],
+  };
+
+  if (!config.monorepo || !changes || changes.forceFullBuild || affected.strategy === 'all') {
+    return { services, targets, deliverables };
+  }
+
+  const allAppDirs = [
+    ...services.map((service) => service.monorepo?.appDir ?? '.'),
+    ...targets.map((target) => target.monorepo.appDir),
+  ];
+  const isWorkloadFile = (file: string) => allAppDirs.some((dir) => isInsideAppDir(file, dir));
+  const isGlobalChange = changes.changedFiles.some(
+    (file) =>
+      file === 'juanie.yaml' ||
+      file.startsWith('.github/') ||
+      file === '.gitlab-ci.yml' ||
+      affected.global.some((pattern) => matchesInput(file, pattern)) ||
+      (affected.inputs.some((pattern) => matchesInput(file, pattern)) && !isWorkloadFile(file))
+  );
+
+  if (isGlobalChange) {
+    return { services, targets, deliverables };
+  }
+
+  const affectedPackages = new Set(changes.affectedPackages ?? []);
+  const usePackageGraph = affected.strategy === 'turbo' && changes.affectedPackages !== undefined;
+  const selectedServices = services.filter((service) =>
+    usePackageGraph
+      ? affectedPackages.has(service.monorepo?.packageName ?? service.name)
+      : changes.changedFiles.some((file) => isInsideAppDir(file, service.monorepo?.appDir ?? '.'))
+  );
+  const selectedTargets = targets.filter((target) =>
+    usePackageGraph
+      ? affectedPackages.has(target.monorepo.packageName ?? target.name)
+      : changes.changedFiles.some((file) => isInsideAppDir(file, target.monorepo.appDir))
+  );
+  const targetNames = new Set(selectedTargets.map((target) => target.name));
+  const selectedDeliverables = deliverables.filter(
+    (deliverable) =>
+      targetNames.has(deliverable.sourceTarget) ||
+      changes.changedFiles.some((file) => isInsideAppDir(file, deliverable.appDir))
+  );
+
+  return {
+    services: selectedServices,
+    targets: selectedTargets,
+    deliverables: selectedDeliverables,
+  };
+}
+
 export function createBuildPlan(input: {
-  config: Pick<JuanieConfig, 'services' | 'monorepo' | 'buildTargets'>;
+  config: Pick<JuanieConfig, 'services' | 'monorepo' | 'buildTargets' | 'deliverables'>;
   repository: string;
   ref: string;
   sha: string;
+  configPath: 'juanie.yaml';
+  configDigest: string;
   registry?: string;
-  selectedServices?: string[];
-  selectedTargets?: string[];
+  changes?: BuildChangeSet;
 }): BuildPlan {
   const registry = input.registry ?? 'ghcr.io';
   const imageRepository = `${registry.replace(/\/$/, '')}/${input.repository}`;
   const allServices = input.config.services;
   const allTargets = input.config.buildTargets ?? [];
-  const selectedServiceNames = new Set(input.selectedServices ?? []);
-  const knownServiceNames = new Set(allServices.map((service) => service.name));
-  const unknownServiceNames = [...selectedServiceNames].filter(
-    (name) => !knownServiceNames.has(name)
-  );
-
-  if (unknownServiceNames.length > 0) {
-    throw new Error(`Build plan references unknown services: ${unknownServiceNames.join(', ')}`);
-  }
-
-  const services =
-    input.selectedServices === undefined
-      ? allServices
-      : allServices.filter((service) => selectedServiceNames.has(service.name));
-
-  const selectedTargetNames = new Set(input.selectedTargets ?? []);
-  const knownTargetNames = new Set(allTargets.map((target) => target.name));
-  const unknownTargetNames = [...selectedTargetNames].filter((name) => !knownTargetNames.has(name));
-  if (unknownTargetNames.length > 0) {
-    throw new Error(`Build plan references unknown targets: ${unknownTargetNames.join(', ')}`);
-  }
-  const targets =
-    input.selectedTargets === undefined
-      ? allTargets
-      : allTargets.filter((target) => selectedTargetNames.has(target.name));
-
-  if (services.length === 0 && targets.length === 0) {
-    throw new Error('Build plan has no selected services or targets');
-  }
+  const { services, targets, deliverables } = selectBuildScope(input.config, input.changes);
 
   const targetNames = allServices
     .map((service) => service.build?.target?.trim())
     .filter((value): value is string => Boolean(value));
   const multiImage = new Set(targetNames).size > 1 || allServices.length + allTargets.length > 1;
   const workspaceGraph = createTurborepoWorkspaceGraph(input.config);
+  const packageManager = input.config.monorepo?.packageManager ?? 'npm';
   const workspaceByService = new Map(
     workspaceGraph?.services.map((service) => [service.serviceName, service]) ?? []
   );
@@ -304,6 +442,7 @@ export function createBuildPlan(input: {
       imageRepository,
       sha: input.sha,
       multiImage,
+      packageManager,
       workspace: workspaceGraph
         ? {
             type: 'turborepo',
@@ -316,7 +455,7 @@ export function createBuildPlan(input: {
     })
   );
   const targetUnits = targets.map((target) =>
-    buildTargetUnit({ target, imageRepository, sha: input.sha, multiImage })
+    buildTargetUnit({ target, imageRepository, sha: input.sha, multiImage, packageManager })
   );
   const units = [...serviceUnits, ...targetUnits];
 
@@ -325,9 +464,12 @@ export function createBuildPlan(input: {
       repository: input.repository,
       ref: input.ref,
       sha: input.sha,
+      configPath: input.configPath,
+      configDigest: input.configDigest,
     },
     units,
     groups: buildGroups(units, Boolean(input.config.monorepo)),
+    deliverables,
     release: {
       mode: 'aggregate',
       requiredUnits: units.map((unit) => unit.id),

@@ -9,7 +9,7 @@ import {
 import { detectMonorepoType, type MonorepoType } from './detect';
 
 type ServiceType = 'web' | 'worker' | 'cron';
-type BuildStrategy = 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
+type BuildStrategy = 'auto' | 'managed' | 'dockerfile' | 'bake' | 'buildpacks';
 
 type PackageJsonShape = DeliveryGraphPackage & {
   packageManager?: string;
@@ -529,13 +529,11 @@ export async function inspectRepositoryTopology(
 
   const [
     managedConfigContent,
-    managedConfigAltContent,
     dockerBakeHclContent,
     dockerBakeJsonContent,
     rootPackageJsonContent,
   ] = await Promise.all([
     safeGetFileContent(reader, repoFullName, 'juanie.yaml', ref),
-    safeGetFileContent(reader, repoFullName, 'juanie.yml', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.hcl', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.json', ref),
     safeGetFileContent(reader, repoFullName, 'package.json', ref),
@@ -549,10 +547,8 @@ export async function inspectRepositoryTopology(
   const dockerBakeContent = dockerBakeHclContent ?? dockerBakeJsonContent;
   const bakeTargets = dockerBakeContent ? parseDockerBakeTargets(dockerBakeContent) : [];
   const rootPackageJson = parsePackageJson(rootPackageJsonContent);
-  const managedConfigContentResolved = managedConfigContent ?? managedConfigAltContent;
-
-  if (managedConfigContentResolved) {
-    const parsedConfig = parseJuanieConfig(managedConfigContentResolved);
+  if (managedConfigContent) {
+    const parsedConfig = parseJuanieConfig(managedConfigContent);
     if (parsedConfig.isValid && parsedConfig.services.length > 0) {
       const serviceList = parsedConfig.services.map(toTopologyServiceFromConfig);
       return {
@@ -567,7 +563,7 @@ export async function inspectRepositoryTopology(
         configMonorepo: parsedConfig.monorepo,
         configBuildTargets: parsedConfig.buildTargets,
         configDeliverables: parsedConfig.deliverables,
-        managedConfigContent: managedConfigContentResolved,
+        managedConfigContent,
         source: 'juanie_config',
       };
     }

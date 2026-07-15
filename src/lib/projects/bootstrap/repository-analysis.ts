@@ -110,7 +110,7 @@ export type ProjectConfigServiceEntry = {
     nodeVersion?: string;
   };
   build?: {
-    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
+    strategy?: 'auto' | 'managed' | 'dockerfile' | 'bake' | 'buildpacks';
     command?: string;
     dockerfile?: string;
     context?: string;

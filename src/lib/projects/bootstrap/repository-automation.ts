@@ -1,14 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse, stringify } from 'yaml';
+import { getCiRuntimeDescriptor, getGitLabCiComponentIntegritySync } from '@/lib/ci/runtime-assets';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
-import type { DeliveryGraphWorkload } from '@/lib/delivery-graph/model';
-import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
-import {
-  renderManagedBuildTargetDockerfile,
-  renderManagedRuntimeDockerfile,
-} from '@/lib/projects/bootstrap/delivery-build';
 import {
   getProjectBuildTargetsConfig,
   getProjectDeliverablesConfig,
@@ -18,7 +14,6 @@ import {
   inferDatabaseCapabilities,
   inferSchemaConfig,
   type MonorepoAffectedRules,
-  type MonorepoCiAffectedRules,
   type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigServiceEntry,
@@ -46,57 +41,7 @@ export {
   resolvePackageScriptCommand,
 } from '@/lib/projects/bootstrap/repository-analysis';
 
-export const JUANIE_BUILD_RUN_SCRIPT_PATH = '.juanie/build-run.sh';
-export const JUANIE_DELIVERY_SCRIPT_PATH = '.juanie/delivery-artifacts.sh';
-export const JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH = '.juanie/workload-identity.sh';
-export const JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH = '.juanie/affected-workspace.mjs';
-export const JUANIE_MANAGED_DOC_PATH = 'JUANIE.md';
-
 const TEMPLATES_DIR = join(process.cwd(), 'templates');
-
-function readRequiredTemplate(...segments: string[]): string {
-  const templatePath = join(TEMPLATES_DIR, ...segments);
-  if (!existsSync(templatePath)) {
-    throw new Error(`Required template file not found at ${templatePath}`);
-  }
-  return readFileSync(templatePath, 'utf-8');
-}
-
-export function renderManagedWorkloadDockerfile(input: {
-  workload: DeliveryGraphWorkload;
-  packageManager: RepoAutomationContextLike['packageManager'];
-  secretNames: string[];
-}): string {
-  const template = readRequiredTemplate(
-    'runtime',
-    input.workload.runtimeKind === 'static' ? 'static-web.Dockerfile' : 'bun-workload.Dockerfile'
-  );
-  return renderManagedRuntimeDockerfile({
-    template,
-    packageManager: input.packageManager,
-    appDir: input.workload.appDir,
-    buildCommand: input.workload.buildCommand ?? `${input.packageManager} run build`,
-    startCommand: input.workload.startCommand,
-    port: input.workload.port ?? 3000,
-    secretNames: input.secretNames,
-  });
-}
-
-export function renderManagedArtifactTargetDockerfile(input: {
-  packageManager: RepoAutomationContextLike['packageManager'];
-  buildCommand: string;
-  outputPath: string;
-  secretNames: string[];
-}): string {
-  return renderManagedBuildTargetDockerfile({
-    template: readRequiredTemplate('runtime', 'build-target.Dockerfile'),
-    ...input,
-  });
-}
-
-export function renderStaticNginxConfig(): string {
-  return readRequiredTemplate('runtime', 'static-nginx.conf');
-}
 
 function resolveBakeTarget(
   service: typeof services.$inferSelect,
@@ -331,7 +276,6 @@ const defaultMonorepoGlobalInputs = [
   'bun.lockb',
   'turbo.json',
   'juanie.yaml',
-  'juanie.yml',
   'docker-bake.hcl',
   'docker-bake.json',
 ] as const;
@@ -727,411 +671,71 @@ export function renderGitHubCI(
   const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions.yml');
 
   if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    // Replace template variables
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
-    return content;
+    const runtime = getCiRuntimeDescriptor();
+    return readFileSync(templatePath, 'utf-8')
+      .replaceAll('{{PRODUCTION_BRANCH}}', getProjectProductionBranch(project))
+      .replaceAll('{{JUANIE_BASE_URL}}', runtime.baseUrl)
+      .replaceAll('{{JUANIE_GITHUB_REPOSITORY}}', runtime.githubRepository)
+      .replaceAll('{{JUANIE_GITHUB_REVISION}}', runtime.githubRevision);
   }
 
   // Fallback: should not normally be reached in production (template file is bundled in Docker image)
   throw new Error(
     `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderDeliveryArtifactsScript(): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'delivery-artifacts.sh');
-
-  if (existsSync(templatePath)) {
-    return readFileSync(templatePath, 'utf-8');
-  }
-
-  throw new Error(
-    `Delivery artifact script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderBuildRunScript(): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'build-run.sh');
-
-  if (existsSync(templatePath)) {
-    return readFileSync(templatePath, 'utf-8');
-  }
-
-  throw new Error(
-    `Build run script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderWorkloadIdentityScript(): string {
-  return readRequiredTemplate('ci', 'workload-identity.sh');
-}
-
-export function renderAffectedWorkspaceScript(): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'affected-workspace.mjs');
-
-  if (existsSync(templatePath)) {
-    return readFileSync(templatePath, 'utf-8');
-  }
-
-  throw new Error(
-    `Affected workspace script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
   );
 }
 
 export function renderGitLabCI(
-  project: typeof projects.$inferSelect & {
+  _project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
-  _context: ProjectInitRenderContext
+  _context: ProjectInitRenderContext,
+  existingContent?: string | null
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci.yml');
 
   if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
-    return content;
+    const runtime = getCiRuntimeDescriptor();
+    const componentUrl = `${runtime.baseUrl}/api/ci/components/gitlab/${runtime.version}`;
+    const rendered = readFileSync(templatePath, 'utf-8')
+      .replaceAll('{{JUANIE_GITLAB_COMPONENT_URL}}', componentUrl)
+      .replaceAll('{{JUANIE_GITLAB_COMPONENT_INTEGRITY}}', getGitLabCiComponentIntegritySync())
+      .replaceAll('{{JUANIE_BASE_URL}}', runtime.baseUrl);
+
+    if (!existingContent?.trim()) return rendered;
+
+    const existing = parse(existingContent) as Record<string, unknown> | null;
+    if (!existing || Array.isArray(existing) || typeof existing !== 'object') {
+      throw new Error('Existing .gitlab-ci.yml must contain a YAML mapping');
+    }
+    const managed = (parse(rendered) as { include: unknown[] }).include[0];
+    const currentIncludes = Array.isArray(existing.include)
+      ? existing.include
+      : existing.include
+        ? [existing.include]
+        : [];
+    const unrelatedIncludes = currentIncludes.filter(
+      (entry) =>
+        !(
+          entry &&
+          typeof entry === 'object' &&
+          'remote' in entry &&
+          typeof entry.remote === 'string' &&
+          entry.remote.includes('/api/ci/components/gitlab/')
+        )
+    );
+
+    return stringify(
+      {
+        ...existing,
+        include: [...unrelatedIncludes, managed],
+      },
+      { lineWidth: 0 }
+    );
   }
 
   // Fallback: should not normally be reached in production (template file is bundled in Docker image)
   throw new Error(
     `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-interface MonorepoCiServiceEntry {
-  name: string;
-  type: 'web' | 'worker' | 'cron';
-  appDir: string;
-  packageName: string;
-  build: {
-    strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
-    command?: string;
-    dockerfile?: string;
-    context?: string;
-    target?: string;
-    definition?: string;
-  };
-}
-
-interface MonorepoCiDeliverableEntry {
-  name: string;
-  type: 'package' | 'baremetal' | 'archive';
-  appDir: string;
-  packageName?: string;
-  sourceTarget: string;
-  variant: {
-    name: string;
-    platform?: string;
-    extract: {
-      from: string;
-      to?: string;
-    };
-    package: {
-      format: 'tgz' | 'zip' | 'tar.gz' | 'directory';
-      platform?: string;
-    };
-    checks: Array<{
-      command: string;
-    }>;
-  };
-}
-
-export function buildMonorepoCiServices(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  serviceList: Array<typeof services.$inferSelect>
-): MonorepoCiServiceEntry[] {
-  const serviceConfigMap = getProjectServiceConfigMap(project);
-
-  return serviceList.map((service) => {
-    const serviceConfig = serviceConfigMap[service.name];
-    const appDir = serviceConfig?.monorepo?.appDir ?? '.';
-    const build = serviceConfig?.build;
-    const normalizedAppDir = appDir.replace(/\/$/, '');
-    const dockerfile =
-      build?.dockerfile ?? service.dockerfile?.trim() ?? `${normalizedAppDir}/Dockerfile`;
-
-    return {
-      name: service.name,
-      type: service.type,
-      appDir,
-      packageName: serviceConfig?.monorepo?.packageName ?? service.name,
-      build: {
-        strategy:
-          build?.strategy ??
-          (build?.definition || build?.target ? 'bake' : dockerfile ? 'dockerfile' : 'auto'),
-        command: build?.command ?? service.buildCommand ?? 'npm run build',
-        dockerfile,
-        context: build?.context ?? service.dockerContext ?? '.',
-        target: build?.target ?? (build?.strategy === 'bake' ? service.name : undefined),
-        definition: build?.definition,
-      },
-    };
-  });
-}
-
-export function buildMonorepoCiDeliverables(
-  project: Pick<typeof projects.$inferSelect, 'configJson'>
-): MonorepoCiDeliverableEntry[] {
-  const targetByName = new Map(
-    getProjectBuildTargetsConfig(project).map((target) => [target.name, target])
-  );
-  return getProjectDeliverablesConfig(project).flatMap((deliverable) => {
-    const sourceTarget = deliverable.source.target;
-    const target = targetByName.get(sourceTarget);
-    return deliverable.variants.map((variant) => ({
-      name: deliverable.name,
-      type: deliverable.type,
-      appDir: target?.monorepo.appDir ?? deliverable.monorepo?.appDir ?? '.',
-      packageName: target?.monorepo.packageName,
-      sourceTarget,
-      variant: {
-        name: variant.name,
-        platform: variant.platform ?? variant.package.platform,
-        extract: {
-          from: variant.extract.from,
-          to: variant.extract.to ?? '.',
-        },
-        package: {
-          format: variant.package.format,
-          platform: variant.package.platform ?? variant.platform,
-        },
-        checks: variant.checks ?? [],
-      },
-    }));
-  });
-}
-
-export function selectMonorepoCiWork(input: {
-  services: MonorepoCiServiceEntry[];
-  deliverables: MonorepoCiDeliverableEntry[];
-  changedFiles: string[];
-  shouldBuildAll: boolean;
-}): { services: MonorepoCiServiceEntry[]; deliverables: MonorepoCiDeliverableEntry[] } {
-  const selectedDeliverables = input.shouldBuildAll
-    ? input.deliverables
-    : input.deliverables.filter((deliverable) =>
-        input.changedFiles.some(
-          (file) => file === deliverable.appDir || file.startsWith(`${deliverable.appDir}/`)
-        )
-      );
-  const selectedServices = input.shouldBuildAll
-    ? input.services
-    : input.services.filter((service) =>
-        input.changedFiles.some(
-          (file) => file === service.appDir || file.startsWith(`${service.appDir}/`)
-        )
-      );
-  return {
-    services: selectedServices,
-    deliverables: selectedDeliverables,
-  };
-}
-
-export function encodeMonorepoCiServices(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  serviceList: Array<typeof services.$inferSelect>
-): string {
-  return Buffer.from(
-    JSON.stringify(buildMonorepoCiServices(project, serviceList)),
-    'utf8'
-  ).toString('base64');
-}
-
-export function encodeMonorepoCiDeliverables(
-  project: Pick<typeof projects.$inferSelect, 'configJson'>
-): string {
-  return Buffer.from(JSON.stringify(buildMonorepoCiDeliverables(project)), 'utf8').toString(
-    'base64'
-  );
-}
-
-export function encodeMonorepoAffectedRules(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  }
-): string {
-  const configured = getProjectMonorepoConfig(project)?.affected;
-  const rules: MonorepoCiAffectedRules = {
-    strategy: configured?.strategy ?? 'turbo',
-    task: configured?.task ?? 'build',
-    useTaskInputs: configured?.useTaskInputs ?? false,
-    packageManager: getProjectMonorepoConfig(project)?.packageManager,
-    global: uniqueStrings([...(configured?.global ?? []), ...defaultMonorepoGlobalInputs]),
-    inputs: uniqueStrings(configured?.inputs ?? []),
-  };
-
-  return Buffer.from(JSON.stringify(rules), 'utf8').toString('base64');
-}
-
-export function renderGitHubCIMonorepo(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  serviceList: Array<typeof services.$inferSelect>
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions-monorepo.yml');
-  const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
-  const deliverableMatrix = encodeMonorepoCiDeliverables(project);
-  const affectedRules = encodeMonorepoAffectedRules(project);
-
-  if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix)
-      .replace(/\{\{JUANIE_DELIVERABLE_MATRIX_B64\}\}/g, deliverableMatrix)
-      .replace(/\{\{JUANIE_AFFECTED_RULES_B64\}\}/g, affectedRules);
-    return content;
-  }
-
-  throw new Error(
-    `Monorepo CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderGitLabCIMonorepo(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  serviceList: Array<typeof services.$inferSelect>
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci-monorepo.yml');
-  const serviceMatrix = encodeMonorepoCiServices(project, serviceList);
-  const deliverableMatrix = encodeMonorepoCiDeliverables(project);
-  const affectedRules = encodeMonorepoAffectedRules(project);
-
-  if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{JUANIE_SERVICE_MATRIX_B64\}\}/g, serviceMatrix)
-      .replace(/\{\{JUANIE_DELIVERABLE_MATRIX_B64\}\}/g, deliverableMatrix)
-      .replace(/\{\{JUANIE_AFFECTED_RULES_B64\}\}/g, affectedRules);
-    return content;
-  }
-
-  throw new Error(
-    `Monorepo CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderEnvTemplate(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  databaseList: Array<typeof databases.$inferSelect>
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'env', '.env.juanie.example');
-
-  if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
-    return content;
-  }
-
-  const ns = buildProjectNamespaceBase(project.slug);
-  const lines: string[] = [
-    `# ===========================================`,
-    `# Juanie 环境变量模板`,
-    `# ===========================================`,
-    `# 复制此文件为 .env 并填入实际值`,
-    `# 真实值可在 Juanie 控制台 → 项目 → 环境变量 中查看`,
-    ``,
-    `PROJECT_NAME=${project.name}`,
-    `PROJECT_SLUG=${project.slug}`,
-  ];
-
-  for (const db_ of databaseList) {
-    const host =
-      db_.provisionType === 'standalone'
-        ? `${buildProjectScopedK8sName(project.slug, db_.name)}.${ns}.svc.cluster.local`
-        : `<host>`;
-
-    switch (db_.type) {
-      case 'postgresql':
-        lines.push(
-          ``,
-          `# --- PostgreSQL (${db_.name}) ---`,
-          `DATABASE_URL=postgresql://postgres:<password>@${host}:5432/${db_.name}`,
-          `POSTGRES_HOST=${host}`,
-          `POSTGRES_PORT=5432`,
-          `POSTGRES_USER=postgres`,
-          `POSTGRES_PASSWORD=<在 Juanie 控制台查看>`,
-          `POSTGRES_DB=${db_.name}`
-        );
-        break;
-      case 'redis':
-        lines.push(
-          ``,
-          `# --- Redis (${db_.name}) ---`,
-          `REDIS_URL=redis://:<password>@${host}:6379`,
-          `REDIS_HOST=${host}`,
-          `REDIS_PORT=6379`,
-          `REDIS_PASSWORD=<在 Juanie 控制台查看>`
-        );
-        break;
-      case 'mysql':
-        lines.push(
-          ``,
-          `# --- MySQL (${db_.name}) ---`,
-          `MYSQL_URL=mysql://root:<password>@${host}:3306/${db_.name}`,
-          `MYSQL_HOST=${host}`,
-          `MYSQL_PORT=3306`,
-          `MYSQL_USER=root`,
-          `MYSQL_PASSWORD=<在 Juanie 控制台查看>`,
-          `MYSQL_DATABASE=${db_.name}`
-        );
-        break;
-      case 'mongodb':
-        lines.push(
-          ``,
-          `# --- MongoDB (${db_.name}) ---`,
-          `MONGODB_URL=mongodb://root:<password>@${host}:27017/${db_.name}`,
-          `MONGODB_HOST=${host}`,
-          `MONGODB_PORT=27017`,
-          `MONGODB_USER=root`,
-          `MONGODB_PASSWORD=<在 Juanie 控制台查看>`,
-          `MONGODB_DATABASE=${db_.name}`
-        );
-        break;
-    }
-  }
-
-  return `${lines.join('\n')}\n`;
-}
-
-export function renderJuanieManagedDoc(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  provider: 'github' | 'gitlab' | 'gitlab-self-hosted'
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'docs', 'JUANIE.md');
-  const ciFile = provider === 'github' ? '.github/workflows/juanie-ci.yml' : '.gitlab-ci.yml';
-
-  if (existsSync(templatePath)) {
-    let content = readFileSync(templatePath, 'utf-8');
-    content = content
-      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{CI_FILE\}\}/g, ciFile);
-    return content;
-  }
-
-  throw new Error(
-    `Juanie managed doc template file not found at ${templatePath}. Ensure templates are bundled correctly.`
   );
 }

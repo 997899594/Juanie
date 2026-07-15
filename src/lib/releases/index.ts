@@ -40,6 +40,8 @@ export interface ReleaseServiceInput {
 }
 
 export interface CreateRepositoryReleaseInput {
+  projectId: string;
+  repositoryId: string;
   repository: string;
   ref: string;
   sha?: string | null;
@@ -350,7 +352,10 @@ async function persistRelease(
 
 export async function createRepositoryRelease(input: CreateRepositoryReleaseInput) {
   const repo = await db.query.repositories.findFirst({
-    where: eq(repositories.fullName, input.repository),
+    where: and(
+      eq(repositories.id, input.repositoryId),
+      eq(repositories.fullName, input.repository)
+    ),
   });
 
   if (!repo) {
@@ -358,7 +363,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
   }
 
   const project = await db.query.projects.findFirst({
-    where: eq(projects.repositoryId, repo.id),
+    where: and(eq(projects.id, input.projectId), eq(projects.repositoryId, repo.id)),
     with: {
       deliveryRules: true,
       environments: true,

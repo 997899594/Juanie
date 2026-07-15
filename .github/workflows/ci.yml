@@ -47,16 +47,23 @@ jobs:
       - run: bun run build
       - name: Validate Production Helm Contract
         run: |
+          ci_runtime_args=(
+            --set-string env.JUANIE_SOURCE_REPOSITORY="${GITHUB_REPOSITORY}"
+            --set-string env.JUANIE_SOURCE_REVISION="${GITHUB_SHA}"
+          )
           helm lint deploy/k8s/charts/juanie \
-            -f deploy/k8s/charts/juanie/values-prod.yaml
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            "${ci_runtime_args[@]}"
           rendered="$(helm template juanie deploy/k8s/charts/juanie \
-            -f deploy/k8s/charts/juanie/values-prod.yaml)"
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            "${ci_runtime_args[@]}")"
           test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
           test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
           ! grep -q 'control-plane-contract' <<<"$rendered"
           schema_release="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
             --show-only templates/schema-sync-job.yaml \
+            "${ci_runtime_args[@]}" \
             --set schemaSync.enabled=true)"
           test "$(grep -c '^kind: Job$' <<<"$schema_release")" -eq 1
           grep -q 'control-plane-expand' <<<"$schema_release"
@@ -64,6 +71,7 @@ jobs:
           grep -q 'schema-runner-sha-f12feba' <<<"$schema_release"
           disaster_recovery="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
+            "${ci_runtime_args[@]}" \
             --set production.requireDisasterRecovery=true \
             --set backup.postgresql.enabled=true \
             --set backup.restateSnapshot.enabled=true \
@@ -72,6 +80,7 @@ jobs:
           test "$(grep -c '^kind: CronJob$' <<<"$disaster_recovery")" -ge 2
           external="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
+            "${ci_runtime_args[@]}" \
             --set production.durabilityMode=external \
             --set postgres.enabled=false \
             --set restate.embeddedEnabled=false \
@@ -85,6 +94,7 @@ jobs:
           external_restate="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
             --show-only templates/restate.yaml \
+            "${ci_runtime_args[@]}" \
             --set production.durabilityMode=external \
             --set postgres.enabled=false \
             --set restate.embeddedEnabled=false \
@@ -360,6 +370,7 @@ jobs:
         env:
           DEPLOY_CHART_DIR: ${{ env.DEPLOY_CHART_DIR }}
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
           WEB_IMAGE_TAG: ${{ env.WEB_IMAGE_TAG }}
@@ -369,7 +380,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DEPLOY_CHART_DIR,GITHUB_SHA,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG
+          envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG
           script_stop: true
           script: |
             set -euo pipefail
@@ -389,6 +400,8 @@ jobs:
               --set-string images.runtime.tag="${RUNTIME_IMAGE_TAG}" \
               --set-string images.schemaRunner.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
               --set-string images.schemaRunner.tag="${SCHEMA_RUNNER_IMAGE_TAG}" \
+              --set-string env.JUANIE_SOURCE_REPOSITORY="${GITHUB_REPOSITORY}" \
+              --set-string env.JUANIE_SOURCE_REVISION="${GITHUB_SHA}" \
               --set schemaSync.enabled=true \
               --wait \
               --wait-for-jobs \

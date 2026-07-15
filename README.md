@@ -9,7 +9,8 @@ Juanie 是一个面向项目交付、预览环境、受控放量和数据库 Sch
 ## 主能力
 
 - 多团队与团队级 Git 集成绑定
-- 创建/导入项目并注入 Juanie 管理的 CI 与 `juanie.yaml`
+- 创建/导入项目，以 `juanie.yaml` 作为唯一用户声明，并注入极薄的 Provider CI 入口
+- GitHub reusable workflow / GitLab CI Component 调用版本化 Juanie CI runtime
 - preview / staging / production 环境主线
 - 基于 Argo CD ApplicationSet 的预览环境脚手架
 - 基于 GitHub Actions + Helm 的平台自身发布
@@ -154,7 +155,7 @@ atlas.hcl                   # Atlas project config
 - `GET /api/projects/[id]` - Get project details
 - `POST /api/projects/[id]/deployments` - Trigger deployment
 - `GET /api/events/deployments` - SSE for deployment updates
-- `POST /api/releases` - Create a release
+- `POST /api/build-runs` - Create an OIDC-authenticated aggregate build from commit-scoped config
 - `GET /api/projects/[id]/resources` - Get K8s resources
 - `GET /api/projects/[id]/resources/logs` - Get pod logs
 

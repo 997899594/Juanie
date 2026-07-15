@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { parse, stringify } from 'yaml';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects, repositories } from '@/lib/db/schema';
@@ -15,22 +16,9 @@ import {
   publishProjectRealtimeSnapshot,
 } from '@/lib/realtime/projects';
 
-const JUANIE_BASE_REPOSITORY_FILES = [
-  'juanie.yaml',
-  '.juanie/build-run.sh',
-  '.juanie/delivery-artifacts.sh',
-  '.juanie/workload-identity.sh',
-  '.juanie/affected-workspace.mjs',
-  '.env.juanie.example',
-  'JUANIE.md',
-] as const;
 const JUANIE_GITHUB_WORKFLOW_PATH = '.github/workflows/juanie-ci.yml';
 const JUANIE_GITLAB_CI_PATH = '.gitlab-ci.yml';
-const JUANIE_GITLAB_CI_MARKERS = [
-  'https://juanie.art/api/build-runs',
-  '.juanie/build-run.sh',
-  'JUANIE_SOURCE_SHA',
-] as const;
+const JUANIE_GITLAB_COMPONENT_PATH = '/api/ci/components/gitlab/';
 const projectDeleteLogger = logger.child({ component: 'project-delete' });
 
 export type ProjectDeleteRecord = Pick<
@@ -53,7 +41,35 @@ export function isJuanieManagedGitLabCi(content: string | null | undefined): boo
     return false;
   }
 
-  return JUANIE_GITLAB_CI_MARKERS.some((marker) => content.includes(marker));
+  return content.includes(JUANIE_GITLAB_COMPONENT_PATH);
+}
+
+export function removeJuanieGitLabComponent(content: string): string | null {
+  const document = parse(content) as Record<string, unknown> | null;
+  if (!document || Array.isArray(document) || typeof document !== 'object') {
+    throw new Error('Existing .gitlab-ci.yml must contain a YAML mapping');
+  }
+
+  const includes = Array.isArray(document.include)
+    ? document.include
+    : document.include
+      ? [document.include]
+      : [];
+  const remainingIncludes = includes.filter(
+    (entry) =>
+      !(
+        entry &&
+        typeof entry === 'object' &&
+        'remote' in entry &&
+        typeof entry.remote === 'string' &&
+        entry.remote.includes(JUANIE_GITLAB_COMPONENT_PATH)
+      )
+  );
+
+  if (remainingIncludes.length === includes.length) return content;
+  if (remainingIncludes.length > 0) document.include = remainingIncludes;
+  else delete document.include;
+  return Object.keys(document).length === 0 ? null : stringify(document, { lineWidth: 0 });
 }
 
 export function buildJuanieRepositoryCleanupPaths({
@@ -63,18 +79,15 @@ export function buildJuanieRepositoryCleanupPaths({
   provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
   gitlabCiContent?: string | null;
 }): string[] {
-  const paths: string[] = [...JUANIE_BASE_REPOSITORY_FILES];
-
   if (provider === 'github') {
-    paths.push(JUANIE_GITHUB_WORKFLOW_PATH);
-    return paths;
+    return [JUANIE_GITHUB_WORKFLOW_PATH];
   }
 
-  if (isJuanieManagedGitLabCi(gitlabCiContent)) {
-    paths.push(JUANIE_GITLAB_CI_PATH);
+  if (gitlabCiContent && removeJuanieGitLabComponent(gitlabCiContent) === null) {
+    return [JUANIE_GITLAB_CI_PATH];
   }
 
-  return paths;
+  return [];
 }
 
 export function shouldDeleteProjectPreviewApplicationSet(
@@ -135,6 +148,18 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
       provider: session.provider,
       gitlabCiContent,
     });
+
+    if (gitlabCiContent) {
+      const updatedGitLabCi = removeJuanieGitLabComponent(gitlabCiContent);
+      if (updatedGitLabCi && updatedGitLabCi !== gitlabCiContent) {
+        await gateway.pushFiles(session, {
+          repoFullName: repository.fullName,
+          branch,
+          files: { [JUANIE_GITLAB_CI_PATH]: updatedGitLabCi },
+          message: 'Remove Juanie CI component [skip ci]',
+        });
+      }
+    }
 
     if (paths.length === 0) {
       return;

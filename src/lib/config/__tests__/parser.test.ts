@@ -330,8 +330,7 @@ buildTargets:
       appDir: apps/dualx-server
       packageName: "@acme/dualx-server"
     build:
-      strategy: dockerfile
-      dockerfile: .juanie/build-targets/dualx-server.Dockerfile
+      strategy: managed
     output:
       path: apps/dualx-server/dist
 deliverables:

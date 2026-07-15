@@ -1,6 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import type { DatabaseConfig, ParsedConfig } from '@/lib/config/parser';
-import { parseJuanieConfig } from '@/lib/config/parser';
+import type { DatabaseConfig, JuanieConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
@@ -12,19 +11,14 @@ import {
 } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, services } from '@/lib/db/schema';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
-import { logger } from '@/lib/logger';
 import { requireProjectRepositoryContext } from '@/lib/projects/context';
 import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
+import { loadRepositoryJuanieConfig } from '@/lib/projects/repository-config';
 
 interface RuntimeContractSyncInput {
   projectId: string;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
-  strict?: boolean;
 }
 
 interface RuntimeDatabaseInfrastructureSnapshot {
@@ -38,8 +32,6 @@ interface RuntimeDatabaseInfrastructureChange {
   databaseName: string;
   message: string;
 }
-
-const runtimeContractLogger = logger.child({ component: 'runtime-contract' });
 
 export class RuntimeDatabaseContractSyncBlockedError extends Error {
   constructor(readonly changes: RuntimeDatabaseInfrastructureChange[]) {
@@ -92,7 +84,7 @@ export function getUnsafeRuntimeDatabaseInfrastructureChange(
 }
 
 async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promise<{
-  parsed: ParsedConfig;
+  config: JuanieConfig;
   currentServices: Awaited<ReturnType<typeof db.query.services.findMany>>;
   currentDatabases: Awaited<ReturnType<typeof db.query.databases.findMany>>;
 }> {
@@ -113,52 +105,15 @@ async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promi
     repositoryMissing: 'Project has no repository',
   });
 
-  let session: Awaited<ReturnType<typeof getTeamIntegrationSession>>;
-  try {
-    session = await getTeamIntegrationSession({
-      teamId: project.teamId,
-      requiredCapabilities: ['read_repo'],
-    });
-  } catch (error) {
-    runtimeContractLogger.warn('Could not load integration session for runtime contract sync', {
-      projectId: input.projectId,
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-
-  const configRef =
-    input.sourceCommitSha || input.sourceRef || getRepositoryDefaultBranch(repository);
-  let configContent: string | null = null;
-
-  for (const configPath of ['juanie.yaml', 'juanie.yml']) {
-    try {
-      const content = await gateway.getFileContent(
-        session,
-        repository.fullName,
-        configPath,
-        configRef
-      );
-      if (content) {
-        configContent = content;
-        break;
-      }
-    } catch (_error) {
-      // Ignore missing config files and keep the last persisted contract.
-    }
-  }
-
-  if (!configContent) {
-    throw new Error('Config not found');
-  }
-
-  const parsed = parseJuanieConfig(configContent);
-  if (!parsed.isValid) {
-    throw new Error(`Invalid juanie.yaml: ${parsed.errors.join('; ')}`);
-  }
+  const revision = await loadRepositoryJuanieConfig({
+    teamId: project.teamId,
+    repository: repository.fullName,
+    sourceCommitSha: input.sourceCommitSha,
+    sourceRef: input.sourceRef ?? getRepositoryDefaultBranch(repository),
+  });
 
   return {
-    parsed,
+    config: revision.config,
     currentServices,
     currentDatabases,
   };
@@ -173,22 +128,9 @@ function buildDatabaseContractKey(input: {
 }
 
 export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeContractSyncInput) {
-  let loaded: Awaited<ReturnType<typeof loadProjectConfigFromRepo>> | null = null;
+  const { config, currentServices } = await loadProjectConfigFromRepo(input);
 
-  try {
-    loaded = await loadProjectConfigFromRepo(input);
-  } catch (error) {
-    if (input.strict) {
-      throw error;
-    }
-    return db.query.services.findMany({
-      where: eq(services.projectId, input.projectId),
-    });
-  }
-
-  const { parsed, currentServices } = loaded;
-
-  const configServices = new Map(parsed.services.map((service) => [service.name, service]));
+  const configServices = new Map(config.services.map((service) => [service.name, service]));
   const byId = new Map(currentServices.map((service) => [service.id, service]));
   const currentServiceNames = new Set(currentServices.map((service) => service.name));
 
@@ -237,7 +179,7 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeC
     byId.set(serviceRecord.id, updated);
   }
 
-  for (const serviceConfig of parsed.services) {
+  for (const serviceConfig of config.services) {
     if (currentServiceNames.has(serviceConfig.name)) {
       continue;
     }
@@ -286,21 +228,8 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeC
 }
 
 export async function syncProjectDatabaseRuntimeContractsFromRepo(input: RuntimeContractSyncInput) {
-  let loaded: Awaited<ReturnType<typeof loadProjectConfigFromRepo>> | null = null;
-
-  try {
-    loaded = await loadProjectConfigFromRepo(input);
-  } catch (error) {
-    if (input.strict) {
-      throw error;
-    }
-    return db.query.databases.findMany({
-      where: and(eq(databases.projectId, input.projectId), isNull(databases.sourceDatabaseId)),
-    });
-  }
-
-  const { parsed, currentServices, currentDatabases } = loaded;
-  const configDatabases = parsed.databases ?? [];
+  const { config, currentServices, currentDatabases } = await loadProjectConfigFromRepo(input);
+  const configDatabases = config.databases ?? [];
   if (configDatabases.length === 0 || currentDatabases.length === 0) {
     return currentDatabases;
   }
@@ -308,7 +237,6 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
   const serviceById = new Map(currentServices.map((service) => [service.id, service]));
   const serviceByName = new Map(currentServices.map((service) => [service.name, service]));
   const configByKey = new Map<string, DatabaseConfig>();
-  const configByName = new Map<string, DatabaseConfig[]>();
 
   for (const config of configDatabases) {
     const scope = config.scope ?? (config.service ? 'service' : 'project');
@@ -318,7 +246,6 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
       serviceName: config.service ?? null,
     });
     configByKey.set(key, config);
-    configByName.set(config.name, [...(configByName.get(config.name) ?? []), config]);
   }
 
   const byId = new Map(currentDatabases.map((database) => [database.id, database]));
@@ -334,9 +261,7 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
         serviceName: currentServiceName,
       })
     );
-    const fallbackCandidates = configByName.get(databaseRecord.name) ?? [];
-    const config =
-      exact ?? (fallbackCandidates.length === 1 ? (fallbackCandidates[0] ?? null) : null);
+    const config = exact ?? null;
 
     if (!config) {
       continue;
@@ -347,16 +272,7 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
       config
     );
     if (unsafeInfrastructureChange) {
-      if (input.strict) {
-        throw new RuntimeDatabaseContractSyncBlockedError([unsafeInfrastructureChange]);
-      }
-
-      runtimeContractLogger.warn('Skipping unsafe database infrastructure change', {
-        projectId: input.projectId,
-        databaseName: databaseRecord.name,
-        reason: unsafeInfrastructureChange.message,
-      });
-      continue;
+      throw new RuntimeDatabaseContractSyncBlockedError([unsafeInfrastructureChange]);
     }
 
     const nextScope = config.scope ?? (config.service ? 'service' : 'project');

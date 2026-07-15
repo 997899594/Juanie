@@ -214,7 +214,6 @@ async function getMigrationDatabaseContext(input: {
   if (input.syncRuntimeContracts) {
     await syncProjectDatabaseRuntimeContractsFromRepo({
       projectId: input.projectId,
-      strict: true,
     });
   }
 

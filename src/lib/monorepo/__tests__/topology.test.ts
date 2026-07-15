@@ -37,6 +37,28 @@ describe('repository topology inspection', () => {
     expect(topology.services[0]?.build?.target).toBe('worker');
   });
 
+  it('never probes the legacy juanie.yml path', async () => {
+    const requestedPaths: string[] = [];
+    await inspectRepositoryTopology(
+      {
+        async listRootFiles() {
+          return ['juanie.yml', 'package.json'];
+        },
+        async getFileContent(_repo, path) {
+          requestedPaths.push(path);
+          return path === 'package.json' ? '{}' : null;
+        },
+        async listDirectory() {
+          return [];
+        },
+      },
+      'acme/demo',
+      'main'
+    );
+
+    expect(requestedPaths).not.toContain('juanie.yml');
+  });
+
   it('keeps managed monorepo affected rules and runtime artifact metadata', async () => {
     const topology = await inspectRepositoryTopology(
       {
@@ -76,8 +98,7 @@ buildTargets:
       appDir: apps/dualx-server
       packageName: "@acme/dualx-server"
     build:
-      strategy: dockerfile
-      dockerfile: .juanie/build-targets/dualx-server.Dockerfile
+      strategy: managed
     output:
       path: apps/dualx-server/dist
 deliverables:

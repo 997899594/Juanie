@@ -127,9 +127,23 @@ Both remain disabled until production supplies the real bucket and `VolumeSnapsh
 closed when either enabled mode is missing its storage configuration. The restore runbook and drill
 criteria live in `docs/troubleshooting.md`.
 
-Internal manual releases use `POST /api/projects/:id/releases`. External repository CI uses
-`POST /api/releases`. Deployment routes only read or operate concrete deployment records; removed
-trigger and lookup compatibility endpoints must not be restored.
+Internal manual releases use `POST /api/projects/:id/releases`. External repository CI exchanges
+provider OIDC at `/api/auth/ci/exchange`, then creates an aggregate build through
+`POST /api/build-runs`. The control plane reads and validates `juanie.yaml` from the OIDC-bound
+commit SHA before deriving the build plan; it never falls back to `project.configJson`.
+
+Child repositories own only `juanie.yaml`. GitHub keeps a thin caller pinned to the deployed Juanie
+source revision, while GitLab keeps an integrity-pinned CI Component include. Build scripts,
+affected-workspace detection and generated Dockerfiles are versioned Juanie runtime assets and are
+materialized only in the CI runner's temporary state. GitHub OIDC must carry the exact pinned
+Juanie reusable workflow in `job_workflow_ref`. GitLab OIDC must bind `.gitlab-ci.yml` to the source
+commit through `ci_config_sha`; before token exchange, Juanie reads that exact file and verifies the
+Component URL, integrity and control-plane origin structurally. The exchanged five-minute token
+binds provider, Juanie project ID, repository ID, source commit and pipeline run, so downstream
+services never select a project from an ambiguous repository name. These paths are protocol-v1
+constants and have no deployment configuration switches. Deployment routes only read or operate
+concrete deployment records; removed trigger and lookup compatibility endpoints must not be
+restored.
 
 ## Verification
 

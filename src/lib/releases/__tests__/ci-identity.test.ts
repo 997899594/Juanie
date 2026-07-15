@@ -18,6 +18,7 @@ const identity: CiWorkloadIdentity = {
   runAttempt: '3',
   externalRunId: '42-3',
   workflowRef: 'acme/api/.github/workflows/juanie-ci.yml@refs/heads/main',
+  workflowSha: '1111111111111111111111111111111111111111',
   eventName: 'push',
 };
 
@@ -28,6 +29,9 @@ describe('Juanie CI workload token', () => {
     process.env.ENCRYPTION_MASTER_KEY = '1'.repeat(64);
     clearMasterKeyCache();
     const scope = {
+      projectId: '11111111-1111-4111-8111-111111111111',
+      repositoryId: '22222222-2222-4222-8222-222222222222',
+      provider: identity.provider,
       repository: identity.repository,
       ref: identity.ref,
       sha: identity.sha!,
@@ -38,7 +42,11 @@ describe('Juanie CI workload token', () => {
 
       expect(result.expiresIn).toBe(300);
       expect(isJuanieCiToken(result.token)).toBe(true);
-      await verifyJuanieCiToken(result.token, scope);
+      expect(await verifyJuanieCiToken(result.token, scope)).toEqual({
+        projectId: scope.projectId,
+        repositoryId: scope.repositoryId,
+        provider: scope.provider,
+      });
       let mismatch: unknown;
       try {
         await verifyJuanieCiToken(result.token, { ...scope, externalRunId: '42-4' });
@@ -47,6 +55,15 @@ describe('Juanie CI workload token', () => {
       }
       expect(mismatch instanceof Error).toBe(true);
       expect((mismatch as Error).message).toContain('scope mismatch');
+
+      let providerMismatch: unknown;
+      try {
+        await issueJuanieCiToken(identity, { ...scope, provider: 'gitlab' });
+      } catch (error) {
+        providerMismatch = error;
+      }
+      expect(providerMismatch instanceof Error).toBe(true);
+      expect((providerMismatch as Error).message).toContain('provider');
     } finally {
       if (originalMasterKey === undefined) delete process.env.ENCRYPTION_MASTER_KEY;
       else process.env.ENCRYPTION_MASTER_KEY = originalMasterKey;

@@ -6,7 +6,7 @@ juanie_base_url="${JUANIE_BASE_URL:-https://juanie.art}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=workload-identity.sh
 source "${script_dir}/workload-identity.sh"
-state_dir="${JUANIE_BUILD_STATE_DIR:-.juanie/build-run}"
+state_dir="${JUANIE_BUILD_STATE_DIR:?JUANIE_BUILD_STATE_DIR is required}"
 build_run_file="${state_dir}/build-run.json"
 units_file="${state_dir}/units.json"
 groups_file="${state_dir}/groups.json"
@@ -14,6 +14,7 @@ release_services_file="${state_dir}/release-services.json"
 build_outputs_file="${state_dir}/build-outputs.json"
 release_file="${state_dir}/release.json"
 artifacts_ready_file="${state_dir}/artifacts-ready"
+deliverables_file="${state_dir}/deliverables.json"
 
 require_env() {
   local name="$1"
@@ -157,8 +158,15 @@ build_unit() {
       --set "$target.args.GIT_SHA=${JUANIE_SOURCE_SHA}" \
       "${bake_cache_args[@]}" \
       --push || return 1
-  elif [ "$strategy" = 'dockerfile' ]; then
-    [ -n "$dockerfile" ] || dockerfile='Dockerfile'
+  elif [ "$strategy" = 'dockerfile' ] || [ "$strategy" = 'managed' ]; then
+    if [ "$strategy" = 'managed' ]; then
+      local generated_dockerfile_dir="${state_dir}/generated"
+      mkdir -p "$generated_dockerfile_dir"
+      dockerfile="${generated_dockerfile_dir}/${unit_key}.Dockerfile"
+      jq -er '.generatedDockerfile' <<<"$unit" > "$dockerfile"
+    else
+      [ -n "$dockerfile" ] || dockerfile='Dockerfile'
+    fi
     local docker_cache_args=()
     local docker_secret_args=()
     append_docker_secret_args "$unit" docker_secret_args
@@ -315,8 +323,8 @@ start_build_run() {
 
   mkdir -p "$state_dir"
 
-  local selected_services_json="${JUANIE_SELECTED_SERVICES_JSON:-}"
-  local selected_targets_json="${JUANIE_SELECTED_TARGETS_JSON:-}"
+  local changed_files_json="${JUANIE_CHANGED_FILES_JSON:-}"
+  local affected_packages_json="${JUANIE_AFFECTED_PACKAGES_JSON:-}"
   local payload
   payload="$(
     jq -cn \
@@ -326,8 +334,9 @@ start_build_run() {
       --arg registry "$JUANIE_IMAGE_REGISTRY" \
       --arg provider "$JUANIE_PROVIDER" \
       --arg externalRunId "${JUANIE_EXTERNAL_RUN_ID:-}" \
-      --arg servicesJson "$selected_services_json" \
-      --arg targetsJson "$selected_targets_json" \
+      --arg changedFilesJson "$changed_files_json" \
+      --arg affectedPackagesJson "$affected_packages_json" \
+      --argjson forceFullBuild "${JUANIE_FORCE_FULL_BUILD:-false}" \
       '{
         repository: $repository,
         sha: $sha,
@@ -336,8 +345,9 @@ start_build_run() {
         provider: $provider,
         externalRunId: (if $externalRunId == "" then null else $externalRunId end)
       }
-      + (if $servicesJson == "" then {} else {services: ($servicesJson | fromjson)} end)
-      + (if $targetsJson == "" then {} else {targets: ($targetsJson | fromjson)} end)'
+      + (if $changedFilesJson == "" then {} else {changedFiles: ($changedFilesJson | fromjson)} end)
+      + (if $affectedPackagesJson == "" then {} else {affectedPackages: ($affectedPackagesJson | fromjson)} end)
+      + {forceFullBuild: $forceFullBuild}'
   )"
 
   local response
@@ -346,6 +356,7 @@ start_build_run() {
 
   jq -c '.plan.units' "$build_run_file" > "$units_file"
   jq -c '.plan.groups' "$build_run_file" > "$groups_file"
+  jq -c '.plan.deliverables' "$build_run_file" > "$deliverables_file"
   jq -c '[.plan.units[].outputs[] | select(.kind == "image") | {name: .service, image}]' "$build_run_file" \
     > "$release_services_file"
   jq -c '[.plan.units[].outputs[] | {name, kind, service, target, image}]' "$build_run_file" \

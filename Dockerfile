@@ -15,18 +15,6 @@ RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
   && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
   && rm -rf /var/lib/apt/lists/*
 
-FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS node-runtime-os
-ARG SECURITY_REFRESH=manual
-RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
-  && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
-  && rm -rf /var/lib/apt/lists/* \
-    /usr/local/lib/node_modules/npm \
-    /usr/local/bin/corepack \
-    /usr/local/bin/npm \
-    /usr/local/bin/npx
-
 # ============================================
 # Stage 3: Dependencies
 # ============================================
@@ -145,8 +133,8 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 # ============================================
 # Stage 8: Web Runner
 # ============================================
-# Web 保持 Next standalone 的 Node server 语义；Bun 作为构建、测试、worker 与 schema-runner 基线。
-FROM node-runtime-os AS web
+# Next standalone only requires a compatible JavaScript runtime. Keep web and workers on one Bun baseline.
+FROM bun-runtime-os AS web
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -167,7 +155,7 @@ USER 1001:1001
 
 EXPOSE 3001
 
-CMD ["node", "server.js"]
+CMD ["bun", "server.js"]
 
 # ============================================
 # Stage 9: Long-lived Runtime Runner

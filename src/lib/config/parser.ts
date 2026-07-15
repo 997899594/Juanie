@@ -119,7 +119,7 @@ const buildSecretNameSchema = z
 
 const buildSchema = z
   .object({
-    strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
+    strategy: z.enum(['auto', 'managed', 'dockerfile', 'bake', 'buildpacks']).optional(),
     command: z.string().optional(),
     dockerfile: z.string().optional(),
     context: z.string().optional(),
@@ -398,9 +398,9 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
       errors.push(`Build target "${target.name}" is declared more than once`);
     }
     buildTargetNames.add(target.name);
-    if (!['dockerfile', 'bake'].includes(target.build.strategy ?? 'dockerfile')) {
+    if (!['managed', 'dockerfile', 'bake'].includes(target.build.strategy ?? 'managed')) {
       errors.push(
-        `Build target "${target.name}" must use dockerfile or bake to produce an immutable output`
+        `Build target "${target.name}" must use managed, dockerfile or bake to produce an immutable output`
       );
     }
   }
@@ -429,7 +429,7 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   for (const service of config.services) {
     if (
       service.build?.secrets?.length &&
-      !['dockerfile', 'bake'].includes(service.build.strategy ?? '')
+      !['managed', 'dockerfile', 'bake'].includes(service.build.strategy ?? '')
     ) {
       errors.push(
         `Service "${service.name}" declares build secrets but does not use dockerfile or bake`

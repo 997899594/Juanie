@@ -1,0 +1,284 @@
+name: Juanie Application Delivery
+
+on:
+  workflow_call:
+    inputs:
+      juanie_base_url:
+        description: Juanie control-plane origin
+        required: true
+        type: string
+      source_sha:
+        description: Source commit SHA
+        required: false
+        type: string
+      release_ref:
+        description: Logical release ref
+        required: false
+        type: string
+      force_full_build:
+        description: Build the complete declared graph
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_REGISTRY: ghcr.io
+  JUANIE_BASE_URL: ${{ inputs.juanie_base_url }}
+  JUANIE_REPOSITORY: ${{ github.repository }}
+  JUANIE_PROVIDER: github
+  JUANIE_EXTERNAL_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  JUANIE_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+  JUANIE_RELEASE_REF: ${{ inputs.release_ref || github.ref }}
+  JUANIE_FORCE_FULL_BUILD: ${{ inputs.force_full_build }}
+  JUANIE_RUNTIME_DIR: /tmp/juanie-ci-runtime-v1
+  JUANIE_BUILD_STATE_DIR: /tmp/juanie-build-run
+  JUANIE_BUILD_RUN_SHA256: 618a5dfd13ad94ad66c22861929e8e177ad91f777c9b95e6cf9f5eb277901d7d
+  JUANIE_CHANGES_SHA256: cda4e87914de1e3f24497376e64538e175a447cb4feafffc2a8859acd368bfc6
+  JUANIE_DELIVERY_SHA256: 409891525ff7f1f029ee7c6e402c312db778a74d53e15bed8cbbf770437e1659
+  JUANIE_IDENTITY_SHA256: ca3db3a2d115d27a2497e007e3c3caf1cd707d5d072f2b266f71a38b64c6bd2b
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      build_run_id: ${{ steps.plan.outputs.build_run_id }}
+      groups: ${{ steps.plan.outputs.groups }}
+      deliverables: ${{ steps.plan.outputs.deliverables }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
+
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR" "$JUANIE_BUILD_STATE_DIR"
+          for asset in build-run.sh changes.mjs delivery-artifacts.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_BUILD_RUN_SHA256" build-run.sh \
+            "$JUANIE_CHANGES_SHA256" changes.mjs \
+            "$JUANIE_DELIVERY_SHA256" delivery-artifacts.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - name: Collect checkout facts
+        id: changes
+        env:
+          JUANIE_BEFORE_SHA: ${{ github.event.before }}
+        run: node "$JUANIE_RUNTIME_DIR/changes.mjs"
+
+      - name: Create commit-scoped build plan
+        id: plan
+        env:
+          JUANIE_IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          JUANIE_CHANGED_FILES_JSON: ${{ steps.changes.outputs.changed_files }}
+          JUANIE_AFFECTED_PACKAGES_JSON: ${{ steps.changes.outputs.affected_packages }}
+        run: |
+          set -euo pipefail
+          bash "$JUANIE_RUNTIME_DIR/build-run.sh" start
+          echo "build_run_id=$(cat "$JUANIE_BUILD_STATE_DIR/build-run-id")" >> "$GITHUB_OUTPUT"
+          {
+            echo 'groups<<JUANIE_GROUPS'
+            cat "$JUANIE_BUILD_STATE_DIR/groups.json"
+            echo 'JUANIE_GROUPS'
+            echo 'deliverables<<JUANIE_DELIVERABLES'
+            cat "$JUANIE_BUILD_STATE_DIR/deliverables.json"
+            echo 'JUANIE_DELIVERABLES'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Persist build plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: juanie-build-run-${{ steps.plan.outputs.build_run_id }}
+          path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: plan
+    if: ${{ needs.plan.outputs.groups != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJson(needs.plan.outputs.groups) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR"
+          for asset in build-run.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_BUILD_RUN_SHA256" build-run.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push group
+        env:
+          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
+          JUANIE_BUILD_GROUP_JSON: ${{ toJson(matrix.group) }}
+          JUANIE_DOCKER_CACHE_BACKEND: gha
+        run: bash "$JUANIE_RUNTIME_DIR/build-run.sh" build-group
+
+  release:
+    needs: [plan, build]
+    if: ${{ always() && needs.plan.outputs.groups != '[]' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      artifacts_ready: ${{ steps.release.outputs.artifacts_ready }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR"
+          for asset in build-run.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_BUILD_RUN_SHA256" build-run.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - name: Finalize aggregate release
+        id: release
+        env:
+          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          bash "$JUANIE_RUNTIME_DIR/build-run.sh" finalize
+          echo "release_id=$(cat "$JUANIE_BUILD_STATE_DIR/release-id")" >> "$GITHUB_OUTPUT"
+          echo "artifacts_ready=$(cat "$JUANIE_BUILD_STATE_DIR/artifacts-ready")" >> "$GITHUB_OUTPUT"
+
+  deliver:
+    needs: [plan, release]
+    if: ${{ needs.plan.outputs.deliverables != '[]' && needs.release.outputs.artifacts_ready == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        deliverable: ${{ fromJson(needs.plan.outputs.deliverables) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR"
+          for asset in delivery-artifacts.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_DELIVERY_SHA256" delivery-artifacts.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract delivery artifact
+        id: delivery
+        env:
+          JUANIE_RELEASE_ID: ${{ needs.release.outputs.release_id }}
+          JUANIE_DELIVERY_STORAGE_MODE: github_actions
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ toJson(matrix.deliverable) }}' | jq -c '[.]' > "$RUNNER_TEMP/juanie-deliverable.json"
+          export JUANIE_BUILD_OUTPUTS_JSON="$(cat "$JUANIE_BUILD_STATE_DIR/build-outputs.json")"
+          JUANIE_DELIVERABLES_FILE="$RUNNER_TEMP/juanie-deliverable.json" \
+            bash "$JUANIE_RUNTIME_DIR/delivery-artifacts.sh"
+
+      - name: Upload delivery artifact
+        id: upload
+        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: juanie-delivery-${{ needs.release.outputs.release_id }}-${{ strategy.job-index }}
+          path: ${{ steps.delivery.outputs.upload_dir }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Register delivery artifact
+        if: ${{ steps.delivery.outputs.has_delivery_artifacts == 'true' }}
+        env:
+          JUANIE_RELEASE_ID: ${{ needs.release.outputs.release_id }}
+          JUANIE_ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          JUANIE_DELIVERY_MANIFEST: ${{ steps.delivery.outputs.manifest }}
+        run: |
+          set -euo pipefail
+          payload="$(
+            jq -cn \
+              --arg repository "$JUANIE_REPOSITORY" \
+              --arg artifactUrl "$JUANIE_ARTIFACT_URL" \
+              --slurpfile manifest "$JUANIE_DELIVERY_MANIFEST" \
+              '{repository: $repository, artifacts: ($manifest[0] | map(. + {uri: $artifactUrl} | del(.path)))}'
+          )"
+          source "$JUANIE_RUNTIME_DIR/workload-identity.sh"
+          juanie_api_json POST "/api/releases/${JUANIE_RELEASE_ID}/artifacts" "$payload"

@@ -14,6 +14,8 @@ export interface Env {
   // NextAuth
   NEXTAUTH_URL: string;
   NEXTAUTH_SECRET: string;
+  JUANIE_SOURCE_REPOSITORY?: string;
+  JUANIE_SOURCE_REVISION?: string;
 
   // GitHub OAuth
   GITHUB_CLIENT_ID: string;

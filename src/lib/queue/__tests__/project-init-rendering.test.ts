@@ -1,27 +1,18 @@
 import { describe, expect, it } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
-  buildMonorepoCiDeliverables,
-  buildMonorepoCiServices,
   buildRunScriptCommand,
   detectMigrationTool,
   detectPackageManager,
-  encodeMonorepoAffectedRules,
-  encodeMonorepoCiDeliverables,
   inferSchemaConfig,
   renderGitHubCI,
-  renderGitHubCIMonorepo,
   renderGitLabCI,
-  renderGitLabCIMonorepo,
   renderJuanieConfig,
   resolvePackageScriptCommand,
-  selectMonorepoCiWork,
 } from '@/lib/projects/bootstrap/repository-automation';
 
 describe('project init migration inference', () => {
-  it('renders generated CI through build-run aggregation instead of per-service releases', () => {
+  it('renders thin provider bootstraps without repository-owned runtime code', () => {
     const project = {
       id: 'project_1',
       slug: 'nexusnote',
@@ -55,44 +46,38 @@ describe('project init migration inference', () => {
       ],
       databases: [],
     };
-    const rendered = [
-      renderGitHubCI(project, context),
-      renderGitLabCI(project, context),
-      renderGitHubCIMonorepo(project, context.services),
-      renderGitLabCIMonorepo(project, context.services),
-    ];
+    const github = renderGitHubCI(project, context);
+    const gitlab = renderGitLabCI(project, context);
 
-    const githubRendered = [rendered[0], rendered[2]];
-
-    for (const ci of rendered) {
-      expect(ci).toContain('.juanie/build-run.sh');
-      expect(ci).not.toContain('-X POST "https://juanie.art/api/releases"');
-      expect(ci).not.toContain('/api/releases/lookup');
-      expect(ci).not.toContain('Trigger Juanie Release');
-    }
-
-    for (const ci of githubRendered) {
-      const githubRunIdExpression = '$' + '{{ github.run_id }}';
-      const githubRunAttemptExpression = '$' + '{{ github.run_attempt }}';
-      expect(ci).toContain('actions/checkout@v4');
-      expect(ci).toContain('docker/setup-buildx-action@v3');
-      expect(ci).toContain('docker/login-action@v3');
-      expect(ci).toContain(
-        `JUANIE_EXTERNAL_RUN_ID: ${githubRunIdExpression}-${githubRunAttemptExpression}`
-      );
-      expect(ci).toContain('id-token: write');
-      expect(ci).not.toContain('JUANIE_TOKEN:');
-      expect(ci).not.toContain('actions/checkout@v5');
-      expect(ci).not.toContain('docker/setup-buildx-action@v4');
-      expect(ci).not.toContain('docker/login-action@v4');
-    }
-
-    const buildRunScript = readFileSync(
-      join(process.cwd(), 'templates', 'ci', 'build-run.sh'),
-      'utf-8'
+    expect(github).toContain(
+      'uses: 997899594/Juanie/.github/workflows/application-delivery.yml@main'
     );
-    expect(buildRunScript).toContain('/api/build-runs');
-    expect(buildRunScript).not.toContain('secret-access-token');
+    expect(github).toContain('id-token: write');
+    expect(github).not.toContain('.juanie/');
+    expect(github).not.toContain('docker build');
+    expect(gitlab).toContain('/api/ci/components/gitlab/v1');
+    expect(gitlab).toContain('integrity: sha256-');
+    expect(gitlab).not.toContain('.juanie/');
+  });
+
+  it('preserves unrelated GitLab jobs while replacing only the Juanie component include', () => {
+    const project = {
+      id: 'project_1',
+      slug: 'nexusnote',
+      name: 'NexusNote',
+      productionBranch: 'main',
+      repositoryId: 'repo_1',
+      repository: null,
+    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
+    const rendered = renderGitLabCI(
+      project,
+      { services: [], databases: [] },
+      `include:\n  - local: /quality.yml\ntest:\n  script: npm test\n`
+    );
+
+    expect(rendered).toContain('local: /quality.yml');
+    expect(rendered).toContain('script: npm test');
+    expect(rendered.match(/\/api\/ci\/components\/gitlab\/v1/gu)?.length).toBe(1);
   });
 
   it('prefers packageManager field over lockfiles', () => {
@@ -573,93 +558,6 @@ describe('project init migration inference', () => {
     expect(config).toContain('      []');
   });
 
-  it('embeds packages monorepo services into CI build metadata', () => {
-    const project = {
-      id: 'project_1',
-      slug: 'nexusnote',
-      name: 'NexusNote',
-      productionBranch: 'main',
-      repositoryId: 'repo_1',
-      configJson: {
-        monorepo: {
-          enabled: true,
-          type: 'turborepo',
-          packageManager: 'pnpm',
-          affected: {
-            strategy: 'turbo',
-            task: 'build',
-            useTaskInputs: true,
-            inputs: ['kit/**', 'acs/**'],
-          },
-        },
-        services: {
-          worker: {
-            monorepo: {
-              appDir: 'packages/worker',
-              packageName: '@acme/worker',
-            },
-            runtime: {
-              language: 'node',
-              framework: 'custom',
-              nodeVersion: '22',
-            },
-            build: {
-              strategy: 'dockerfile',
-              context: '.',
-              dockerfile: 'packages/worker/Dockerfile',
-            },
-          },
-        },
-      },
-    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
-    const serviceList = [
-      {
-        id: 'service_worker',
-        projectId: 'project_1',
-        name: 'worker',
-        type: 'worker',
-        buildCommand: 'bun run build',
-        startCommand: 'bun run worker',
-      } as typeof services.$inferSelect,
-    ];
-
-    const rendered = renderGitHubCIMonorepo(project, serviceList);
-    const encoded = rendered.match(/JUANIE_SERVICE_MATRIX_B64: ([A-Za-z0-9+/=]+)/)?.[1];
-    const deliverableEncoded = rendered.match(
-      /JUANIE_DELIVERABLE_MATRIX_B64: ([A-Za-z0-9+/=]+)/
-    )?.[1];
-    const affectedEncoded = rendered.match(/JUANIE_AFFECTED_RULES_B64: ([A-Za-z0-9+/=]+)/)?.[1];
-
-    expect(Boolean(encoded)).toBe(true);
-    expect(Boolean(deliverableEncoded)).toBe(true);
-    expect(Boolean(affectedEncoded)).toBe(true);
-    const ciServices = buildMonorepoCiServices(project, serviceList);
-    const affectedRules = JSON.parse(
-      Buffer.from(encodeMonorepoAffectedRules(project), 'base64').toString('utf8')
-    );
-
-    expect(ciServices.length).toBe(1);
-    expect(ciServices[0]?.name).toBe('worker');
-    expect(ciServices[0]?.appDir).toBe('packages/worker');
-    expect(ciServices[0]?.packageName).toBe('@acme/worker');
-    expect(ciServices[0]?.type).toBe('worker');
-    expect(ciServices[0]?.build.dockerfile).toBe('packages/worker/Dockerfile');
-    expect(ciServices[0]?.build.context).toBe('.');
-    expect(affectedRules.inputs).toEqual(['kit/**', 'acs/**']);
-    expect(affectedRules.task).toBe('build');
-    expect(affectedRules.useTaskInputs).toBe(true);
-    expect(rendered).toContain('node .juanie/affected-workspace.mjs');
-    const affectedScript = readFileSync(
-      join(process.cwd(), 'templates', 'ci', 'affected-workspace.mjs'),
-      'utf-8'
-    );
-    expect(affectedScript).toContain('turbo');
-    expect(affectedScript).toContain('query');
-    expect(affectedScript).toContain('affected');
-    expect(affectedScript).toContain('--base');
-    expect(affectedScript).toContain('--head');
-  });
-
   it('renders configured deliverables as real manifest entries instead of commented examples', () => {
     const config = renderJuanieConfig(
       {
@@ -719,117 +617,6 @@ describe('project init migration inference', () => {
     expect(config).toContain('target: web-baremetal');
     expect(config).toContain('from: /app/dist');
     expect(config).not.toContain('# deliverables:');
-
-    const projectWithDeliverableConfig = {
-      configJson: {
-        buildTargets: [
-          {
-            name: 'web-baremetal',
-            kind: 'bundle',
-            monorepo: { appDir: 'packages/exporter', packageName: '@acme/exporter' },
-            build: {
-              strategy: 'dockerfile',
-              dockerfile: '.juanie/build-targets/exporter.Dockerfile',
-            },
-            output: { path: 'packages/exporter/dist' },
-          },
-        ],
-        deliverables: [
-          {
-            name: 'web-baremetal',
-            type: 'baremetal',
-            source: { target: 'web-baremetal' },
-            variants: [
-              {
-                name: 'linux-amd64',
-                platform: 'linux/amd64',
-                extract: { from: '/app/dist', to: '.' },
-                package: { format: 'tar.gz' },
-              },
-            ],
-          },
-        ],
-      },
-    };
-    const deliverables = buildMonorepoCiDeliverables(projectWithDeliverableConfig);
-    const encodedDeliverables = JSON.parse(
-      Buffer.from(encodeMonorepoCiDeliverables(projectWithDeliverableConfig), 'base64').toString(
-        'utf8'
-      )
-    );
-
-    expect(deliverables[0]?.name).toBe('web-baremetal');
-    expect(deliverables[0]?.sourceTarget).toBe('web-baremetal');
-    expect(deliverables[0]?.variant.extract.from).toBe('/app/dist');
-    expect(encodedDeliverables[0]?.variant.package.format).toBe('tar.gz');
-  });
-
-  it('keeps build-only target changes out of the runtime service matrix', () => {
-    const result = selectMonorepoCiWork({
-      shouldBuildAll: false,
-      changedFiles: ['packages/exporter/README.md'],
-      services: [
-        {
-          name: 'web',
-          type: 'web',
-          appDir: 'apps/web',
-          packageName: '@acme/web',
-          build: {},
-        },
-      ],
-      deliverables: [
-        {
-          name: 'web-baremetal',
-          type: 'baremetal',
-          appDir: 'packages/exporter',
-          sourceTarget: 'web-baremetal',
-          variant: {
-            name: 'linux-amd64',
-            platform: 'linux/amd64',
-            extract: { from: '/app/dist', to: '.' },
-            package: { format: 'tar.gz' },
-            checks: [],
-          },
-        },
-      ],
-    });
-
-    expect(result.deliverables.map((deliverable) => deliverable.name)).toEqual(['web-baremetal']);
-    expect(result.services).toEqual([]);
-  });
-
-  it('does not rebuild an independent target when only a runtime service changes', () => {
-    const result = selectMonorepoCiWork({
-      shouldBuildAll: false,
-      changedFiles: ['apps/web/src/page.tsx'],
-      services: [
-        {
-          name: 'web',
-          type: 'web',
-          appDir: 'apps/web',
-          packageName: '@acme/web',
-          build: {},
-        },
-      ],
-      deliverables: [
-        {
-          name: 'web-baremetal',
-          type: 'baremetal',
-          appDir: 'packages/exporter',
-          sourceTarget: 'web-baremetal',
-          variant: {
-            name: 'linux-amd64',
-            platform: 'linux/amd64',
-            extract: { from: '/app/dist', to: '.' },
-            package: { format: 'tar.gz' },
-            checks: [],
-          },
-        },
-      ],
-    });
-
-    expect(result.services.map((service) => service.name)).toEqual(['web']);
-    expect(result.deliverables).toEqual([]);
   });
 
   it('builds yarn commands without run', () => {

@@ -21,6 +21,8 @@ export async function GET(
       release.project?.repository?.fullName ?? release.sourceRepository ?? '',
       request.headers.get('authorization'),
       {
+        projectId: release.projectId,
+        repositoryId: release.project?.repository?.id,
         ref: release.sourceRef,
         sha: release.sourceCommitSha,
         externalRunId: release.externalRunId,

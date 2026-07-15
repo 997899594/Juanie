@@ -1,42 +1,50 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { BuildRunError, startBuildRun } from '@/lib/builds/service';
 import { isCiAccessError } from '@/lib/releases/api-access';
 
+const startBuildRunSchema = z
+  .object({
+    repository: z
+      .string()
+      .min(3)
+      .max(255)
+      .regex(/^[^/\s]+\/[^/\s]+$/u),
+    ref: z.string().min(1).max(255),
+    sha: z.string().regex(/^[a-f0-9]{40}$/u),
+    registry: z.string().min(1).max(500).optional(),
+    provider: z.enum(['github', 'gitlab', 'gitlab-self-hosted']),
+    externalRunId: z.string().min(1).max(255).optional().nullable(),
+    changedFiles: z.array(z.string().min(1).max(500)).max(5000).optional(),
+    affectedPackages: z.array(z.string().min(1).max(214)).max(2000).optional(),
+    forceFullBuild: z.boolean().optional().default(false),
+  })
+  .strict();
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { repository, ref, sha, registry, provider, externalRunId, services, targets } = body;
-
-    if (
-      typeof repository !== 'string' ||
-      typeof ref !== 'string' ||
-      typeof sha !== 'string' ||
-      !repository ||
-      !ref ||
-      !sha
-    ) {
+    const parsed = startBuildRunSchema.safeParse(await request.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: repository, ref, sha' },
+        {
+          error: 'Invalid build run request',
+          details: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+        },
         { status: 400 }
       );
     }
+    const input = parsed.data;
 
     const result = await startBuildRun({
-      repository,
-      ref,
-      sha,
-      registry: typeof registry === 'string' && registry.trim() ? registry.trim() : undefined,
-      services: Array.isArray(services)
-        ? services.filter((item) => typeof item === 'string')
-        : undefined,
-      targets: Array.isArray(targets)
-        ? targets.filter((item) => typeof item === 'string')
-        : undefined,
-      provider: typeof provider === 'string' && provider.trim() ? provider.trim() : undefined,
-      externalRunId:
-        typeof externalRunId === 'string' && externalRunId.trim()
-          ? externalRunId.trim()
-          : undefined,
+      repository: input.repository,
+      ref: input.ref,
+      sha: input.sha,
+      registry: input.registry,
+      changedFiles: input.changedFiles,
+      affectedPackages: input.affectedPackages,
+      forceFullBuild: input.forceFullBuild,
+      provider: input.provider,
+      externalRunId: input.externalRunId,
       authHeader: request.headers.get('authorization'),
     });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 juanie_base_url="${JUANIE_BASE_URL:-https://juanie.art}"
-juanie_oidc_audience="${JUANIE_OIDC_AUDIENCE:-juanie-ci}"
+juanie_oidc_audience='juanie-ci'
 
 require_juanie_identity_env() {
   local name="$1"
@@ -36,6 +36,7 @@ acquire_ci_oidc_token() {
 
 acquire_juanie_ci_token() {
   require_juanie_identity_env JUANIE_REPOSITORY
+  require_juanie_identity_env JUANIE_PROVIDER
   require_juanie_identity_env JUANIE_RELEASE_REF
   require_juanie_identity_env JUANIE_SOURCE_SHA
   require_juanie_identity_env JUANIE_EXTERNAL_RUN_ID
@@ -46,10 +47,11 @@ acquire_juanie_ci_token() {
   payload="$(
     printf '%s' "$oidc_token" | jq -Rsc \
       --arg repository "$JUANIE_REPOSITORY" \
+      --arg provider "$JUANIE_PROVIDER" \
       --arg ref "$JUANIE_RELEASE_REF" \
       --arg sha "$JUANIE_SOURCE_SHA" \
       --arg externalRunId "$JUANIE_EXTERNAL_RUN_ID" \
-      '{idToken: ., repository: $repository, ref: $ref, sha: $sha, externalRunId: $externalRunId}'
+      '{idToken: ., provider: $provider, repository: $repository, ref: $ref, sha: $sha, externalRunId: $externalRunId}'
   )"
 
   printf '%s' "$payload" | curl -fsSL -X POST "${juanie_base_url}/api/auth/ci/exchange" \

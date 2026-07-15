@@ -252,29 +252,13 @@ export async function syncMigrationSpecificationsFromRepo(
     requiredCapabilities: ['read_repo'],
   });
 
-  const configPaths = ['juanie.yaml', 'juanie.yml'];
-  let configContent: string | null = null;
   const configRef =
     options?.sourceCommitSha ||
     options?.sourceRef ||
     getRepositoryDefaultBranch(context.repository);
-
-  for (const configPath of configPaths) {
-    try {
-      const content = await gateway.getFileContent(
-        session,
-        context.repository.fullName,
-        configPath,
-        configRef
-      );
-      if (content) {
-        configContent = content;
-        break;
-      }
-    } catch (_error) {
-      // Ignore missing config path and try the next candidate.
-    }
-  }
+  const configContent = await gateway
+    .getFileContent(session, context.repository.fullName, 'juanie.yaml', configRef)
+    .catch(() => null);
 
   if (!configContent) {
     return [];

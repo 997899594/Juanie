@@ -2,6 +2,12 @@
 {{- if not .Values.monitoring.prometheusRule.enabled }}
 {{- fail "production requires monitoring.prometheusRule.enabled=true" }}
 {{- end }}
+{{- if not (regexMatch "^[^/[:space:]]+/[^/[:space:]]+$" .Values.env.JUANIE_SOURCE_REPOSITORY) }}
+{{- fail "production requires env.JUANIE_SOURCE_REPOSITORY as a GitHub owner/repository pair" }}
+{{- end }}
+{{- if not (regexMatch "^[a-f0-9]{40}$" .Values.env.JUANIE_SOURCE_REVISION) }}
+{{- fail "production requires env.JUANIE_SOURCE_REVISION as an immutable 40-character commit SHA" }}
+{{- end }}
 {{- if eq .Values.production.durabilityMode "selfHosted" }}
 {{- if or (not .Values.postgres.enabled) (not .Values.restate.embeddedEnabled) }}
 {{- fail "self-hosted production requires embedded PostgreSQL and Restate" }}

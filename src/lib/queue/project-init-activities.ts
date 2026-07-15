@@ -30,37 +30,20 @@ import {
   buildDeliveryBuildTargets,
   buildDeliveryDeliverables,
   getDeliveryBuildSecretNames,
-  getManagedBuildFileStem,
 } from '@/lib/projects/bootstrap/delivery-build';
 import {
   detectPackageManager,
   extractAtlasSchemaSourcePaths,
   getProjectConfigJson,
   getProjectServiceConfigMap,
-  JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH,
-  JUANIE_BUILD_RUN_SCRIPT_PATH,
-  JUANIE_DELIVERY_SCRIPT_PATH,
-  JUANIE_MANAGED_DOC_PATH,
-  JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH,
   type ProjectConfigBuildTargetEntry,
   type ProjectConfigDeliverableEntry,
   type ProjectConfigMonorepoEntry,
   type ProjectInitRenderContext,
   type RepoAutomationContext,
-  renderAffectedWorkspaceScript,
-  renderBuildRunScript,
-  renderDeliveryArtifactsScript,
-  renderEnvTemplate,
   renderGitHubCI,
-  renderGitHubCIMonorepo,
   renderGitLabCI,
-  renderGitLabCIMonorepo,
   renderJuanieConfig,
-  renderJuanieManagedDoc,
-  renderManagedArtifactTargetDockerfile,
-  renderManagedWorkloadDockerfile,
-  renderStaticNginxConfig,
-  renderWorkloadIdentityScript,
   resolveManagedMigrationScriptPaths,
   resolveMonorepoAffectedRules,
 } from '@/lib/projects/bootstrap/repository-automation';
@@ -471,7 +454,6 @@ export async function pushCicdConfig(
     configBuildTargets.length > 0
       ? configBuildTargets
       : buildDeliveryBuildTargets({ graph: deliveryGraph, secretNames: buildSecretNames });
-  const usesGeneratedBuildTargets = configBuildTargets.length === 0;
   const effectiveDeliverables =
     configDeliverables.length > 0 ? configDeliverables : buildDeliveryDeliverables(deliveryGraph);
   const inferredWorkloadByName = new Map(
@@ -480,22 +462,18 @@ export async function pushCicdConfig(
   const nextServiceConfigMap = { ...existingServiceConfigMap };
   for (const service of topologyServices) {
     const workload = inferredWorkloadByName.get(service.name);
-    const managedDockerfile =
-      workload?.confidence === 'high' && !workload.hasDockerfile
-        ? `.juanie/runtime/${getManagedBuildFileStem(service.name)}.Dockerfile`
-        : null;
+    const useManagedBuild = workload?.confidence === 'high' && !workload.hasDockerfile;
     const build = service.build
       ? {
           ...service.build,
-          ...(managedDockerfile
-            ? { strategy: 'dockerfile' as const, dockerfile: managedDockerfile, context: '.' }
+          ...(useManagedBuild
+            ? { strategy: 'managed' as const, dockerfile: undefined, context: '.' }
             : {}),
           ...(buildSecretNames.length > 0 ? { secrets: buildSecretNames } : {}),
         }
-      : managedDockerfile
+      : useManagedBuild
         ? {
-            strategy: 'dockerfile' as const,
-            dockerfile: managedDockerfile,
+            strategy: 'managed' as const,
             context: '.',
             command: workload?.buildCommand,
             secrets: buildSecretNames,
@@ -542,47 +520,20 @@ export async function pushCicdConfig(
 
   const isMonorepo = monorepoType !== 'none';
   if (session.provider === 'github') {
-    const ciTemplate = isMonorepo
-      ? renderGitHubCIMonorepo(projectWithTopology, serviceList)
-      : renderGitHubCI(project, renderContext);
-    files['.github/workflows/juanie-ci.yml'] = ciTemplate;
+    files['.github/workflows/juanie-ci.yml'] = renderGitHubCI(project, renderContext);
   } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
-    const ciTemplate = isMonorepo
-      ? renderGitLabCIMonorepo(projectWithTopology, serviceList)
-      : renderGitLabCI(project, renderContext);
-    files['.gitlab-ci.yml'] = ciTemplate;
+    const existingGitLabCi = await gateway.getFileContent(
+      session,
+      repository.fullName,
+      '.gitlab-ci.yml',
+      targetBranch
+    );
+    files['.gitlab-ci.yml'] = renderGitLabCI(project, renderContext, existingGitLabCi);
   }
 
   files['juanie.yaml'] =
     managedJuanieConfigContent ??
     renderJuanieConfig(projectWithTopology, renderContext, automationContext);
-
-  const envTemplate = renderEnvTemplate(project, databaseList);
-  files['.env.juanie.example'] = envTemplate;
-  files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
-  files[JUANIE_BUILD_RUN_SCRIPT_PATH] = renderBuildRunScript();
-  files[JUANIE_DELIVERY_SCRIPT_PATH] = renderDeliveryArtifactsScript();
-  files[JUANIE_WORKLOAD_IDENTITY_SCRIPT_PATH] = renderWorkloadIdentityScript();
-  files[JUANIE_AFFECTED_WORKSPACE_SCRIPT_PATH] = renderAffectedWorkspaceScript();
-  for (const workload of deliveryGraph?.workloads ?? []) {
-    if (workload.confidence !== 'high' || workload.hasDockerfile) continue;
-    files[`.juanie/runtime/${getManagedBuildFileStem(workload.name)}.Dockerfile`] =
-      renderManagedWorkloadDockerfile({ workload, packageManager, secretNames: buildSecretNames });
-  }
-  if ((deliveryGraph?.workloads ?? []).some((workload) => workload.runtimeKind === 'static')) {
-    files['.juanie/runtime/static-nginx.conf'] = renderStaticNginxConfig();
-  }
-  for (const target of usesGeneratedBuildTargets ? effectiveBuildTargets : []) {
-    files[
-      target.build.dockerfile ??
-        `.juanie/build-targets/${getManagedBuildFileStem(target.name)}.Dockerfile`
-    ] = renderManagedArtifactTargetDockerfile({
-      packageManager,
-      buildCommand: target.build.command ?? `${packageManager} run build`,
-      outputPath: target.output.path,
-      secretNames: target.build.secrets ?? [],
-    });
-  }
 
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');

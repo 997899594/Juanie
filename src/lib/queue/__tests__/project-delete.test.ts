@@ -2,18 +2,16 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildJuanieRepositoryCleanupPaths,
   isJuanieManagedGitLabCi,
+  removeJuanieGitLabComponent,
   shouldDeleteProjectPreviewApplicationSet,
 } from '@/lib/queue/project-delete';
 
 describe('project delete repository cleanup planning', () => {
-  it('detects Juanie-managed GitLab CI files conservatively', () => {
+  it('detects only the versioned Juanie GitLab component', () => {
     expect(
       isJuanieManagedGitLabCi(`
-stages: [build]
-build:
-  script:
-    - echo "$JUANIE_SOURCE_SHA"
-    - bash .juanie/build-run.sh start
+include:
+  - remote: https://juanie.example/api/ci/components/gitlab/v1
 `)
     ).toBe(true);
 
@@ -27,58 +25,45 @@ test:
     ).toBe(false);
   });
 
-  it('always removes Juanie-owned files and only removes GitLab CI when it is managed by Juanie', () => {
+  it('removes only provider bootstraps and leaves the user-owned declaration in place', () => {
     expect(
       buildJuanieRepositoryCleanupPaths({
         provider: 'github',
         gitlabCiContent: null,
       })
-    ).toEqual([
-      'juanie.yaml',
-      '.juanie/build-run.sh',
-      '.juanie/delivery-artifacts.sh',
-      '.juanie/workload-identity.sh',
-      '.juanie/affected-workspace.mjs',
-      '.env.juanie.example',
-      'JUANIE.md',
-      '.github/workflows/juanie-ci.yml',
-    ]);
+    ).toEqual(['.github/workflows/juanie-ci.yml']);
 
     expect(
       buildJuanieRepositoryCleanupPaths({
         provider: 'gitlab',
         gitlabCiContent: `
-variables:
-  SOURCE_SHA: "$JUANIE_SOURCE_SHA"
-script:
-  - curl -X POST "https://juanie.art/api/build-runs"
+include:
+  - remote: https://juanie.art/api/ci/components/gitlab/v1
 `,
       })
-    ).toEqual([
-      'juanie.yaml',
-      '.juanie/build-run.sh',
-      '.juanie/delivery-artifacts.sh',
-      '.juanie/workload-identity.sh',
-      '.juanie/affected-workspace.mjs',
-      '.env.juanie.example',
-      'JUANIE.md',
-      '.gitlab-ci.yml',
-    ]);
+    ).toEqual(['.gitlab-ci.yml']);
 
     expect(
       buildJuanieRepositoryCleanupPaths({
         provider: 'gitlab-self-hosted',
         gitlabCiContent: 'stages: [test]',
       })
-    ).toEqual([
-      'juanie.yaml',
-      '.juanie/build-run.sh',
-      '.juanie/delivery-artifacts.sh',
-      '.juanie/workload-identity.sh',
-      '.juanie/affected-workspace.mjs',
-      '.env.juanie.example',
-      'JUANIE.md',
-    ]);
+    ).toEqual([]);
+  });
+
+  it('removes the Juanie include without deleting unrelated GitLab jobs', () => {
+    const updated = removeJuanieGitLabComponent(`
+include:
+  - local: /quality.yml
+  - remote: https://juanie.example/api/ci/components/gitlab/v1
+test:
+  script: npm test
+`);
+
+    expect(updated).not.toBe(null);
+    expect(updated).toContain('local: /quality.yml');
+    expect(updated).toContain('script: npm test');
+    expect(updated).not.toContain('/api/ci/components/gitlab/');
   });
 
   it('only deletes preview ApplicationSet when the project actually has preview environments', () => {

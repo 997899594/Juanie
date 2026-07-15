@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
+import { type CiWorkloadProvider, isCiWorkloadProvider } from '@/lib/ci/workload-identity';
 import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import {
@@ -15,9 +16,9 @@ import {
   projects,
   releases,
   repositories,
-  services,
 } from '@/lib/db/schema';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
+import { loadRepositoryJuanieConfig } from '@/lib/projects/repository-config';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
@@ -37,9 +38,10 @@ export interface StartBuildRunInput {
   ref: string;
   sha: string;
   registry?: string;
-  services?: string[];
-  targets?: string[];
-  provider?: string;
+  changedFiles?: string[];
+  affectedPackages?: string[];
+  forceFullBuild?: boolean;
+  provider: CiWorkloadProvider;
   externalRunId?: string | null;
   authHeader: string | null;
 }
@@ -77,6 +79,13 @@ function isBuildRunClosed(status: BuildRunStatus) {
   return status === 'failed' || status === 'finalizing' || status === 'finalized';
 }
 
+function requireBuildRunProvider(value: string): CiWorkloadProvider {
+  if (!isCiWorkloadProvider(value)) {
+    throw new BuildRunError(`Build run has an invalid provider: ${value}`, 409);
+  }
+  return value;
+}
+
 function isBuildUnitClosed(status: BuildUnitStatus) {
   return closedBuildUnitStatuses.includes(status as (typeof closedBuildUnitStatuses)[number]);
 }
@@ -85,101 +94,31 @@ function isBuildUnitStatusRegression(currentStatus: BuildUnitStatus, nextStatus:
   return buildUnitStatusRank[nextStatus] < buildUnitStatusRank[currentStatus];
 }
 
-function getProjectConfigForBuildPlan(
-  project: typeof projects.$inferSelect & { services: Array<typeof services.$inferSelect> }
-) {
-  const configJson = project.configJson;
-  const serviceConfigMap =
-    configJson &&
-    typeof configJson === 'object' &&
-    'services' in configJson &&
-    configJson.services &&
-    typeof configJson.services === 'object'
-      ? (configJson.services as Record<string, Record<string, unknown>>)
-      : {};
-  const monorepo =
-    configJson &&
-    typeof configJson === 'object' &&
-    'monorepo' in configJson &&
-    configJson.monorepo &&
-    typeof configJson.monorepo === 'object'
-      ? (configJson.monorepo as { type: 'turborepo' })
-      : undefined;
-  const buildTargets =
-    configJson &&
-    typeof configJson === 'object' &&
-    'buildTargets' in configJson &&
-    Array.isArray(configJson.buildTargets)
-      ? configJson.buildTargets
-      : [];
-
-  return {
-    monorepo,
-    buildTargets: buildTargets as Array<{
-      name: string;
-      kind: 'package' | 'documentation' | 'bundle';
-      monorepo: { appDir: string; packageName?: string };
-      build: {
-        strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
-        command?: string;
-        dockerfile?: string;
-        context?: string;
-        target?: string;
-        definition?: string;
-        secrets?: string[];
-      };
-      output: { path: string };
-    }>,
-    services: project.services.map((service) => {
-      const serviceConfig = serviceConfigMap[service.name] ?? {};
-      const startCommand = service.startCommand?.trim();
-
-      if (!startCommand) {
-        throw new BuildRunError(`Service ${service.name} is missing run.command in juanie.yaml`);
-      }
-
-      return {
-        name: service.name,
-        type: service.type,
-        monorepo: serviceConfig.monorepo as { appDir?: string } | undefined,
-        build: serviceConfig.build as
-          | {
-              strategy?: 'auto' | 'dockerfile' | 'bake' | 'buildpacks';
-              command?: string;
-              dockerfile?: string;
-              context?: string;
-              target?: string;
-              definition?: string;
-              secrets?: string[];
-            }
-          | undefined,
-        run: {
-          command: startCommand,
-          ...(service.port ? { port: service.port } : {}),
-        },
-      };
-    }),
-  };
-}
-
-async function loadRepositoryProject(repository: string) {
+async function loadRepositoryProject(input: {
+  repository: string;
+  repositoryId: string;
+  projectId: string;
+}) {
   const repo = await db.query.repositories.findFirst({
-    where: eq(repositories.fullName, repository),
+    where: and(
+      eq(repositories.id, input.repositoryId),
+      eq(repositories.fullName, input.repository)
+    ),
   });
 
   if (!repo) {
-    throw new BuildRunError(`Repository ${repository} not found in Juanie`, 404);
+    throw new BuildRunError(`Repository ${input.repository} not found in Juanie`, 404);
   }
 
   const project = await db.query.projects.findFirst({
-    where: eq(projects.repositoryId, repo.id),
+    where: and(eq(projects.id, input.projectId), eq(projects.repositoryId, repo.id)),
     with: {
       services: true,
     },
   });
 
   if (!project) {
-    throw new BuildRunError(`No project linked to repository ${repository}`, 404);
+    throw new BuildRunError(`No project linked to repository ${input.repository}`, 404);
   }
 
   return { repo, project };
@@ -229,13 +168,18 @@ function assertExistingBuildRunMatchesInput(
 }
 
 export async function startBuildRun(input: StartBuildRunInput) {
-  await verifyRepositoryAccess(input.repository, input.authHeader, {
+  const access = await verifyRepositoryAccess(input.repository, input.authHeader, {
+    provider: input.provider,
     ref: input.ref,
     sha: input.sha,
     externalRunId: input.externalRunId,
   });
-  const { repo, project } = await loadRepositoryProject(input.repository);
-  const provider = input.provider ?? 'github';
+  const { repo, project } = await loadRepositoryProject({
+    repository: input.repository,
+    repositoryId: access.repositoryId,
+    projectId: access.projectId,
+  });
+  const provider = access.provider;
 
   if (input.externalRunId) {
     const existingBuildRun = await db.query.buildRuns.findFirst({
@@ -255,14 +199,27 @@ export async function startBuildRun(input: StartBuildRunInput) {
     }
   }
 
+  const configRevision = await loadRepositoryJuanieConfig({
+    teamId: project.teamId,
+    repository: input.repository,
+    sourceCommitSha: input.sha,
+  });
   const plan = createBuildPlan({
-    config: getProjectConfigForBuildPlan(project),
+    config: configRevision.config,
     repository: input.repository,
     ref: input.ref,
     sha: input.sha,
+    configPath: configRevision.path,
+    configDigest: configRevision.digest,
     registry: input.registry,
-    selectedServices: input.services,
-    selectedTargets: input.targets,
+    changes:
+      input.changedFiles || input.affectedPackages || input.forceFullBuild
+        ? {
+            changedFiles: input.changedFiles ?? [],
+            ...(input.affectedPackages ? { affectedPackages: input.affectedPackages } : {}),
+            forceFullBuild: input.forceFullBuild ?? false,
+          }
+        : undefined,
   });
   const now = new Date();
   const serviceByName = new Map(project.services.map((service) => [service.name, service]));
@@ -276,9 +233,10 @@ export async function startBuildRun(input: StartBuildRunInput) {
       sourceCommitSha: input.sha,
       provider,
       externalRunId: input.externalRunId ?? null,
-      status: 'running',
+      status: plan.units.length === 0 ? 'succeeded' : 'running',
       plan,
       startedAt: now,
+      finishedAt: plan.units.length === 0 ? now : null,
       updatedAt: now,
     });
 
@@ -311,16 +269,18 @@ export async function startBuildRun(input: StartBuildRunInput) {
       return existingBuildRun;
     }
 
-    await tx.insert(buildUnits).values(
-      plan.units.map((unit) => ({
-        buildRunId: createdBuildRun.id,
-        serviceId: serviceByName.get(unit.service)?.id ?? null,
-        unitKey: unit.id,
-        serviceName: unit.service,
-        status: 'pending' as const,
-        metadata: unit,
-      }))
-    );
+    if (plan.units.length > 0) {
+      await tx.insert(buildUnits).values(
+        plan.units.map((unit) => ({
+          buildRunId: createdBuildRun.id,
+          serviceId: serviceByName.get(unit.service)?.id ?? null,
+          unitKey: unit.id,
+          serviceName: unit.service,
+          status: 'pending' as const,
+          metadata: unit,
+        }))
+      );
+    }
 
     return createdBuildRun;
   });
@@ -343,14 +303,20 @@ async function loadBuildRunForMutation(buildRunId: string, authHeader: string | 
   if (!buildRun) {
     throw new BuildRunError('Build run not found', 404);
   }
+  if (!buildRun.repositoryId) {
+    throw new BuildRunError('Build run is missing its repository identity', 409);
+  }
 
   await verifyRepositoryAccess(buildRun.sourceRepository, authHeader, {
+    projectId: buildRun.projectId,
+    repositoryId: buildRun.repositoryId,
+    provider: requireBuildRunProvider(buildRun.provider),
     ref: buildRun.sourceRef,
     sha: buildRun.sourceCommitSha,
     externalRunId: buildRun.externalRunId,
   });
 
-  return buildRun;
+  return { ...buildRun, repositoryId: buildRun.repositoryId };
 }
 
 async function readBuildVariableValue(
@@ -372,7 +338,13 @@ export async function getBuildRunSecrets(input: {
     where: eq(buildRuns.id, input.buildRunId),
   });
   if (!buildRun) throw new BuildRunError('Build run not found', 404);
+  if (!buildRun.repositoryId) {
+    throw new BuildRunError('Build run is missing its repository identity', 409);
+  }
   await verifyRepositoryAccess(buildRun.sourceRepository, input.authHeader, {
+    projectId: buildRun.projectId,
+    repositoryId: buildRun.repositoryId,
+    provider: requireBuildRunProvider(buildRun.provider),
     ref: buildRun.sourceRef,
     sha: buildRun.sourceCommitSha,
     externalRunId: buildRun.externalRunId,
@@ -724,6 +696,8 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
   let release: NonNullable<Awaited<ReturnType<typeof createRepositoryRelease>>>;
   try {
     const createdRelease = await createRepositoryRelease({
+      projectId: buildRun.projectId,
+      repositoryId: buildRun.repositoryId,
       repository: buildRun.sourceRepository,
       ref: buildRun.sourceRef,
       sha: buildRun.sourceCommitSha,

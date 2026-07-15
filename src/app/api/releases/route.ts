@@ -31,9 +31,15 @@ export async function POST(request: Request) {
       );
     }
 
-    await verifyRepositoryAccess(repository, authHeader, { ref, sha, externalRunId });
+    const access = await verifyRepositoryAccess(repository, authHeader, {
+      ref,
+      sha,
+      externalRunId,
+    });
 
     const release = await createRepositoryRelease({
+      projectId: access.projectId,
+      repositoryId: access.repositoryId,
       repository,
       ref,
       sha,
