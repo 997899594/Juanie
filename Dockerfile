@@ -21,7 +21,11 @@ RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
   && apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+    /usr/local/lib/node_modules/npm \
+    /usr/local/bin/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx
 
 # ============================================
 # Stage 3: Dependencies
@@ -156,6 +160,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder --chown=1001:1001 /app/.next/standalone ./
 COPY --from=builder --chown=1001:1001 /app/.next/static ./.next/static
 COPY --from=builder --chown=1001:1001 /app/public ./public
+COPY --from=source --chown=1001:1001 /app/templates ./templates
 RUN mkdir -p ./.next/cache && chown -R 1001:1001 ./.next/cache
 
 USER 1001:1001
