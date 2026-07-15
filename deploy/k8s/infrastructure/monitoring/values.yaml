@@ -13,14 +13,8 @@ kubeProxy:
 kubeScheduler:
   enabled: false
 
-kube-state-metrics:
-  resources:
-    requests:
-      cpu: 25m
-      memory: 64Mi
-    limits:
-      cpu: 150m
-      memory: 128Mi
+kubeStateMetrics:
+  enabled: false
 
 prometheus-node-exporter:
   resources:

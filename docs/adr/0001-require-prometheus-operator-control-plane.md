@@ -17,9 +17,9 @@ storage. The monitoring control plane must therefore have bounded storage and re
 ## Decision
 
 Install kube-prometheus-stack as a version-pinned platform dependency. Run one persistent
-Prometheus and Alertmanager, Prometheus Operator, kube-state-metrics, and node-exporter. Disable
-Grafana and Kubernetes control-plane scrapers that do not match K3s and Cilium. Discover Juanie
-rules and PodMonitors across namespaces.
+Prometheus and Alertmanager, Prometheus Operator, and node-exporter. Disable Grafana,
+kube-state-metrics, and Kubernetes control-plane scrapers that are not inputs to Juanie's business
+alerts or do not match K3s and Cilium. Discover Juanie rules and PodMonitors across namespaces.
 
 Juanie production charts must render both a `PrometheusRule` and a `PodMonitor`. The PodMonitor
 scrapes the outbox dispatcher, which exposes the durable outbox, AI task, and workflow projection
