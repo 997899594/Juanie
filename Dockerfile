@@ -15,7 +15,7 @@ RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
   && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
   && rm -rf /var/lib/apt/lists/*
 
-FROM node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS node-runtime-os
+FROM node:26-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb AS node-runtime-os
 ARG SECURITY_REFRESH=manual
 RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
   && apt-get update \
