@@ -1,5 +1,12 @@
 import type { NextConfig } from 'next';
 
+const buildTimeTraceExcludes = [
+  '**/node_modules/@esbuild/**/*',
+  '**/node_modules/drizzle-kit/**/*',
+  '**/node_modules/esbuild/**/*',
+  '**/node_modules/tsx/**/*',
+];
+
 const nonRuntimeTraceExcludes = [
   './archive/**/*',
   './config/**/*',
@@ -10,10 +17,7 @@ const nonRuntimeTraceExcludes = [
   './scripts/**/*',
   './templates/**/*',
   './tmp/**/*',
-  './node_modules/@esbuild/**/*',
-  './node_modules/drizzle-kit/**/*',
-  './node_modules/esbuild/**/*',
-  './node_modules/tsx/**/*',
+  ...buildTimeTraceExcludes,
   './*.json',
   './*.lock',
   './*.md',
@@ -39,6 +43,7 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingExcludes: {
     '/**': nonRuntimeTraceExcludes,
+    'next-server': buildTimeTraceExcludes,
   },
 
   experimental: {
