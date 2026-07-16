@@ -7,11 +7,7 @@ import {
   integrationGrants,
   integrationIdentities,
 } from '@/lib/db/schema';
-import {
-  resolveGitHubCapabilities,
-  resolveGitLabCapabilities,
-} from '@/lib/integrations/domain/capability';
-import type { Capability } from '@/lib/integrations/domain/models';
+import { resolveProviderCapabilities } from '@/lib/integrations/domain/capability';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 
 type UpsertGrantFromOAuthInput = {
@@ -22,25 +18,6 @@ type UpsertGrantFromOAuthInput = {
   expiresAt?: Date | null;
   scopeRaw?: string | null;
   serverUrl?: string | null;
-};
-
-const splitScopes = (scopeRaw?: string | null): string[] => {
-  if (!scopeRaw) {
-    return [];
-  }
-
-  return scopeRaw
-    .split(/[\s,]+/)
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-};
-
-const resolveCapabilities = (provider: GitProviderType, scopes: string[]): Capability[] => {
-  if (provider === 'github') {
-    return resolveGitHubCapabilities(scopes);
-  }
-
-  return resolveGitLabCapabilities(scopes);
 };
 
 export const upsertGrantFromOAuth = async ({
@@ -83,7 +60,7 @@ export const upsertGrantFromOAuth = async ({
     identity = updated ?? identity;
   }
 
-  const capabilities = resolveCapabilities(provider, splitScopes(scopeRaw));
+  const capabilities = resolveProviderCapabilities(provider, scopeRaw);
   const grantId = randomUUID();
   const encryptedCredentials = await encryptGrantCredentials({
     grantId,

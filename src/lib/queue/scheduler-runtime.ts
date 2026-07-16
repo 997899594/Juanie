@@ -10,6 +10,7 @@ import { startMigrationStateHealing } from './migration-state-healing';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { startSchemaRepairReviewSync } from './schema-repair-review-sync';
 import { startSchemaStateHealing } from './schema-state-healing';
+import { startSourceWebhookReconciliation } from './source-webhook-reconciliation';
 
 const schedulerLogger = logger.child({ component: 'scheduler' });
 
@@ -74,6 +75,11 @@ export function startSchedulerRuntime(): string[] {
   if (process.env.ENABLE_MIGRATION_STATE_HEALING !== 'false') {
     startMigrationStateHealing();
     enabledTasks.push('migration-state-healing');
+  }
+
+  if (process.env.ENABLE_SOURCE_WEBHOOK_RECONCILIATION !== 'false') {
+    startSourceWebhookReconciliation();
+    enabledTasks.push('source-webhook-reconciliation');
   }
 
   schedulerLogger.info('Scheduler runtime started successfully', {

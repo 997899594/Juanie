@@ -5,6 +5,7 @@ describe('resolveGitHubCapabilities', () => {
   it('maps repo without workflow correctly', () => {
     const caps = resolveGitHubCapabilities(['repo', 'user:email']);
     expect(caps).toContain('write_repo');
+    expect(caps).toContain('manage_webhook');
     expect(caps).not.toContain('write_workflow');
   });
 });

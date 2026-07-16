@@ -6,6 +6,7 @@ import {
   integrationGrants,
   integrationIdentities,
 } from '@/lib/db/schema';
+import { resolveProviderCapabilities } from '@/lib/integrations/domain/capability';
 import { integrationErrors, toIntegrationError } from '@/lib/integrations/domain/errors';
 import type { Capability } from '@/lib/integrations/domain/models';
 import { decryptGrantAccessToken } from '@/lib/integrations/service/grant-credentials';
@@ -83,7 +84,27 @@ export const createIntegrationSession = async ({
     where: eq(integrationCapabilitySnapshots.integrationGrantId, grant.id),
   });
 
-  const capabilities = snapshotRows.map((row) => row.capability) as Capability[];
+  const snapshotCapabilities = snapshotRows.map((row) => row.capability) as Capability[];
+  const capabilities = [
+    ...new Set([
+      ...snapshotCapabilities,
+      ...resolveProviderCapabilities(identity.provider, grant.scopeRaw),
+    ]),
+  ];
+  const missingCapabilities = capabilities.filter(
+    (capability) => !snapshotCapabilities.includes(capability)
+  );
+  if (missingCapabilities.length > 0) {
+    await db
+      .insert(integrationCapabilitySnapshots)
+      .values(
+        missingCapabilities.map((capability) => ({
+          integrationGrantId: grant.id,
+          capability,
+        }))
+      )
+      .onConflictDoNothing();
+  }
   assertCapabilities(capabilities, requiredCapabilities);
   const accessToken = await decryptGrantAccessToken(grant);
 

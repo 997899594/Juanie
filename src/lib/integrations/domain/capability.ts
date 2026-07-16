@@ -1,5 +1,7 @@
 import type { Capability } from './models';
 
+type Provider = 'github' | 'gitlab' | 'gitlab-self-hosted';
+
 const sortCapabilities = (capabilities: Iterable<Capability>): Capability[] =>
   Array.from(new Set(capabilities)).sort((a, b) => a.localeCompare(b)) as Capability[];
 
@@ -42,3 +44,16 @@ export const resolveGitLabCapabilities = (scopes: string[]): Capability[] => {
 
   return sortCapabilities(capabilities);
 };
+
+export function resolveProviderCapabilities(
+  provider: Provider,
+  scopeRaw?: string | null
+): Capability[] {
+  const scopes = (scopeRaw ?? '')
+    .split(/[\s,]+/u)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  return provider === 'github'
+    ? resolveGitHubCapabilities(scopes)
+    : resolveGitLabCapabilities(scopes);
+}
