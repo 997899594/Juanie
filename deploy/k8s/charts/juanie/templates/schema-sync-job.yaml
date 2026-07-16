@@ -22,8 +22,12 @@ spec:
         app.kubernetes.io/component: schema-{{ .phase }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ $root.Chart.Name }}-schema-runner
+      serviceAccountName: default
       automountServiceAccountToken: false
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
