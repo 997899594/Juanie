@@ -16,8 +16,7 @@ permissions:
 env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
-  ATLAS_VERSION: 1.2.0
-  ATLAS_ACTION_VERSION: v1.2.0
+  ATLAS_VERSION: 1.2.3
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -32,7 +31,7 @@ jobs:
 
       - uses: ariga/setup-atlas@2f3c785c89a15e1c0d07bcae3900fb5feb969eea # v0
         with:
-          version: ${{ env.ATLAS_ACTION_VERSION }}
+          version: v${{ env.ATLAS_VERSION }}
 
       - run: bun install --frozen-lockfile
       - run: bun audit --production
@@ -169,7 +168,7 @@ jobs:
           bun-version: 1.3.9
       - uses: ariga/setup-atlas@2f3c785c89a15e1c0d07bcae3900fb5feb969eea # v0
         with:
-          version: ${{ env.ATLAS_ACTION_VERSION }}
+          version: v${{ env.ATLAS_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run db:push
       - name: Start Restate And Durable Services

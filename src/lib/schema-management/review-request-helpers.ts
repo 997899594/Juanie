@@ -1,6 +1,6 @@
 import { drizzleSchemaConfigCandidates } from '@/lib/migrations/schema-source';
 
-const DEFAULT_ATLAS_IMAGE = 'arigaio/atlas:1.2.0-community';
+const DEFAULT_ATLAS_IMAGE = 'arigaio/atlas:1.2.3-community';
 
 export interface SchemaRepairRuntimeArtifacts {
   files: Record<string, string>;

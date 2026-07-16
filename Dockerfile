@@ -66,9 +66,9 @@ RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-distribution
 
 ARG TARGETARCH=amd64
-ARG ATLAS_VERSION=1.2.0
-ARG ATLAS_SHA256_AMD64=c12b889e3349f0e5610aec32fe327e5a6911a0e472754a0c381c30c7c0630e88
-ARG ATLAS_SHA256_ARM64=b76308f558d50d006add507f3ab86afc1147644519dd327f7f5fac6d02d4f595
+ARG ATLAS_VERSION=1.2.3
+ARG ATLAS_SHA256_AMD64=241d8c56091c58c7bea71c028bdee66b998f8225aaf60fee954914dbb9bed430
+ARG ATLAS_SHA256_ARM64=4e81e18e1ce554cf1e177bb462f887dad31aaf00471d0e4bbba84fedf155fed1
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
