@@ -8,6 +8,12 @@
 {{- if not (regexMatch "^[a-f0-9]{40}$" .Values.env.JUANIE_SOURCE_REVISION) }}
 {{- fail "production requires env.JUANIE_SOURCE_REVISION as an immutable 40-character commit SHA" }}
 {{- end }}
+{{- if not .Values.monitoring.podMonitor.enabled }}
+{{- fail "production requires monitoring.podMonitor.enabled=true" }}
+{{- end }}
+{{- if not (has .Values.production.topologyMode (list "singleNode" "highAvailability")) }}
+{{- fail "production.topologyMode must be singleNode or highAvailability" }}
+{{- end }}
 {{- if eq .Values.production.durabilityMode "selfHosted" }}
 {{- if or (not .Values.postgres.enabled) (not .Values.restate.embeddedEnabled) }}
 {{- fail "self-hosted production requires embedded PostgreSQL and Restate" }}
@@ -36,10 +42,13 @@
 {{- else }}
 {{- fail "production.durabilityMode must be selfHosted or external" }}
 {{- end }}
-{{- if lt (int .Values.replicaCount.web) 2 }}
-{{- fail "production requires at least two web replicas" }}
+{{- if eq .Values.production.topologyMode "singleNode" }}
+{{- if or (ne (int .Values.replicaCount.web) 1) (ne (int .Values.replicaCount.worker) 1) (ne (int .Values.replicaCount.scheduler) 1) (ne (int .Values.replicaCount.restateServices) 1) (ne (int .Values.replicaCount.outboxDispatcher) 1) }}
+{{- fail "singleNode production requires exactly one replica for every control-plane component" }}
 {{- end }}
-{{- if lt (int .Values.replicaCount.restateServices) 2 }}
-{{- fail "production requires at least two Restate service replicas" }}
+{{- else }}
+{{- if or (lt (int .Values.replicaCount.web) 2) (lt (int .Values.replicaCount.worker) 2) (lt (int .Values.replicaCount.scheduler) 2) (lt (int .Values.replicaCount.restateServices) 2) (lt (int .Values.replicaCount.outboxDispatcher) 2) }}
+{{- fail "highAvailability production requires at least two replicas for every control-plane component" }}
+{{- end }}
 {{- end }}
 {{- end }}

@@ -1,15 +1,16 @@
 # 生产环境覆盖配置
 production:
   enabled: true
+  topologyMode: singleNode
   durabilityMode: selfHosted
   requireDisasterRecovery: false
 
 replicaCount:
-  web: 2
-  worker: 2
-  scheduler: 2
-  restateServices: 2
-  outboxDispatcher: 2
+  web: 1
+  worker: 1
+  scheduler: 1
+  restateServices: 1
+  outboxDispatcher: 1
 
 worker:
   insecureSkipTlsVerify: false
@@ -20,13 +21,13 @@ deployment:
   web:
     strategy:
       type: RollingUpdate
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: 0
+      maxUnavailable: 1
   worker:
     strategy:
       type: RollingUpdate
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: 0
+      maxUnavailable: 1
   scheduler:
     strategy:
       type: RollingUpdate
@@ -93,4 +94,6 @@ env:
 
 monitoring:
   prometheusRule:
+    enabled: true
+  podMonitor:
     enabled: true
