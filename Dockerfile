@@ -61,52 +61,32 @@ RUN bun build ./src/lib/backups/control-plane-uploader.ts --compile --outfile=co
 RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-snapshot
 
 # ============================================
-# Stage 6: Reproducible Atlas Builder
+# Stage 6: Verified Atlas Distribution
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-builder
-WORKDIR /build
+FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-distribution
 
 ARG TARGETARCH=amd64
-ARG GO_VERSION=1.26.5
-ARG GO_SHA256_AMD64=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
-ARG GO_SHA256_ARM64=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
 ARG ATLAS_VERSION=1.2.0
-ARG ATLAS_SOURCE_REF=47daa88aea519f7f4c4aab5adfde2beab9b10b13
-ARG ATLAS_SOURCE_SHA256=9e7f5a962d4358b1b125b687fa02c10a038c188e04f1459fa6f58b6bf92a9cd0
+ARG ATLAS_SHA256_AMD64=c12b889e3349f0e5610aec32fe327e5a6911a0e472754a0c381c30c7c0630e88
+ARG ATLAS_SHA256_ARM64=b76308f558d50d006add507f3ab86afc1147644519dd327f7f5fac6d02d4f595
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential ca-certificates curl patch \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 RUN case "${TARGETARCH}" in \
-      amd64) go_sha256="${GO_SHA256_AMD64}" ;; \
-      arm64) go_sha256="${GO_SHA256_ARM64}" ;; \
-      *) echo "Unsupported Go architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+      amd64) atlas_sha256="${ATLAS_SHA256_AMD64}" ;; \
+      arm64) atlas_sha256="${ATLAS_SHA256_ARM64}" ;; \
+      *) echo "Unsupported Atlas architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-  && curl -sSfL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" -o /tmp/go.tar.gz \
-  && echo "${go_sha256}  /tmp/go.tar.gz" | sha256sum -c - \
-  && tar -C /usr/local -xzf /tmp/go.tar.gz \
-  && rm /tmp/go.tar.gz
-
-RUN curl -sSfL \
-      "https://github.com/ariga/atlas/archive/${ATLAS_SOURCE_REF}.tar.gz" \
-      -o /tmp/atlas.tar.gz \
-  && echo "${ATLAS_SOURCE_SHA256}  /tmp/atlas.tar.gz" | sha256sum -c - \
-  && mkdir /build/atlas \
-  && tar -C /build/atlas --strip-components=1 -xzf /tmp/atlas.tar.gz \
-  && rm /tmp/atlas.tar.gz
-
-COPY --from=source /app/deploy/atlas/atlas-v1.2.0-security.patch /tmp/atlas-security.patch
-RUN cd /build/atlas \
-  && patch -p1 < /tmp/atlas-security.patch \
-  && cd cmd/atlas \
-  && GOTOOLCHAIN=local /usr/local/go/bin/go mod download \
-  && CGO_ENABLED=1 GOTOOLCHAIN=local /usr/local/go/bin/go build \
-      -mod=mod \
-      -trimpath \
-      -ldflags "-s -w -buildid= -X ariga.io/atlas/cmd/atlas/internal/cmdapi.version=v${ATLAS_VERSION} -X ariga.io/atlas/cmd/atlas/internal/cmdapi.flavor=community" \
-      -o /usr/local/bin/atlas . \
-  && /usr/local/bin/atlas version
+  && curl --fail --location --retry 5 --retry-all-errors \
+      "https://release.ariga.io/atlas/atlas-linux-${TARGETARCH}-v${ATLAS_VERSION}" \
+      --output /tmp/atlas \
+  && echo "${atlas_sha256}  /tmp/atlas" | sha256sum -c - \
+  && install -m 0755 /tmp/atlas /usr/local/bin/atlas \
+  && rm /tmp/atlas \
+  && /usr/local/bin/atlas version \
+  && /usr/local/bin/atlas migrate apply --help | grep -F -- '--to-version'
 
 # ============================================
 # Stage 7: Schema Runner Postgres Dependencies
@@ -201,7 +181,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates findutils tar \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=atlas-builder /usr/local/bin/atlas /usr/local/bin/atlas
+COPY --from=atlas-distribution /usr/local/bin/atlas /usr/local/bin/atlas
 COPY --from=worker-builder /app/schema-runner ./schema-runner
 COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations

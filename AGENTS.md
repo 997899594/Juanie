@@ -121,9 +121,10 @@ Helm chart 同步 Web / Restate / Dispatcher / Worker / Scheduler
 默认 Helm 发布不得执行 destructive contract migration。contract chain 必须在 N-1 回滚窗口结束后，
 通过独立的显式 promotion 命令执行。
 Restate services、outbox dispatcher、worker、scheduler 共享最小化 Bun runtime 镜像，通过
-command 区分入口。schema-runner 使用独立的短生命周期镜像，内含从固定源码和安全 Go
-工具链可复现构建的 Atlas CLI；不得把迁移工具链重新放入常驻 runtime 镜像。Web、
-controller、worker、scheduler、schema-runner 使用独立 ServiceAccount；
+command 区分入口。schema-runner 使用独立的短生命周期镜像，内含固定版本、校验
+SHA256 且通过所需命令能力门禁的 Atlas 官方发行版；不得自行编译能力不完整的 community
+flavor，也不得把迁移工具链重新放入常驻 runtime 镜像。Web、controller、worker、
+scheduler、schema-runner 使用独立 ServiceAccount；
 Web/worker/schema-runner 不挂载 Kubernetes token。
 
 ## Code Style Guidelines

@@ -312,6 +312,8 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --entrypoint /usr/local/bin/atlas "${SCHEMA_RUNNER_IMAGE}" version
+          docker run --rm --entrypoint /bin/bash "${SCHEMA_RUNNER_IMAGE}" -o pipefail -c \
+            "/usr/local/bin/atlas migrate apply --help | grep -F -- '--to-version'"
 
   deploy-platform:
     needs: build-images
