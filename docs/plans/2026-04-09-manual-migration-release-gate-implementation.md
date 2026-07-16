@@ -36,7 +36,7 @@ expect(plan.migration.manualPlatformCount).toBe(1);
 expect(plan.migration.externalCount).toBe(1);
 ```
 
-Add resolver coverage that `executionMode` survives `juanie.yaml -> migrationSpecification -> ResolvedMigrationSpec`.
+Add resolver coverage that `executionMode` survives `juanie.yml -> migrationSpecification -> ResolvedMigrationSpec`.
 
 **Step 2: Run tests to verify they fail**
 
@@ -444,7 +444,7 @@ git commit -m "feat: surface migration gate drift in release views"
 ### Task 6: Update NexusNote Contract And Add App-Side Schema Guard
 
 **Files:**
-- Modify: `/Users/findbiao/projects/nexusnote/juanie.yaml`
+- Modify: `/Users/findbiao/projects/nexusnote/juanie.yml`
 - Modify: `/Users/findbiao/projects/nexusnote/scripts/db-verify.mjs`
 - Create: `/Users/findbiao/projects/nexusnote/lib/server/schema-compatibility.ts`
 - Modify: `/Users/findbiao/projects/nexusnote/app/api/health/route.ts`
@@ -529,7 +529,7 @@ Expected: lint and typecheck pass; health route returns `503` when schema is inc
 **Step 6: Commit**
 
 ```bash
-git -C /Users/findbiao/projects/nexusnote add juanie.yaml scripts/db-verify.mjs lib/server/schema-compatibility.ts app/api/health/route.ts DEPLOYMENT.md
+git -C /Users/findbiao/projects/nexusnote add juanie.yml scripts/db-verify.mjs lib/server/schema-compatibility.ts app/api/health/route.ts DEPLOYMENT.md
 git -C /Users/findbiao/projects/nexusnote commit -m "feat: add schema gate for release compatibility"
 ```
 

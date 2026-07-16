@@ -10,7 +10,7 @@
 ## 版本 2：数据库与发布安全
 
 - 建立 schema safety 主链，使用 Atlas 进行 diff/safety/repair 和控制面迁移执行，结合子应用
-  `juanie.yaml` 迁移配置实现发布前数据库风险门禁。
+  `juanie.yml` 迁移配置实现发布前数据库风险门禁。
 - 将 production 发布建模为可审计状态机，支持 staging promotion、候选版本追踪、受控放量和 release detail 操作闭环。
 
 ## 版本 3：AI 工程化

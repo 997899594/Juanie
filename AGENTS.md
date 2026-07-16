@@ -391,7 +391,7 @@ src/
 │   │   └── gitlab.ts      # GitLab 实现（含自托管）
 │   ├── integrations/      # OAuth/Grant/团队绑定控制面
 │   ├── config/
-│   │   └── parser.ts      # juanie.yaml 解析器（Zod 校验）
+│   │   └── parser.ts      # juanie.yml 解析器（Zod 校验）
 │   ├── queue/             # Remaining short-task BullMQ worker and transitional activity adapters
 │   ├── outbox/            # Transactional outbox + dispatcher
 │   ├── restate/           # Durable service contracts and endpoint
@@ -473,9 +473,9 @@ SMTP_PASS=xxx
 
 4. **Before committing**: Run `bun run test` and `bun run lint` to check for issues
 
-## juanie.yaml 项目配置格式
+## juanie.yml 项目配置格式
 
-项目根目录的 `juanie.yaml` 由 `src/lib/config/parser.ts` 解析（Zod 校验）：
+项目根目录的 `juanie.yml` 由 `src/lib/config/parser.ts` 解析（Zod 校验）：
 
 ```yaml
 services:

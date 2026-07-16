@@ -69,14 +69,14 @@ export function getUnsafeRuntimeDatabaseInfrastructureChange(
   if (config.type !== current.type) {
     return {
       databaseName: config.name,
-      message: `数据库 "${config.name}" 的基础设施类型不能通过 juanie.yaml 直接从 ${getDatabaseTypeLabel(current.type)} 改成 ${getDatabaseTypeLabel(config.type)}，请走显式迁移流程`,
+      message: `数据库 "${config.name}" 的基础设施类型不能通过 juanie.yml 直接从 ${getDatabaseTypeLabel(current.type)} 改成 ${getDatabaseTypeLabel(config.type)}，请走显式迁移流程`,
     };
   }
 
   if (current.provisionTypeWasSupported && nextProvisionType !== current.provisionType) {
     return {
       databaseName: config.name,
-      message: `数据库 "${config.name}" 的供应方式不能通过 juanie.yaml 直接从 ${getDatabaseProvisionTypeLabel(current.provisionType)} 改成 ${getDatabaseProvisionTypeLabel(nextProvisionType)}，请走显式迁移流程`,
+      message: `数据库 "${config.name}" 的供应方式不能通过 juanie.yml 直接从 ${getDatabaseProvisionTypeLabel(current.provisionType)} 改成 ${getDatabaseProvisionTypeLabel(nextProvisionType)}，请走显式迁移流程`,
     };
   }
 

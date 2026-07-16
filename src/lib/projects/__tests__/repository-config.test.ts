@@ -23,13 +23,13 @@ describe('repository Juanie config', () => {
       },
     });
 
-    expect(requests).toEqual([{ path: 'juanie.yaml', ref: 'a'.repeat(40) }]);
-    expect(result.path).toBe('juanie.yaml');
+    expect(requests).toEqual([{ path: 'juanie.yml', ref: 'a'.repeat(40) }]);
+    expect(result.path).toBe('juanie.yml');
     expect(/^[a-f0-9]{64}$/.test(result.digest)).toBe(true);
     expect(result.config.services[0]?.name).toBe('web');
   });
 
-  it('does not probe legacy paths or persisted configuration when juanie.yaml is absent', async () => {
+  it('does not probe legacy paths or persisted configuration when juanie.yml is absent', async () => {
     const requestedPaths: string[] = [];
 
     let error: unknown;
@@ -47,8 +47,8 @@ describe('repository Juanie config', () => {
     }
 
     expect(error instanceof Error).toBe(true);
-    expect((error as Error).message).toContain('juanie.yaml was not found in acme/app');
-    expect(requestedPaths).toEqual(['juanie.yaml']);
+    expect((error as Error).message).toContain('juanie.yml was not found in acme/app');
+    expect(requestedPaths).toEqual(['juanie.yml']);
   });
 
   it('rejects invalid configuration with commit lineage', async () => {
@@ -66,6 +66,6 @@ describe('repository Juanie config', () => {
     }
 
     expect(error instanceof Error).toBe(true);
-    expect((error as Error).message).toContain(`Invalid juanie.yaml at ${sha}`);
+    expect((error as Error).message).toContain(`Invalid juanie.yml at ${sha}`);
   });
 });

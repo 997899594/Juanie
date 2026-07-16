@@ -3,14 +3,14 @@
 ## 30 秒版本
 
 Juanie 的 schema safety 不是替用户强行接管 ORM，而是在发布前用 Atlas 和平台上下文做 diff、风险识别、
-门禁、解释和修复建议。控制面自己的 schema 迁移只走 Atlas；用户应用的实际迁移执行尊重 `juanie.yaml`。
+门禁、解释和修复建议。控制面自己的 schema 迁移只走 Atlas；用户应用的实际迁移执行尊重 `juanie.yml`。
 
 ## 两类 schema
 
 | 类型 | 真源 | 执行 |
 | --- | --- | --- |
 | Juanie 控制面 schema | `src/lib/db/schema.ts` + `atlas.hcl` + `migrations/` | Argo PreSync schema-runner 执行 Atlas |
-| 用户应用 schema | 子应用 ORM / migration / `juanie.yaml` | Juanie 做 diff/safety/repair，执行按配置 |
+| 用户应用 schema | 子应用 ORM / migration / `juanie.yml` | Juanie 做 diff/safety/repair，执行按配置 |
 
 这个边界非常重要。不要把“平台用 Atlas”讲成“所有子应用必须用 Atlas 写迁移”。
 
@@ -29,7 +29,7 @@ Juanie 的 schema safety 不是替用户强行接管 ORM，而是在发布前用
 ## 推荐讲法
 
 > 子应用可以继续使用自己的 ORM 和迁移工具。Juanie 不要求用户维护两套模型。平台层用 Atlas 做 schema diff、
-> safety classification 和 repair guidance；真正执行迁移时，仍然遵守 `juanie.yaml` 里声明的工具、命令、
+> safety classification 和 repair guidance；真正执行迁移时，仍然遵守 `juanie.yml` 里声明的工具、命令、
 > working directory、phase、approval policy 和 lock strategy。
 
 ## AI 在 schema safety 中的角色

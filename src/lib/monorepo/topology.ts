@@ -533,7 +533,7 @@ export async function inspectRepositoryTopology(
     dockerBakeJsonContent,
     rootPackageJsonContent,
   ] = await Promise.all([
-    safeGetFileContent(reader, repoFullName, 'juanie.yaml', ref),
+    safeGetFileContent(reader, repoFullName, 'juanie.yml', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.hcl', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.json', ref),
     safeGetFileContent(reader, repoFullName, 'package.json', ref),

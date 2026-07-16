@@ -28,7 +28,7 @@ else
 require 'json'
 require 'yaml'
 
-config = YAML.load_file('juanie.yaml') || {}
+config = YAML.load_file('juanie.yml') || {}
 deliverables = Array(config['deliverables'])
 
 result = deliverables.flat_map do |deliverable|

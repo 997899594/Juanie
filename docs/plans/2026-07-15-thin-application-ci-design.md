@@ -2,7 +2,7 @@
 
 ## Decision
 
-Child repositories expose one user-owned declaration, `juanie.yaml`, and one provider-owned
+Child repositories expose one user-owned declaration, `juanie.yml`, and one provider-owned
 bootstrap entry. GitHub uses a one-job caller for a Juanie reusable workflow. GitLab uses a single
 remote CI Component include protected by GitLab's `integrity` field. All executable build planning,
 OIDC exchange, image building and artifact registration code belongs to a versioned Juanie CI
@@ -11,13 +11,13 @@ Dockerfiles or static runtime configuration into child repositories.
 
 The bootstrap entry is not application configuration. It is a provider requirement that grants the
 minimum permissions needed to start the platform runtime. Application owners only edit
-`juanie.yaml`. Juanie can replace the bootstrap mechanically when its runtime revision changes,
+`juanie.yml`. Juanie can replace the bootstrap mechanically when its runtime revision changes,
 without merging application-specific data into it.
 
 ## Configuration Authority
 
 An OIDC workload token binds provider, repository, ref, source commit and external run id. After
-verifying that identity, the control plane reads `juanie.yaml` from the bound commit through the
+verifying that identity, the control plane reads `juanie.yml` from the bound commit through the
 team integration binding. It validates the file with the platform parser and derives the build plan
 from that immutable content. Missing or invalid configuration fails the build. The control plane
 must not use the mutable `project.configJson` snapshot as a build fallback.
@@ -48,7 +48,7 @@ build plan and passed to BuildKit with `--file`; they are never written to the s
 
 ## Failure Model
 
-- Missing `juanie.yaml`, invalid YAML, provider read failure or SHA mismatch blocks build planning.
+- Missing `juanie.yml`, invalid YAML, provider read failure or SHA mismatch blocks build planning.
 - An unavailable or integrity-mismatched CI Component blocks GitLab pipeline creation.
 - An unavailable reusable workflow revision blocks GitHub before application code runs.
 - Unknown services, targets or packages are rejected by the control plane.
@@ -56,7 +56,7 @@ build plan and passed to BuildKit with `--file`; they are never written to the s
 
 ## Repository Contract
 
-GitHub repositories contain `juanie.yaml` and `.github/workflows/juanie-ci.yml`. GitLab repositories
-contain `juanie.yaml` plus one Juanie include in their existing `.gitlab-ci.yml`; Juanie must not
+GitHub repositories contain `juanie.yml` and `.github/workflows/juanie-ci.yml`. GitLab repositories
+contain `juanie.yml` plus one Juanie include in their existing `.gitlab-ci.yml`; Juanie must not
 replace unrelated GitLab jobs. Repositories with an existing GitLab pipeline receive a managed
 include block, while new repositories receive the minimal include-only file.

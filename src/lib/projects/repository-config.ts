@@ -6,7 +6,7 @@ import {
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 
-const canonicalConfigPath = 'juanie.yaml';
+const canonicalConfigPath = 'juanie.yml';
 
 export interface RepositoryJuanieConfig {
   path: typeof canonicalConfigPath;

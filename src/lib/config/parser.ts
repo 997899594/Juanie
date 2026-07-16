@@ -544,7 +544,7 @@ export function generateDefaultConfig(
   }
 ): string {
   const lines: string[] = [
-    `# juanie.yaml`,
+    `# juanie.yml`,
     `name: ${name}`,
     `framework: ${framework}`,
     ``,

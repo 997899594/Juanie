@@ -275,7 +275,7 @@ const defaultMonorepoGlobalInputs = [
   'bun.lock',
   'bun.lockb',
   'turbo.json',
-  'juanie.yaml',
+  'juanie.yml',
   'docker-bake.hcl',
   'docker-bake.json',
 ] as const;
@@ -493,7 +493,7 @@ export function renderJuanieConfig(
   const serviceConfigMap = getProjectServiceConfigMap(project);
   const monorepoAffected = resolveMonorepoAffectedRules(project, automation);
   const lines: string[] = [
-    '# juanie.yaml',
+    '# juanie.yml',
     '# This file is the source of truth for Juanie build, deploy, verification, and delivery.',
     '# Keep runtime services, build-only targets, and customer deliverables as separate graph nodes.',
     '',

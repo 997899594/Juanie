@@ -257,7 +257,7 @@ export async function syncMigrationSpecificationsFromRepo(
     options?.sourceRef ||
     getRepositoryDefaultBranch(context.repository);
   const configContent = await gateway
-    .getFileContent(session, context.repository.fullName, 'juanie.yaml', configRef)
+    .getFileContent(session, context.repository.fullName, 'juanie.yml', configRef)
     .catch(() => null);
 
   if (!configContent) {
@@ -266,7 +266,7 @@ export async function syncMigrationSpecificationsFromRepo(
 
   const parsed = parseJuanieConfig(configContent);
   if (!parsed.isValid) {
-    throw new Error(`Invalid juanie.yaml: ${parsed.errors.join('; ')}`);
+    throw new Error(`Invalid juanie.yml: ${parsed.errors.join('; ')}`);
   }
 
   const configServices = new Map(parsed.services.map((service) => [service.name, service]));

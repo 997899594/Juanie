@@ -3,7 +3,7 @@ import { createBuildPlan, getBuildPlanReleaseServices, selectBuildScope } from '
 import type { JuanieConfig } from '@/lib/config/parser';
 
 const configLineage = {
-  configPath: 'juanie.yaml' as const,
+  configPath: 'juanie.yml' as const,
   configDigest: 'f'.repeat(64),
 };
 
@@ -161,7 +161,7 @@ describe('build plan', () => {
           strategy: 'turbo',
           task: 'build',
           useTaskInputs: false,
-          global: ['juanie.yaml'],
+          global: ['juanie.yml'],
           inputs: [],
         },
       },

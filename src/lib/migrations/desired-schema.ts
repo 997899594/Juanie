@@ -236,7 +236,7 @@ async function resolveDrizzleConfigPath(input: {
   );
   if (discovered.length === 0) {
     throw new Error(
-      `未找到 Drizzle 配置文件，请在 juanie.yaml 中通过 schema.config 指定（支持: ${drizzleSchemaConfigCandidates.join(', ')}）`
+      `未找到 Drizzle 配置文件，请在 juanie.yml 中通过 schema.config 指定（支持: ${drizzleSchemaConfigCandidates.join(', ')}）`
     );
   }
 
@@ -250,7 +250,7 @@ async function resolveDrizzleConfigPath(input: {
   }
 
   throw new Error(
-    `发现多个 Drizzle 配置文件，请在 juanie.yaml 中通过 schema.config 明确指定：${discovered.join(', ')}`
+    `发现多个 Drizzle 配置文件，请在 juanie.yml 中通过 schema.config 明确指定：${discovered.join(', ')}`
   );
 }
 

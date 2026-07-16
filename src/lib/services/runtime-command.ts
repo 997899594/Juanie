@@ -11,7 +11,7 @@ export function buildServiceRuntimeCommandSpec(service: {
   const displayCommand = service.startCommand?.trim();
 
   if (!displayCommand) {
-    throw new Error(`Service ${service.name} is missing run.command in juanie.yaml`);
+    throw new Error(`Service ${service.name} is missing run.command in juanie.yml`);
   }
 
   return {

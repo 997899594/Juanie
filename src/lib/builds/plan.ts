@@ -66,7 +66,7 @@ export interface BuildPlan {
     repository: string;
     ref: string;
     sha: string;
-    configPath: 'juanie.yaml';
+    configPath: 'juanie.yml';
     configDigest: string;
   };
   units: BuildUnit[];
@@ -374,7 +374,7 @@ export function selectBuildScope(
   const isWorkloadFile = (file: string) => allAppDirs.some((dir) => isInsideAppDir(file, dir));
   const isGlobalChange = changes.changedFiles.some(
     (file) =>
-      file === 'juanie.yaml' ||
+      file === 'juanie.yml' ||
       file.startsWith('.github/') ||
       file === '.gitlab-ci.yml' ||
       affected.global.some((pattern) => matchesInput(file, pattern)) ||
@@ -416,7 +416,7 @@ export function createBuildPlan(input: {
   repository: string;
   ref: string;
   sha: string;
-  configPath: 'juanie.yaml';
+  configPath: 'juanie.yml';
   configDigest: string;
   registry?: string;
   changes?: BuildChangeSet;

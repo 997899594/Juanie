@@ -25,7 +25,7 @@
 **Action：**
 
 - 控制面迁移只走 Atlas。
-- 子应用迁移执行尊重 `juanie.yaml`。
+- 子应用迁移执行尊重 `juanie.yml`。
 - 平台用 Atlas 做 diff/safety/repair。
 - AI migration review 解释风险和下一步。
 

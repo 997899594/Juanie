@@ -114,7 +114,7 @@ CI must fail loudly when:
 2. Add release artifact provenance columns through Atlas migration.
 3. Add signed upload and append-artifact APIs.
 4. Update GitHub/GitLab single-repo and monorepo CI templates.
-5. Update generated `juanie.yaml` examples so new imports do not learn the old path.
+5. Update generated `juanie.yml` examples so new imports do not learn the old path.
 6. Apply the new manifest to NexusNote only after Juanie CI and tests pass.
 
 ## Non-Goals

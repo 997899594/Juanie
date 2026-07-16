@@ -7,7 +7,7 @@
 **Juanie 做什么：**
 
 - 验证仓库和团队集成身份。
-- 注入 Juanie 管理的 CI 和 `juanie.yaml`。
+- 注入 Juanie 管理的 CI 和 `juanie.yml`。
 - 创建命名空间、环境、数据库、变量和 DNS/TLS。
 - 触发首发构建。
 - 通过 SSE 展示初始化进度。

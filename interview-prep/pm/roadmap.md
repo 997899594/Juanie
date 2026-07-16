@@ -5,7 +5,7 @@
 当前最重要的是让黄金路径稳定：
 
 1. 导入或创建项目。
-2. 平台注入正确 CI 和 `juanie.yaml`。
+2. 平台注入正确 CI 和 `juanie.yml`。
 3. Staging 首发成功。
 4. Preview 可基于分支最新 commit 创建。
 5. Preview 可提升到 staging。

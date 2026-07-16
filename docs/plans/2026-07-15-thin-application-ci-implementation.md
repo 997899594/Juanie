@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make `juanie.yaml` the only user-maintained child-application configuration while moving all CI implementation into a versioned Juanie runtime.
+**Goal:** Make `juanie.yml` the only user-maintained child-application configuration while moving all CI implementation into a versioned Juanie runtime.
 
 **Architecture:** The control plane reads and validates configuration at the OIDC-bound commit, then computes a build and delivery plan from checkout facts supplied by CI. GitHub and GitLab keep only provider bootstrap files and execute centrally owned runtime assets pinned to the deployed Juanie revision.
 
@@ -18,7 +18,7 @@
 - Modify: `src/lib/services/runtime-contract.ts`
 
 **Steps:**
-1. Add tests proving only `juanie.yaml` at the exact commit is accepted.
+1. Add tests proving only `juanie.yml` at the exact commit is accepted.
 2. Add a loader that resolves the team binding, fetches the file, validates it and computes SHA-256.
 3. Replace permissive runtime-contract loading with the shared strict loader.
 4. Run the repository-config and runtime-contract tests.

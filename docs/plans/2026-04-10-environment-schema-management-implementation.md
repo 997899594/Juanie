@@ -14,7 +14,7 @@
 
 Juanie already has:
 
-- repo-backed migration spec parsing from `juanie.yaml`
+- repo-backed migration spec parsing from `juanie.yml`
 - explicit migration execution modes: `automatic`, `manual_platform`, `external`
 - release planning that counts migration gates
 - release orchestration that blocks rollout on migration runs

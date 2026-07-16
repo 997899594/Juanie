@@ -217,7 +217,7 @@ describe('GitHubProvider preview build trigger', () => {
         const url = input instanceof URL ? input.toString() : String(input);
         calls.push({ url, init });
 
-        if (url.endsWith('/contents/juanie.yaml?ref=main')) {
+        if (url.endsWith('/contents/juanie.yml?ref=main')) {
           return new Response(
             JSON.stringify({
               sha: 'existing-sha-1',
@@ -230,7 +230,7 @@ describe('GitHubProvider preview build trigger', () => {
           return new Response('not found', { status: 404 });
         }
 
-        if (url.endsWith('/contents/juanie.yaml') && init?.method === 'DELETE') {
+        if (url.endsWith('/contents/juanie.yml') && init?.method === 'DELETE') {
           return new Response(null, { status: 200 });
         }
 
@@ -247,13 +247,13 @@ describe('GitHubProvider preview build trigger', () => {
       await provider.deleteFiles('token', {
         repoFullName: 'acme/juanie-demo',
         branch: 'main',
-        paths: ['juanie.yaml', '.env.juanie.example'],
+        paths: ['juanie.yml', '.env.juanie.example'],
         message: 'Remove Juanie managed files [skip ci]',
       });
 
       expect(calls.map((call) => call.url)).toEqual([
-        'https://api.github.com/repos/acme/juanie-demo/contents/juanie.yaml?ref=main',
-        'https://api.github.com/repos/acme/juanie-demo/contents/juanie.yaml',
+        'https://api.github.com/repos/acme/juanie-demo/contents/juanie.yml?ref=main',
+        'https://api.github.com/repos/acme/juanie-demo/contents/juanie.yml',
         'https://api.github.com/repos/acme/juanie-demo/contents/.env.juanie.example?ref=main',
       ]);
       expect(calls[1]?.init?.method).toBe('DELETE');

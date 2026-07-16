@@ -12,7 +12,7 @@ promotion 是否能完整跑通。
 
 过程中出现过多类问题：
 
-- 旧 `juanie.yaml` 和新注入配置冲突。
+- 旧 `juanie.yml` 和新注入配置冲突。
 - CI workflow inputs 不匹配。
 - schema gate 阻断。
 - schema-runner 运行时缺命令或超时。

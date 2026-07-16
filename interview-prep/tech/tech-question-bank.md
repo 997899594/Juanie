@@ -32,7 +32,7 @@ Drizzle 对 TypeScript schema authoring 友好；Atlas 更适合 migration hash�
 **回答：**
 
 子应用可以用自己的 ORM 和 migration。Juanie 用 Atlas 做 diff/safety/repair 和 gate，实际迁移执行按
-`juanie.yaml` 声明的工具、命令、工作目录和审批策略。
+`juanie.yml` 声明的工具、命令、工作目录和审批策略。
 
 ## Q6：Preview 如何直接基于分支最新 commit？
 

@@ -28,7 +28,7 @@ manual service editing remains under Advanced settings.
 
 ## Inference Rules
 
-1. A valid managed `juanie.yaml` remains authoritative.
+1. A valid managed `juanie.yml` remains authoritative.
 2. `apps/*` workspaces are workload candidates.
 3. A `packages/*` workspace is a workload only when it has an explicit runtime script, schedule or
    Dockerfile.
@@ -80,7 +80,7 @@ runtime deployment stage.
 
 - Build-time secrets and runtime secrets are separate contracts.
 - CI fetches build values per Build Run unit and passes them only through BuildKit secret mounts.
-- Secret values are never returned by repository analysis or written to `juanie.yaml`.
+- Secret values are never returned by repository analysis or written to `juanie.yml`.
 - External resources default to deny-all network access until an explicit binding is configured.
 - Graph inference includes a version so future rule changes do not silently reinterpret an existing
   project.
@@ -92,7 +92,7 @@ runtime deployment stage.
 Rejected. It makes build-only packages look deployable and pushes internal platform concepts into
 the user form.
 
-### Require every repository to maintain `juanie.yaml`
+### Require every repository to maintain `juanie.yml`
 
 Rejected as the default. Explicit configuration remains an override, not an onboarding prerequisite.
 

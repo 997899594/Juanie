@@ -72,7 +72,7 @@ describe('GitLabProvider preview build trigger', () => {
         calls.push({ url, init });
 
         if (
-          url.endsWith('/repository/files/juanie.yaml') &&
+          url.endsWith('/repository/files/juanie.yml') &&
           init?.method &&
           init.method.toUpperCase() === 'DELETE'
         ) {
@@ -101,7 +101,7 @@ describe('GitLabProvider preview build trigger', () => {
       await provider.deleteFiles('token', {
         repoFullName: 'acme/juanie-demo',
         branch: 'main',
-        paths: ['juanie.yaml', '.gitlab-ci.yml'],
+        paths: ['juanie.yml', '.gitlab-ci.yml'],
         message: 'Remove Juanie managed files [skip ci]',
       });
 

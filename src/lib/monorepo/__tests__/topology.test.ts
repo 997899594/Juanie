@@ -6,10 +6,10 @@ describe('repository topology inspection', () => {
     const topology = await inspectRepositoryTopology(
       {
         async listRootFiles() {
-          return ['turbo.json', 'juanie.yaml', 'docker-bake.hcl'];
+          return ['turbo.json', 'juanie.yml', 'docker-bake.hcl'];
         },
         async getFileContent(_repo, path) {
-          if (path === 'juanie.yaml') {
+          if (path === 'juanie.yml') {
             return `services:\n  - name: worker\n    type: worker\n    monorepo:\n      appDir: packages/worker\n    build:\n      strategy: bake\n      definition: docker-bake.hcl\n      target: worker\n      context: .\n    run:\n      command: bun run worker\n`;
           }
 
@@ -37,7 +37,7 @@ describe('repository topology inspection', () => {
     expect(topology.services[0]?.build?.target).toBe('worker');
   });
 
-  it('never probes the legacy juanie.yml path', async () => {
+  it('probes only the canonical juanie.yml path', async () => {
     const requestedPaths: string[] = [];
     await inspectRepositoryTopology(
       {
@@ -56,17 +56,18 @@ describe('repository topology inspection', () => {
       'main'
     );
 
-    expect(requestedPaths).not.toContain('juanie.yml');
+    expect(requestedPaths).toContain('juanie.yml');
+    expect(requestedPaths).not.toContain('juanie.yaml');
   });
 
   it('keeps managed monorepo affected rules and runtime artifact metadata', async () => {
     const topology = await inspectRepositoryTopology(
       {
         async listRootFiles() {
-          return ['turbo.json', 'juanie.yaml'];
+          return ['turbo.json', 'juanie.yml'];
         },
         async getFileContent(_repo, path) {
-          if (path === 'juanie.yaml') {
+          if (path === 'juanie.yml') {
             return `
 monorepo:
   type: turborepo

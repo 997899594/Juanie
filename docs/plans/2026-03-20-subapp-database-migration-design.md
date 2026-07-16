@@ -258,7 +258,7 @@ migrationRunItem {
 
 ## 仓库声明设计
 
-建议扩展 `juanie.yaml`，由服务级配置显式声明迁移能力，而不是平台猜测目录结构。
+建议扩展 `juanie.yml`，由服务级配置显式声明迁移能力，而不是平台猜测目录结构。
 
 示例：
 
@@ -573,7 +573,7 @@ UI 不直接显示底层 provider/DB 原始错误作为主信息，应映射为�
 - 可选新增 `migrationRunItems`
 
 2. 配置解析
-- 扩展 `juanie.yaml` parser
+- 扩展 `juanie.yml` parser
 - 读取服务级 `databases[].migrate`
 
 3. 执行器
@@ -641,7 +641,7 @@ src/app/api/projects/[id]/migration-runs/[runId]/
 - 新增 migration tables
 
 2. `src/lib/config/parser.ts`
-- 扩展 `juanie.yaml` schema
+- 扩展 `juanie.yml` schema
 
 3. `src/lib/queue/deployment.ts`
 - 将 migration 作为部署阶段之一

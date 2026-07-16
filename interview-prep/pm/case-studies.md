@@ -17,7 +17,7 @@
 
 **问题：** 如果平台只执行子应用脚本，无法提前知道 schema 风险；如果平台强制接管所有迁移，又会要求用户维护两套模型。
 
-**方案：** Juanie 使用 Atlas 做 diff/safety/repair，实际迁移执行尊重 `juanie.yaml` 和子应用工具配置。
+**方案：** Juanie 使用 Atlas 做 diff/safety/repair，实际迁移执行尊重 `juanie.yml` 和子应用工具配置。
 
 **价值：** 用户保留自己的 ORM 和迁移习惯，同时平台能在发布前识别风险并给出修复建议。
 

@@ -34,7 +34,7 @@ controlled rollout。这样做的原因是子应用每次发布都改 GitOps 仓
 | 平台自身发布 | CI build images -> update GitOps pointer -> Argo CD sync -> Helm -> PreSync Atlas |
 | 用户应用发布 | App CI build image -> call Juanie API -> release state machine |
 | 控制面 schema | Drizzle 负责建模，Atlas 是唯一活跃迁移执行器 |
-| 子应用 schema | Atlas 做 diff/safety/repair，实际迁移执行尊重 `juanie.yaml` 声明 |
+| 子应用 schema | Atlas 做 diff/safety/repair，实际迁移执行尊重 `juanie.yml` 声明 |
 | Preview | 基于远端分支最新 commit 创建，ApplicationSet 管 scaffold，release 状态机管发布 |
 | Staging | 默认作为持续验证环境，接收直接发布或从 preview 提升 |
 | Production | 默认通过 staging 提升，并可以进入受控放量 |

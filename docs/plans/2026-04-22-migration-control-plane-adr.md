@@ -12,7 +12,7 @@ Juanie 现在同时承担两类数据库职责：
 
 这两类能力在实现上已经部分分离，但产品语义和代码信号还不够统一：
 
-- `juanie.yaml` 已支持 `schema.source=atlas|drizzle|prisma|knex|typeorm|sql|custom`，说明子应用 schema 真相本来就是多态的。
+- `juanie.yml` 已支持 `schema.source=atlas|drizzle|prisma|knex|typeorm|sql|custom`，说明子应用 schema 真相本来就是多态的。
 - 发布执行器目前按工具分发，`drizzle`、`atlas`、`sql` 走不同主链，而不是所有项目都先转成 Atlas 再发版。
 - schema repair / review request 这条治理链已经倾向统一使用 Atlas 作为 diff / scaffold / adopt / repair 引擎。
 

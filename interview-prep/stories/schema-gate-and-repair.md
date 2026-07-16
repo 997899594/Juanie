@@ -27,7 +27,7 @@ Juanie 用 Atlas 做 diff/safety/repair，用 AI 解释风险，用 release 状�
 ## Action
 
 - 控制面 migration 唯一走 Atlas。
-- 子应用 migration 执行按 `juanie.yaml`。
+- 子应用 migration 执行按 `juanie.yml`。
 - 平台层使用 Atlas diff/safety 做门禁。
 - schema repair 可以引导用户生成 MR/PR 或修复建议。
 - AI migration review 把技术 diff 翻译成风险和下一步。

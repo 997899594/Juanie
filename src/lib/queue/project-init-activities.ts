@@ -531,7 +531,7 @@ export async function pushCicdConfig(
     files['.gitlab-ci.yml'] = renderGitLabCI(project, renderContext, existingGitLabCi);
   }
 
-  files['juanie.yaml'] =
+  files['juanie.yml'] =
     managedJuanieConfigContent ??
     renderJuanieConfig(projectWithTopology, renderContext, automationContext);
 

@@ -129,10 +129,10 @@ criteria live in `docs/troubleshooting.md`.
 
 Internal manual releases use `POST /api/projects/:id/releases`. External repository CI exchanges
 provider OIDC at `/api/auth/ci/exchange`, then creates an aggregate build through
-`POST /api/build-runs`. The control plane reads and validates `juanie.yaml` from the OIDC-bound
+`POST /api/build-runs`. The control plane reads and validates `juanie.yml` from the OIDC-bound
 commit SHA before deriving the build plan; it never falls back to `project.configJson`.
 
-Child repositories own only `juanie.yaml`. GitHub keeps a thin caller pinned to the deployed Juanie
+Child repositories own only `juanie.yml`. GitHub keeps a thin caller pinned to the deployed Juanie
 source revision, while GitLab keeps an integrity-pinned CI Component include. Build scripts,
 affected-workspace detection and generated Dockerfiles are versioned Juanie runtime assets and are
 materialized only in the CI runner's temporary state. GitHub OIDC must carry the exact pinned

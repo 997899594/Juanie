@@ -3,7 +3,7 @@ import { buildServiceRuntimeCommandSpec } from '@/lib/services/runtime-command';
 import { getUnsafeRuntimeDatabaseInfrastructureChange } from '@/lib/services/runtime-contract';
 
 describe('service runtime command contract', () => {
-  it('turns juanie.yaml run.command into the pod entrypoint contract', () => {
+  it('turns juanie.yml run.command into the pod entrypoint contract', () => {
     expect(
       buildServiceRuntimeCommandSpec({
         name: 'worker',
@@ -22,12 +22,12 @@ describe('service runtime command contract', () => {
         name: 'worker',
         startCommand: null,
       })
-    ).toThrow('Service worker is missing run.command in juanie.yaml');
+    ).toThrow('Service worker is missing run.command in juanie.yml');
   });
 });
 
 describe('runtime database contract safety', () => {
-  it('blocks changing a managed database type through juanie.yaml', () => {
+  it('blocks changing a managed database type through juanie.yml', () => {
     expect(
       getUnsafeRuntimeDatabaseInfrastructureChange(
         {
@@ -44,11 +44,11 @@ describe('runtime database contract safety', () => {
     ).toEqual({
       databaseName: 'primary',
       message:
-        '数据库 "primary" 的基础设施类型不能通过 juanie.yaml 直接从 PostgreSQL 改成 MySQL，请走显式迁移流程',
+        '数据库 "primary" 的基础设施类型不能通过 juanie.yml 直接从 PostgreSQL 改成 MySQL，请走显式迁移流程',
     });
   });
 
-  it('blocks changing a supported provision type through juanie.yaml', () => {
+  it('blocks changing a supported provision type through juanie.yml', () => {
     expect(
       getUnsafeRuntimeDatabaseInfrastructureChange(
         {
@@ -65,7 +65,7 @@ describe('runtime database contract safety', () => {
     ).toEqual({
       databaseName: 'primary',
       message:
-        '数据库 "primary" 的供应方式不能通过 juanie.yaml 直接从 共享资源 改成 外部实例，请走显式迁移流程',
+        '数据库 "primary" 的供应方式不能通过 juanie.yml 直接从 共享资源 改成 外部实例，请走显式迁移流程',
     });
   });
 
