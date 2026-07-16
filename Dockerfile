@@ -105,6 +105,7 @@ RUN curl --fail --location --retry 5 --retry-all-errors \
       -o /usr/local/bin/atlas . \
   && /usr/local/bin/atlas version \
   && /usr/local/bin/atlas migrate apply --help | grep -F -- 'apply [flags] [amount]' \
+  && /usr/local/bin/atlas migrate apply --help | grep -F -- '--exec-order' \
   && ! /usr/local/bin/atlas migrate apply --help | grep -F -- '--to-version'
 
 # ============================================

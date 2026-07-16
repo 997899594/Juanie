@@ -8,6 +8,14 @@
 
 **Tech Stack:** Bun, TypeScript, Atlas Community CLI 1.2.3, Go 1.26.5, Docker BuildKit, Trivy
 
+**Production lineage addendum:** A historical merge inserted four migrations behind the already
+published `20260714120000` revision. The permanent repair is
+`20260714130000_reconcile_control_plane_history.sql`: it restores the skipped expand schema,
+backfills credential envelopes, and becomes the new continuity baseline. Only this marked lineage
+uses Atlas `linear-skip`; the missing destructive revision remains unrecorded and is superseded by
+the independently promoted contract chain. CI enforces append-only migration versions after this
+checkpoint.
+
 ---
 
 ### Task 1: Define The Bounded Migration Contract

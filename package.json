@@ -34,6 +34,7 @@
     "db:push": "bun src/lib/db/control-plane-atlas.ts apply",
     "db:contract": "bun src/lib/db/control-plane-atlas.ts contract",
     "db:hash": "bun src/lib/db/control-plane-atlas.ts hash",
+    "db:lineage": "bun scripts/validate-migration-lineage.ts",
     "db:status": "bun src/lib/db/control-plane-atlas.ts status",
     "db:validate": "bun src/lib/db/control-plane-atlas.ts validate",
     "db:studio": "bunx drizzle-kit studio --config drizzle.studio.config.ts",

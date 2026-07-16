@@ -38,6 +38,28 @@ describe('atlas migration helpers', () => {
     ]);
   });
 
+  it('uses Atlas linear-skip only for an explicit history reconciliation', () => {
+    expect(
+      buildAtlasMigrateApplyArgs({
+        databaseUrl: 'postgres://app:secret@db/app',
+        migrationCount: 1,
+        executionOrder: 'linear-skip',
+      })
+    ).toEqual([
+      'migrate',
+      'apply',
+      '--dir',
+      'file://migrations',
+      '--url',
+      'postgres://app:secret@db/app',
+      '--revisions-schema',
+      'public',
+      '--exec-order',
+      'linear-skip',
+      '1',
+    ]);
+  });
+
   it('builds an explicit baseline adoption command', () => {
     expect(
       buildAtlasMigrateSetArgs({
@@ -130,6 +152,65 @@ describe('atlas migration helpers', () => {
         targetVersion: '2026071401',
       })
     ).toThrow('duplicate declared version');
+  });
+
+  it('allows a historical gap only at its adjacent reconciliation checkpoint', () => {
+    const declaredVersions = [
+      '20260712000000',
+      '20260713120000',
+      '20260713121000',
+      '20260714100000',
+      '20260714110000',
+      '20260714120000',
+      '20260714130000',
+      '20260715120000',
+    ];
+    const appliedVersions = ['20260712000000', '20260714120000'];
+
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions,
+        targetVersion: '20260714130000',
+        historyReconciliationVersion: '20260714130000',
+      })
+    ).toBe(1);
+    expect(() =>
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions,
+        targetVersion: '20260715120000',
+        historyReconciliationVersion: '20260714130000',
+      })
+    ).toThrow('contains a gap');
+  });
+
+  it('resumes a reconciliation checkpoint that applied before ledger canonicalization', () => {
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: ['20260712000000', '20260713120000', '20260714120000', '20260714130000'],
+        appliedVersions: ['20260712000000', '20260714120000', '20260714130000'],
+        targetVersion: '20260714130000',
+        historyReconciliationVersion: '20260714130000',
+      })
+    ).toBe(0);
+  });
+
+  it('treats an applied reconciliation checkpoint as the new history baseline', () => {
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: [
+          '20260712000000',
+          '20260713120000',
+          '20260714120000',
+          '20260714130000',
+          '20260715120000',
+        ],
+        appliedVersions: ['20260712000000', '20260714120000', '20260714130000'],
+        targetVersion: '20260715120000',
+        historyReconciliationVersion: '20260714130000',
+      })
+    ).toBe(1);
   });
 
   it('limits release graph previews to migrations at or before the stage target', () => {

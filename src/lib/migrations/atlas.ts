@@ -53,9 +53,12 @@ export interface AtlasSchemaApplyPlan {
   planSql: string;
 }
 
+export type AtlasMigrationExecutionOrder = 'linear' | 'linear-skip' | 'non-linear';
+
 export function buildAtlasMigrateApplyArgs(input: {
   databaseUrl: string;
   migrationCount?: number | null;
+  executionOrder?: AtlasMigrationExecutionOrder;
 }): string[] {
   const args = [
     'migrate',
@@ -67,6 +70,9 @@ export function buildAtlasMigrateApplyArgs(input: {
     '--revisions-schema',
     'public',
   ];
+  if (input.executionOrder) {
+    args.push('--exec-order', input.executionOrder);
+  }
   if (input.migrationCount !== null && input.migrationCount !== undefined) {
     if (!Number.isSafeInteger(input.migrationCount) || input.migrationCount < 1) {
       throw new Error('Atlas migration count must be a positive safe integer');
@@ -97,6 +103,7 @@ export function resolveAtlasBoundedMigrationCount(input: {
   declaredVersions: readonly string[];
   appliedVersions: readonly string[];
   targetVersion: string | null | undefined;
+  historyReconciliationVersion?: string;
 }): number | null {
   const declaredIndexes = new Map<string, number>();
   let previousVersion: bigint | null = null;
@@ -130,10 +137,35 @@ export function resolveAtlasBoundedMigrationCount(input: {
   const orderedAppliedIndexes = [...appliedIndexes].sort((left, right) => left - right);
   const firstAppliedIndex = orderedAppliedIndexes[0];
   const latestAppliedIndex = orderedAppliedIndexes.at(-1) ?? -1;
-  if (firstAppliedIndex !== undefined) {
-    for (let index = firstAppliedIndex; index <= latestAppliedIndex; index += 1) {
+  const targetIndex = input.targetVersion ? declaredIndexes.get(input.targetVersion) : undefined;
+  if (input.targetVersion && targetIndex === undefined) {
+    throw new Error(`Atlas release stage targets undeclared version ${input.targetVersion}`);
+  }
+
+  const reconciliationIndex = input.historyReconciliationVersion
+    ? declaredIndexes.get(input.historyReconciliationVersion)
+    : undefined;
+  if (input.historyReconciliationVersion && reconciliationIndex === undefined) {
+    throw new Error(
+      `Atlas history reconciliation targets undeclared version ${input.historyReconciliationVersion}`
+    );
+  }
+
+  const historyBaselineIndex =
+    reconciliationIndex !== undefined && appliedIndexes.has(reconciliationIndex)
+      ? reconciliationIndex
+      : firstAppliedIndex;
+  if (historyBaselineIndex !== undefined) {
+    for (let index = historyBaselineIndex; index <= latestAppliedIndex; index += 1) {
       if (!appliedIndexes.has(index)) {
-        throw new Error('Atlas migration history contains a gap after its baseline');
+        const targetsReconciliation =
+          targetIndex !== undefined &&
+          targetIndex === reconciliationIndex &&
+          (targetIndex === latestAppliedIndex || targetIndex === latestAppliedIndex + 1);
+        if (!targetsReconciliation) {
+          throw new Error('Atlas migration history contains a gap after its baseline');
+        }
+        break;
       }
     }
   }
@@ -141,8 +173,6 @@ export function resolveAtlasBoundedMigrationCount(input: {
   if (!input.targetVersion) {
     return null;
   }
-
-  const targetIndex = declaredIndexes.get(input.targetVersion);
   if (targetIndex === undefined) {
     throw new Error(`Atlas release stage targets undeclared version ${input.targetVersion}`);
   }

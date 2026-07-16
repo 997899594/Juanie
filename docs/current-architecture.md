@@ -108,7 +108,11 @@ CLI is built from a checksum-verified source archive with a pinned, security-cur
 Juanie owns target-version boundaries: it derives the exact positional migration count from the
 ordered directory and completed revision ledger, adopts explicit baselines with `migrate set`, and
 verifies the target revision after execution. The runtime does not depend on extended-only Atlas
-flags. Final application bases receive a fresh Debian security upgrade on every CI run; the
+flags. The published out-of-order control-plane lineage is closed by an explicit reconciliation
+checkpoint: only that lineage uses Atlas `linear-skip`, and the checkpoint becomes its new
+continuity baseline without falsely recording superseded destructive revisions. CI rejects
+rewritten migrations and versions inserted behind a published frontier unless they carry explicit
+reconciliation metadata. Final application bases receive a fresh Debian security upgrade on every CI run; the
 resulting SBOM and immutable digest, rather than the upstream tag, are the deployed trust boundary.
 Application images are signed with GitHub OIDC and deployed by verified digest.
 

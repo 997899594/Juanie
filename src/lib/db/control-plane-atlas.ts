@@ -11,6 +11,7 @@ import {
 } from '@/lib/atlas/cli';
 import { encrypt } from '@/lib/crypto';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
+import type { AtlasMigrationExecutionOrder } from '@/lib/migrations/atlas';
 import {
   buildAtlasMigrateApplyArgs,
   buildAtlasMigrateSetArgs,
@@ -29,6 +30,7 @@ const CONTRACT_REVISIONS_SCHEMA = 'atlas_contract';
 const LEGACY_MIGRATIONS_TABLE = '_migrations';
 const CREDENTIAL_ENVELOPE_VERSION = '20260713120000';
 const PLAINTEXT_CREDENTIAL_REMOVAL_VERSION = '20260713121000';
+const CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION = '20260714130000';
 const LEGACY_CONTRACT_BOUNDARY_VERSION = PLAINTEXT_CREDENTIAL_REMOVAL_VERSION;
 const CONTROL_PLANE_CONTRACT_EPOCH = '20260715';
 
@@ -146,10 +148,6 @@ async function hasLegacyMigrationState(databaseUrl: string): Promise<boolean> {
   } finally {
     await sql.end();
   }
-}
-
-async function isAtlasRevisionApplied(databaseUrl: string, version: string): Promise<boolean> {
-  return (await getAtlasAppliedVersions(databaseUrl)).includes(version);
 }
 
 async function getAtlasAppliedVersions(databaseUrl: string): Promise<string[]> {
@@ -539,17 +537,28 @@ async function ensureAtlasBaseline(databaseUrl: string): Promise<void> {
 
 async function applyControlPlaneMigrationsThroughVersion(
   databaseUrl: string,
-  targetVersion: string
+  targetVersion: string,
+  options?: {
+    historyReconciliationVersion?: string;
+    executionOrder?: AtlasMigrationExecutionOrder;
+  }
 ): Promise<void> {
   const declaredVersions = (await getMigrationFiles()).map(extractVersion);
   const migrationCount = resolveAtlasBoundedMigrationCount({
     declaredVersions,
     appliedVersions: await getAtlasAppliedVersions(databaseUrl),
     targetVersion,
+    historyReconciliationVersion: options?.historyReconciliationVersion,
   });
 
   if (migrationCount !== 0) {
-    await runAtlas(buildAtlasMigrateApplyArgs({ databaseUrl, migrationCount }));
+    await runAtlas(
+      buildAtlasMigrateApplyArgs({
+        databaseUrl,
+        migrationCount,
+        executionOrder: options?.executionOrder,
+      })
+    );
   }
 
   const appliedVersions = await getAtlasAppliedVersions(databaseUrl);
@@ -558,28 +567,65 @@ async function applyControlPlaneMigrationsThroughVersion(
   }
 }
 
+async function reconcileOutOfOrderControlPlaneHistory(databaseUrl: string): Promise<void> {
+  const appliedVersions = await getAtlasAppliedVersions(databaseUrl);
+  const frontierAdvancedWithoutEnvelope =
+    !appliedVersions.includes(CREDENTIAL_ENVELOPE_VERSION) &&
+    appliedVersions.some((version) => BigInt(version) > BigInt(CREDENTIAL_ENVELOPE_VERSION));
+
+  if (!frontierAdvancedWithoutEnvelope) {
+    return;
+  }
+
+  console.log(
+    `[db:push] reconciling out-of-order Atlas history at ${CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION}`
+  );
+  await applyControlPlaneMigrationsThroughVersion(
+    databaseUrl,
+    CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION,
+    {
+      historyReconciliationVersion: CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION,
+      executionOrder: 'linear-skip',
+    }
+  );
+  await migrateCredentialEnvelopes(databaseUrl);
+
+  resolveAtlasBoundedMigrationCount({
+    declaredVersions: (await getMigrationFiles()).map(extractVersion),
+    appliedVersions: await getAtlasAppliedVersions(databaseUrl),
+    targetVersion: CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION,
+    historyReconciliationVersion: CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION,
+  });
+}
+
 export async function applyControlPlaneExpandMigrations(): Promise<void> {
   const databaseUrl = getDatabaseUrl();
   await ensureAtlasBaseline(databaseUrl);
+  await reconcileOutOfOrderControlPlaneHistory(databaseUrl);
 
-  const plaintextCredentialsRemoved = await isAtlasRevisionApplied(
-    databaseUrl,
+  const appliedVersions = await getAtlasAppliedVersions(databaseUrl);
+  const usesReconciledHistory =
+    appliedVersions.includes(CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION) &&
+    !appliedVersions.includes(CREDENTIAL_ENVELOPE_VERSION);
+  const plaintextCredentialsRemoved = appliedVersions.includes(
     PLAINTEXT_CREDENTIAL_REMOVAL_VERSION
   );
-  if (!plaintextCredentialsRemoved) {
-    const envelopeMigrationApplied = await isAtlasRevisionApplied(
-      databaseUrl,
-      CREDENTIAL_ENVELOPE_VERSION
-    );
+  if (!usesReconciledHistory && !plaintextCredentialsRemoved) {
+    const envelopeMigrationApplied = appliedVersions.includes(CREDENTIAL_ENVELOPE_VERSION);
     if (!envelopeMigrationApplied) {
       await applyControlPlaneMigrationsThroughVersion(databaseUrl, CREDENTIAL_ENVELOPE_VERSION);
     }
     await migrateCredentialEnvelopes(databaseUrl);
   }
 
-  // Once the contract revision is present, every later migration is required to be
-  // backward-compatible and can run in the pre-upgrade phase.
-  await runAtlas(buildAtlasMigrateApplyArgs({ databaseUrl }));
+  // Revisions after the legacy boundary are expand-compatible. The reconciled lineage
+  // skips only the historical revisions explicitly superseded by its checkpoint.
+  await runAtlas(
+    buildAtlasMigrateApplyArgs({
+      databaseUrl,
+      executionOrder: usesReconciledHistory ? 'linear-skip' : undefined,
+    })
+  );
 
   await runPostMigrationTasks(databaseUrl);
   await migrateEnvironmentSecretEnvelopes(databaseUrl);
