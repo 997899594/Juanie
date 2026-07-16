@@ -1,5 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { parse, stringify } from 'yaml';
+import {
+  buildJuanieRepositoryCleanupPaths,
+  legacyJuanieGitLabCiPath,
+  removeJuanieGitLabComponent,
+} from '@/lib/ci/legacy-bootstrap';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects, repositories } from '@/lib/db/schema';
@@ -16,9 +20,6 @@ import {
   publishProjectRealtimeSnapshot,
 } from '@/lib/realtime/projects';
 
-const JUANIE_GITHUB_WORKFLOW_PATH = '.github/workflows/juanie-ci.yml';
-const JUANIE_GITLAB_CI_PATH = '.gitlab-ci.yml';
-const JUANIE_GITLAB_COMPONENT_PATH = '/api/ci/components/gitlab/';
 const projectDeleteLogger = logger.child({ component: 'project-delete' });
 
 export type ProjectDeleteRecord = Pick<
@@ -36,59 +37,11 @@ interface ProjectDeleteEnvironmentRecord {
   isPreview: boolean | null;
 }
 
-export function isJuanieManagedGitLabCi(content: string | null | undefined): boolean {
-  if (!content) {
-    return false;
-  }
-
-  return content.includes(JUANIE_GITLAB_COMPONENT_PATH);
-}
-
-export function removeJuanieGitLabComponent(content: string): string | null {
-  const document = parse(content) as Record<string, unknown> | null;
-  if (!document || Array.isArray(document) || typeof document !== 'object') {
-    throw new Error('Existing .gitlab-ci.yml must contain a YAML mapping');
-  }
-
-  const includes = Array.isArray(document.include)
-    ? document.include
-    : document.include
-      ? [document.include]
-      : [];
-  const remainingIncludes = includes.filter(
-    (entry) =>
-      !(
-        entry &&
-        typeof entry === 'object' &&
-        'remote' in entry &&
-        typeof entry.remote === 'string' &&
-        entry.remote.includes(JUANIE_GITLAB_COMPONENT_PATH)
-      )
-  );
-
-  if (remainingIncludes.length === includes.length) return content;
-  if (remainingIncludes.length > 0) document.include = remainingIncludes;
-  else delete document.include;
-  return Object.keys(document).length === 0 ? null : stringify(document, { lineWidth: 0 });
-}
-
-export function buildJuanieRepositoryCleanupPaths({
-  provider,
-  gitlabCiContent,
-}: {
-  provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
-  gitlabCiContent?: string | null;
-}): string[] {
-  if (provider === 'github') {
-    return [JUANIE_GITHUB_WORKFLOW_PATH];
-  }
-
-  if (gitlabCiContent && removeJuanieGitLabComponent(gitlabCiContent) === null) {
-    return [JUANIE_GITLAB_CI_PATH];
-  }
-
-  return [];
-}
+export {
+  buildJuanieRepositoryCleanupPaths,
+  isJuanieManagedGitLabCi,
+  removeJuanieGitLabComponent,
+} from '@/lib/ci/legacy-bootstrap';
 
 export function shouldDeleteProjectPreviewApplicationSet(
   environmentsForProject: ProjectDeleteEnvironmentRecord[]
@@ -139,7 +92,7 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
       gitlabCiContent = await gateway.getFileContent(
         session,
         repository.fullName,
-        JUANIE_GITLAB_CI_PATH,
+        legacyJuanieGitLabCiPath,
         branch
       );
     }
@@ -155,7 +108,7 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
         await gateway.pushFiles(session, {
           repoFullName: repository.fullName,
           branch,
-          files: { [JUANIE_GITLAB_CI_PATH]: updatedGitLabCi },
+          files: { [legacyJuanieGitLabCiPath]: updatedGitLabCi },
           message: 'Remove Juanie CI component [skip ci]',
         });
       }

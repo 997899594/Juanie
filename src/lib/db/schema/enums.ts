@@ -253,7 +253,12 @@ export type TeamRole = (typeof teamRoles)[number];
 export const platformRoles = ['user', 'operator'] as const;
 export type PlatformRole = (typeof platformRoles)[number];
 
-export const integrationCapabilities = ['read_repo', 'write_repo', 'write_workflow'] as const;
+export const integrationCapabilities = [
+  'read_repo',
+  'write_repo',
+  'write_workflow',
+  'manage_webhook',
+] as const;
 export type IntegrationCapability = (typeof integrationCapabilities)[number];
 export const integrationAuthModes = ['personal', 'service'] as const;
 export type IntegrationAuthMode = (typeof integrationAuthModes)[number];

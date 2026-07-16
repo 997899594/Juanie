@@ -20,7 +20,6 @@ import type {
   GitUser,
   PushOptions,
   SyncBranchRefOptions,
-  TriggerReleaseBuildOptions,
 } from './index';
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -97,8 +96,12 @@ export class GitLabProvider implements GitProvider {
     });
   }
 
-  private buildApiUrl(path: string): string {
-    return new URL(`/api/v4${path}`, this.serverUrl).toString();
+  private buildApiUrl(path: string, searchParams?: Record<string, string | undefined>): string {
+    const url = new URL(`/api/v4${path}`, this.serverUrl);
+    for (const [key, value] of Object.entries(searchParams ?? {})) {
+      if (value) url.searchParams.set(key, value);
+    }
+    return url.toString();
   }
 
   private async requestJson<T>(
@@ -107,9 +110,10 @@ export class GitLabProvider implements GitProvider {
     options?: {
       method?: string;
       body?: unknown;
+      searchParams?: Record<string, string | undefined>;
     }
   ): Promise<T> {
-    const response = await fetch(this.buildApiUrl(path), {
+    const response = await fetch(this.buildApiUrl(path, options?.searchParams), {
       method: options?.method,
       headers: {
         Accept: 'application/json',
@@ -133,26 +137,6 @@ export class GitLabProvider implements GitProvider {
     }
 
     return payload as T;
-  }
-
-  private async requestBinary(accessToken: string, path: string): Promise<Uint8Array> {
-    const response = await fetch(this.buildApiUrl(path), {
-      headers: {
-        Accept: 'application/octet-stream',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      const raw = await response.text();
-      const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
-
-      throw Object.assign(new Error(this.extractGitLabErrorMessage(payload, raw)), {
-        status: response.status,
-      });
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
   }
 
   private parseJsonSafely(raw: string): unknown {
@@ -369,60 +353,47 @@ export class GitLabProvider implements GitProvider {
     return data.diff_refs?.head_sha ?? null;
   }
 
-  async triggerReleaseBuild(
+  async compareCommits(
     accessToken: string,
-    options: TriggerReleaseBuildOptions
+    repoFullName: string,
+    beforeSha: string,
+    afterSha: string
+  ): Promise<{ changedFiles: string[]; complete: boolean }> {
+    const comparison = await this.requestJson<{
+      diffs?: Array<{ new_path?: string; old_path?: string; deleted_file?: boolean }>;
+      overflow?: boolean;
+    }>(accessToken, `/projects/${this.encodeProjectId(repoFullName)}/repository/compare`, {
+      searchParams: { from: beforeSha, to: afterSha, straight: 'true' },
+    });
+    const changedFiles = (comparison.diffs ?? [])
+      .flatMap((diff) => [diff.new_path, diff.deleted_file ? diff.old_path : undefined])
+      .map((path) => path?.trim())
+      .filter((path): path is string => Boolean(path));
+    return { changedFiles: [...new Set(changedFiles)], complete: comparison.overflow !== true };
+  }
+
+  async ensurePushWebhook(
+    accessToken: string,
+    options: { repoFullName: string; url: string; secret: string }
   ): Promise<void> {
-    let pipelineRef: string | null = null;
-
-    if (options.ref.startsWith('refs/heads/')) {
-      pipelineRef = options.ref.slice('refs/heads/'.length);
-    } else {
-      const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
-      if (prMatch) {
-        const data = await this.requestJson<ExpandedMergeRequestSchema>(
-          accessToken,
-          `/projects/${this.encodeProjectId(options.repoFullName)}/merge_requests/${prMatch[1]}`
-        );
-        pipelineRef =
-          typeof data.source_branch === 'string' && data.source_branch.trim().length > 0
-            ? data.source_branch
-            : null;
-      }
-    }
-
-    if (!pipelineRef) {
-      throw new Error('当前 GitLab 来源无法触发预览构建，请检查 MR 或改用分支启动');
-    }
-
-    try {
-      await this.requestJson<{ id: number }>(
-        accessToken,
-        `/projects/${this.encodeProjectId(options.repoFullName)}/pipeline`,
-        {
-          method: 'POST',
-          body: {
-            ref: pipelineRef,
-            variables: [
-              {
-                key: 'JUANIE_SOURCE_SHA',
-                value: options.sourceCommitSha,
-              },
-              {
-                key: 'JUANIE_RELEASE_REF',
-                value: options.releaseRef ?? options.ref,
-              },
-              {
-                key: 'JUANIE_FORCE_FULL_BUILD',
-                value: options.forceFullBuild ? '1' : '0',
-              },
-            ],
-          },
-        }
-      );
-    } catch (error) {
-      throw new Error(getErrorMessage(error, 'Failed to trigger GitLab preview build pipeline'));
-    }
+    const projectPath = this.encodeProjectId(options.repoFullName);
+    const hooks = await this.requestJson<Array<{ id: number; url?: string }>>(
+      accessToken,
+      `/projects/${projectPath}/hooks`,
+      { searchParams: { per_page: '100' } }
+    );
+    const existing = hooks.find((hook) => hook.url === options.url);
+    const body = {
+      url: options.url,
+      token: options.secret,
+      push_events: true,
+      enable_ssl_verification: true,
+    };
+    await this.requestJson<void>(
+      accessToken,
+      existing ? `/projects/${projectPath}/hooks/${existing.id}` : `/projects/${projectPath}/hooks`,
+      { method: existing ? 'PUT' : 'POST', body }
+    );
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
@@ -687,12 +658,35 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array> {
-    const archiveRef = normalizeArchiveRef(ref);
+    const response = await this.openRepositoryArchive(accessToken, repoFullName, ref);
+    return new Uint8Array(await response.arrayBuffer());
+  }
 
-    return this.requestBinary(
-      accessToken,
-      `/projects/${this.encodeProjectId(repoFullName)}/repository/archive.tar.gz?sha=${encodeURIComponent(archiveRef)}`
+  async openRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Response> {
+    const response = await fetch(
+      this.buildApiUrl(
+        `/projects/${this.encodeProjectId(repoFullName)}/repository/archive.tar.gz`,
+        {
+          sha: normalizeArchiveRef(ref),
+        }
+      ),
+      {
+        headers: {
+          Accept: 'application/octet-stream',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
     );
+    if (!response.ok) {
+      throw Object.assign(new Error(`GitLab archive request failed with ${response.status}`), {
+        status: response.status,
+      });
+    }
+    return response;
   }
 
   private mapRepository(data: ProjectSchema): GitRepository {

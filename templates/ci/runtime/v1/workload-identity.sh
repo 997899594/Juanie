@@ -12,7 +12,7 @@ require_juanie_identity_env() {
 }
 
 acquire_ci_oidc_token() {
-  case "${JUANIE_PROVIDER:-}" in
+  case "${JUANIE_EXECUTOR_PROVIDER:-}" in
     github)
       require_juanie_identity_env ACTIONS_ID_TOKEN_REQUEST_URL
       require_juanie_identity_env ACTIONS_ID_TOKEN_REQUEST_TOKEN
@@ -28,7 +28,7 @@ acquire_ci_oidc_token() {
       printf '%s' "$JUANIE_OIDC_TOKEN"
       ;;
     *)
-      echo "Unsupported JUANIE_PROVIDER: ${JUANIE_PROVIDER:-unset}" >&2
+      echo "Unsupported JUANIE_EXECUTOR_PROVIDER: ${JUANIE_EXECUTOR_PROVIDER:-unset}" >&2
       return 1
       ;;
   esac

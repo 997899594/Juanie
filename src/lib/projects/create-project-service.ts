@@ -108,6 +108,8 @@ function getCapabilityLabel(capability: string): string {
       return '写入仓库';
     case 'write_workflow':
       return '触发或管理工作流';
+    case 'manage_webhook':
+      return '管理源码事件';
     default:
       return capability;
   }

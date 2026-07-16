@@ -8,14 +8,14 @@ import {
 const stepCapabilityMap: Record<ProjectInitStepName, Capability[]> = {
   validate_repository: ['read_repo'],
   create_repository: ['write_repo'],
-  push_template: ['write_repo', 'write_workflow'],
-  push_cicd_config: ['write_repo', 'write_workflow'],
-  configure_release_trigger: [],
+  push_template: ['write_repo'],
+  push_cicd_config: ['read_repo', 'write_repo'],
+  configure_release_trigger: ['manage_webhook'],
   setup_namespace: [],
   provision_databases: [],
   deploy_services: [],
   configure_dns: [],
-  trigger_initial_builds: ['read_repo', 'write_workflow'],
+  trigger_initial_builds: ['read_repo'],
 };
 
 export function requiredCapabilitiesForStep(step: ProjectInitStepName): Capability[] {

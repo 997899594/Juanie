@@ -7,12 +7,13 @@ import type {
   CreateReviewRequestOptions,
   CreateTagOptions,
   DeleteFilesOptions,
+  EnsurePushWebhookOptions,
+  GitCommitComparison,
   GitProvider,
   GitRepository,
   GitReviewRequest,
   PushOptions,
   SyncBranchRefOptions,
-  TriggerReleaseBuildOptions,
 } from '@/lib/git';
 import { createGitProviderForSession } from '@/lib/git';
 import {
@@ -225,12 +226,22 @@ export const gateway = {
     return provider.resolveRefToCommitSha(session.accessToken, repoFullName, ref);
   },
 
-  async triggerReleaseBuild(
+  async compareCommits(
     session: IntegrationSession,
-    options: TriggerReleaseBuildOptions
+    repoFullName: string,
+    beforeSha: string,
+    afterSha: string
+  ): Promise<GitCommitComparison> {
+    const provider = resolveProvider(session);
+    return provider.compareCommits(session.accessToken, repoFullName, beforeSha, afterSha);
+  },
+
+  async ensurePushWebhook(
+    session: IntegrationSession,
+    options: EnsurePushWebhookOptions
   ): Promise<void> {
     const provider = resolveProvider(session);
-    return provider.triggerReleaseBuild(session.accessToken, options);
+    return provider.ensurePushWebhook(session.accessToken, options);
   },
 
   async createRepository(
@@ -300,6 +311,15 @@ export const gateway = {
   ): Promise<Uint8Array> {
     const provider = resolveProvider(session);
     return provider.downloadRepositoryArchive(session.accessToken, repoFullName, ref);
+  },
+
+  async openRepositoryArchive(
+    session: IntegrationSession,
+    repoFullName: string,
+    ref: string
+  ): Promise<Response> {
+    const provider = resolveProvider(session);
+    return provider.openRepositoryArchive(session.accessToken, repoFullName, ref);
   },
 
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {

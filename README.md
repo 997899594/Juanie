@@ -9,8 +9,8 @@ Juanie 是一个面向项目交付、预览环境、受控放量和数据库 Sch
 ## 主能力
 
 - 多团队与团队级 Git 集成绑定
-- 创建/导入项目，以 `juanie.yml` 作为唯一用户声明，并注入极薄的 Provider CI 入口
-- GitHub reusable workflow / GitLab CI Component 调用版本化 Juanie CI runtime
+- 创建/导入项目，以 `juanie.yml` 作为唯一 Juanie 声明
+- GitHub App + 签名 Provider webhook 调度平台自有的版本化 CI runtime
 - preview / staging / production 环境主线
 - 基于 Argo CD ApplicationSet 的预览环境脚手架
 - 基于 GitHub Actions + Helm 的平台自身发布
@@ -117,6 +117,11 @@ Notes:
 | ENCRYPTION_MASTER_KEY | Local fallback | 64-char hex key for local encryption when Kubernetes Secret auto-bootstrap is unavailable |
 | GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |
 | GITHUB_CLIENT_SECRET | Yes | GitHub OAuth app client secret |
+| JUANIE_GITHUB_APP_ID | Yes | GitHub App ID used only to dispatch the platform workflow |
+| JUANIE_GITHUB_APP_PRIVATE_KEY | Yes | GitHub App private key for short-lived installation tokens |
+| JUANIE_GITHUB_APP_INSTALLATION_ID | No | Platform repository installation ID; resolved automatically when omitted |
+| JUANIE_SOURCE_WEBHOOK_SECRET | Yes | Shared signing secret for provider source webhooks |
+| JUANIE_WORKLOAD_REGISTRY | Yes | Juanie-owned OCI repository prefix for application images |
 | GITLAB_CLIENT_ID | No | GitLab OAuth app client ID |
 | GITLAB_CLIENT_SECRET | No | GitLab OAuth app client secret |
 | KUBECONFIG | No | Kubernetes config path |

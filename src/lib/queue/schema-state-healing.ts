@@ -1,13 +1,11 @@
 import { Cron } from 'croner';
 import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { dispatchApplicationDelivery } from '@/lib/ci/application-delivery';
 import { isSchemaManagedDatabaseType } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { environmentSchemaStates, environments } from '@/lib/db/schema';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { logger } from '@/lib/logger';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
 import { isReleaseSchemaStateBlocking } from '@/lib/schema-safety';
@@ -162,7 +160,7 @@ async function retryFailedEnvironmentSourceBuild(input: {
   const session = await getTeamIntegrationSession({
     integrationId: input.project.repository.providerId,
     teamId: input.project.teamId,
-    requiredCapabilities: ['write_workflow'],
+    requiredCapabilities: ['read_repo'],
   });
 
   const startedAt = new Date();
@@ -175,10 +173,10 @@ async function retryFailedEnvironmentSourceBuild(input: {
   });
 
   try {
-    await gateway.triggerReleaseBuild(session, {
-      repoFullName: input.project.repository.fullName,
-      ref: sourceRef,
-      releaseRef: sourceRef,
+    await dispatchApplicationDelivery({
+      provider: session.provider,
+      repository: input.project.repository.fullName,
+      sourceRef,
       sourceCommitSha,
       forceFullBuild: true,
     });

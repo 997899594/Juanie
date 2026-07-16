@@ -41,6 +41,8 @@ data:
   JUANIE_BASE_DOMAIN: {{ .Values.env.JUANIE_BASE_DOMAIN | default "juanie.art" | quote }}
   JUANIE_SOURCE_REPOSITORY: {{ .Values.env.JUANIE_SOURCE_REPOSITORY | quote }}
   JUANIE_SOURCE_REVISION: {{ .Values.env.JUANIE_SOURCE_REVISION | quote }}
+  JUANIE_DELIVERY_WORKFLOW_REF: {{ .Values.env.JUANIE_DELIVERY_WORKFLOW_REF | default "main" | quote }}
+  JUANIE_WORKLOAD_REGISTRY: {{ .Values.env.JUANIE_WORKLOAD_REGISTRY | quote }}
   JUANIE_ARGOCD_NAMESPACE: {{ .Values.env.JUANIE_ARGOCD_NAMESPACE | default "argocd" | quote }}
   JUANIE_ARGOCD_PROJECT: {{ .Values.env.JUANIE_ARGOCD_PROJECT | default "juanie" | quote }}
   JUANIE_ARGOCD_DESTINATION_SERVER: {{ .Values.env.JUANIE_ARGOCD_DESTINATION_SERVER | default "https://kubernetes.default.svc" | quote }}

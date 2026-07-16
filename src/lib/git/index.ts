@@ -79,12 +79,15 @@ export interface DeleteFilesOptions {
   message: string;
 }
 
-export interface TriggerReleaseBuildOptions {
+export interface GitCommitComparison {
+  changedFiles: string[];
+  complete: boolean;
+}
+
+export interface EnsurePushWebhookOptions {
   repoFullName: string;
-  ref: string;
-  sourceCommitSha: string;
-  releaseRef?: string;
-  forceFullBuild?: boolean;
+  url: string;
+  secret: string;
 }
 
 export interface GitProviderConfig {
@@ -131,7 +134,13 @@ export interface GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<string | null>;
-  triggerReleaseBuild(accessToken: string, options: TriggerReleaseBuildOptions): Promise<void>;
+  compareCommits(
+    accessToken: string,
+    repoFullName: string,
+    beforeSha: string,
+    afterSha: string
+  ): Promise<GitCommitComparison>;
+  ensurePushWebhook(accessToken: string, options: EnsurePushWebhookOptions): Promise<void>;
   createBranch(accessToken: string, options: CreateBranchOptions): Promise<void>;
   syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void>;
   createTag(accessToken: string, options: CreateTagOptions): Promise<void>;
@@ -190,6 +199,7 @@ export interface GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array>;
+  openRepositoryArchive(accessToken: string, repoFullName: string, ref: string): Promise<Response>;
 }
 
 export function createGitProvider(config: GitProviderConfig): GitProvider {

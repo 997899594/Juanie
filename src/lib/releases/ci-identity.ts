@@ -5,6 +5,7 @@ import {
   type CiWorkloadIdentity,
   type CiWorkloadProvider,
   isCiWorkloadProvider,
+  isPlatformDeliveryIdentity,
 } from '@/lib/ci/workload-identity';
 import { getMasterKey } from '@/lib/crypto';
 
@@ -68,7 +69,7 @@ export async function issueJuanieCiToken(
   requestedScope: CiReleaseScope
 ): Promise<{ token: string; expiresIn: number }> {
   validateScope(requestedScope);
-  if (identity.provider !== requestedScope.provider) {
+  if (identity.provider !== requestedScope.provider && !isPlatformDeliveryIdentity(identity)) {
     throw new Error('CI workload provider does not match the requested scope');
   }
   assertWorkloadIdentityMatchesRequest(identity, {

@@ -419,10 +419,12 @@ export function createBuildPlan(input: {
   configPath: 'juanie.yml';
   configDigest: string;
   registry?: string;
+  imageRepository?: string;
   changes?: BuildChangeSet;
 }): BuildPlan {
   const registry = input.registry ?? 'ghcr.io';
-  const imageRepository = `${registry.replace(/\/$/, '')}/${input.repository}`;
+  const imageRepository =
+    input.imageRepository ?? `${registry.replace(/\/$/, '')}/${input.repository}`;
   const allServices = input.config.services;
   const allTargets = input.config.buildTargets ?? [];
   const { services, targets, deliverables } = selectBuildScope(input.config, input.changes);

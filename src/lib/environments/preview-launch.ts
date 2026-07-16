@@ -1,4 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm';
+import { dispatchApplicationDelivery } from '@/lib/ci/application-delivery';
 import { db } from '@/lib/db';
 import { projects, releases } from '@/lib/db/schema';
 import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
@@ -137,13 +138,13 @@ async function triggerPreviewBuild(input: {
   const session = await getTeamIntegrationSession({
     integrationId: input.project.repository.providerId,
     teamId: input.project.teamId,
-    requiredCapabilities: ['write_workflow'],
+    requiredCapabilities: ['read_repo'],
   });
 
-  await gateway.triggerReleaseBuild(session, {
-    repoFullName: input.project.repository.fullName,
-    ref: input.ref,
-    releaseRef: input.ref,
+  await dispatchApplicationDelivery({
+    provider: session.provider,
+    repository: input.project.repository.fullName,
+    sourceRef: input.ref,
     sourceCommitSha: input.sourceCommitSha,
     forceFullBuild: true,
   });

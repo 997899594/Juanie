@@ -1,10 +1,9 @@
-import { createRemoteJWKSet, decodeJwt, type JWTPayload, jwtVerify } from 'jose';
+import { createRemoteJWKSet, type JWTPayload, jwtVerify } from 'jose';
 import { getCiRuntimeDescriptor } from '@/lib/ci/runtime-assets';
 
 const githubIssuer = 'https://token.actions.githubusercontent.com';
 const ciOidcAudience = 'juanie-ci';
-const githubWorkflowPath = '.github/workflows/juanie-ci.yml';
-const gitLabConfigPath = '.gitlab-ci.yml';
+const githubWorkflowPath = '.github/workflows/application-delivery.yml';
 
 export type CiWorkloadProvider = 'github' | 'gitlab' | 'gitlab-self-hosted';
 
@@ -49,35 +48,6 @@ function requireClaim(payload: JWTPayload, name: string): string {
   return value.trim();
 }
 
-function normalizeIssuer(value: string): string {
-  return value.trim().replace(/\/$/u, '');
-}
-
-export function readCiWorkloadIssuer(token: string): string {
-  return normalizeIssuer(requireClaim(decodeJwt(token), 'iss'));
-}
-
-export function matchesCiProviderIssuer(input: {
-  issuer: string;
-  provider: CiWorkloadProvider;
-  serverUrl?: string | null;
-}): boolean {
-  const issuer = normalizeIssuer(input.issuer);
-  if (input.provider === 'github') return issuer === githubIssuer;
-  if (input.provider === 'gitlab') return issuer === 'https://gitlab.com';
-  if (!input.serverUrl) return false;
-
-  try {
-    const server = new URL(input.serverUrl);
-    server.pathname = '';
-    server.search = '';
-    server.hash = '';
-    return issuer === normalizeIssuer(server.toString());
-  } catch {
-    return false;
-  }
-}
-
 function normalizeRef(value: string): string {
   const normalized = value.trim();
   if (normalized.startsWith('refs/')) return normalized;
@@ -88,30 +58,45 @@ function matchesManagedWorkflow(workflowRef: string, repository: string, path: s
   return workflowRef.startsWith(`${repository}/${path}@`);
 }
 
-function getTrustedGitHubJobWorkflowRef(): string {
+export function isPlatformDeliveryIdentity(identity: CiWorkloadIdentity): boolean {
+  return (
+    identity.provider === 'github' &&
+    identity.eventName === 'workflow_dispatch' &&
+    matchesManagedWorkflow(identity.workflowRef, identity.repository, githubWorkflowPath)
+  );
+}
+
+function getTrustedGitHubWorkflow(): { repository: string; revision: string } {
   const runtime = getCiRuntimeDescriptor();
-  return `${runtime.githubRepository}/.github/workflows/application-delivery.yml@${runtime.githubRevision}`;
+  return { repository: runtime.githubRepository, revision: runtime.githubRevision };
 }
 
 export function normalizeGitHubWorkloadIdentity(
   payload: JWTPayload,
-  trustedJobWorkflowRef = getTrustedGitHubJobWorkflowRef()
+  trustedWorkflow = getTrustedGitHubWorkflow()
 ): CiWorkloadIdentity {
-  const issuer = normalizeIssuer(requireClaim(payload, 'iss'));
+  const issuer = requireClaim(payload, 'iss').replace(/\/$/u, '');
   if (issuer !== githubIssuer) {
     throw new CiWorkloadIdentityError('GitHub workload identity issuer is not trusted');
   }
 
   const repository = requireClaim(payload, 'repository');
+  if (repository !== trustedWorkflow.repository) {
+    throw new CiWorkloadIdentityError('GitHub workload identity executor is not Juanie');
+  }
   const workflowRef = requireClaim(payload, 'workflow_ref');
   if (!matchesManagedWorkflow(workflowRef, repository, githubWorkflowPath)) {
     throw new CiWorkloadIdentityError('GitHub workload identity workflow is not managed by Juanie');
   }
-  const jobWorkflowRef = requireClaim(payload, 'job_workflow_ref');
-  if (jobWorkflowRef !== trustedJobWorkflowRef) {
+  const workflowSha = requireClaim(payload, 'workflow_sha').toLowerCase();
+  if (workflowSha !== trustedWorkflow.revision.toLowerCase()) {
     throw new CiWorkloadIdentityError(
-      'GitHub workload identity was not issued by the trusted Juanie reusable workflow'
+      'GitHub workload identity revision is not deployed by Juanie'
     );
+  }
+  const eventName = requireClaim(payload, 'event_name');
+  if (eventName !== 'workflow_dispatch') {
+    throw new CiWorkloadIdentityError('GitHub workload identity was not manually dispatched');
   }
 
   const runId = requireClaim(payload, 'run_id');
@@ -126,90 +111,28 @@ export function normalizeGitHubWorkloadIdentity(
     runId,
     runAttempt,
     externalRunId: `${runId}-${runAttempt}`,
-    workflowRef: jobWorkflowRef,
-    workflowSha: trustedJobWorkflowRef.slice(trustedJobWorkflowRef.lastIndexOf('@') + 1),
-    eventName: typeof payload.event_name === 'string' ? payload.event_name : null,
-  };
-}
-
-export function normalizeGitLabWorkloadIdentity(
-  payload: JWTPayload,
-  allowedIssuer: string,
-  provider: 'gitlab' | 'gitlab-self-hosted' = normalizeIssuer(allowedIssuer) ===
-  'https://gitlab.com'
-    ? 'gitlab'
-    : 'gitlab-self-hosted'
-): CiWorkloadIdentity {
-  const issuer = normalizeIssuer(requireClaim(payload, 'iss'));
-  if (issuer !== normalizeIssuer(allowedIssuer)) {
-    throw new CiWorkloadIdentityError('GitLab workload identity issuer is not trusted');
-  }
-
-  const repository = requireClaim(payload, 'project_path');
-  const workflowRef = requireClaim(payload, 'ci_config_ref_uri');
-  const workflowSha = requireClaim(payload, 'ci_config_sha').toLowerCase();
-  const sourceSha = requireClaim(payload, 'sha').toLowerCase();
-  const issuerHost = new URL(issuer).host;
-  if (!workflowRef.startsWith(`${issuerHost}/${repository}//${gitLabConfigPath}@`)) {
-    throw new CiWorkloadIdentityError('GitLab workload identity workflow is not managed by Juanie');
-  }
-  if (!/^[a-f0-9]{40}$/u.test(workflowSha) || workflowSha !== sourceSha) {
-    throw new CiWorkloadIdentityError(
-      'GitLab workload identity config revision does not match the source commit'
-    );
-  }
-
-  const runId = requireClaim(payload, 'pipeline_id');
-  const runAttempt = requireClaim(payload, 'job_id');
-  const ref =
-    typeof payload.ref_path === 'string'
-      ? normalizeRef(payload.ref_path)
-      : normalizeRef(requireClaim(payload, 'ref'));
-  return {
-    provider,
-    issuer,
-    subject: typeof payload.sub === 'string' ? payload.sub : `project:${repository}`,
-    repository,
-    ref,
-    sha: sourceSha,
-    runId,
-    runAttempt,
-    externalRunId: runId,
     workflowRef,
     workflowSha,
-    eventName: typeof payload.pipeline_source === 'string' ? payload.pipeline_source : null,
+    eventName,
   };
-}
-
-function canSelectSourceRevision(identity: CiWorkloadIdentity): boolean {
-  if (identity.provider === 'github') return identity.eventName === 'workflow_dispatch';
-  return ['api', 'pipeline', 'trigger', 'web'].includes(identity.eventName ?? '');
 }
 
 export function assertWorkloadIdentityMatchesRequest(
   identity: CiWorkloadIdentity,
   request: WorkloadIdentityRequestScope
 ): void {
-  if (identity.repository !== request.repository) {
-    throw new CiWorkloadIdentityError('CI workload repository does not match the request');
+  if (isPlatformDeliveryIdentity(identity)) {
+    if (
+      !request.repository ||
+      !request.sourceRef ||
+      !request.sourceCommitSha ||
+      !request.externalRunId
+    ) {
+      throw new CiWorkloadIdentityError('Platform delivery request scope is incomplete');
+    }
+    return;
   }
-  if (
-    request.sourceRef &&
-    identity.ref !== normalizeRef(request.sourceRef) &&
-    !canSelectSourceRevision(identity)
-  ) {
-    throw new CiWorkloadIdentityError('CI workload ref does not match the request');
-  }
-  if (
-    request.sourceCommitSha &&
-    identity.sha !== request.sourceCommitSha &&
-    !canSelectSourceRevision(identity)
-  ) {
-    throw new CiWorkloadIdentityError('CI workload commit does not match the request');
-  }
-  if (request.externalRunId && identity.externalRunId !== request.externalRunId) {
-    throw new CiWorkloadIdentityError('CI workload run does not match the request');
-  }
+  throw new CiWorkloadIdentityError('CI workload identity is not the Juanie delivery executor');
 }
 
 const remoteJwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
@@ -233,29 +156,11 @@ function requireBearerToken(authHeader: string | null): string {
 
 export async function verifyCiWorkloadIdentity(input: {
   authHeader: string | null;
-  provider: CiWorkloadProvider;
-  gitLabIssuer?: string | null;
 }): Promise<CiWorkloadIdentity> {
   const token = requireBearerToken(input.authHeader);
-  if (input.provider === 'github') {
-    const { payload } = await jwtVerify(token, getRemoteJwks(`${githubIssuer}/.well-known/jwks`), {
-      issuer: githubIssuer,
-      audience: ciOidcAudience,
-    });
-    return normalizeGitHubWorkloadIdentity(payload);
-  }
-
-  const allowedIssuer = input.gitLabIssuer ? normalizeIssuer(input.gitLabIssuer) : null;
-  if (!allowedIssuer) {
-    throw new CiWorkloadIdentityError('GitLab workload issuer is not configured');
-  }
-  const unverifiedIssuer = readCiWorkloadIssuer(token);
-  if (unverifiedIssuer !== allowedIssuer) {
-    throw new CiWorkloadIdentityError('GitLab workload identity issuer is not trusted');
-  }
-  const { payload } = await jwtVerify(token, getRemoteJwks(`${allowedIssuer}/-/jwks`), {
-    issuer: allowedIssuer,
+  const { payload } = await jwtVerify(token, getRemoteJwks(`${githubIssuer}/.well-known/jwks`), {
+    issuer: githubIssuer,
     audience: ciOidcAudience,
   });
-  return normalizeGitLabWorkloadIdentity(payload, allowedIssuer, input.provider);
+  return normalizeGitHubWorkloadIdentity(payload);
 }

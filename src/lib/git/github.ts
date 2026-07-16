@@ -13,7 +13,6 @@ import type {
   GitUser,
   PushOptions,
   SyncBranchRefOptions,
-  TriggerReleaseBuildOptions,
 } from './index';
 
 const gitHubProviderLogger = logger.child({ component: 'git-provider-github' });
@@ -69,48 +68,6 @@ type GitHubContentPayload =
   | GitHubContentFilePayload
   | GitHubContentDirectoryPayload
   | Array<GitHubContentFilePayload | GitHubContentDirectoryPayload>;
-
-function mapGitHubWorkflowDispatchError(message?: string | null): string {
-  const normalizedMessage = message?.trim();
-
-  if (normalizedMessage === "Workflow does not have 'workflow_dispatch' trigger") {
-    return '当前仓库的 .github/workflows/juanie-ci.yml 没有启用 workflow_dispatch，Juanie 不会兼容旧版手写配置。请重新同步平台注入配置后，再按远端分支最新提交启动预览环境。';
-  }
-
-  if (
-    normalizedMessage === 'Workflow does not exist or does not have a workflow_dispatch trigger'
-  ) {
-    return '当前仓库缺少 Juanie 注入的 .github/workflows/juanie-ci.yml，或者它还没有启用 workflow_dispatch。Juanie 不会兼容旧版手写配置，请重新同步平台注入配置后重试。';
-  }
-
-  if (normalizedMessage === 'Workflow was disabled manually') {
-    return '当前仓库的 .github/workflows/juanie-ci.yml 已被禁用，Juanie 无法触发预览构建。请先在 GitHub Actions 中重新启用该 workflow。';
-  }
-
-  const unexpectedInputs = parseUnexpectedWorkflowDispatchInputs(normalizedMessage);
-  if (unexpectedInputs.length > 0) {
-    return `当前仓库的 .github/workflows/juanie-ci.yml 与 Juanie 当前契约不一致，缺少这些 dispatch inputs：${unexpectedInputs.join('、')}。Juanie 不会兼容旧版手写配置，请删除仓库内旧的 Juanie 配置并重新通过 Juanie 导入或同步配置后重试。`;
-  }
-
-  return normalizedMessage || 'Failed to trigger GitHub preview build workflow';
-}
-
-function parseUnexpectedWorkflowDispatchInputs(message?: string | null): string[] {
-  const normalizedMessage = message?.trim();
-  if (!normalizedMessage) {
-    return [];
-  }
-
-  const match = normalizedMessage.match(/Unexpected inputs provided:\s*\[(.+)\]/i);
-  if (!match?.[1]) {
-    return [];
-  }
-
-  return match[1]
-    .split(',')
-    .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
-    .filter((value) => value.length > 0);
-}
 
 function isNotFoundError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'status' in error && error.status === 404;
@@ -208,37 +165,6 @@ export class GitHubProvider implements GitProvider {
     return payload as T;
   }
 
-  private async requestBinary(
-    accessToken: string,
-    path: string,
-    options?: {
-      method?: string;
-      searchParams?: Record<string, string | undefined>;
-    }
-  ): Promise<Uint8Array> {
-    const response = await fetch(this.buildApiUrl(path, options?.searchParams), {
-      method: options?.method ?? 'GET',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${accessToken}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      redirect: 'follow',
-    });
-
-    if (!response.ok) {
-      const raw = await response.text();
-      const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
-
-      throw Object.assign(
-        new Error(this.extractGitHubErrorMessage(payload, raw, response.statusText)),
-        { status: response.status }
-      );
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
-  }
-
   private parseJsonSafely(raw: string): unknown {
     try {
       return JSON.parse(raw);
@@ -283,7 +209,7 @@ export class GitHubProvider implements GitProvider {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'repo workflow user:email',
+      scope: 'repo user:email',
       state,
       prompt: 'consent',
     });
@@ -472,68 +398,51 @@ export class GitHubProvider implements GitProvider {
     return data.head?.sha ?? null;
   }
 
-  async triggerReleaseBuild(
-    accessToken: string,
-    options: TriggerReleaseBuildOptions
-  ): Promise<void> {
-    let dispatchRef: string | null = null;
-
-    if (options.ref.startsWith('refs/heads/')) {
-      dispatchRef = options.ref.slice('refs/heads/'.length);
-    } else {
-      const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
-      if (prMatch) {
-        const data = await this.requestJson<GitHubPullRequestPayload>(
-          accessToken,
-          `/repos/${options.repoFullName}/pulls/${prMatch[1]}`
-        );
-        dispatchRef = data.head?.ref ?? null;
-      }
-    }
-
-    if (!dispatchRef) {
-      throw new Error('当前来源无法触发 GitHub 预览构建，请改用分支启动');
-    }
-
-    const inputs = this.buildWorkflowDispatchInputs(options);
-
-    try {
-      await this.dispatchWorkflow(accessToken, options.repoFullName, dispatchRef, inputs);
-    } catch (error) {
-      throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(error, '')));
-    }
-  }
-
-  private async dispatchWorkflow(
+  async compareCommits(
     accessToken: string,
     repoFullName: string,
-    dispatchRef: string,
-    inputs: Record<string, string>
-  ): Promise<void> {
-    await this.requestJson<void>(
+    beforeSha: string,
+    afterSha: string
+  ): Promise<{ changedFiles: string[]; complete: boolean }> {
+    const comparison = await this.requestJson<{
+      files?: Array<{ filename?: string }>;
+    }>(
       accessToken,
-      `/repos/${repoFullName}/actions/workflows/juanie-ci.yml/dispatches`,
-      {
-        method: 'POST',
-        body: {
-          ref: dispatchRef,
-          inputs,
-        },
-      }
+      `/repos/${repoFullName}/compare/${encodeURIComponent(beforeSha)}...${encodeURIComponent(afterSha)}`
     );
+    const changedFiles = (comparison.files ?? [])
+      .map((file) => file.filename?.trim())
+      .filter((file): file is string => Boolean(file));
+    return { changedFiles, complete: changedFiles.length < 300 };
   }
 
-  private buildWorkflowDispatchInputs(options: TriggerReleaseBuildOptions): Record<string, string> {
-    const inputs: Record<string, string> = {
-      juanie_source_sha: options.sourceCommitSha,
-      juanie_release_ref: options.releaseRef ?? options.ref,
+  async ensurePushWebhook(
+    accessToken: string,
+    options: { repoFullName: string; url: string; secret: string }
+  ): Promise<void> {
+    const hooks = await this.requestJson<Array<{ id: number; config?: { url?: string } }>>(
+      accessToken,
+      `/repos/${options.repoFullName}/hooks`,
+      { searchParams: { per_page: '100' } }
+    );
+    const existing = hooks.find((hook) => hook.config?.url === options.url);
+    const body = {
+      active: true,
+      events: ['push'],
+      config: {
+        url: options.url,
+        content_type: 'json',
+        insecure_ssl: '0',
+        secret: options.secret,
+      },
     };
-
-    if (options.forceFullBuild) {
-      inputs.juanie_force_full_build = 'true';
-    }
-
-    return inputs;
+    await this.requestJson<void>(
+      accessToken,
+      existing
+        ? `/repos/${options.repoFullName}/hooks/${existing.id}`
+        : `/repos/${options.repoFullName}/hooks`,
+      { method: existing ? 'PATCH' : 'POST', body }
+    );
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
@@ -870,13 +779,33 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array> {
-    const { owner, repo } = this.parseRepoFullName(repoFullName);
-    const archiveRef = normalizeArchiveRef(ref);
+    const response = await this.openRepositoryArchive(accessToken, repoFullName, ref);
+    return new Uint8Array(await response.arrayBuffer());
+  }
 
-    return this.requestBinary(
-      accessToken,
-      `/repos/${owner}/${repo}/tarball/${encodeURIComponent(archiveRef)}`
+  async openRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Response> {
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
+    const response = await fetch(
+      this.buildApiUrl(
+        `/repos/${owner}/${repo}/tarball/${encodeURIComponent(normalizeArchiveRef(ref))}`
+      ),
+      {
+        headers: {
+          Accept: 'application/octet-stream',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
     );
+    if (!response.ok) {
+      throw Object.assign(new Error(`GitHub archive request failed with ${response.status}`), {
+        status: response.status,
+      });
+    }
+    return response;
   }
 
   private async getDirectoryContents(

@@ -21,6 +21,11 @@ Child repositories do not contain `.github/workflows/juanie-ci.yml`, generated s
 GitLab CI includes for Juanie. Workload identity is issued to the platform-owned delivery workflow
 and bound in code to the source repository, ref, and commit.
 
+GitHub and GitLab push webhooks are installed through the bound provider integration and verified by
+Juanie. Juanie dispatches its own GitHub Actions workflow with a short-lived GitHub App installation
+token. The workflow authenticates control-plane calls with GitHub OIDC, downloads the exact source
+snapshot through Juanie, and pushes images only to the Juanie-owned workload registry.
+
 ## Consequences
 
 ### Positive

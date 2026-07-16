@@ -9,7 +9,7 @@ export const resolveGitHubCapabilities = (scopes: string[]): Capability[] => {
 
   // repo scope includes read and write access
   if (normalized.has('repo') || normalized.has('public_repo')) {
-    capabilities.push('read_repo', 'write_repo');
+    capabilities.push('read_repo', 'write_repo', 'manage_webhook');
   }
 
   // workflow scope for GitHub Actions
@@ -34,6 +34,10 @@ export const resolveGitLabCapabilities = (scopes: string[]): Capability[] => {
 
   if (normalized.has('api') || normalized.has('write_repository')) {
     capabilities.push('write_workflow');
+  }
+
+  if (normalized.has('api')) {
+    capabilities.push('manage_webhook');
   }
 
   return sortCapabilities(capabilities);

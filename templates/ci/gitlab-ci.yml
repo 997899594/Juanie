@@ -1,5 +1,0 @@
-include:
-  - remote: {{JUANIE_GITLAB_COMPONENT_URL}}
-    integrity: {{JUANIE_GITLAB_COMPONENT_INTEGRITY}}
-    inputs:
-      juanie_base_url: {{JUANIE_BASE_URL}}

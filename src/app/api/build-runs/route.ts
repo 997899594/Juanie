@@ -12,11 +12,13 @@ const startBuildRunSchema = z
       .regex(/^[^/\s]+\/[^/\s]+$/u),
     ref: z.string().min(1).max(255),
     sha: z.string().regex(/^[a-f0-9]{40}$/u),
-    registry: z.string().min(1).max(500).optional(),
+    beforeSha: z
+      .string()
+      .regex(/^[a-f0-9]{40}$/u)
+      .optional()
+      .nullable(),
     provider: z.enum(['github', 'gitlab', 'gitlab-self-hosted']),
     externalRunId: z.string().min(1).max(255).optional().nullable(),
-    changedFiles: z.array(z.string().min(1).max(500)).max(5000).optional(),
-    affectedPackages: z.array(z.string().min(1).max(214)).max(2000).optional(),
     forceFullBuild: z.boolean().optional().default(false),
   })
   .strict();
@@ -39,9 +41,7 @@ export async function POST(request: Request) {
       repository: input.repository,
       ref: input.ref,
       sha: input.sha,
-      registry: input.registry,
-      changedFiles: input.changedFiles,
-      affectedPackages: input.affectedPackages,
+      beforeSha: input.beforeSha,
       forceFullBuild: input.forceFullBuild,
       provider: input.provider,
       externalRunId: input.externalRunId,

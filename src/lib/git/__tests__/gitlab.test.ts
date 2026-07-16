@@ -1,196 +1,73 @@
 import { describe, expect, it } from 'bun:test';
 import { GitLabProvider } from '@/lib/git/gitlab';
 
-describe('GitLabProvider preview build trigger', () => {
+function createProvider(): GitLabProvider {
+  return new GitLabProvider({
+    type: 'gitlab',
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+    serverUrl: 'https://gitlab.example.com',
+  });
+}
+
+describe('GitLabProvider source control plane', () => {
   const originalFetch = globalThis.fetch;
 
-  it('triggers merge request preview builds on the MR source branch', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
-
+  it('downloads an immutable repository archive through the provider API', async () => {
     try {
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof URL ? input.toString() : String(input);
-        calls.push({ url, init });
-
-        if (url.endsWith('/merge_requests/42')) {
-          return new Response(
-            JSON.stringify({
-              source_branch: 'feature/preview-checkout',
-            }),
-            { status: 200 }
-          );
-        }
-
-        if (url.endsWith('/pipeline')) {
-          return new Response(JSON.stringify({ id: 7 }), { status: 201 });
-        }
-
-        return new Response('not found', { status: 404 });
+      globalThis.fetch = (async (input) => {
+        expect(String(input)).toContain(`/repository/archive.tar.gz?sha=${'a'.repeat(40)}`);
+        return new Response('archive');
       }) as typeof fetch;
-
-      const provider = new GitLabProvider({
-        type: 'gitlab',
-        clientId: '',
-        clientSecret: '',
-        redirectUri: '',
-        serverUrl: 'https://gitlab.example.com',
-      });
-
-      await provider.triggerReleaseBuild('token', {
-        repoFullName: 'acme/juanie-demo',
-        ref: 'refs/pull/42/merge',
-        releaseRef: 'refs/pull/42/merge',
-        sourceCommitSha: 'abc123456789',
-        forceFullBuild: true,
-      });
-
-      expect(calls[0]?.url).toContain('/merge_requests/42');
-      expect(calls[1]?.url).toContain('/pipeline');
-
-      const payload = JSON.parse(String(calls[1]?.init?.body ?? '{}')) as {
-        ref: string;
-        variables: Array<{ key: string; value: string }>;
-      };
-
-      expect(payload.ref).toBe('feature/preview-checkout');
-      expect(payload.variables).toEqual([
-        { key: 'JUANIE_SOURCE_SHA', value: 'abc123456789' },
-        { key: 'JUANIE_RELEASE_REF', value: 'refs/pull/42/merge' },
-        { key: 'JUANIE_FORCE_FULL_BUILD', value: '1' },
-      ]);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it('deletes tracked files while skipping missing paths', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
-
-    try {
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input instanceof URL ? input.toString() : String(input);
-        calls.push({ url, init });
-
-        if (
-          url.endsWith('/repository/files/juanie.yml') &&
-          init?.method &&
-          init.method.toUpperCase() === 'DELETE'
-        ) {
-          return new Response(null, { status: 204 });
-        }
-
-        if (
-          url.endsWith('/repository/files/.gitlab-ci.yml') &&
-          init?.method &&
-          init.method.toUpperCase() === 'DELETE'
-        ) {
-          return new Response('not found', { status: 404 });
-        }
-
-        return new Response('not found', { status: 404 });
-      }) as typeof fetch;
-
-      const provider = new GitLabProvider({
-        type: 'gitlab',
-        clientId: '',
-        clientSecret: '',
-        redirectUri: '',
-        serverUrl: 'https://gitlab.example.com',
-      });
-
-      await provider.deleteFiles('token', {
-        repoFullName: 'acme/juanie-demo',
-        branch: 'main',
-        paths: ['juanie.yml', '.gitlab-ci.yml'],
-        message: 'Remove Juanie managed files [skip ci]',
-      });
-
-      expect(calls.length).toBe(2);
-      expect(calls[0]?.init?.method).toBe('DELETE');
-      expect(JSON.parse(String(calls[0]?.init?.body ?? '{}'))).toEqual({
-        branch: 'main',
-        commit_message: 'Remove Juanie managed files [skip ci]',
-      });
-      expect(calls[1]?.url).toContain('/repository/files/.gitlab-ci.yml');
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it('downloads repository archives through the provider API instead of shell git', async () => {
-    const calls: Array<string> = [];
-
-    try {
-      globalThis.fetch = (async (input: RequestInfo | URL) => {
-        const url = input instanceof URL ? input.toString() : String(input);
-        calls.push(url);
-        return new Response('archive', { status: 200 });
-      }) as typeof fetch;
-
-      const provider = new GitLabProvider({
-        type: 'gitlab',
-        clientId: '',
-        clientSecret: '',
-        redirectUri: '',
-        serverUrl: 'https://gitlab.example.com',
-      });
-
-      const archive = await provider.downloadRepositoryArchive(
+      const archive = await createProvider().downloadRepositoryArchive(
         'token',
-        'acme/juanie-demo',
-        'refs/heads/feature/preview-checkout'
+        'acme/demo',
+        'a'.repeat(40)
       );
-
-      expect(archive instanceof Uint8Array).toBe(true);
-      expect(calls).toEqual([
-        'https://gitlab.example.com/api/v4/projects/acme%2Fjuanie-demo/repository/archive.tar.gz?sha=feature%2Fpreview-checkout',
-      ]);
+      expect(new TextDecoder().decode(archive)).toBe('archive');
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it('lists repositories the token can access, including group projects', async () => {
-    const captured: Array<Record<string, unknown>> = [];
-    const provider = new GitLabProvider({
-      type: 'gitlab',
-      clientId: '',
-      clientSecret: '',
-      redirectUri: '',
-      serverUrl: 'https://gitlab.example.com',
-    });
+  it('returns complete changed paths from GitLab compare', async () => {
+    try {
+      globalThis.fetch = (async (input) => {
+        const url = String(input);
+        expect(url).toContain(`from=${'a'.repeat(40)}`);
+        expect(url).toContain(`to=${'b'.repeat(40)}`);
+        return Response.json({ diffs: [{ new_path: 'src/new.ts' }], overflow: false });
+      }) as typeof fetch;
+      expect(
+        await createProvider().compareCommits('token', 'acme/demo', 'a'.repeat(40), 'b'.repeat(40))
+      ).toEqual({ changedFiles: ['src/new.ts'], complete: true });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 
-    (provider as unknown as { getClient: (accessToken: string) => unknown }).getClient = () => ({
-      Projects: {
-        all: async (options: Record<string, unknown>) => {
-          captured.push(options);
-          return [
-            {
-              id: 1,
-              name: 'nexusnote',
-              path_with_namespace: 'acme/nexusnote',
-              default_branch: 'main',
-              visibility: 'private',
-              web_url: 'https://gitlab.example.com/acme/nexusnote',
-              http_url_to_repo: 'https://gitlab.example.com/acme/nexusnote.git',
-              ssh_url_to_repo: 'git@gitlab.example.com:acme/nexusnote.git',
-            },
-          ];
-        },
-      },
-    });
-
-    const repositories = await provider.getRepositories('token', {
-      search: 'nexus',
-      page: 2,
-      perPage: 20,
-    });
-
-    expect(captured[0]?.membership).toBe(true);
-    expect(captured[0]?.search).toBe('nexus');
-    expect(captured[0]?.page).toBe(2);
-    expect(captured[0]?.perPage).toBe(20);
-    expect(captured[0]?.owned).toBeUndefined();
-    expect(repositories[0]?.fullName).toBe('acme/nexusnote');
+  it('creates a verified push webhook when none exists', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    try {
+      globalThis.fetch = (async (input, init) => {
+        requests.push({ url: String(input), init });
+        return init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json([]);
+      }) as typeof fetch;
+      await createProvider().ensurePushWebhook('token', {
+        repoFullName: 'acme/demo',
+        url: 'https://juanie.art/api/webhooks/source',
+        secret: 'secret',
+      });
+      expect(requests[1]?.init?.method).toBe('POST');
+      expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+        url: 'https://juanie.art/api/webhooks/source',
+        push_events: true,
+        enable_ssl_verification: true,
+        token: 'secret',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

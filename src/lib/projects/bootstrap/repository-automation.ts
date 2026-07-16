@@ -1,7 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parse, stringify } from 'yaml';
-import { getCiRuntimeDescriptor, getGitLabCiComponentIntegritySync } from '@/lib/ci/runtime-assets';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
@@ -40,8 +36,6 @@ export {
   resolveManagedMigrationScriptPaths,
   resolvePackageScriptCommand,
 } from '@/lib/projects/bootstrap/repository-analysis';
-
-const TEMPLATES_DIR = join(process.cwd(), 'templates');
 
 function resolveBakeTarget(
   service: typeof services.$inferSelect,
@@ -660,82 +654,4 @@ export function renderJuanieConfig(
   );
 
   return `${lines.join('\n')}\n`;
-}
-
-export function renderGitHubCI(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  _context: ProjectInitRenderContext
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions.yml');
-
-  if (existsSync(templatePath)) {
-    const runtime = getCiRuntimeDescriptor();
-    return readFileSync(templatePath, 'utf-8')
-      .replaceAll('{{PRODUCTION_BRANCH}}', getProjectProductionBranch(project))
-      .replaceAll('{{JUANIE_BASE_URL}}', runtime.baseUrl)
-      .replaceAll('{{JUANIE_GITHUB_REPOSITORY}}', runtime.githubRepository)
-      .replaceAll('{{JUANIE_GITHUB_REVISION}}', runtime.githubRevision);
-  }
-
-  // Fallback: should not normally be reached in production (template file is bundled in Docker image)
-  throw new Error(
-    `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
-}
-
-export function renderGitLabCI(
-  _project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  },
-  _context: ProjectInitRenderContext,
-  existingContent?: string | null
-): string {
-  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci.yml');
-
-  if (existsSync(templatePath)) {
-    const runtime = getCiRuntimeDescriptor();
-    const componentUrl = `${runtime.baseUrl}/api/ci/components/gitlab/${runtime.version}`;
-    const rendered = readFileSync(templatePath, 'utf-8')
-      .replaceAll('{{JUANIE_GITLAB_COMPONENT_URL}}', componentUrl)
-      .replaceAll('{{JUANIE_GITLAB_COMPONENT_INTEGRITY}}', getGitLabCiComponentIntegritySync())
-      .replaceAll('{{JUANIE_BASE_URL}}', runtime.baseUrl);
-
-    if (!existingContent?.trim()) return rendered;
-
-    const existing = parse(existingContent) as Record<string, unknown> | null;
-    if (!existing || Array.isArray(existing) || typeof existing !== 'object') {
-      throw new Error('Existing .gitlab-ci.yml must contain a YAML mapping');
-    }
-    const managed = (parse(rendered) as { include: unknown[] }).include[0];
-    const currentIncludes = Array.isArray(existing.include)
-      ? existing.include
-      : existing.include
-        ? [existing.include]
-        : [];
-    const unrelatedIncludes = currentIncludes.filter(
-      (entry) =>
-        !(
-          entry &&
-          typeof entry === 'object' &&
-          'remote' in entry &&
-          typeof entry.remote === 'string' &&
-          entry.remote.includes('/api/ci/components/gitlab/')
-        )
-    );
-
-    return stringify(
-      {
-        ...existing,
-        include: [...unrelatedIncludes, managed],
-      },
-      { lineWidth: 0 }
-    );
-  }
-
-  // Fallback: should not normally be reached in production (template file is bundled in Docker image)
-  throw new Error(
-    `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
-  );
 }

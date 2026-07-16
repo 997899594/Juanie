@@ -1,4 +1,12 @@
 import { eq } from 'drizzle-orm';
+import { resolveWorkloadImageRepository } from '@/lib/builds/registry';
+import { dispatchApplicationDelivery } from '@/lib/ci/application-delivery';
+import {
+  legacyJuanieGitHubWorkflowPath,
+  legacyJuanieGitLabCiPath,
+  removeJuanieGitLabComponent,
+} from '@/lib/ci/legacy-bootstrap';
+import { getCiRuntimeDescriptor } from '@/lib/ci/runtime-assets';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/databases/provisioning';
 import { db } from '@/lib/db';
 import {
@@ -10,7 +18,6 @@ import {
   services,
 } from '@/lib/db/schema';
 import type { DeliveryGraph } from '@/lib/delivery-graph/model';
-import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { ensureEnvironmentNamespace, reconcileEnvironmentState } from '@/lib/environments/service';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
@@ -41,8 +48,6 @@ import {
   type ProjectConfigMonorepoEntry,
   type ProjectInitRenderContext,
   type RepoAutomationContext,
-  renderGitHubCI,
-  renderGitLabCI,
   renderJuanieConfig,
   resolveManagedMigrationScriptPaths,
   resolveMonorepoAffectedRules,
@@ -519,29 +524,47 @@ export async function pushCicdConfig(
   const files: Record<string, string> = {};
 
   const isMonorepo = monorepoType !== 'none';
-  if (session.provider === 'github') {
-    files['.github/workflows/juanie-ci.yml'] = renderGitHubCI(project, renderContext);
-  } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
+  let deleteLegacyGitLabBootstrap = false;
+  if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
     const existingGitLabCi = await gateway.getFileContent(
       session,
       repository.fullName,
-      '.gitlab-ci.yml',
+      legacyJuanieGitLabCiPath,
       targetBranch
     );
-    files['.gitlab-ci.yml'] = renderGitLabCI(project, renderContext, existingGitLabCi);
+    if (existingGitLabCi) {
+      const cleanedGitLabCi = removeJuanieGitLabComponent(existingGitLabCi);
+      if (cleanedGitLabCi === null) deleteLegacyGitLabBootstrap = true;
+      else if (cleanedGitLabCi !== existingGitLabCi) {
+        files[legacyJuanieGitLabCiPath] = cleanedGitLabCi;
+      }
+    }
   }
-
   files['juanie.yml'] =
     managedJuanieConfigContent ??
     renderJuanieConfig(projectWithTopology, renderContext, automationContext);
 
+  const legacyPaths =
+    session.provider === 'github'
+      ? [legacyJuanieGitHubWorkflowPath]
+      : deleteLegacyGitLabBootstrap
+        ? [legacyJuanieGitLabCiPath]
+        : [];
+  if (legacyPaths.length > 0) {
+    await gateway.deleteFiles(session, {
+      repoFullName: repository.fullName,
+      branch: targetBranch,
+      paths: legacyPaths,
+      message: 'Remove legacy Juanie CI bootstrap [skip ci]',
+    });
+  }
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
     await gateway.pushFiles(session, {
       repoFullName: repository.fullName,
       branch: targetBranch,
       files,
-      message: 'Configure Juanie CI/CD [skip ci]',
+      message: 'Configure Juanie application contract [skip ci]',
     });
   }
 
@@ -597,17 +620,26 @@ export async function configureReleaseTrigger(
     return;
   }
 
+  const webhookSecret = process.env.JUANIE_SOURCE_WEBHOOK_SECRET?.trim();
+  if (!webhookSecret) {
+    throw new Error('JUANIE_SOURCE_WEBHOOK_SECRET is required to configure source delivery');
+  }
+  const session = await getTeamIntegrationSession({
+    teamId: project.teamId,
+    integrationId: repository.providerId,
+    requiredCapabilities: requiredCapabilitiesForStep('configure_release_trigger'),
+  });
+  const runtime = getCiRuntimeDescriptor();
+  await gateway.ensurePushWebhook(session, {
+    repoFullName: repository.fullName,
+    url: `${runtime.baseUrl}/api/webhooks/source`,
+    secret: webhookSecret,
+  });
+
   // Update project config with image name
   const config = (project.configJson as Record<string, unknown>) || {};
   await onProgress?.(60, '计算镜像仓库地址');
-  const imageName = resolveDeployImageRepository({
-    configJson: project.configJson,
-    repositoryFullName: repository.fullName,
-  });
-
-  if (!imageName) {
-    throw new Error(`Cannot resolve deploy image repository for ${repository.fullName}`);
-  }
+  const imageName = resolveWorkloadImageRepository(repository.fullName);
 
   await db
     .update(projects)
@@ -698,10 +730,10 @@ export async function triggerInitialAutoDeployBuilds(
     );
 
     try {
-      await gateway.triggerReleaseBuild(session, {
-        repoFullName: repository.fullName,
-        ref,
-        releaseRef: ref,
+      await dispatchApplicationDelivery({
+        provider: session.provider,
+        repository: repository.fullName,
+        sourceRef: ref,
         sourceCommitSha,
         forceFullBuild: true,
       });

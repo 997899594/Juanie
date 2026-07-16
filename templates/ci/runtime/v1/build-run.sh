@@ -318,35 +318,28 @@ start_build_run() {
   require_env JUANIE_REPOSITORY
   require_env JUANIE_SOURCE_SHA
   require_env JUANIE_RELEASE_REF
-  require_env JUANIE_IMAGE_REGISTRY
   require_env JUANIE_PROVIDER
 
   mkdir -p "$state_dir"
 
-  local changed_files_json="${JUANIE_CHANGED_FILES_JSON:-}"
-  local affected_packages_json="${JUANIE_AFFECTED_PACKAGES_JSON:-}"
   local payload
   payload="$(
     jq -cn \
       --arg repository "$JUANIE_REPOSITORY" \
       --arg sha "$JUANIE_SOURCE_SHA" \
       --arg ref "$JUANIE_RELEASE_REF" \
-      --arg registry "$JUANIE_IMAGE_REGISTRY" \
       --arg provider "$JUANIE_PROVIDER" \
       --arg externalRunId "${JUANIE_EXTERNAL_RUN_ID:-}" \
-      --arg changedFilesJson "$changed_files_json" \
-      --arg affectedPackagesJson "$affected_packages_json" \
+      --arg beforeSha "${JUANIE_BEFORE_SHA:-}" \
       --argjson forceFullBuild "${JUANIE_FORCE_FULL_BUILD:-false}" \
       '{
         repository: $repository,
         sha: $sha,
         ref: $ref,
-        registry: $registry,
         provider: $provider,
-        externalRunId: (if $externalRunId == "" then null else $externalRunId end)
+        externalRunId: (if $externalRunId == "" then null else $externalRunId end),
+        beforeSha: (if $beforeSha == "" then null else $beforeSha end)
       }
-      + (if $changedFilesJson == "" then {} else {changedFiles: ($changedFilesJson | fromjson)} end)
-      + (if $affectedPackagesJson == "" then {} else {affectedPackages: ($affectedPackagesJson | fromjson)} end)
       + {forceFullBuild: $forceFullBuild}'
   )"
 

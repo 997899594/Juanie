@@ -23,9 +23,10 @@ internals.
 
 ## Decision
 
-1. CI calls use workload identity. GitHub Actions obtains an OIDC token with audience `juanie-ci`.
-   Juanie verifies issuer, audience, repository, workflow, ref, run and attempt claims. Git provider
-   API tokens no longer authorize control-plane mutations.
+1. CI calls use workload identity. Juanie's platform-owned GitHub Actions workflow obtains an OIDC
+   token with audience `juanie-ci`. Juanie verifies issuer, audience, executor repository, workflow
+   and deployed workflow revision, then binds the token to an exact source repository, ref, commit
+   and provider delivery ID. Git provider API tokens never authorize control-plane mutations.
 2. Build secrets are fetched with a fresh workload token and a unit-scoped request. No secret
    capability is returned by the build API or persisted in workflow artifacts.
 3. Durable commands carry an explicit execution key. Release commands are serialized by target
@@ -53,16 +54,17 @@ internals.
 
 ### Negative
 
-- Generated CI workflows require `id-token: write`.
-- Self-hosted GitLab needs an explicitly trusted issuer and JWKS endpoint.
+- The platform workflow requires `id-token: write` and an operational GitHub App installation.
+- Provider webhook delivery and replay become control-plane responsibilities.
 - Existing plaintext environment secrets must be migrated before the database constraint is enabled.
 - Production operators must choose external HA state services or provide backup storage and a CSI
   snapshot class.
 
 ## Alternatives Considered
 
-- GitHub App installation tokens were rejected for build execution because they identify an
-  installation, not a concrete workflow run and unit.
+- GitHub App installation tokens were rejected as build API identities because they identify an
+  installation, not a concrete workflow run and unit. They are used only to dispatch Juanie's own
+  workflow; OIDC remains the execution identity.
 - Additional preflight queries were rejected as a concurrency fix because they do not close races.
 - Running contract DDL immediately after each rollout was rejected because it destroys the N-1
   rollback window.

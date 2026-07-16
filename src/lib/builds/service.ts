@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
+import { resolveWorkloadImageRepository } from '@/lib/builds/registry';
 import { type CiWorkloadProvider, isCiWorkloadProvider } from '@/lib/ci/workload-identity';
 import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
@@ -18,6 +19,10 @@ import {
   repositories,
 } from '@/lib/db/schema';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
+import {
+  gateway,
+  getTeamIntegrationSession,
+} from '@/lib/integrations/service/integration-control-plane';
 import { loadRepositoryJuanieConfig } from '@/lib/projects/repository-config';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
@@ -37,13 +42,15 @@ export interface StartBuildRunInput {
   repository: string;
   ref: string;
   sha: string;
-  registry?: string;
-  changedFiles?: string[];
-  affectedPackages?: string[];
+  beforeSha?: string | null;
   forceFullBuild?: boolean;
   provider: CiWorkloadProvider;
   externalRunId?: string | null;
   authHeader: string | null;
+}
+
+function isZeroCommitSha(value: string | null | undefined): boolean {
+  return !value || /^0+$/u.test(value);
 }
 
 export interface CompleteBuildUnitInput {
@@ -204,6 +211,25 @@ export async function startBuildRun(input: StartBuildRunInput) {
     repository: input.repository,
     sourceCommitSha: input.sha,
   });
+  let changes: { changedFiles: string[]; forceFullBuild: boolean } | undefined;
+  if (input.forceFullBuild || isZeroCommitSha(input.beforeSha)) {
+    changes = { changedFiles: [], forceFullBuild: true };
+  } else if (input.beforeSha) {
+    const session = await getTeamIntegrationSession({
+      integrationId: repo.providerId,
+      teamId: project.teamId,
+      requiredCapabilities: ['read_repo'],
+    });
+    const comparison = await gateway.compareCommits(
+      session,
+      input.repository,
+      input.beforeSha,
+      input.sha
+    );
+    changes = comparison.complete
+      ? { changedFiles: comparison.changedFiles, forceFullBuild: false }
+      : { changedFiles: [], forceFullBuild: true };
+  }
   const plan = createBuildPlan({
     config: configRevision.config,
     repository: input.repository,
@@ -211,15 +237,8 @@ export async function startBuildRun(input: StartBuildRunInput) {
     sha: input.sha,
     configPath: configRevision.path,
     configDigest: configRevision.digest,
-    registry: input.registry,
-    changes:
-      input.changedFiles || input.affectedPackages || input.forceFullBuild
-        ? {
-            changedFiles: input.changedFiles ?? [],
-            ...(input.affectedPackages ? { affectedPackages: input.affectedPackages } : {}),
-            forceFullBuild: input.forceFullBuild ?? false,
-          }
-        : undefined,
+    imageRepository: resolveWorkloadImageRepository(input.repository),
+    changes,
   });
   const now = new Date();
   const serviceByName = new Map(project.services.map((service) => [service.name, service]));

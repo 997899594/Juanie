@@ -1,21 +1,18 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const ciRuntimeVersion = 'v1' as const;
 export const ciRuntimeAssetNames = [
   'build-run.sh',
-  'changes.mjs',
   'delivery-artifacts.sh',
   'workload-identity.sh',
 ] as const;
 
 export type CiRuntimeAssetName = (typeof ciRuntimeAssetNames)[number];
 export const ciRuntimeAssetDigests: Record<CiRuntimeAssetName, string> = {
-  'build-run.sh': '618a5dfd13ad94ad66c22861929e8e177ad91f777c9b95e6cf9f5eb277901d7d',
-  'changes.mjs': 'cda4e87914de1e3f24497376e64538e175a447cb4feafffc2a8859acd368bfc6',
-  'delivery-artifacts.sh': '409891525ff7f1f029ee7c6e402c312db778a74d53e15bed8cbbf770437e1659',
-  'workload-identity.sh': 'ca3db3a2d115d27a2497e007e3c3caf1cd707d5d072f2b266f71a38b64c6bd2b',
+  'build-run.sh': 'a0acf8264fb2a24f551c9a684393032d082a0334ed59cebf6edbc698bf1ef35a',
+  'delivery-artifacts.sh': '7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154',
+  'workload-identity.sh': 'c03714358bdb8b013e86f3a8448eea838ea78d1a8f8b5ac9100524a2c0ce7112',
 };
 
 function templatesRoot(): string {
@@ -28,25 +25,6 @@ export function isCiRuntimeAssetName(value: string): value is CiRuntimeAssetName
 
 export async function readCiRuntimeAsset(asset: CiRuntimeAssetName): Promise<string> {
   return readFileSync(join(templatesRoot(), 'runtime', ciRuntimeVersion, asset), 'utf8');
-}
-
-export async function readGitLabCiComponent(): Promise<string> {
-  return readGitLabCiComponentSync();
-}
-
-export function readGitLabCiComponentSync(): string {
-  return readFileSync(join(templatesRoot(), `gitlab-component-${ciRuntimeVersion}.yml`), 'utf8');
-}
-
-export async function getGitLabCiComponentIntegrity(): Promise<string> {
-  const content = await readGitLabCiComponent();
-  return `sha256-${createHash('sha256').update(content, 'utf8').digest('base64')}`;
-}
-
-export function getGitLabCiComponentIntegritySync(): string {
-  return `sha256-${createHash('sha256')
-    .update(readGitLabCiComponentSync(), 'utf8')
-    .digest('base64')}`;
 }
 
 function requiredProductionValue(name: string, developmentValue: string): string {

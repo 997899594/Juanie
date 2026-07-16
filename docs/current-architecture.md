@@ -115,11 +115,11 @@ application delivery.
 
 ## Deployment Topology
 
-Production runs two replicas for web, Restate services, outbox dispatcher, short-task worker and
-scheduler, with PDBs for replicated components. Restate Server currently uses one persistent
-StatefulSet replica. A replicated Restate cluster and HA PostgreSQL/Redis require an operator-backed
-topology decision; never increase those StatefulSet replicas without configuring their consensus or
-replication protocols.
+Production explicitly runs `production.topologyMode=singleNode`: every control-plane component has
+one replica, and web/worker rollouts use no-surge replacement. This matches the current four-core,
+3.7 GiB single failure domain. `highAvailability` is a separate validated mode that requires at
+least two replicas for every component and must not be selected before the cluster has multiple
+failure domains and operator-backed state replication.
 
 Single-node durability is backed up independently of HA. PostgreSQL custom-format dumps are uploaded
 to S3-compatible storage by a CronJob, and Restate journals can be protected by CSI VolumeSnapshots.
@@ -127,23 +127,19 @@ Both remain disabled until production supplies the real bucket and `VolumeSnapsh
 closed when either enabled mode is missing its storage configuration. The restore runbook and drill
 criteria live in `docs/troubleshooting.md`.
 
-Internal manual releases use `POST /api/projects/:id/releases`. External repository CI exchanges
-provider OIDC at `/api/auth/ci/exchange`, then creates an aggregate build through
-`POST /api/build-runs`. The control plane reads and validates `juanie.yml` from the OIDC-bound
-commit SHA before deriving the build plan; it never falls back to `project.configJson`.
+Child repositories expose exactly one Juanie-owned file: `juanie.yml`. Juanie installs a signed push
+webhook through the bound GitHub or GitLab integration. A verified source event dispatches
+`.github/workflows/application-delivery.yml` in the Juanie repository with a short-lived GitHub App
+installation token; child repositories contain no Actions caller, GitLab include or CI credential.
 
-Child repositories own only `juanie.yml`. GitHub keeps a thin caller pinned to the deployed Juanie
-source revision, while GitLab keeps an integrity-pinned CI Component include. Build scripts,
-affected-workspace detection and generated Dockerfiles are versioned Juanie runtime assets and are
-materialized only in the CI runner's temporary state. GitHub OIDC must carry the exact pinned
-Juanie reusable workflow in `job_workflow_ref`. GitLab OIDC must bind `.gitlab-ci.yml` to the source
-commit through `ci_config_sha`; before token exchange, Juanie reads that exact file and verifies the
-Component URL, integrity and control-plane origin structurally. The exchanged five-minute token
-binds provider, Juanie project ID, repository ID, source commit and pipeline run, so downstream
-services never select a project from an ambiguous repository name. These paths are protocol-v1
-constants and have no deployment configuration switches. Deployment routes only read or operate
-concrete deployment records; removed trigger and lookup compatibility endpoints must not be
-restored.
+The platform workflow exchanges its own GitHub OIDC identity at `/api/auth/ci/exchange`. Juanie
+binds that trusted executor to the requested source provider, repository, ref, commit and provider
+delivery ID, then serves an immutable source archive through `/api/ci/source/archive`. Changed paths
+are derived server-side through the provider compare API. Incomplete comparisons force a full build
+instead of risking an under-build. Build scripts and generated Dockerfiles remain versioned Juanie
+runtime assets materialized only in temporary runner state. Images are written to the
+Juanie-controlled `JUANIE_WORKLOAD_REGISTRY` namespace, so child repository package permissions are
+never part of the delivery trust boundary.
 
 ## Verification
 

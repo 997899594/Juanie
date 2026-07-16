@@ -2,22 +2,19 @@ import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parse, parseAllDocuments } from 'yaml';
+import { parse } from 'yaml';
 import {
   ciRuntimeAssetDigests,
   ciRuntimeAssetNames,
   getCiRuntimeDescriptor,
-  getGitLabCiComponentIntegrity,
   isCiRuntimeAssetName,
   readCiRuntimeAsset,
-  readGitLabCiComponent,
 } from '@/lib/ci/runtime-assets';
 
 describe('versioned CI runtime assets', () => {
   it('serves only the immutable runtime allowlist', async () => {
     expect(ciRuntimeAssetNames).toEqual([
       'build-run.sh',
-      'changes.mjs',
       'delivery-artifacts.sh',
       'workload-identity.sh',
     ]);
@@ -32,22 +29,7 @@ describe('versioned CI runtime assets', () => {
     }
   });
 
-  it('publishes a valid GitLab component with matching SHA-256 integrity', async () => {
-    const component = await readGitLabCiComponent();
-    const integrity = await getGitLabCiComponentIntegrity();
-
-    expect(parseAllDocuments(component).every((document) => document.errors.length === 0)).toBe(
-      true
-    );
-    expect(integrity).toBe(
-      `sha256-${createHash('sha256').update(component, 'utf8').digest('base64')}`
-    );
-    for (const digest of Object.values(ciRuntimeAssetDigests)) {
-      expect(component).toContain(digest);
-    }
-  });
-
-  it('keeps the central GitHub reusable workflow syntactically valid', async () => {
+  it('keeps the platform-owned GitHub workflow syntactically valid', async () => {
     const workflow = await readFile(
       join(process.cwd(), '.github', 'workflows', 'application-delivery.yml'),
       'utf8'
@@ -55,6 +37,8 @@ describe('versioned CI runtime assets', () => {
     const parsed = parse(workflow) as { jobs?: Record<string, unknown> };
 
     expect(Object.keys(parsed.jobs ?? {})).toEqual(['plan', 'build', 'release', 'deliver']);
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).not.toContain('workflow_call:');
     for (const digest of Object.values(ciRuntimeAssetDigests)) {
       expect(workflow).toContain(digest);
     }

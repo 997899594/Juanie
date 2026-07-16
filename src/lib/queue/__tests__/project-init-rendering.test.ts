@@ -5,81 +5,11 @@ import {
   detectMigrationTool,
   detectPackageManager,
   inferSchemaConfig,
-  renderGitHubCI,
-  renderGitLabCI,
   renderJuanieConfig,
   resolvePackageScriptCommand,
 } from '@/lib/projects/bootstrap/repository-automation';
 
 describe('project init migration inference', () => {
-  it('renders thin provider bootstraps without repository-owned runtime code', () => {
-    const project = {
-      id: 'project_1',
-      slug: 'nexusnote',
-      name: 'NexusNote',
-      productionBranch: 'main',
-      repositoryId: 'repo_1',
-      repository: null,
-      configJson: {
-        services: {
-          web: {
-            build: {
-              strategy: 'bake',
-              definition: 'docker-bake.hcl',
-              target: 'web',
-            },
-          },
-        },
-      },
-    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
-    const context = {
-      services: [
-        {
-          id: 'service_web',
-          projectId: 'project_1',
-          name: 'web',
-          type: 'web',
-          buildCommand: 'bun run build',
-          startCommand: 'bun run start',
-          port: 3000,
-        } as typeof services.$inferSelect,
-      ],
-      databases: [],
-    };
-    const github = renderGitHubCI(project, context);
-    const gitlab = renderGitLabCI(project, context);
-
-    expect(github).toContain(
-      'uses: 997899594/Juanie/.github/workflows/application-delivery.yml@main'
-    );
-    expect(github).toContain('id-token: write');
-    expect(github).not.toContain('.juanie/');
-    expect(github).not.toContain('docker build');
-    expect(gitlab).toContain('/api/ci/components/gitlab/v1');
-    expect(gitlab).toContain('integrity: sha256-');
-    expect(gitlab).not.toContain('.juanie/');
-  });
-
-  it('preserves unrelated GitLab jobs while replacing only the Juanie component include', () => {
-    const project = {
-      id: 'project_1',
-      slug: 'nexusnote',
-      name: 'NexusNote',
-      productionBranch: 'main',
-      repositoryId: 'repo_1',
-      repository: null,
-    } as typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null };
-    const rendered = renderGitLabCI(
-      project,
-      { services: [], databases: [] },
-      `include:\n  - local: /quality.yml\ntest:\n  script: npm test\n`
-    );
-
-    expect(rendered).toContain('local: /quality.yml');
-    expect(rendered).toContain('script: npm test');
-    expect(rendered.match(/\/api\/ci\/components\/gitlab\/v1/gu)?.length).toBe(1);
-  });
-
   it('prefers packageManager field over lockfiles', () => {
     expect(
       detectPackageManager(['package.json', 'package-lock.json'], {
