@@ -23,13 +23,12 @@ describe('control-plane expand and contract migrations', () => {
     expect(sql).toContain('DROP TABLE "gitProvider"');
   });
 
-  it('uses the Atlas apply version flag for the expand boundary', async () => {
+  it('uses the platform-owned bounded apply planner for the expand boundary', async () => {
     const source = await readFile(atlasRunnerPath, 'utf8');
 
-    expect(source).toContain(
-      "'apply',\n        '--to-version',\n        CREDENTIAL_ENVELOPE_VERSION"
-    );
-    expect(source).not.toContain("'apply',\n        '--to',\n        CREDENTIAL_ENVELOPE_VERSION");
+    expect(source).toContain('applyControlPlaneMigrationsThroughVersion(');
+    expect(source).toContain('resolveAtlasBoundedMigrationCount({');
+    expect(source).not.toContain("'--to-version'");
   });
 
   it('keeps contract promotion out of the default Helm release', async () => {

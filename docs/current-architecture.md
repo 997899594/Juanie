@@ -103,9 +103,12 @@ Juanie self-deploy has one path:
 7. Destructive contract migrations remain outside the default Helm release. Operators promote the
    contract chain explicitly only after the N-1 rollback window closes.
 
-Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas is built
-from a checksum-verified source archive with a pinned Go toolchain and patched security dependency
-floor. Final application bases receive a fresh Debian security upgrade on every CI run; the
+Base images, third-party Helm images and CI service images are pinned by OCI digest. Atlas community
+CLI is built from a checksum-verified source archive with a pinned, security-current Go toolchain.
+Juanie owns target-version boundaries: it derives the exact positional migration count from the
+ordered directory and completed revision ledger, adopts explicit baselines with `migrate set`, and
+verifies the target revision after execution. The runtime does not depend on extended-only Atlas
+flags. Final application bases receive a fresh Debian security upgrade on every CI run; the
 resulting SBOM and immutable digest, rather than the upstream tag, are the deployed trust boundary.
 Application images are signed with GitHub OIDC and deployed by verified digest.
 

@@ -55,8 +55,7 @@ export interface AtlasSchemaApplyPlan {
 
 export function buildAtlasMigrateApplyArgs(input: {
   databaseUrl: string;
-  targetVersion?: string | null;
-  baselineVersion?: string | null;
+  migrationCount?: number | null;
 }): string[] {
   const args = [
     'migrate',
@@ -68,13 +67,96 @@ export function buildAtlasMigrateApplyArgs(input: {
     '--revisions-schema',
     'public',
   ];
-  if (input.targetVersion) {
-    args.push('--to-version', input.targetVersion);
-  }
-  if (input.baselineVersion) {
-    args.push('--baseline', input.baselineVersion);
+  if (input.migrationCount !== null && input.migrationCount !== undefined) {
+    if (!Number.isSafeInteger(input.migrationCount) || input.migrationCount < 1) {
+      throw new Error('Atlas migration count must be a positive safe integer');
+    }
+    args.push(String(input.migrationCount));
   }
   return args;
+}
+
+export function buildAtlasMigrateSetArgs(input: {
+  databaseUrl: string;
+  version: string;
+}): string[] {
+  return [
+    'migrate',
+    'set',
+    input.version,
+    '--dir',
+    'file://migrations',
+    '--url',
+    input.databaseUrl,
+    '--revisions-schema',
+    'public',
+  ];
+}
+
+export function resolveAtlasBoundedMigrationCount(input: {
+  declaredVersions: readonly string[];
+  appliedVersions: readonly string[];
+  targetVersion: string | null | undefined;
+}): number | null {
+  const declaredIndexes = new Map<string, number>();
+  let previousVersion: bigint | null = null;
+
+  for (const [index, version] of input.declaredVersions.entries()) {
+    if (!/^\d+$/u.test(version)) {
+      throw new Error(`Atlas migration directory contains invalid declared version ${version}`);
+    }
+    if (declaredIndexes.has(version)) {
+      throw new Error(`Atlas migration directory contains duplicate declared version ${version}`);
+    }
+
+    const numericVersion = BigInt(version);
+    if (previousVersion !== null && numericVersion <= previousVersion) {
+      throw new Error('Atlas migration directory versions must be strictly increasing');
+    }
+
+    declaredIndexes.set(version, index);
+    previousVersion = numericVersion;
+  }
+
+  const appliedIndexes = new Set<number>();
+  for (const version of input.appliedVersions) {
+    const index = declaredIndexes.get(version);
+    if (index === undefined) {
+      throw new Error(`Atlas migration history contains undeclared applied version ${version}`);
+    }
+    appliedIndexes.add(index);
+  }
+
+  const orderedAppliedIndexes = [...appliedIndexes].sort((left, right) => left - right);
+  const firstAppliedIndex = orderedAppliedIndexes[0];
+  const latestAppliedIndex = orderedAppliedIndexes.at(-1) ?? -1;
+  if (firstAppliedIndex !== undefined) {
+    for (let index = firstAppliedIndex; index <= latestAppliedIndex; index += 1) {
+      if (!appliedIndexes.has(index)) {
+        throw new Error('Atlas migration history contains a gap after its baseline');
+      }
+    }
+  }
+
+  if (!input.targetVersion) {
+    return null;
+  }
+
+  const targetIndex = declaredIndexes.get(input.targetVersion);
+  if (targetIndex === undefined) {
+    throw new Error(`Atlas release stage targets undeclared version ${input.targetVersion}`);
+  }
+
+  if (appliedIndexes.has(targetIndex)) {
+    return 0;
+  }
+  if (latestAppliedIndex > targetIndex) {
+    throw new Error(
+      `Atlas migration history has advanced beyond missing target ${input.targetVersion}`
+    );
+  }
+
+  return targetIndex - latestAppliedIndex;
 }
 
 export function parseAtlasMigrationDir(configContent: string | null | undefined): string | null {
@@ -102,7 +184,14 @@ export function extractAtlasMigrationVersion(fileName: string): string | null {
 export function getAtlasDeclaredVersions(files: Array<{ name: string }>): string[] {
   return files
     .map((file) => extractAtlasMigrationVersion(file.name))
-    .filter((version): version is string => Boolean(version));
+    .filter((version): version is string => Boolean(version))
+    .sort((left, right) => {
+      const leftVersion = BigInt(left);
+      const rightVersion = BigInt(right);
+      if (leftVersion < rightVersion) return -1;
+      if (leftVersion > rightVersion) return 1;
+      return 0;
+    });
 }
 
 export function isAtlasTargetVersionApplied(

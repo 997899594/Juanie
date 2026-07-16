@@ -11,6 +11,11 @@ import {
 } from '@/lib/atlas/cli';
 import { encrypt } from '@/lib/crypto';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
+import {
+  buildAtlasMigrateApplyArgs,
+  buildAtlasMigrateSetArgs,
+  resolveAtlasBoundedMigrationCount,
+} from '@/lib/migrations/atlas';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 
@@ -144,6 +149,10 @@ async function hasLegacyMigrationState(databaseUrl: string): Promise<boolean> {
 }
 
 async function isAtlasRevisionApplied(databaseUrl: string, version: string): Promise<boolean> {
+  return (await getAtlasAppliedVersions(databaseUrl)).includes(version);
+}
+
+async function getAtlasAppliedVersions(databaseUrl: string): Promise<string[]> {
   const sql = postgres(databaseUrl, { max: 1 });
   try {
     const tableName = `${REVISIONS_SCHEMA}.${ATLAS_REVISIONS_TABLE}`;
@@ -151,13 +160,16 @@ async function isAtlasRevisionApplied(databaseUrl: string, version: string): Pro
       select to_regclass(${tableName}) as regclass
     `;
     if (!table?.regclass) {
-      return false;
+      return [];
     }
     const rows = await sql.unsafe(
-      `select exists(select 1 from "${REVISIONS_SCHEMA}"."${ATLAS_REVISIONS_TABLE}" where version = $1) as applied`,
-      [version]
+      `select version
+       from "${REVISIONS_SCHEMA}"."${ATLAS_REVISIONS_TABLE}"
+       where (applied is null or total is null or applied = total)
+         and (error is null or error = '')
+       order by version asc`
     );
-    return Boolean(rows[0]?.applied);
+    return rows.map((row) => (typeof row.version === 'string' ? row.version : '')).filter(Boolean);
   } finally {
     await sql.end();
   }
@@ -520,18 +532,29 @@ async function ensureAtlasBaseline(databaseUrl: string): Promise<void> {
     if (hasLegacyState) {
       const baselineVersion = await getAtlasBaselineVersion();
       console.log(`[db:push] adopting legacy migration state at version ${baselineVersion}`);
-      await runAtlas([
-        'migrate',
-        'set',
-        baselineVersion,
-        '--dir',
-        MIGRATIONS_DIR_URL,
-        '--url',
-        databaseUrl,
-        '--revisions-schema',
-        REVISIONS_SCHEMA,
-      ]);
+      await runAtlas(buildAtlasMigrateSetArgs({ databaseUrl, version: baselineVersion }));
     }
+  }
+}
+
+async function applyControlPlaneMigrationsThroughVersion(
+  databaseUrl: string,
+  targetVersion: string
+): Promise<void> {
+  const declaredVersions = (await getMigrationFiles()).map(extractVersion);
+  const migrationCount = resolveAtlasBoundedMigrationCount({
+    declaredVersions,
+    appliedVersions: await getAtlasAppliedVersions(databaseUrl),
+    targetVersion,
+  });
+
+  if (migrationCount !== 0) {
+    await runAtlas(buildAtlasMigrateApplyArgs({ databaseUrl, migrationCount }));
+  }
+
+  const appliedVersions = await getAtlasAppliedVersions(databaseUrl);
+  if (!appliedVersions.includes(targetVersion)) {
+    throw new Error(`Control-plane Atlas target ${targetVersion} was not recorded after execution`);
   }
 }
 
@@ -549,34 +572,14 @@ export async function applyControlPlaneExpandMigrations(): Promise<void> {
       CREDENTIAL_ENVELOPE_VERSION
     );
     if (!envelopeMigrationApplied) {
-      await runAtlas([
-        'migrate',
-        'apply',
-        '--to-version',
-        CREDENTIAL_ENVELOPE_VERSION,
-        '--dir',
-        MIGRATIONS_DIR_URL,
-        '--url',
-        databaseUrl,
-        '--revisions-schema',
-        REVISIONS_SCHEMA,
-      ]);
+      await applyControlPlaneMigrationsThroughVersion(databaseUrl, CREDENTIAL_ENVELOPE_VERSION);
     }
     await migrateCredentialEnvelopes(databaseUrl);
   }
 
   // Once the contract revision is present, every later migration is required to be
   // backward-compatible and can run in the pre-upgrade phase.
-  await runAtlas([
-    'migrate',
-    'apply',
-    '--dir',
-    MIGRATIONS_DIR_URL,
-    '--url',
-    databaseUrl,
-    '--revisions-schema',
-    REVISIONS_SCHEMA,
-  ]);
+  await runAtlas(buildAtlasMigrateApplyArgs({ databaseUrl }));
 
   await runPostMigrationTasks(databaseUrl);
   await migrateEnvironmentSecretEnvelopes(databaseUrl);

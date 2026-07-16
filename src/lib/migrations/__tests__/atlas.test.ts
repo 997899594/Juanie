@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildAtlasMigrateApplyArgs,
+  buildAtlasMigrateSetArgs,
+  getAtlasDeclaredVersions,
   getAtlasSchemaDiffExcludePatterns,
   getAtlasSchemaDiffScopeArgs,
   getPostgresSchemaNamesFromDatabaseUrl,
   isAtlasTargetVersionApplied,
+  resolveAtlasBoundedMigrationCount,
   selectAtlasMigrationsThroughTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
@@ -16,12 +19,11 @@ import {
 } from '@/lib/migrations/atlas-dev-database';
 
 describe('atlas migration helpers', () => {
-  it('pins release graph execution to the declared stage target', () => {
+  it('passes the planned migration count as the community apply positional argument', () => {
     expect(
       buildAtlasMigrateApplyArgs({
         databaseUrl: 'postgres://app:secret@db/app',
-        targetVersion: '2026071403',
-        baselineVersion: '2026071400',
+        migrationCount: 3,
       })
     ).toEqual([
       'migrate',
@@ -32,11 +34,102 @@ describe('atlas migration helpers', () => {
       'postgres://app:secret@db/app',
       '--revisions-schema',
       'public',
-      '--to-version',
-      '2026071403',
-      '--baseline',
-      '2026071400',
+      '3',
     ]);
+  });
+
+  it('builds an explicit baseline adoption command', () => {
+    expect(
+      buildAtlasMigrateSetArgs({
+        databaseUrl: 'postgres://app:secret@db/app',
+        version: '2026071400',
+      })
+    ).toEqual([
+      'migrate',
+      'set',
+      '2026071400',
+      '--dir',
+      'file://migrations',
+      '--url',
+      'postgres://app:secret@db/app',
+      '--revisions-schema',
+      'public',
+    ]);
+  });
+
+  it('plans an exact bounded count from fresh and partially applied histories', () => {
+    const declaredVersions = ['2026071401', '2026071402', '2026071403', '2026071404'];
+
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions: [],
+        targetVersion: '2026071403',
+      })
+    ).toBe(3);
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions: ['2026071401'],
+        targetVersion: '2026071403',
+      })
+    ).toBe(2);
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions: ['2026071401', '2026071402', '2026071403'],
+        targetVersion: '2026071403',
+      })
+    ).toBe(0);
+    expect(
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions: ['2026071401'],
+        targetVersion: null,
+      })
+    ).toBe(null);
+  });
+
+  it('derives migration order independently from provider directory ordering', () => {
+    expect(
+      getAtlasDeclaredVersions([
+        { name: '2026071403_verify.sql' },
+        { name: '2026071401_expand.sql' },
+        { name: 'README.md' },
+        { name: '2026071402_backfill.sql' },
+      ])
+    ).toEqual(['2026071401', '2026071402', '2026071403']);
+  });
+
+  it('rejects invalid bounded migration histories before execution', () => {
+    expect(() =>
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: ['2026071401', '2026071402'],
+        appliedVersions: [],
+        targetVersion: '2026071499',
+      })
+    ).toThrow('targets undeclared version');
+    expect(() =>
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: ['2026071401', '2026071402'],
+        appliedVersions: ['2026071399'],
+        targetVersion: '2026071402',
+      })
+    ).toThrow('contains undeclared applied version');
+    expect(() =>
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: ['2026071401', '2026071402', '2026071403'],
+        appliedVersions: ['2026071403'],
+        targetVersion: '2026071402',
+      })
+    ).toThrow('has advanced beyond missing target');
+    expect(() =>
+      resolveAtlasBoundedMigrationCount({
+        declaredVersions: ['2026071401', '2026071401'],
+        appliedVersions: [],
+        targetVersion: '2026071401',
+      })
+    ).toThrow('duplicate declared version');
   });
 
   it('limits release graph previews to migrations at or before the stage target', () => {

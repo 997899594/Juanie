@@ -311,8 +311,10 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --entrypoint /usr/local/bin/atlas "${SCHEMA_RUNNER_IMAGE}" version
-          docker run --rm --entrypoint /bin/bash "${SCHEMA_RUNNER_IMAGE}" -o pipefail -c \
-            "/usr/local/bin/atlas migrate apply --help | grep -F -- '--to-version'"
+          atlas_help="$(docker run --rm --entrypoint /usr/local/bin/atlas \
+            "${SCHEMA_RUNNER_IMAGE}" migrate apply --help)"
+          grep -F -- 'apply [flags] [amount]' <<<"${atlas_help}"
+          ! grep -F -- '--to-version' <<<"${atlas_help}"
 
   deploy-platform:
     needs: build-images

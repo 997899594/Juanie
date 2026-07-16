@@ -16,6 +16,7 @@ import {
   type AtlasSchemaApplyPlan,
   applyDesiredSchemaToDatabase,
   buildAtlasMigrateApplyArgs,
+  buildAtlasMigrateSetArgs,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
   hasAtlasUserTables,
@@ -23,8 +24,8 @@ import {
   isAtlasTargetVersionApplied,
   planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
+  resolveAtlasBoundedMigrationCount,
   resolveAtlasDatabaseUrl,
-  selectAtlasMigrationsThroughTarget,
 } from '@/lib/migrations/atlas';
 import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -604,25 +605,50 @@ export async function executeAtlasMigrationsForSpec(
       beforeVersions.length === 0 && (await hasAtlasUserTables(executionDatabase))
         ? spec.specification.baselineVersion
         : null;
-    await log(
-      `🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${selectAtlasMigrationsThroughTarget(workspace.files, targetVersion).length} 个阶段内版本)`,
-      'info'
-    );
+
+    let executionBeforeVersions = beforeVersions;
 
     try {
-      await runAtlasCommand(
-        buildAtlasMigrateApplyArgs({
-          databaseUrl,
-          targetVersion,
-          baselineVersion,
-        }),
-        {
-          cwd: workspace.dir,
-          onOutputLine: (line, stream) => {
-            void log(line, stream === 'stderr' ? 'warn' : 'info');
-          },
+      if (baselineVersion) {
+        if (!declaredVersions.includes(baselineVersion)) {
+          throw new Error(`Atlas baseline targets undeclared version ${baselineVersion}`);
         }
-      );
+        await log(`🔗 ${spec.database.name}: 采用 Atlas baseline ${baselineVersion}`, 'info');
+        await runAtlasCommand(
+          buildAtlasMigrateSetArgs({
+            databaseUrl,
+            version: baselineVersion,
+          }),
+          { cwd: workspace.dir }
+        );
+        executionBeforeVersions = await getAppliedAtlasVersions(executionDatabase);
+        if (!executionBeforeVersions.includes(baselineVersion)) {
+          throw new Error(`Atlas baseline ${baselineVersion} was not recorded`);
+        }
+      }
+
+      const migrationCount = resolveAtlasBoundedMigrationCount({
+        declaredVersions,
+        appliedVersions: executionBeforeVersions,
+        targetVersion,
+      });
+      const planLabel = migrationCount === null ? '全部剩余版本' : `${migrationCount} 个版本`;
+      await log(`🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${planLabel})`, 'info');
+
+      if (migrationCount !== 0) {
+        await runAtlasCommand(
+          buildAtlasMigrateApplyArgs({
+            databaseUrl,
+            migrationCount,
+          }),
+          {
+            cwd: workspace.dir,
+            onOutputLine: (line, stream) => {
+              void log(line, stream === 'stderr' ? 'warn' : 'info');
+            },
+          }
+        );
+      }
     } catch (error) {
       if (error instanceof AtlasCommandError) {
         const details = [error.stdout.trim(), error.stderr.trim()].filter(Boolean).join('\n');
@@ -635,6 +661,9 @@ export async function executeAtlasMigrationsForSpec(
     }
 
     const afterVersions = await getAppliedAtlasVersions(executionDatabase);
+    if (targetVersion && !afterVersions.includes(targetVersion)) {
+      throw new Error(`Atlas migration target ${targetVersion} was not recorded after execution`);
+    }
     const beforeSet = new Set(beforeVersions);
     const appliedVersions = afterVersions.filter((version) => !beforeSet.has(version));
 

@@ -1,5 +1,8 @@
 # Schema Release Graph Implementation Plan
 
+> Historical note: target execution now uses the platform-owned bounded positional amount defined
+> in `2026-07-16-atlas-bounded-community-runner.md`, not the extended-only `--to-version` flag.
+
 ## Goal
 
 Make Atlas migration chains a first-class staged release primitive in Juanie without requiring
@@ -14,7 +17,7 @@ changes in consuming repositories.
 ## Step 2: Resolution and orchestration
 
 - Output: graph expansion into ordered pre/post specifications, deterministic phase scheduling,
-  target-aware previews, and `--to-version` Atlas execution.
+  target-aware previews, and bounded Atlas execution through an exact positional migration count.
 - Verify: resolver, phase progress, runner, and Atlas helper tests.
 
 ## Step 3: Release-level approval boundary

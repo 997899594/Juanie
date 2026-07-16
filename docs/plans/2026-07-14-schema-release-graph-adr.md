@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Superseded in part by `2026-07-16-atlas-bounded-community-runner.md`. The release graph remains
+accepted; the extended-only `--to-version` execution detail does not.
 
 ## Context
 
@@ -48,12 +49,12 @@ schema:
 All SQL remains in one linear Atlas migration directory. `expand`, `backfill`, and `verify` are
 ordered pre-deploy specifications. `cutover` maps to Juanie's existing deployment and rollout
 state machine. `contract` is a post-deploy specification. Each Atlas execution uses
-`atlas migrate apply --to-version <targetVersion>` and fixes the revision ledger in `public`
-rather than relying on Atlas CLI version defaults.
+Juanie's bounded planner to derive the exact community CLI positional amount through
+`targetVersion`, then verifies the target in the `public` revision ledger.
 
-`baselineVersion` is optional. Juanie only passes it to Atlas when the target database has user
-tables but no revision ledger. Empty databases execute the baseline migration normally; existing
-databases adopt it and continue from the next version.
+`baselineVersion` is optional. Juanie records it with `atlas migrate set` only when the target
+database has user tables but no revision ledger. Empty databases execute the baseline migration
+normally; existing databases adopt it and continue from the next version.
 
 Juanie persists one specification per architecture stage and creates one immutable
 `releaseMigrationPlan` before any stage executes. The plan is pinned to a commit, contains the full
