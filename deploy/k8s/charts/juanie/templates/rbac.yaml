@@ -76,6 +76,62 @@ subjects:
     namespace: {{ .Values.namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Chart.Name }}-scheduler
+rules:
+  # Expired preview environments are authoritative Scheduler-owned lifecycle work.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "delete"]
+  # Infrastructure remediation only observes pods and force-deletes stuck terminations.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  # Candidate and DbGate cleanup may enumerate services and delete known resources.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "delete"]
+  # Scheduler never reads secret payloads; delete is required for expired DbGate sessions.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["delete"]
+  # Runtime sleep/wake and cleanup reconcile existing workloads without creating new ones.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["delete"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["get", "list", "patch", "delete"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters"]
+    verbs: ["delete"]
+  {{- if eq (toString .Values.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED) "true" }}
+  - apiGroups: ["argoproj.io"]
+    resources: ["applicationsets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Chart.Name }}-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Chart.Name }}-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Chart.Name }}-scheduler
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ .Chart.Name }}-scheduler-leader-election

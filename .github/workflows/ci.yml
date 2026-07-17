@@ -62,6 +62,7 @@ jobs:
           rendered="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
             "${ci_runtime_args[@]}")"
+          printf '%s\n' "$rendered" | bun scripts/validate-scheduler-rbac.ts
           test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
           test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
           test "$(grep -c '^kind: PodMonitor$' <<<"$rendered")" -eq 1
