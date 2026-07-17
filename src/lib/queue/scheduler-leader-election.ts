@@ -37,8 +37,19 @@ function buildLease(identity: string, now: Date, resourceVersion?: string): k8s.
   };
 }
 
+function leaseTimeMs(value: k8s.V1MicroTime | string | undefined): number {
+  if (value === undefined) return 0;
+
+  const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    throw new Error(`Scheduler lease has an invalid renewTime: ${String(value)}`);
+  }
+
+  return timestamp;
+}
+
 function isExpired(lease: k8s.V1Lease, now: Date): boolean {
-  const renewTime = lease.spec?.renewTime?.getTime() ?? 0;
+  const renewTime = leaseTimeMs(lease.spec?.renewTime);
   const durationMs = (lease.spec?.leaseDurationSeconds ?? leaseDurationSeconds) * 1000;
   return renewTime + durationMs < now.getTime();
 }
