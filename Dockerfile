@@ -7,12 +7,12 @@ COPY . /app
 # ============================================
 # Stage 2: Reproducible Final Base
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS bun-runtime-os
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun-runtime-os
 
 # ============================================
 # Stage 3: Dependencies
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS deps
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS deps
 WORKDIR /app
 ENV CI=true
 ENV LEFTHOOK=0
@@ -66,7 +66,7 @@ RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=s
 # ============================================
 # Stage 7: Reproducible Atlas Community Builder
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-builder
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS atlas-builder
 WORKDIR /build
 
 ARG TARGETARCH=amd64
@@ -114,7 +114,7 @@ RUN curl --fail --location --retry 5 --retry-all-errors \
 # ============================================
 # Stage 8: Schema Runner Postgres Dependencies
 # ============================================
-FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS schema-runner-postgres-deps
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS schema-runner-postgres-deps
 WORKDIR /migrate
 ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
