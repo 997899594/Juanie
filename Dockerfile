@@ -5,15 +5,9 @@ FROM scratch AS source
 COPY . /app
 
 # ============================================
-# Stage 2: Security-refreshed Final Bases
+# Stage 2: Reproducible Final Base
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS bun-runtime-os
-ARG SECURITY_REFRESH=manual
-RUN echo "security-refresh=${SECURITY_REFRESH}" >/dev/null \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
-  && DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
 
 # ============================================
 # Stage 3: Dependencies
@@ -44,24 +38,33 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN mkdir -p public && bun run build
 
 # ============================================
-# Stage 5: Worker Builder
+# Stage 5: Long-Lived Runtime Builder
 # ============================================
-FROM deps AS worker-builder
+FROM deps AS runtime-builder
 WORKDIR /app
 
 COPY --from=source /app ./
 
-# 编译队列 worker/scheduler 为独立可执行文件
+# Compile long-lived control-plane services as independent Bun executables.
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
 RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
-RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=schema-runner
 RUN bun build ./src/lib/restate/server.ts --compile --outfile=restate-services
 RUN bun build ./src/lib/outbox/dispatcher.ts --compile --outfile=outbox-dispatcher
 RUN bun build ./src/lib/backups/control-plane-uploader.ts --compile --outfile=control-plane-backup-uploader
 RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-snapshot
 
 # ============================================
-# Stage 6: Reproducible Atlas Community Builder
+# Stage 6: Schema Runner Builder
+# ============================================
+FROM deps AS schema-runner-builder
+WORKDIR /app
+
+COPY --from=source /app ./
+
+RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=schema-runner
+
+# ============================================
+# Stage 7: Reproducible Atlas Community Builder
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS atlas-builder
 WORKDIR /build
@@ -109,7 +112,7 @@ RUN curl --fail --location --retry 5 --retry-all-errors \
   && ! /usr/local/bin/atlas migrate apply --help | grep -F -- '--to-version'
 
 # ============================================
-# Stage 7: Schema Runner Postgres Dependencies
+# Stage 8: Schema Runner Postgres Dependencies
 # ============================================
 FROM oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521 AS schema-runner-postgres-deps
 WORKDIR /migrate
@@ -131,7 +134,7 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
   && bun install --production --no-cache --backend=copyfile --network-concurrency=8
 
 # ============================================
-# Stage 8: Web Runner
+# Stage 9: Web Runner
 # ============================================
 # Next standalone only requires a compatible JavaScript runtime. Keep web and workers on one Bun baseline.
 FROM bun-runtime-os AS web
@@ -158,7 +161,7 @@ EXPOSE 3001
 CMD ["bun", "server.js"]
 
 # ============================================
-# Stage 9: Long-lived Runtime Runner
+# Stage 10: Long-lived Runtime Runner
 # ============================================
 FROM bun-runtime-os AS runtime
 WORKDIR /app
@@ -168,12 +171,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOME=/tmp
 ENV XDG_CACHE_HOME=/tmp/.cache
 
-COPY --from=worker-builder /app/worker ./worker
-COPY --from=worker-builder /app/scheduler ./scheduler
-COPY --from=worker-builder /app/restate-services ./restate-services
-COPY --from=worker-builder /app/outbox-dispatcher ./outbox-dispatcher
-COPY --from=worker-builder /app/control-plane-backup-uploader ./control-plane-backup-uploader
-COPY --from=worker-builder /app/restate-snapshot ./restate-snapshot
+COPY --from=runtime-builder /app/worker ./worker
+COPY --from=runtime-builder /app/scheduler ./scheduler
+COPY --from=runtime-builder /app/restate-services ./restate-services
+COPY --from=runtime-builder /app/outbox-dispatcher ./outbox-dispatcher
+COPY --from=runtime-builder /app/control-plane-backup-uploader ./control-plane-backup-uploader
+COPY --from=runtime-builder /app/restate-snapshot ./restate-snapshot
 COPY --from=source /app/templates ./templates
 
 RUN mkdir -p /tmp/.cache \
@@ -186,7 +189,7 @@ USER 1001:1001
 CMD ["./worker"]
 
 # ============================================
-# Stage 10: Ephemeral Schema Runner
+# Stage 11: Ephemeral Schema Runner
 # ============================================
 FROM bun-runtime-os AS schema-runner
 WORKDIR /app
@@ -202,7 +205,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=atlas-builder /usr/local/bin/atlas /usr/local/bin/atlas
-COPY --from=worker-builder /app/schema-runner ./schema-runner
+COPY --from=schema-runner-builder /app/schema-runner ./schema-runner
 COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations
 COPY --from=source /app/migrations-contract ./migrations-contract

@@ -17,7 +17,6 @@ out
 # Local env files
 .env
 .env.*
-!.env.example
 .env*.local
 
 # CI/CD
@@ -53,3 +52,10 @@ interview-prep
 
 # K8s configs (not needed in image)
 k8s
+deploy
+
+# Repository tooling not used by image builds
+archive
+config
+scripts/*
+!scripts/prepare.ts

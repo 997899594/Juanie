@@ -63,6 +63,14 @@ jobs:
             -f deploy/k8s/charts/juanie/values-prod.yaml \
             "${ci_runtime_args[@]}")"
           printf '%s\n' "$rendered" | bun scripts/validate-scheduler-rbac.ts
+          release_manifest="$(helm template juanie deploy/k8s/charts/juanie \
+            -f deploy/k8s/charts/juanie/values-prod.yaml \
+            --show-only templates/release-manifest.yaml \
+            "${ci_runtime_args[@]}")"
+          grep -q "sourceRevision: \"${GITHUB_SHA}\"" <<<"$release_manifest"
+          grep -q 'webImage: "ghcr.io/997899594/juanie:web-sha-f12feba"' <<<"$release_manifest"
+          grep -q 'runtimeImage: "ghcr.io/997899594/juanie:runtime-sha-f12feba"' <<<"$release_manifest"
+          grep -q 'schemaRunnerImage: "ghcr.io/997899594/juanie:schema-runner-sha-f12feba"' <<<"$release_manifest"
           test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
           test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
           test "$(grep -c '^kind: PodMonitor$' <<<"$rendered")" -eq 1
@@ -123,6 +131,56 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore.yaml
           exit-code: '1'
+
+  plan-images:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      targets: ${{ steps.plan.outputs.targets }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Plan Component Images
+        id: plan
+        env:
+          BASE_REVISION: ${{ github.event.before }}
+          HEAD_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          plan="$(bun scripts/plan-platform-images.ts "$BASE_REVISION" "$HEAD_REVISION")"
+          registry_token="$(curl -fsS \
+            "https://ghcr.io/token?service=ghcr.io&scope=repository:${IMAGE_REPOSITORY}:pull" \
+            | jq -r .token)"
+
+          for target in web runtime schema-runner; do
+            if ! curl -fsS -o /dev/null \
+              -H "Authorization: Bearer ${registry_token}" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json' \
+              "https://ghcr.io/v2/${IMAGE_REPOSITORY}/manifests/${target}-stable"; then
+              plan="$(jq -c --arg target "$target" \
+                '.targets = ((.targets + [$target]) | unique) |
+                 .reasons += ["stable channel missing: " + $target]' <<<"$plan")"
+            fi
+          done
+
+          echo "targets=$(jq -c '.targets' <<<"$plan")" >> "$GITHUB_OUTPUT"
+          echo "plan=$(jq -c '.' <<<"$plan")" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Platform image plan'
+            echo '```json'
+            jq '.' <<<"$plan"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   integration:
     needs: quality
@@ -217,7 +275,7 @@ jobs:
             /tmp/juanie-web.log
 
   build-images:
-    needs: [quality, integration]
+    needs: [quality, integration, plan-images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -228,18 +286,24 @@ jobs:
       fail-fast: false
       matrix:
         target: [web, runtime, schema-runner]
+    env:
+      TARGET_ENABLED: ${{ contains(fromJSON(needs.plan-images.outputs.targets), matrix.target) }}
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - if: env.TARGET_ENABLED == 'true'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - if: env.TARGET_ENABLED == 'true'
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - if: env.TARGET_ENABLED == 'true'
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build And Push ${{ matrix.target }} Image
+        if: env.TARGET_ENABLED == 'true'
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -248,7 +312,6 @@ jobs:
           target: ${{ matrix.target }}
           build-args: |
             ATLAS_VERSION=${{ env.ATLAS_VERSION }}
-            SECURITY_REFRESH=${{ github.run_id }}
           push: true
           provenance: mode=max
           sbom: true
@@ -257,15 +320,18 @@ jobs:
           cache-to: type=gha,mode=max,scope=juanie-docker-${{ matrix.target }}
 
       - name: Install Cosign
+        if: env.TARGET_ENABLED == 'true'
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       - name: Sign Image With GitHub OIDC
+        if: env.TARGET_ENABLED == 'true'
         env:
           IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Scan Published Image
+        if: env.TARGET_ENABLED == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}
@@ -274,7 +340,7 @@ jobs:
           exit-code: '1'
 
       - name: Smoke Test Web Image Runtime
-        if: matrix.target == 'web'
+        if: env.TARGET_ENABLED == 'true' && matrix.target == 'web'
         env:
           WEB_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:web-${{ github.sha }}
         run: |
@@ -312,7 +378,7 @@ jobs:
             console.log('web image runtime smoke ok');"
 
       - name: Smoke Test Schema Runner Toolchain
-        if: matrix.target == 'schema-runner'
+        if: env.TARGET_ENABLED == 'true' && matrix.target == 'schema-runner'
         env:
           SCHEMA_RUNNER_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:schema-runner-${{ github.sha }}
         run: |
@@ -325,7 +391,7 @@ jobs:
           ! grep -F -- '--to-version' <<<"${atlas_help}"
 
   deploy-platform:
-    needs: build-images
+    needs: [build-images, plan-images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -335,16 +401,19 @@ jobs:
     environment: production
     permissions:
       contents: read
-      packages: read
+      packages: write
     env:
       DEPLOY_CHART_DIR: /tmp/juanie-direct-deploy-${{ github.sha }}/deploy/k8s/charts/juanie
-      WEB_IMAGE_TAG: web-${{ github.sha }}
-      RUNTIME_IMAGE_TAG: runtime-${{ github.sha }}
-      SCHEMA_RUNNER_IMAGE_TAG: schema-runner-${{ github.sha }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
@@ -352,24 +421,31 @@ jobs:
       - name: Verify And Resolve Immutable Images
         env:
           IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
+          PLAN_TARGETS: ${{ needs.plan-images.outputs.targets }}
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@refs/heads/main"
-          web_digest="$(docker buildx imagetools inspect "${IMAGE}:${WEB_IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
-          runtime_digest="$(docker buildx imagetools inspect "${IMAGE}:${RUNTIME_IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
-          schema_runner_digest="$(docker buildx imagetools inspect "${IMAGE}:${SCHEMA_RUNNER_IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
-          cosign verify "${IMAGE}@${web_digest}" \
-            --certificate-identity "${identity}" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com
-          cosign verify "${IMAGE}@${runtime_digest}" \
-            --certificate-identity "${identity}" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com
-          cosign verify "${IMAGE}@${schema_runner_digest}" \
-            --certificate-identity "${identity}" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com
-          echo "WEB_IMAGE_TAG=${WEB_IMAGE_TAG}@${web_digest}" >> "${GITHUB_ENV}"
-          echo "RUNTIME_IMAGE_TAG=${RUNTIME_IMAGE_TAG}@${runtime_digest}" >> "${GITHUB_ENV}"
-          echo "SCHEMA_RUNNER_IMAGE_TAG=${SCHEMA_RUNNER_IMAGE_TAG}@${schema_runner_digest}" >> "${GITHUB_ENV}"
+
+          resolve_component() {
+            target="$1"
+            output_name="$2"
+            if jq -e --arg target "$target" 'index($target) != null' <<<"$PLAN_TARGETS" >/dev/null; then
+              tag="${target}-${GITHUB_SHA}"
+            else
+              tag="${target}-stable"
+            fi
+
+            digest="$(docker buildx imagetools inspect \
+              "${IMAGE}:${tag}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            cosign verify "${IMAGE}@${digest}" \
+              --certificate-identity "${identity}" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            echo "${output_name}=${tag}@${digest}" >> "${GITHUB_ENV}"
+          }
+
+          resolve_component web WEB_IMAGE_TAG
+          resolve_component runtime RUNTIME_IMAGE_TAG
+          resolve_component schema-runner SCHEMA_RUNNER_IMAGE_TAG
 
       - name: Upload Helm Chart
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
@@ -462,3 +538,36 @@ jobs:
 
               sleep 5
             done
+
+      - name: Promote Deployed Component Channels
+        env:
+          IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
+          PLAN_TARGETS: ${{ needs.plan-images.outputs.targets }}
+        run: |
+          set -euo pipefail
+
+          promote_component() {
+            target="$1"
+            reference="$2"
+            digest="${reference##*@}"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:${target}-stable" \
+              "${IMAGE}@${digest}"
+            promoted_digest="$(docker buildx imagetools inspect \
+              "${IMAGE}:${target}-stable" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            test "$promoted_digest" = "$digest"
+          }
+
+          for target in web runtime schema-runner; do
+            if ! jq -e --arg target "$target" 'index($target) != null' \
+              <<<"$PLAN_TARGETS" >/dev/null; then
+              continue
+            fi
+
+            case "$target" in
+              web) reference="$WEB_IMAGE_TAG" ;;
+              runtime) reference="$RUNTIME_IMAGE_TAG" ;;
+              schema-runner) reference="$SCHEMA_RUNNER_IMAGE_TAG" ;;
+            esac
+            promote_component "$target" "$reference"
+          done

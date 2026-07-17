@@ -26,7 +26,7 @@
     "check": "bun run lint && bun run typecheck && bun run ai:eval",
     "format": "bunx biome format src --write",
     "prepare": "bun scripts/prepare.ts",
-    "test": "bun test src tests/integration",
+    "test": "bun test src tests/integration scripts/__tests__",
     "test:integration": "INTEGRATION_TESTS=true bun test tests/integration",
     "test:e2e": "playwright test",
     "ai:eval": "bun scripts/run-ai-evals.ts",
