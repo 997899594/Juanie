@@ -36,10 +36,10 @@ resources:
   web:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 384Mi
     limits:
       cpu: 500m
-      memory: 768Mi
+      memory: 1Gi
   worker:
     requests:
       cpu: 75m
