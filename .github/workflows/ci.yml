@@ -394,12 +394,14 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 70m
           envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG
           script_stop: true
           script: |
             set -euo pipefail
             deploy_root="/tmp/juanie-direct-deploy-${GITHUB_SHA}"
             trap 'rm -rf "${deploy_root}"' EXIT
+            preload_log="${deploy_root}/image-preload.log"
 
             test -d "${DEPLOY_CHART_DIR}"
             registry_hosts_dir=/var/lib/rancher/k3s/agent/etc/containerd/certs.d
@@ -408,12 +410,17 @@ jobs:
               "${SCHEMA_RUNNER_IMAGE_TAG}" \
               "${RUNTIME_IMAGE_TAG}" \
               "${WEB_IMAGE_TAG}"; do
-              timeout 15m k3s ctr --namespace k8s.io images pull \
+              if ! timeout 15m k3s ctr --namespace k8s.io images pull \
                 --local \
                 --hosts-dir "${registry_hosts_dir}" \
                 --platform linux/amd64 \
                 --max-concurrent-downloads 3 \
-                "${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${image_tag}"
+                "${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${image_tag}" \
+                >"${preload_log}" 2>&1; then
+                tail -200 "${preload_log}"
+                exit 1
+              fi
+              echo "Preloaded ${image_tag%%@*}"
             done
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
