@@ -14,6 +14,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/component: web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
               app.kubernetes.io/component: outbox-dispatcher
         - podSelector:
             matchLabels:
