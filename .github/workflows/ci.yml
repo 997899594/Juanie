@@ -327,7 +327,7 @@ jobs:
     needs: build-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     concurrency:
       group: production-platform
       cancel-in-progress: false
@@ -398,8 +398,23 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            deploy_root="/tmp/juanie-direct-deploy-${GITHUB_SHA}"
+            trap 'rm -rf "${deploy_root}"' EXIT
 
             test -d "${DEPLOY_CHART_DIR}"
+            registry_hosts_dir=/var/lib/rancher/k3s/agent/etc/containerd/certs.d
+            test -f "${registry_hosts_dir}/ghcr.io/hosts.toml"
+            for image_tag in \
+              "${SCHEMA_RUNNER_IMAGE_TAG}" \
+              "${RUNTIME_IMAGE_TAG}" \
+              "${WEB_IMAGE_TAG}"; do
+              timeout 15m k3s ctr --namespace k8s.io images pull \
+                --local \
+                --hosts-dir "${registry_hosts_dir}" \
+                --platform linux/amd64 \
+                --max-concurrent-downloads 3 \
+                "${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${image_tag}"
+            done
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
               --ignore-not-found=true >/dev/null 2>&1 || true
@@ -439,4 +454,3 @@ jobs:
 
               sleep 5
             done
-            rm -rf "/tmp/juanie-direct-deploy-${GITHUB_SHA}"
