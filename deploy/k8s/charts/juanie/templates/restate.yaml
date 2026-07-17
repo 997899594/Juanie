@@ -273,6 +273,8 @@ spec:
               -H 'content-type: application/json'
               -d '{"uri":"{{ .Values.env.RESTATE_SERVICE_REGISTRATION_URL }}"}'
           securityContext:
+            runAsUser: 101
+            runAsGroup: 102
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:

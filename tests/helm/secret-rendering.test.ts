@@ -61,6 +61,20 @@ describe('Helm runtime Secret rendering', () => {
     expect(new Set(collectSecretReferences(resources))).toEqual(new Set(['juanie-secret']));
   });
 
+  it('pins the Restate registration container to the curl image numeric identity', () => {
+    const resources = renderChart([]);
+    const registration = findResource(resources, 'Job', 'juanie-restate-register-1');
+    const template = registration.spec?.template as
+      | { spec?: { containers?: Array<{ securityContext?: Record<string, unknown> }> } }
+      | undefined;
+    const securityContext = template?.spec?.containers?.[0]?.securityContext;
+
+    expect(securityContext?.runAsUser).toBe(101);
+    expect(securityContext?.runAsGroup).toBe(102);
+    expect(securityContext?.allowPrivilegeEscalation).toBe(false);
+    expect(securityContext?.readOnlyRootFilesystem).toBe(true);
+  });
+
   it('uses one existing Secret for every runtime consumer', () => {
     const resources = renderChart(['--set', 'secret.existingSecret=company-managed-secret']);
     expect(resources.some((resource) => resource.kind === 'Secret')).toBe(false);

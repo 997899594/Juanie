@@ -400,6 +400,9 @@ jobs:
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
               --ignore-not-found=true >/dev/null 2>&1 || true
+            kubectl -n juanie delete job \
+              -l app.kubernetes.io/component=restate-registration \
+              --ignore-not-found=true >/dev/null 2>&1 || true
 
             helm upgrade --install juanie "${DEPLOY_CHART_DIR}" \
               --namespace juanie \
