@@ -420,29 +420,37 @@ export class GitHubProvider implements GitProvider {
     accessToken: string,
     options: { repoFullName: string; url: string; secret: string }
   ): Promise<void> {
-    const hooks = await this.requestJson<Array<{ id: number; config?: { url?: string } }>>(
-      accessToken,
-      `/repos/${options.repoFullName}/hooks`,
-      { searchParams: { per_page: '100' } }
-    );
-    const existing = hooks.find((hook) => hook.config?.url === options.url);
-    const body = {
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
+    const hooks = await client.rest.repos.listWebhooks({ owner, repo, per_page: 100 });
+    const existing = hooks.data.find((hook) => hook.config?.url === options.url);
+    const config = {
+      url: options.url,
+      content_type: 'json',
+      insecure_ssl: '0',
+      secret: options.secret,
+    };
+
+    if (existing) {
+      await client.rest.repos.updateWebhook({
+        owner,
+        repo,
+        hook_id: existing.id,
+        active: true,
+        events: ['push'],
+        config,
+      });
+      return;
+    }
+
+    await client.rest.repos.createWebhook({
+      owner,
+      repo,
+      name: 'web',
       active: true,
       events: ['push'],
-      config: {
-        url: options.url,
-        content_type: 'json',
-        insecure_ssl: '0',
-        secret: options.secret,
-      },
-    };
-    await this.requestJson<void>(
-      accessToken,
-      existing
-        ? `/repos/${options.repoFullName}/hooks/${existing.id}`
-        : `/repos/${options.repoFullName}/hooks`,
-      { method: existing ? 'PATCH' : 'POST', body }
-    );
+      config,
+    });
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {

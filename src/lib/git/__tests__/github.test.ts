@@ -87,6 +87,7 @@ describe('GitHubProvider source control plane', () => {
       });
       expect(requests[1]?.init?.method).toBe('POST');
       expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+        name: 'web',
         active: true,
         events: ['push'],
         config: {
@@ -94,6 +95,43 @@ describe('GitHubProvider source control plane', () => {
           content_type: 'json',
           insecure_ssl: '0',
           secret: 'secret',
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('updates an existing webhook without sending create-only fields', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    try {
+      globalThis.fetch = (async (input, init) => {
+        requests.push({ url: String(input), init });
+        if (init?.method === 'PATCH') return Response.json({ id: 42 });
+        return Response.json([
+          {
+            id: 42,
+            config: { url: 'https://juanie.art/api/webhooks/source' },
+          },
+        ]);
+      }) as typeof fetch;
+
+      await createProvider().ensurePushWebhook('token', {
+        repoFullName: 'acme/demo',
+        url: 'https://juanie.art/api/webhooks/source',
+        secret: 'rotated-secret',
+      });
+
+      expect(requests[1]?.url).toContain('/repos/acme/demo/hooks/42');
+      expect(requests[1]?.init?.method).toBe('PATCH');
+      expect(JSON.parse(String(requests[1]?.init?.body))).toEqual({
+        active: true,
+        events: ['push'],
+        config: {
+          url: 'https://juanie.art/api/webhooks/source',
+          content_type: 'json',
+          insecure_ssl: '0',
+          secret: 'rotated-secret',
         },
       });
     } finally {
