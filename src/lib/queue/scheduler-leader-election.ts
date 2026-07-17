@@ -18,6 +18,8 @@ function loadCoordinationClient(): k8s.CoordinationV1Api {
 }
 
 function buildLease(identity: string, now: Date, resourceVersion?: string): k8s.V1Lease {
+  const leaseTime = new k8s.V1MicroTime(now.getTime());
+
   return {
     apiVersion: 'coordination.k8s.io/v1',
     kind: 'Lease',
@@ -29,8 +31,8 @@ function buildLease(identity: string, now: Date, resourceVersion?: string): k8s.
     spec: {
       holderIdentity: identity,
       leaseDurationSeconds,
-      acquireTime: now,
-      renewTime: now,
+      acquireTime: leaseTime,
+      renewTime: leaseTime,
     },
   };
 }
