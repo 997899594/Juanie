@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -328,6 +328,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: production-platform
+      cancel-in-progress: false
     environment: production
     permissions:
       contents: read
@@ -417,6 +420,8 @@ jobs:
               --set-string env.JUANIE_SOURCE_REPOSITORY="${GITHUB_REPOSITORY}" \
               --set-string env.JUANIE_SOURCE_REVISION="${GITHUB_SHA}" \
               --set schemaSync.enabled=true \
+              --atomic \
+              --cleanup-on-fail \
               --wait \
               --wait-for-jobs \
               --timeout 20m
