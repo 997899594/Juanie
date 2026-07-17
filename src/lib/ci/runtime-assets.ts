@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getPublicOrigin } from '@/lib/runtime/public-origin';
 
 export const ciRuntimeVersion = 'v1' as const;
 export const ciRuntimeAssetNames = [
@@ -27,38 +28,10 @@ export async function readCiRuntimeAsset(asset: CiRuntimeAssetName): Promise<str
   return readFileSync(join(templatesRoot(), 'runtime', ciRuntimeVersion, asset), 'utf8');
 }
 
-function requiredProductionValue(name: string, developmentValue: string): string {
+function requiredRuntimeValue(name: string): string {
   const value = process.env[name]?.trim();
   if (value) return value;
-  if (process.env.NODE_ENV !== 'production') return developmentValue;
-  throw new Error(`${name} is required in production`);
-}
-
-function normalizeControlPlaneOrigin(value: string): string {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('NEXTAUTH_URL must be an absolute HTTP(S) origin');
-  }
-
-  if (
-    (url.protocol !== 'https:' && url.protocol !== 'http:') ||
-    url.username ||
-    url.password ||
-    (url.pathname !== '/' && url.pathname !== '') ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error(
-      'NEXTAUTH_URL must be an absolute HTTP(S) origin without credentials or a path'
-    );
-  }
-  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
-    throw new Error('NEXTAUTH_URL must use HTTPS in production');
-  }
-
-  return url.origin;
+  throw new Error(`${name} is required`);
 }
 
 export function getCiRuntimeDescriptor(): {
@@ -67,11 +40,9 @@ export function getCiRuntimeDescriptor(): {
   githubRevision: string;
   version: typeof ciRuntimeVersion;
 } {
-  const baseUrl = normalizeControlPlaneOrigin(
-    requiredProductionValue('NEXTAUTH_URL', 'http://localhost:3001')
-  );
-  const githubRepository = requiredProductionValue('JUANIE_SOURCE_REPOSITORY', '997899594/Juanie');
-  const githubRevision = requiredProductionValue('JUANIE_SOURCE_REVISION', 'main');
+  const baseUrl = getPublicOrigin();
+  const githubRepository = requiredRuntimeValue('JUANIE_SOURCE_REPOSITORY');
+  const githubRevision = requiredRuntimeValue('JUANIE_SOURCE_REVISION');
 
   if (!/^[^/\s]+\/[^/\s]+$/u.test(githubRepository)) {
     throw new Error('JUANIE_SOURCE_REPOSITORY must be a GitHub owner/repository pair');

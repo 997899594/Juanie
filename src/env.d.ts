@@ -33,6 +33,7 @@ export interface Env {
 
   // App
   NODE_ENV: 'development' | 'production' | 'test';
+  JUANIE_PUBLIC_ORIGIN?: string;
   JUANIE_BASE_DOMAIN?: string;
   JUANIE_ARGOCD_NAMESPACE?: string;
   JUANIE_ARGOCD_PROJECT?: string;

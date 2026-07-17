@@ -38,6 +38,7 @@ data:
   {{- if or .Values.env.NO_PROXY .Values.env.HTTP_PROXY .Values.env.HTTPS_PROXY .Values.env.ALL_PROXY }}
   NO_PROXY: {{ .Values.env.NO_PROXY | default "localhost,127.0.0.1,.svc,.cluster.local,postgres,redis,kubernetes.default.svc" | quote }}
   {{- end }}
+  JUANIE_PUBLIC_ORIGIN: {{ printf "https://%s" .Values.hostname | quote }}
   JUANIE_BASE_DOMAIN: {{ .Values.env.JUANIE_BASE_DOMAIN | default "juanie.art" | quote }}
   JUANIE_SOURCE_REPOSITORY: {{ .Values.env.JUANIE_SOURCE_REPOSITORY | quote }}
   JUANIE_SOURCE_REVISION: {{ .Values.env.JUANIE_SOURCE_REVISION | quote }}

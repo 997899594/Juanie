@@ -5,6 +5,7 @@ import { getTeamAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { teamInvitations } from '@/lib/db/schema';
+import { getPublicOrigin } from '@/lib/runtime/public-origin';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -62,8 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       })
       .returning();
 
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3001';
-    const inviteUrl = `${baseUrl}/invite/${token}`;
+    const inviteUrl = `${getPublicOrigin()}/invite/${token}`;
 
     return NextResponse.json({ invitation, inviteUrl }, { status: 201 });
   } catch (error) {

@@ -2,6 +2,9 @@
 {{- if not .Values.monitoring.prometheusRule.enabled }}
 {{- fail "production requires monitoring.prometheusRule.enabled=true" }}
 {{- end }}
+{{- if or (eq .Values.hostname "localhost") (not (regexMatch "^[a-z0-9][a-z0-9.-]*[a-z0-9]$" .Values.hostname)) }}
+{{- fail "production requires hostname to be a public DNS name" }}
+{{- end }}
 {{- if not (regexMatch "^[^/[:space:]]+/[^/[:space:]]+$" .Values.env.JUANIE_SOURCE_REPOSITORY) }}
 {{- fail "production requires env.JUANIE_SOURCE_REPOSITORY as a GitHub owner/repository pair" }}
 {{- end }}

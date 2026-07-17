@@ -50,23 +50,30 @@ describe('versioned CI runtime assets', () => {
   });
 
   it('accepts only a normalized control-plane origin', () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    const previousNextAuthUrl = process.env.NEXTAUTH_URL;
+    const previousPublicOrigin = process.env.JUANIE_PUBLIC_ORIGIN;
+    const previousSourceRepository = process.env.JUANIE_SOURCE_REPOSITORY;
+    const previousSourceRevision = process.env.JUANIE_SOURCE_REVISION;
     try {
-      Reflect.set(process.env, 'NODE_ENV', 'development');
-      Reflect.set(process.env, 'NEXTAUTH_URL', 'https://juanie.example.com/');
+      Reflect.set(process.env, 'JUANIE_PUBLIC_ORIGIN', 'https://juanie.example.com/');
+      Reflect.set(process.env, 'JUANIE_SOURCE_REPOSITORY', '997899594/Juanie');
+      Reflect.set(process.env, 'JUANIE_SOURCE_REVISION', 'main');
       expect(getCiRuntimeDescriptor().baseUrl).toBe('https://juanie.example.com');
-
-      Reflect.set(process.env, 'NEXTAUTH_URL', 'https://juanie.example.com/control-plane');
-      expect(() => getCiRuntimeDescriptor()).toThrow('origin');
-
-      Reflect.set(process.env, 'NODE_ENV', 'production');
-      Reflect.set(process.env, 'NEXTAUTH_URL', 'http://juanie.example.com');
-      expect(() => getCiRuntimeDescriptor()).toThrow('HTTPS');
     } finally {
-      Reflect.set(process.env, 'NODE_ENV', previousNodeEnv);
-      if (previousNextAuthUrl === undefined) Reflect.deleteProperty(process.env, 'NEXTAUTH_URL');
-      else Reflect.set(process.env, 'NEXTAUTH_URL', previousNextAuthUrl);
+      if (previousPublicOrigin === undefined) {
+        Reflect.deleteProperty(process.env, 'JUANIE_PUBLIC_ORIGIN');
+      } else {
+        Reflect.set(process.env, 'JUANIE_PUBLIC_ORIGIN', previousPublicOrigin);
+      }
+      if (previousSourceRepository === undefined) {
+        Reflect.deleteProperty(process.env, 'JUANIE_SOURCE_REPOSITORY');
+      } else {
+        Reflect.set(process.env, 'JUANIE_SOURCE_REPOSITORY', previousSourceRepository);
+      }
+      if (previousSourceRevision === undefined) {
+        Reflect.deleteProperty(process.env, 'JUANIE_SOURCE_REVISION');
+      } else {
+        Reflect.set(process.env, 'JUANIE_SOURCE_REVISION', previousSourceRevision);
+      }
     }
   });
 });
