@@ -39,7 +39,7 @@ Juanie 是一个面向项目交付、预览环境、受控放量和数据库 Sch
 ### Prerequisites
 
 - Node.js 24+
-- Bun 1.3.9+
+- Bun 1.3.14+
 - PostgreSQL database
 - Docker (recommended for Atlas dev diff/validation)
 - Kubernetes cluster (optional, for deployments)

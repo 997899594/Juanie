@@ -16,7 +16,7 @@ describe('managed Dockerfiles', () => {
       secretNames: [],
     });
 
-    expect(dockerfile).toContain('FROM oven/bun:1.3.9@sha256:856da45d');
+    expect(dockerfile).toContain('FROM oven/bun:1.3.14@sha256:e10577f0db68');
     expect(dockerfile).toContain('WORKDIR /workspace/apps/web');
     expect(dockerfile).toContain('CMD ["sh", "-c", "bun run start"]');
     expect(dockerfile).not.toContain('.juanie/');

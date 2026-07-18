@@ -15,7 +15,7 @@ function installCommand(packageManager: ManagedPackageManager): string {
 
 function buildBaseImage(packageManager: ManagedPackageManager): string {
   return packageManager === 'bun'
-    ? 'oven/bun:1.3.9@sha256:856da45d07aeb62eb38ea3e7f9e1794c0143a4ff63efb00e6c4491b627e2a521'
+    ? 'oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4'
     : 'node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5';
 }
 
