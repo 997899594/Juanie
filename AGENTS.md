@@ -448,7 +448,7 @@ REDIS_PORT=6379
 # Kubernetes
 KUBECONFIG=~/.kube/config
 # 或
-KUBECONFIG_CONTENT=<base64-encoded>
+KUBECONFIG_CONTENT=<raw-kubeconfig-yaml>
 
 # 可观测性（可选）
 SENTRY_DSN=xxx

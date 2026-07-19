@@ -5,6 +5,11 @@ export {
   isK8sAvailable,
 } from '@/lib/k8s/client';
 export {
+  type KubernetesConfigurationEnvironment,
+  type KubernetesConfigurationSource,
+  resolveKubernetesConfiguration,
+} from '@/lib/k8s/configuration';
+export {
   cleanupStuckTerminatingPods,
   createConfigMap,
   createNamespace,

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveKubernetesConfiguration } from '@/lib/k8s/configuration';
 
 interface HealthResponse {
   status: 'healthy' | 'unhealthy' | 'degraded';
@@ -12,10 +13,17 @@ interface HealthResponse {
   };
 }
 
-interface HealthCheck {
-  status: 'pass' | 'fail' | 'warn';
+export interface HealthCheck {
+  status: 'pass' | 'fail' | 'warn' | 'not_applicable';
   message?: string;
   latency?: number;
+}
+
+export function createKubernetesNotApplicableCheck(): HealthCheck {
+  return {
+    status: 'not_applicable',
+    message: 'Kubernetes access is not assigned to this runtime',
+  };
 }
 
 function createBaseResponse(): HealthResponse {
@@ -100,12 +108,6 @@ async function isRedisConfigured(): Promise<boolean> {
   return redisConfig.isRedisConfigured();
 }
 
-function isKubernetesCheckEnabled(): boolean {
-  return Boolean(
-    process.env.KUBECONFIG || process.env.KUBECONFIG_CONTENT || process.env.KUBERNETES_SERVICE_HOST
-  );
-}
-
 function okJson(body: unknown, startTime?: number) {
   return NextResponse.json(body, {
     status: 200,
@@ -174,7 +176,7 @@ export async function getHealthResponse() {
     overallStatus = 'unhealthy';
   }
 
-  if (isKubernetesCheckEnabled()) {
+  if (resolveKubernetesConfiguration()) {
     try {
       checks.kubernetes = await checkKubernetes();
     } catch (error) {
@@ -184,6 +186,8 @@ export async function getHealthResponse() {
       };
       overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus;
     }
+  } else {
+    checks.kubernetes = createKubernetesNotApplicableCheck();
   }
 
   const response: HealthResponse = {

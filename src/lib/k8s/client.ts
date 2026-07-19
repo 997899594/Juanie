@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
 import * as k8s from '@kubernetes/client-node';
+import { resolveKubernetesConfiguration } from '@/lib/k8s/configuration';
 import { logger } from '@/lib/logger';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
@@ -46,26 +46,21 @@ export function initK8sClient(): void {
   const kc = new k8s.KubeConfig();
 
   try {
-    // In production (K8s environment), prefer in-cluster config
-    // In development, use external kubeconfig
-    if (process.env.KUBERNETES_SERVICE_HOST) {
-      // Running in K8s cluster, use in-cluster config (ServiceAccount)
+    const configuration = resolveKubernetesConfiguration();
+    if (!configuration) {
+      k8sLogger.info('Kubernetes access is not configured for this runtime');
+      return;
+    }
+
+    if (configuration.kind === 'in-cluster') {
       kc.loadFromCluster();
       k8sLogger.info('Using in-cluster Kubernetes configuration');
-    } else if (process.env.KUBECONFIG_CONTENT) {
-      // External kubeconfig provided as string
-      kc.loadFromString(process.env.KUBECONFIG_CONTENT);
+    } else if (configuration.kind === 'content') {
+      kc.loadFromString(configuration.content);
       k8sLogger.info('Using KUBECONFIG_CONTENT');
     } else {
-      // Try to load from an explicit local kubeconfig path.
-      const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
-      if (existsSync(kubeconfigPath)) {
-        kc.loadFromFile(kubeconfigPath);
-        k8sLogger.info('Using kubeconfig from file', { kubeconfigPath });
-      } else {
-        k8sLogger.warn('No kubeconfig file found', { kubeconfigPath });
-        return;
-      }
+      kc.loadFromFile(configuration.path);
+      k8sLogger.info('Using kubeconfig from file', { kubeconfigPath: configuration.path });
     }
 
     // Check if we have a valid cluster config

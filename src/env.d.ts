@@ -29,7 +29,9 @@ export interface Env {
   GITHUB_TOKEN?: string;
 
   // K8s
-  KUBE_CONFIG_PATH?: string;
+  KUBECONFIG?: string;
+  KUBECONFIG_CONTENT?: string;
+  KUBERNETES_SERVICE_HOST?: string;
 
   // App
   NODE_ENV: 'development' | 'production' | 'test';

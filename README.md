@@ -125,6 +125,7 @@ Notes:
 | GITLAB_CLIENT_ID | No | GitLab OAuth app client ID |
 | GITLAB_CLIENT_SECRET | No | GitLab OAuth app client secret |
 | KUBECONFIG | No | Kubernetes config path |
+| KUBECONFIG_CONTENT | No | Raw Kubernetes config YAML for environments without a config file |
 
 Required GitHub Actions secret:
 
