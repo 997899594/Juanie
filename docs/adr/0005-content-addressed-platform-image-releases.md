@@ -37,7 +37,11 @@ source revision and complete immutable image set. Helm history remains the rollb
 
 Remove run-specific OS mutation from image construction. Bun base security updates arrive as pinned
 Docker digest changes through Dependabot and must pass the existing source and image vulnerability
-gates. Keep Bun as the build and runtime engine for every component.
+gates. Web and long-lived services use Bun's pinned distroless variant so their final images expose
+neither a shell nor a package manager. The ephemeral schema-runner retains the Debian tool surface
+required to inspect heterogeneous user repositories; fixed security packages in that image are
+version-pinned instead of applying a mutable distribution upgrade. Keep Bun as the build and runtime
+engine for every component.
 
 ## Consequences
 
@@ -49,6 +53,7 @@ gates. Keep Bun as the build and runtime engine for every component.
 - Reused components retain their original signed digest and provenance.
 - Base-image refreshes are explicit, reviewable, reproducible inputs instead of mutable build-time
   network state.
+- Long-lived production images no longer carry Debian package-management or shell attack surfaces.
 - Production exposes one machine-readable release manifest without introducing another deploy path.
 
 ### Negative

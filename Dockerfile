@@ -5,14 +5,15 @@ FROM scratch AS source
 COPY . /app
 
 # ============================================
-# Stage 2: Reproducible Final Base
+# Stage 2: Reproducible Bun Bases
 # ============================================
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun-runtime-os
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun-build-os
+FROM oven/bun:1.3.14-distroless@sha256:c28c51287af70bab8e0b66fc4b6a30cfb92a727ebc88045223adc9f4c9d09307 AS bun-runtime-os
 
 # ============================================
 # Stage 3: Dependencies
 # ============================================
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS deps
+FROM bun-build-os AS deps
 WORKDIR /app
 ENV CI=true
 ENV LEFTHOOK=0
@@ -35,7 +36,9 @@ COPY --from=source /app ./
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-RUN mkdir -p public && bun run build
+RUN mkdir -p public \
+  && bun run build \
+  && mkdir -p /app/.next/standalone/.next/cache
 
 # ============================================
 # Stage 5: Long-Lived Runtime Builder
@@ -66,7 +69,7 @@ RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=s
 # ============================================
 # Stage 7: Reproducible Atlas Community Builder
 # ============================================
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS atlas-builder
+FROM bun-build-os AS atlas-builder
 WORKDIR /build
 
 ARG TARGETARCH=amd64
@@ -114,7 +117,7 @@ RUN curl --fail --location --retry 5 --retry-all-errors \
 # ============================================
 # Stage 8: Schema Runner Postgres Dependencies
 # ============================================
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS schema-runner-postgres-deps
+FROM bun-build-os AS schema-runner-postgres-deps
 WORKDIR /migrate
 ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
@@ -152,13 +155,13 @@ COPY --from=builder --chown=1001:1001 /app/.next/standalone ./
 COPY --from=builder --chown=1001:1001 /app/.next/static ./.next/static
 COPY --from=builder --chown=1001:1001 /app/public ./public
 COPY --from=source --chown=1001:1001 /app/templates ./templates
-RUN mkdir -p ./.next/cache && chown -R 1001:1001 ./.next/cache
 
 USER 1001:1001
 
 EXPOSE 3001
 
-CMD ["bun", "server.js"]
+ENTRYPOINT []
+CMD ["/usr/local/bin/bun", "server.js"]
 
 # ============================================
 # Stage 10: Long-lived Runtime Runner
@@ -171,27 +174,23 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOME=/tmp
 ENV XDG_CACHE_HOME=/tmp/.cache
 
-COPY --from=runtime-builder /app/worker ./worker
-COPY --from=runtime-builder /app/scheduler ./scheduler
-COPY --from=runtime-builder /app/restate-services ./restate-services
-COPY --from=runtime-builder /app/outbox-dispatcher ./outbox-dispatcher
-COPY --from=runtime-builder /app/control-plane-backup-uploader ./control-plane-backup-uploader
-COPY --from=runtime-builder /app/restate-snapshot ./restate-snapshot
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/worker ./worker
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/scheduler ./scheduler
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/restate-services ./restate-services
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/outbox-dispatcher ./outbox-dispatcher
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/control-plane-backup-uploader ./control-plane-backup-uploader
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/restate-snapshot ./restate-snapshot
 COPY --from=source /app/templates ./templates
-
-RUN mkdir -p /tmp/.cache \
-  && chown -R 1001:1001 /tmp/.cache \
-  && chmod +x ./worker ./scheduler ./restate-services ./outbox-dispatcher \
-    ./control-plane-backup-uploader ./restate-snapshot
 
 USER 1001:1001
 
+ENTRYPOINT []
 CMD ["./worker"]
 
 # ============================================
 # Stage 11: Ephemeral Schema Runner
 # ============================================
-FROM bun-runtime-os AS schema-runner
+FROM bun-build-os AS schema-runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -201,7 +200,14 @@ ENV XDG_CACHE_HOME=/tmp/.cache
 ENV ATLAS_NO_UPDATE_NOTIFIER=1
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates findutils tar \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    findutils \
+    libcap2=1:2.75-10+deb13u1 \
+    libssl3t64=3.5.6-1~deb13u2 \
+    openssl-provider-legacy=3.5.6-1~deb13u2 \
+    tar \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=atlas-builder /usr/local/bin/atlas /usr/local/bin/atlas
