@@ -83,3 +83,6 @@ tag-and-digest references, and stable channels advance only after the atomic dep
    signed digests.
 5. Push an image-neutral follow-up change and confirm no component image layers are rebuilt or
    transferred.
+
+Bootstrap validation completed in GitHub Actions run `29676046315`: all component images passed
+build, signature verification, vulnerability scanning, runtime smoke checks, and production deploy.
