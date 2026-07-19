@@ -371,7 +371,7 @@ jobs:
             sleep 2
           done
 
-          docker exec "${container}" node -e "\
+          docker exec "${container}" /usr/local/bin/bun -e "\
             require.resolve('next/package.json'); \
             require.resolve('@kubernetes/client-node/package.json'); \
             require.resolve('ws/package.json'); \

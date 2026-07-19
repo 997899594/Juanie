@@ -204,7 +204,7 @@ RUN apt-get update \
     bash \
     ca-certificates \
     findutils \
-    libcap2=1:2.75-10+deb13u1 \
+    libcap2=1:2.75-10+deb13u1+b1 \
     libssl3t64=3.5.6-1~deb13u2 \
     openssl-provider-legacy=3.5.6-1~deb13u2 \
     tar \
