@@ -232,6 +232,141 @@ deliverables:
     expect(topology.services[2]?.schedule).toBe('*/5 * * * *');
   });
 
+  it('discovers custom and nested pnpm workspaces while honoring exclusions', async () => {
+    const requestedDirectories: string[] = [];
+    const packageFiles = new Map<string, string>([
+      [
+        'products/console/package.json',
+        JSON.stringify({
+          name: '@acme/console',
+          scripts: { build: 'vite build', start: 'vite preview --port 4100' },
+        }),
+      ],
+      [
+        'platform/services/api/package.json',
+        JSON.stringify({
+          name: '@acme/api',
+          scripts: { build: 'tsc', start: 'node dist/server.js' },
+        }),
+      ],
+      [
+        'platform/private/internal/package.json',
+        JSON.stringify({
+          name: '@acme/internal',
+          scripts: { start: 'node index.js' },
+        }),
+      ],
+    ]);
+    const topology = await inspectRepositoryTopology(
+      {
+        async listRootFiles() {
+          return ['turbo.json', 'package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml'];
+        },
+        async getFileContent(_repo, path) {
+          if (path === 'package.json') {
+            return JSON.stringify({ packageManager: 'pnpm@11.9.0' });
+          }
+          if (path === 'pnpm-workspace.yaml') {
+            return `packages:\n  - products/*\n  - platform/**\n  - '!platform/private/**'\n`;
+          }
+          return packageFiles.get(path) ?? null;
+        },
+        async listDirectory(_repo, path) {
+          requestedDirectories.push(path);
+          const children: Record<string, string[]> = {
+            products: ['console'],
+            platform: ['services', 'private'],
+            'platform/services': ['api'],
+            'platform/private': ['internal'],
+          };
+          return (children[path] ?? []).map((name) => ({
+            name,
+            path: `${path}/${name}`,
+            type: 'dir' as const,
+          }));
+        },
+      },
+      'acme/custom-layout',
+      'main'
+    );
+
+    expect(topology.services.map((service) => service.packageName)).toEqual([
+      '@acme/console',
+      '@acme/api',
+    ]);
+    expect(topology.services.map((service) => service.appDir)).toEqual([
+      'products/console',
+      'platform/services/api',
+    ]);
+    expect(topology.services.some((service) => service.packageName === '@acme/internal')).toBe(
+      false
+    );
+    expect(requestedDirectories).toContain('platform/services');
+  });
+
+  it('discovers object-form workspace declarations from package.json', async () => {
+    const topology = await inspectRepositoryTopology(
+      {
+        async listRootFiles() {
+          return ['turbo.json', 'package.json', 'bun.lock'];
+        },
+        async getFileContent(_repo, path) {
+          if (path === 'package.json') {
+            return JSON.stringify({
+              packageManager: 'bun@1.3.14',
+              workspaces: { packages: ['services/*'] },
+            });
+          }
+          if (path === 'services/gateway/package.json') {
+            return JSON.stringify({
+              name: '@acme/gateway',
+              scripts: { build: 'bun build src/index.ts', start: 'bun dist/index.js' },
+            });
+          }
+          return null;
+        },
+        async listDirectory(_repo, path) {
+          return path === 'services'
+            ? [{ name: 'gateway', path: 'services/gateway', type: 'dir' as const }]
+            : [];
+        },
+      },
+      'acme/bun-workspaces',
+      'main'
+    );
+
+    expect(topology.services.map((service) => service.packageName)).toEqual(['@acme/gateway']);
+    expect(topology.services[0]?.runtime?.language).toBe('bun');
+  });
+
+  it('rejects malformed pnpm workspace declarations instead of returning a partial topology', async () => {
+    let error: unknown;
+    try {
+      await inspectRepositoryTopology(
+        {
+          async listRootFiles() {
+            return ['turbo.json', 'package.json', 'pnpm-workspace.yaml'];
+          },
+          async getFileContent(_repo, path) {
+            if (path === 'package.json') return '{}';
+            if (path === 'pnpm-workspace.yaml') return 'packages: [apps/*';
+            return null;
+          },
+          async listDirectory() {
+            return [];
+          },
+        },
+        'acme/invalid-workspace',
+        'main'
+      );
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error instanceof Error).toBe(true);
+    expect((error as Error).message).toContain('Invalid pnpm-workspace.yaml');
+  });
+
   it('projects a Fuser-shaped workspace graph into only real runtime services', async () => {
     const files = new Map<string, string>([
       [

@@ -50,8 +50,17 @@ acquire_juanie_ci_token() {
       --arg provider "$JUANIE_PROVIDER" \
       --arg ref "$JUANIE_RELEASE_REF" \
       --arg sha "$JUANIE_SOURCE_SHA" \
+      --arg beforeSha "${JUANIE_BEFORE_SHA:-}" \
       --arg externalRunId "$JUANIE_EXTERNAL_RUN_ID" \
-      '{idToken: ., provider: $provider, repository: $repository, ref: $ref, sha: $sha, externalRunId: $externalRunId}'
+      '{
+        idToken: .,
+        provider: $provider,
+        repository: $repository,
+        ref: $ref,
+        sha: $sha,
+        beforeSha: (if $beforeSha == "" then null else $beforeSha end),
+        externalRunId: $externalRunId
+      }'
   )"
 
   printf '%s' "$payload" | curl -fsSL -X POST "${juanie_base_url}/api/auth/ci/exchange" \

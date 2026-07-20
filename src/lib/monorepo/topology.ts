@@ -1,3 +1,4 @@
+import { parse } from 'yaml';
 import { type JuanieConfig, parseJuanieConfig, type ServiceConfig } from '@/lib/config/parser';
 import { inferDeliveryGraph } from '@/lib/delivery-graph/inference';
 import {
@@ -13,6 +14,7 @@ type BuildStrategy = 'auto' | 'managed' | 'dockerfile' | 'bake' | 'buildpacks';
 
 type PackageJsonShape = DeliveryGraphPackage & {
   packageManager?: string;
+  workspaces?: string[] | { packages?: string[] };
 };
 
 export interface RepositoryTopologyBuild {
@@ -24,7 +26,7 @@ export interface RepositoryTopologyBuild {
   definition?: string;
   secrets?: string[];
   package?: {
-    strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
+    strategy: 'turbo-prune' | 'pnpm-deploy';
   };
 }
 
@@ -357,19 +359,6 @@ function buildDeclaredDeliveryGraph(
   };
 }
 
-async function safeListDirectory(
-  reader: RepositoryTopologyReader,
-  repoFullName: string,
-  path: string,
-  ref?: string
-): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
-  try {
-    return await reader.listDirectory(repoFullName, path, ref);
-  } catch {
-    return [];
-  }
-}
-
 async function safeGetFileContent(
   reader: RepositoryTopologyReader,
   repoFullName: string,
@@ -381,6 +370,164 @@ async function safeGetFileContent(
   } catch {
     return null;
   }
+}
+
+const workspaceDiscoveryLimits = {
+  patterns: 64,
+  directories: 500,
+  depth: 12,
+} as const;
+
+function normalizeWorkspacePattern(pattern: string): string | null {
+  const normalized = pattern.trim().replace(/^\.\//u, '').replace(/\/$/u, '');
+  if (
+    !normalized ||
+    normalized.startsWith('/') ||
+    normalized.split('/').some((segment) => segment === '..')
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function parseWorkspacePatterns(
+  rootPackageJson: PackageJsonShape | null,
+  pnpmWorkspaceContent: string | null
+): string[] {
+  if (pnpmWorkspaceContent) {
+    try {
+      const document = parse(pnpmWorkspaceContent) as { packages?: unknown } | null;
+      if (Array.isArray(document?.packages)) {
+        return document.packages
+          .filter((value): value is string => typeof value === 'string')
+          .slice(0, workspaceDiscoveryLimits.patterns);
+      }
+      if (document?.packages !== undefined) {
+        throw new Error('pnpm-workspace.yaml packages must be an array');
+      }
+    } catch (error) {
+      throw new Error(
+        `Invalid pnpm-workspace.yaml: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  const workspaces = rootPackageJson?.workspaces;
+  const patterns = Array.isArray(workspaces) ? workspaces : workspaces?.packages;
+  return (patterns ?? []).slice(0, workspaceDiscoveryLimits.patterns);
+}
+
+function matchesWorkspaceSegment(value: string, pattern: string): boolean {
+  const expression = pattern
+    .replace(/[.+^${}()|[\]\\]/gu, '\\$&')
+    .replace(/\*/gu, '.*')
+    .replace(/\?/gu, '.');
+  return new RegExp(`^${expression}$`, 'u').test(value);
+}
+
+async function expandWorkspacePattern(input: {
+  reader: RepositoryTopologyReader;
+  repoFullName: string;
+  ref?: string;
+  pattern: string;
+  budget: { directories: number; exhausted: boolean };
+}): Promise<Set<string>> {
+  const normalized = normalizeWorkspacePattern(input.pattern);
+  if (!normalized) return new Set();
+  const segments = normalized.split('/');
+  const matches = new Set<string>();
+  const visited = new Set<string>();
+
+  async function visit(path: string, index: number): Promise<void> {
+    const state = `${path}\0${index}`;
+    if (
+      visited.has(state) ||
+      path.split('/').filter(Boolean).length > workspaceDiscoveryLimits.depth
+    ) {
+      return;
+    }
+    visited.add(state);
+
+    if (index === segments.length) {
+      if (path) matches.add(path);
+      return;
+    }
+
+    const segment = segments[index];
+    if (!segment) return;
+    if (segment === '**') {
+      await visit(path, index + 1);
+      if (input.budget.directories >= workspaceDiscoveryLimits.directories) {
+        input.budget.exhausted = true;
+        return;
+      }
+      input.budget.directories += 1;
+      const entries = await input.reader.listDirectory(input.repoFullName, path, input.ref);
+      for (const entry of entries.filter((candidate) => candidate.type === 'dir')) {
+        await visit(entry.path, index);
+      }
+      return;
+    }
+
+    if (!segment.includes('*') && !segment.includes('?')) {
+      await visit(path ? `${path}/${segment}` : segment, index + 1);
+      return;
+    }
+
+    if (input.budget.directories >= workspaceDiscoveryLimits.directories) {
+      input.budget.exhausted = true;
+      return;
+    }
+    input.budget.directories += 1;
+    const entries = await input.reader.listDirectory(input.repoFullName, path, input.ref);
+    for (const entry of entries) {
+      if (entry.type === 'dir' && matchesWorkspaceSegment(entry.name, segment)) {
+        await visit(entry.path, index + 1);
+      }
+    }
+  }
+
+  await visit('', 0);
+  return matches;
+}
+
+async function discoverWorkspacePaths(input: {
+  reader: RepositoryTopologyReader;
+  repoFullName: string;
+  ref?: string;
+  patterns: string[];
+}): Promise<string[]> {
+  const declaredPatterns = input.patterns.length > 0 ? input.patterns : ['apps/*', 'packages/*'];
+  const includes = declaredPatterns.filter((pattern) => !pattern.trim().startsWith('!'));
+  const excludes = declaredPatterns
+    .filter((pattern) => pattern.trim().startsWith('!'))
+    .map((pattern) => pattern.trim().slice(1));
+  const budget = { directories: 0, exhausted: false };
+  const included = new Set<string>();
+  const excluded = new Set<string>();
+
+  for (const pattern of includes) {
+    const matches = await expandWorkspacePattern({ ...input, pattern, budget });
+    for (const path of matches) included.add(path);
+  }
+  for (const pattern of excludes) {
+    const matches = await expandWorkspacePattern({ ...input, pattern, budget });
+    for (const path of matches) excluded.add(path);
+  }
+  if (budget.exhausted) {
+    throw new Error(
+      `Workspace discovery exceeded the ${workspaceDiscoveryLimits.directories} directory limit`
+    );
+  }
+
+  return [...included].filter((path) => !excluded.has(path));
+}
+
+function inferWorkspaceZone(path: string): DeliveryGraphWorkspaceInput['zone'] {
+  const root = path.split('/')[0]?.toLowerCase();
+  return root && ['packages', 'libs', 'libraries', 'shared', 'tooling'].includes(root)
+    ? 'package'
+    : 'app';
 }
 
 function toTopologyServiceFromWorkload(input: {
@@ -440,53 +587,35 @@ async function inspectWorkspaceDelivery(input: {
   ref?: string;
   rootFiles: string[];
   rootPackageJson: PackageJsonShape | null;
+  pnpmWorkspaceContent: string | null;
   bakeDefinitionPath: string | null;
   bakeTargets: string[];
 }): Promise<{ graph: DeliveryGraph; services: RepositoryTopologyService[] }> {
   const packageManager = detectPackageManager(input.rootFiles, input.rootPackageJson);
-  const [appEntries, packageEntries, rootEnvironmentContent] = await Promise.all([
-    safeListDirectory(input.reader, input.repoFullName, 'apps', input.ref),
-    safeListDirectory(input.reader, input.repoFullName, 'packages', input.ref),
+  const [workspacePaths, rootEnvironmentContent] = await Promise.all([
+    discoverWorkspacePaths({
+      reader: input.reader,
+      repoFullName: input.repoFullName,
+      ref: input.ref,
+      patterns: parseWorkspacePatterns(input.rootPackageJson, input.pnpmWorkspaceContent),
+    }),
     safeGetFileContent(input.reader, input.repoFullName, '.env.example', input.ref),
   ]);
-  const entries = [
-    ...appEntries
-      .filter((entry) => entry.type === 'dir')
-      .map((entry) => ({ ...entry, zone: 'app' as const })),
-    ...packageEntries
-      .filter((entry) => entry.type === 'dir')
-      .map((entry) => ({ ...entry, zone: 'package' as const })),
-  ];
 
   const workspaces = (
     await Promise.all(
-      entries.map(async (entry): Promise<DeliveryGraphWorkspaceInput | null> => {
+      workspacePaths.map(async (path): Promise<DeliveryGraphWorkspaceInput | null> => {
         const [packageJsonContent, dockerfileContent, environmentContent] = await Promise.all([
-          safeGetFileContent(
-            input.reader,
-            input.repoFullName,
-            `${entry.path}/package.json`,
-            input.ref
-          ),
-          safeGetFileContent(
-            input.reader,
-            input.repoFullName,
-            `${entry.path}/Dockerfile`,
-            input.ref
-          ),
-          safeGetFileContent(
-            input.reader,
-            input.repoFullName,
-            `${entry.path}/.env.example`,
-            input.ref
-          ),
+          safeGetFileContent(input.reader, input.repoFullName, `${path}/package.json`, input.ref),
+          safeGetFileContent(input.reader, input.repoFullName, `${path}/Dockerfile`, input.ref),
+          safeGetFileContent(input.reader, input.repoFullName, `${path}/.env.example`, input.ref),
         ]);
         const packageJson = parsePackageJson(packageJsonContent);
         if (!packageJson && !dockerfileContent) return null;
 
         return {
-          path: entry.path,
-          zone: entry.zone,
+          path,
+          zone: inferWorkspaceZone(path),
           packageJson: packageJson ?? {},
           hasDockerfile: Boolean(dockerfileContent),
           environmentKeys: parseEnvironmentKeys(environmentContent),
@@ -532,11 +661,15 @@ export async function inspectRepositoryTopology(
     dockerBakeHclContent,
     dockerBakeJsonContent,
     rootPackageJsonContent,
+    pnpmWorkspaceContent,
   ] = await Promise.all([
     safeGetFileContent(reader, repoFullName, 'juanie.yml', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.hcl', ref),
     safeGetFileContent(reader, repoFullName, 'docker-bake.json', ref),
     safeGetFileContent(reader, repoFullName, 'package.json', ref),
+    rootFiles.includes('pnpm-workspace.yaml')
+      ? safeGetFileContent(reader, repoFullName, 'pnpm-workspace.yaml', ref)
+      : Promise.resolve(null),
   ]);
 
   const bakeDefinitionPath = rootFiles.includes('docker-bake.hcl')
@@ -576,6 +709,7 @@ export async function inspectRepositoryTopology(
       ref,
       rootFiles,
       rootPackageJson,
+      pnpmWorkspaceContent,
       bakeDefinitionPath,
       bakeTargets,
     });

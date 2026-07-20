@@ -20,6 +20,7 @@ export interface CiReleaseScope {
   repository: string;
   ref: string;
   sha: string;
+  beforeSha: string | null;
   externalRunId: string;
 }
 
@@ -31,6 +32,7 @@ interface JuanieCiClaims extends JWTPayload {
   repository?: string;
   ref?: string;
   sha?: string;
+  before_sha?: string;
   external_run_id?: string;
   workflow_ref?: string;
 }
@@ -58,6 +60,9 @@ function validateScope(scope: CiReleaseScope): void {
   }
   if (!/^[a-f0-9]{40}$/iu.test(scope.sha)) {
     throw new Error('Invalid release SHA scope');
+  }
+  if (scope.beforeSha !== null && !/^[a-f0-9]{40}$/iu.test(scope.beforeSha)) {
+    throw new Error('Invalid base SHA scope');
   }
   if (!/^[A-Za-z0-9_.:-]+$/u.test(scope.externalRunId)) {
     throw new Error('Invalid CI run scope');
@@ -87,6 +92,7 @@ export async function issueJuanieCiToken(
     repository: requestedScope.repository.toLowerCase(),
     ref: requestedScope.ref,
     sha: requestedScope.sha.toLowerCase(),
+    ...(requestedScope.beforeSha ? { before_sha: requestedScope.beforeSha.toLowerCase() } : {}),
     external_run_id: requestedScope.externalRunId,
     workflow_ref: identity.workflowRef,
   } satisfies JuanieCiClaims)
@@ -120,6 +126,7 @@ export async function verifyJuanieCiToken(
     repository: string;
     ref?: string | null;
     sha?: string | null;
+    beforeSha?: string | null;
     externalRunId?: string | null;
   }
 ): Promise<{
@@ -147,6 +154,9 @@ export async function verifyJuanieCiToken(
     payload.repository?.toLowerCase() !== expected.repository.toLowerCase() ||
     (expected.ref && payload.ref !== expected.ref) ||
     (expected.sha && payload.sha?.toLowerCase() !== expected.sha.toLowerCase()) ||
+    (expected.beforeSha !== undefined &&
+      (payload.before_sha?.toLowerCase() ?? null) !==
+        (expected.beforeSha?.toLowerCase() ?? null)) ||
     (expected.externalRunId && payload.external_run_id !== expected.externalRunId)
   ) {
     throw new Error('CI workload token scope mismatch');

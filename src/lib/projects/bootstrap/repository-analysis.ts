@@ -118,7 +118,7 @@ export type ProjectConfigServiceEntry = {
     definition?: string;
     secrets?: string[];
     package?: {
-      strategy: 'pnpm-deploy' | 'pnpm-pack' | 'npm-pack' | 'copy' | 'custom';
+      strategy: 'turbo-prune' | 'pnpm-deploy';
     };
   };
 };

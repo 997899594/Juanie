@@ -141,7 +141,8 @@ function buildImageTag(input: {
   return `${base}-${sanitizeUnitId(input.service)}`;
 }
 
-function getBuildContext(service: ServiceConfig): string {
+function getBuildContext(service: ServiceConfig, strategy: BuildStrategy): string {
+  if (strategy === 'managed' && service.monorepo) return '.';
   return service.build?.context?.trim() || service.monorepo?.appDir || '.';
 }
 
@@ -181,7 +182,7 @@ function buildUnit(input: {
     service: serviceName,
     kind: 'image',
     strategy,
-    context: getBuildContext(input.service),
+    context: getBuildContext(input.service, strategy),
     dockerfile: getDockerfile(input.service, strategy),
     bakeTarget: getBakeTarget(input.service),
     bakeDefinition: getBuildDefinition(input.service),
@@ -195,6 +196,12 @@ function buildUnit(input: {
             port: input.service.run.port ?? 3000,
             runtimeLanguage: input.service.runtime?.language,
             secretNames: input.service.build?.secrets ?? [],
+            workspace: input.workspace
+              ? {
+                  packageName: input.workspace.packageName,
+                  packageStrategy: input.service.build?.package?.strategy,
+                }
+              : undefined,
           })
         : null,
     secrets: input.service.build?.secrets ?? [],
@@ -230,7 +237,7 @@ function buildTargetUnit(input: {
     service: targetName,
     kind: input.target.kind === 'documentation' ? 'static' : 'package',
     strategy,
-    context: input.target.build.context?.trim() || '.',
+    context: strategy === 'managed' ? '.' : input.target.build.context?.trim() || '.',
     dockerfile: input.target.build.dockerfile?.trim() || null,
     bakeTarget: input.target.build.target?.trim() || null,
     bakeDefinition: input.target.build.definition?.trim() || null,
@@ -241,6 +248,10 @@ function buildTargetUnit(input: {
             buildCommand: input.target.build.command ?? `${input.packageManager} run build`,
             outputPath: input.target.output.path,
             secretNames: input.target.build.secrets ?? [],
+            workspace: {
+              packageName: input.target.monorepo.packageName ?? input.target.name,
+              packageStrategy: input.target.build.package?.strategy,
+            },
           })
         : null,
     secrets: input.target.build.secrets ?? [],
@@ -367,6 +378,10 @@ export function selectBuildScope(
     return { services, targets, deliverables };
   }
 
+  if (affected.strategy === 'turbo' && changes.affectedPackages === undefined) {
+    return { services, targets, deliverables };
+  }
+
   const allAppDirs = [
     ...services.map((service) => service.monorepo?.appDir ?? '.'),
     ...targets.map((target) => target.monorepo.appDir),
@@ -386,7 +401,7 @@ export function selectBuildScope(
   }
 
   const affectedPackages = new Set(changes.affectedPackages ?? []);
-  const usePackageGraph = affected.strategy === 'turbo' && changes.affectedPackages !== undefined;
+  const usePackageGraph = affected.strategy === 'turbo';
   const selectedServices = services.filter((service) =>
     usePackageGraph
       ? affectedPackages.has(service.monorepo?.packageName ?? service.name)

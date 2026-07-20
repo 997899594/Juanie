@@ -386,6 +386,26 @@ deliverables:
     );
   });
 
+  it('rejects package strategies that have no managed runtime implementation', () => {
+    const parsed = parseJuanieConfig(`
+monorepo:
+  type: turborepo
+services:
+  - name: web
+    type: web
+    build:
+      strategy: managed
+      package:
+        strategy: copy
+    run:
+      command: npm start
+      port: 3000
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.errors.some((error) => error.includes('build.package.strategy'))).toBe(true);
+  });
+
   it('rejects deliverables whose source target is not declared', () => {
     const parsed = parseJuanieConfig(`
 services:

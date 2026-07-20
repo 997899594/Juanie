@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import type { TurboAnalysisFacts } from '@/lib/builds/api-schema';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
 import { resolveWorkloadImageRepository } from '@/lib/builds/registry';
 import { type CiWorkloadProvider, isCiWorkloadProvider } from '@/lib/ci/workload-identity';
@@ -23,6 +24,7 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { getBuildAnalysisPolicy, turboQueryVersion } from '@/lib/monorepo/turbo-analysis';
 import { loadRepositoryJuanieConfig } from '@/lib/projects/repository-config';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
@@ -44,6 +46,7 @@ export interface StartBuildRunInput {
   sha: string;
   beforeSha?: string | null;
   forceFullBuild?: boolean;
+  monorepoAnalysis?: TurboAnalysisFacts;
   provider: CiWorkloadProvider;
   externalRunId?: string | null;
   authHeader: string | null;
@@ -66,6 +69,17 @@ export interface CompleteBuildUnitInput {
 
 export interface FinalizeBuildRunInput {
   buildRunId: string;
+  authHeader: string | null;
+}
+
+export interface PrepareBuildAnalysisInput {
+  repository: string;
+  ref: string;
+  sha: string;
+  beforeSha?: string | null;
+  forceFullBuild?: boolean;
+  provider: CiWorkloadProvider;
+  externalRunId?: string | null;
   authHeader: string | null;
 }
 
@@ -174,11 +188,90 @@ function assertExistingBuildRunMatchesInput(
   }
 }
 
+function resolveTurboAffectedPackages(input: {
+  config: Awaited<ReturnType<typeof loadRepositoryJuanieConfig>>['config'];
+  sourceSha: string;
+  beforeSha?: string | null;
+  analysis?: TurboAnalysisFacts;
+}): string[] | undefined {
+  const policy = getBuildAnalysisPolicy(input.config, {
+    beforeSha: input.beforeSha,
+    forceFullBuild: false,
+  });
+  if (policy.mode !== 'turbo') return undefined;
+  if (!input.analysis) return undefined;
+
+  if (
+    input.analysis.engineVersion !== turboQueryVersion ||
+    input.analysis.sourceSha !== input.sourceSha ||
+    input.analysis.baseSha !== input.beforeSha
+  ) {
+    throw new BuildRunError('Turborepo analysis does not match the authenticated source lineage');
+  }
+  if (input.analysis.status === 'failed') return undefined;
+
+  const expectedMode = policy.useTaskInputs ? 'tasks' : 'packages';
+  if (
+    input.analysis.mode !== expectedMode ||
+    (expectedMode === 'tasks' && input.analysis.task !== policy.task) ||
+    (expectedMode === 'packages' && input.analysis.task !== undefined)
+  ) {
+    throw new BuildRunError('Turborepo analysis does not match the configured affected policy');
+  }
+
+  const workspacePackages = new Set(input.analysis.workspacePackages);
+  const declaredPackages = [
+    ...input.config.services.map((service) => service.monorepo?.packageName ?? service.name),
+    ...(input.config.buildTargets ?? []).map(
+      (target) => target.monorepo.packageName ?? target.name
+    ),
+  ];
+  const missingPackages = declaredPackages.filter(
+    (packageName) => !workspacePackages.has(packageName)
+  );
+  if (missingPackages.length > 0) {
+    throw new BuildRunError(
+      `Declared Turborepo packages are missing from the source graph: ${missingPackages.join(', ')}`
+    );
+  }
+  if (input.analysis.affectedPackages.some((packageName) => !workspacePackages.has(packageName))) {
+    throw new BuildRunError('Turborepo affected facts contain packages outside the source graph');
+  }
+
+  return [...new Set(input.analysis.affectedPackages)];
+}
+
+export async function prepareBuildAnalysis(input: PrepareBuildAnalysisInput) {
+  const access = await verifyRepositoryAccess(input.repository, input.authHeader, {
+    provider: input.provider,
+    ref: input.ref,
+    sha: input.sha,
+    beforeSha: input.beforeSha ?? null,
+    externalRunId: input.externalRunId,
+  });
+  const { project } = await loadRepositoryProject({
+    repository: input.repository,
+    repositoryId: access.repositoryId,
+    projectId: access.projectId,
+  });
+  const configRevision = await loadRepositoryJuanieConfig({
+    teamId: project.teamId,
+    repository: input.repository,
+    sourceCommitSha: input.sha,
+  });
+
+  return {
+    configDigest: configRevision.digest,
+    policy: getBuildAnalysisPolicy(configRevision.config, input),
+  };
+}
+
 export async function startBuildRun(input: StartBuildRunInput) {
   const access = await verifyRepositoryAccess(input.repository, input.authHeader, {
     provider: input.provider,
     ref: input.ref,
     sha: input.sha,
+    beforeSha: input.beforeSha ?? null,
     externalRunId: input.externalRunId,
   });
   const { repo, project } = await loadRepositoryProject({
@@ -211,7 +304,9 @@ export async function startBuildRun(input: StartBuildRunInput) {
     repository: input.repository,
     sourceCommitSha: input.sha,
   });
-  let changes: { changedFiles: string[]; forceFullBuild: boolean } | undefined;
+  let changes:
+    | { changedFiles: string[]; affectedPackages?: string[]; forceFullBuild: boolean }
+    | undefined;
   if (input.forceFullBuild || isZeroCommitSha(input.beforeSha)) {
     changes = { changedFiles: [], forceFullBuild: true };
   } else if (input.beforeSha) {
@@ -226,8 +321,20 @@ export async function startBuildRun(input: StartBuildRunInput) {
       input.beforeSha,
       input.sha
     );
+    const affectedPackages = comparison.complete
+      ? resolveTurboAffectedPackages({
+          config: configRevision.config,
+          sourceSha: input.sha,
+          beforeSha: input.beforeSha,
+          analysis: input.monorepoAnalysis,
+        })
+      : undefined;
     changes = comparison.complete
-      ? { changedFiles: comparison.changedFiles, forceFullBuild: false }
+      ? {
+          changedFiles: comparison.changedFiles,
+          ...(affectedPackages ? { affectedPackages } : {}),
+          forceFullBuild: false,
+        }
       : { changedFiles: [], forceFullBuild: true };
   }
   const plan = createBuildPlan({

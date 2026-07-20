@@ -30,6 +30,7 @@ export async function verifyRepositoryAccess(
     provider?: CiWorkloadProvider | null;
     ref?: string | null;
     sha?: string | null;
+    beforeSha?: string | null;
     externalRunId?: string | null;
   }
 ): ReturnType<typeof verifyJuanieCiToken> {

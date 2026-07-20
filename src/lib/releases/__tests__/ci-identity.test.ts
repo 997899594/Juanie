@@ -35,6 +35,7 @@ describe('Juanie CI workload token', () => {
       repository: 'acme/api',
       ref: 'refs/heads/main',
       sha: 'a'.repeat(40),
+      beforeSha: 'b'.repeat(40),
       externalRunId: 'github:delivery-42',
     };
     try {
@@ -50,6 +51,14 @@ describe('Juanie CI workload token', () => {
       let mismatch: unknown;
       try {
         await verifyJuanieCiToken(result.token, { ...scope, externalRunId: '42-4' });
+      } catch (error) {
+        mismatch = error;
+      }
+      expect(mismatch instanceof Error).toBe(true);
+      expect((mismatch as Error).message).toContain('scope mismatch');
+      mismatch = undefined;
+      try {
+        await verifyJuanieCiToken(result.token, { ...scope, beforeSha: 'c'.repeat(40) });
       } catch (error) {
         mismatch = error;
       }
@@ -72,6 +81,7 @@ describe('Juanie CI workload token', () => {
       repository: 'acme/api',
       ref: 'refs/heads/main',
       sha: 'a'.repeat(40),
+      beforeSha: null,
       externalRunId: 'gitlab:delivery-42',
     };
     try {

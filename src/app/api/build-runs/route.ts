@@ -1,27 +1,7 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
+import { startBuildRunSchema } from '@/lib/builds/api-schema';
 import { BuildRunError, startBuildRun } from '@/lib/builds/service';
 import { isCiAccessError } from '@/lib/releases/api-access';
-
-const startBuildRunSchema = z
-  .object({
-    repository: z
-      .string()
-      .min(3)
-      .max(255)
-      .regex(/^[^/\s]+\/[^/\s]+$/u),
-    ref: z.string().min(1).max(255),
-    sha: z.string().regex(/^[a-f0-9]{40}$/u),
-    beforeSha: z
-      .string()
-      .regex(/^[a-f0-9]{40}$/u)
-      .optional()
-      .nullable(),
-    provider: z.enum(['github', 'gitlab', 'gitlab-self-hosted']),
-    externalRunId: z.string().min(1).max(255).optional().nullable(),
-    forceFullBuild: z.boolean().optional().default(false),
-  })
-  .strict();
 
 export async function POST(request: Request) {
   try {
@@ -43,6 +23,7 @@ export async function POST(request: Request) {
       sha: input.sha,
       beforeSha: input.beforeSha,
       forceFullBuild: input.forceFullBuild,
+      monorepoAnalysis: input.monorepoAnalysis,
       provider: input.provider,
       externalRunId: input.externalRunId,
       authHeader: request.headers.get('authorization'),

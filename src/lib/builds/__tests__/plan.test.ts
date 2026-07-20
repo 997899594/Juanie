@@ -191,6 +191,32 @@ describe('build plan', () => {
     expect(selected.services.map((service) => service.name)).toEqual(['web']);
   });
 
+  it('fails full when Turborepo facts are missing instead of falling back to paths', () => {
+    const config = {
+      monorepo: { type: 'turborepo' },
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          monorepo: { appDir: 'apps/web', packageName: '@acme/web' },
+          run: { command: 'npm start' },
+        },
+        {
+          name: 'worker',
+          type: 'worker',
+          monorepo: { appDir: 'apps/worker', packageName: '@acme/worker' },
+          run: { command: 'npm run worker' },
+        },
+      ],
+    } satisfies Pick<JuanieConfig, 'services' | 'monorepo'>;
+
+    const selected = selectBuildScope(config, {
+      changedFiles: ['apps/web/src/page.tsx'],
+    });
+
+    expect(selected.services.map((service) => service.name)).toEqual(['web', 'worker']);
+  });
+
   it('forces the full graph when a global input changes', () => {
     const config = {
       monorepo: {
@@ -269,8 +295,41 @@ describe('build plan', () => {
     expect(plan.units[0]?.id).toBe('target-sdk');
     expect(plan.units[0]?.secrets).toEqual(['OSS_ACCESS_KEY_ID']);
     expect(plan.units[0]?.generatedDockerfile).toContain('pnpm --filter @acme/sdk build');
+    expect(plan.units[0]?.generatedDockerfile).toContain("turbo@2.10.5 prune '@acme/sdk'");
     expect(plan.units[0]?.dockerfile).toBe(null);
     expect(plan.release.requiredUnits).toEqual(['target-sdk']);
     expect(getBuildPlanReleaseServices(plan)).toEqual([]);
+  });
+
+  it('forces managed monorepo builds to use the root prune context', () => {
+    const config = {
+      monorepo: { type: 'turborepo', packageManager: 'pnpm' },
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          monorepo: { appDir: 'apps/web', packageName: '@acme/web' },
+          build: {
+            strategy: 'managed',
+            context: 'apps/web',
+            package: { strategy: 'pnpm-deploy' },
+          },
+          run: { command: 'node server.js', port: 3000 },
+        },
+      ],
+    } satisfies Pick<JuanieConfig, 'services' | 'monorepo'>;
+
+    const plan = createBuildPlan({
+      config,
+      repository: 'acme/platform',
+      ref: 'main',
+      sha: 'abc123',
+      ...configLineage,
+    });
+
+    expect(plan.units[0]?.context).toBe('.');
+    expect(plan.units[0]?.generatedDockerfile).toContain(
+      "pnpm --filter '@acme/web' --prod deploy /runtime"
+    );
   });
 });

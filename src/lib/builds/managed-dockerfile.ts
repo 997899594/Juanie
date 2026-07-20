@@ -1,4 +1,12 @@
 export type ManagedPackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm';
+export type ManagedPackageStrategy = 'turbo-prune' | 'pnpm-deploy';
+
+export interface ManagedWorkspacePackage {
+  packageName: string;
+  packageStrategy?: ManagedPackageStrategy;
+}
+
+const turboVersion = '2.10.5';
 
 function installCommand(packageManager: ManagedPackageManager): string {
   switch (packageManager) {
@@ -19,22 +27,77 @@ function buildBaseImage(packageManager: ManagedPackageManager): string {
     : 'node:24-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5';
 }
 
-function renderSecretCommand(command: string, secretNames: string[]): string {
-  if (secretNames.length === 0) return `RUN ${command}`;
+function renderRunCommand(command: string, secretNames: string[]): string {
+  const continuation = ` \\
+    `;
+  const mounts = [...secretNames.map((name) => `--mount=type=secret,id=${name},required=true`)];
+  if (mounts.length === 0) return `RUN ${command}`;
 
-  const continuation = ' \\\n    ';
-  const mounts = secretNames
-    .map((name) => `--mount=type=secret,id=${name},required=true`)
-    .join(continuation);
   const environment = secretNames
     .map((name) => `${name}="$(cat /run/secrets/${name})"`)
     .join(continuation);
-  return [`RUN ${mounts}`, environment, command].join(continuation);
+  return [`RUN ${mounts.join(continuation)}`, ...(environment ? [environment] : []), command].join(
+    continuation
+  );
 }
 
 function normalizeAppDir(appDir: string): string {
   const normalized = appDir.replace(/^\.\//u, '').replace(/\/$/u, '');
   return normalized && normalized !== '.' ? normalized : '.';
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/gu, `'"'"'`)}'`;
+}
+
+function turboCommand(packageManager: ManagedPackageManager): string {
+  switch (packageManager) {
+    case 'bun':
+      return `bunx turbo@${turboVersion}`;
+    case 'pnpm':
+      return `corepack enable && pnpm dlx turbo@${turboVersion}`;
+    case 'yarn':
+      return `corepack enable && yarn dlx turbo@${turboVersion}`;
+    case 'npm':
+      return `npx --yes turbo@${turboVersion}`;
+  }
+}
+
+function renderBuildStages(input: {
+  packageManager: ManagedPackageManager;
+  buildCommand: string;
+  secretNames: string[];
+  workspace?: ManagedWorkspacePackage;
+}): string[] {
+  const baseImage = buildBaseImage(input.packageManager);
+  if (!input.workspace) {
+    return [
+      `FROM ${baseImage} AS build`,
+      'WORKDIR /workspace',
+      'COPY . .',
+      renderRunCommand(installCommand(input.packageManager), input.secretNames),
+      renderRunCommand(input.buildCommand, input.secretNames),
+    ];
+  }
+
+  return [
+    `FROM ${baseImage} AS prune`,
+    'WORKDIR /workspace',
+    'COPY . .',
+    `RUN ${turboCommand(input.packageManager)} prune ${shellQuote(input.workspace.packageName)} --docker`,
+    '',
+    `FROM ${baseImage} AS build`,
+    'WORKDIR /workspace',
+    'COPY --from=prune /workspace/out/json/ .',
+    renderRunCommand(installCommand(input.packageManager), input.secretNames),
+    'COPY --from=prune /workspace/out/full/ .',
+    'COPY --from=juanie_turbo_cache / /workspace/.turbo/',
+    'ENV TURBO_CACHE_DIR=/workspace/.turbo',
+    renderRunCommand(input.buildCommand, input.secretNames),
+    '',
+    'FROM scratch AS juanie-turbo-cache',
+    'COPY --from=build /workspace/.turbo /',
+  ];
 }
 
 const staticServer = `const root = '/srv';
@@ -59,17 +122,10 @@ export function renderManagedServiceDockerfile(input: {
   outputPath?: string;
   runtimeLanguage?: 'node' | 'bun' | 'static' | 'custom';
   secretNames: string[];
+  workspace?: ManagedWorkspacePackage;
 }): string {
   const appDir = normalizeAppDir(input.appDir);
-  const lines = [
-    '# syntax=docker/dockerfile:1.7',
-    `FROM ${buildBaseImage(input.packageManager)} AS build`,
-    'WORKDIR /workspace',
-    'COPY . .',
-    renderSecretCommand(installCommand(input.packageManager), input.secretNames),
-    renderSecretCommand(input.buildCommand, input.secretNames),
-    '',
-  ];
+  const lines = ['# syntax=docker/dockerfile:1.7', ...renderBuildStages(input), ''];
 
   if (input.runtimeLanguage === 'static') {
     const outputPath = input.outputPath ?? (appDir === '.' ? 'dist' : `${appDir}/dist`);
@@ -83,6 +139,21 @@ export function renderManagedServiceDockerfile(input: {
       'HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\',
       '  CMD bun -e "fetch(\'http://127.0.0.1:8080/healthz\').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"',
       'CMD ["bun", "run", "/server.ts"]'
+    );
+  } else if (input.workspace?.packageStrategy === 'pnpm-deploy') {
+    if (input.packageManager !== 'pnpm') {
+      throw new Error('pnpm-deploy requires monorepo.packageManager=pnpm');
+    }
+    lines.push(
+      'FROM build AS package',
+      `RUN corepack enable && pnpm --filter ${shellQuote(input.workspace.packageName)} --prod deploy /runtime`,
+      '',
+      `FROM ${buildBaseImage('npm')} AS runtime`,
+      'WORKDIR /app',
+      'ENV NODE_ENV=production',
+      'COPY --from=package /runtime /app',
+      `EXPOSE ${input.port}`,
+      `CMD ["sh", "-c", ${JSON.stringify(input.startCommand)}]`
     );
   } else {
     lines.push(
@@ -104,14 +175,11 @@ export function renderManagedBuildTargetDockerfile(input: {
   buildCommand: string;
   outputPath: string;
   secretNames: string[];
+  workspace?: ManagedWorkspacePackage;
 }): string {
   return `${[
     '# syntax=docker/dockerfile:1.7',
-    `FROM ${buildBaseImage(input.packageManager)} AS build`,
-    'WORKDIR /workspace',
-    'COPY . .',
-    renderSecretCommand(installCommand(input.packageManager), input.secretNames),
-    renderSecretCommand(input.buildCommand, input.secretNames),
+    ...renderBuildStages(input),
     '',
     `FROM ${buildBaseImage(input.packageManager)} AS artifact`,
     `COPY --from=build /workspace/${input.outputPath} /juanie/output`,

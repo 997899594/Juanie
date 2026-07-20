@@ -48,17 +48,21 @@ async function readExchangeBody(request: Request): Promise<Record<string, unknow
 export async function POST(request: Request) {
   try {
     const body = await readExchangeBody(request);
-    const { idToken, provider, repository, ref, sha, externalRunId } = body;
+    const { idToken, provider, repository, ref, sha, beforeSha, externalRunId } = body;
     if (
       typeof idToken !== 'string' ||
       !isCiWorkloadProvider(provider) ||
       typeof repository !== 'string' ||
       typeof ref !== 'string' ||
       typeof sha !== 'string' ||
+      (beforeSha !== null && beforeSha !== undefined && typeof beforeSha !== 'string') ||
       typeof externalRunId !== 'string'
     ) {
       return NextResponse.json(
-        { error: 'idToken, provider, repository, ref, sha, and externalRunId are required' },
+        {
+          error:
+            'idToken, provider, repository, ref, sha, beforeSha, and externalRunId are required',
+        },
         { status: 400 }
       );
     }
@@ -95,6 +99,7 @@ export async function POST(request: Request) {
       repository,
       ref,
       sha,
+      beforeSha: typeof beforeSha === 'string' ? beforeSha : null,
       externalRunId,
     });
     return NextResponse.json({ ...exchange, tokenType: 'Bearer' });

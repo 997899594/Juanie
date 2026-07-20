@@ -16,8 +16,17 @@ export async function GET(request: Request) {
     const provider = params.get('provider')?.trim();
     const ref = params.get('ref')?.trim();
     const sha = params.get('sha')?.trim();
+    const baseSha = params.get('baseSha')?.trim() || null;
     const externalRunId = params.get('externalRunId')?.trim();
-    if (!repository || !isCiWorkloadProvider(provider) || !ref || !sha || !externalRunId) {
+    if (
+      !repository ||
+      !isCiWorkloadProvider(provider) ||
+      !ref ||
+      !sha ||
+      !/^[a-f0-9]{40}$/u.test(sha) ||
+      (baseSha !== null && !/^[a-f0-9]{40}$/u.test(baseSha)) ||
+      !externalRunId
+    ) {
       return NextResponse.json(
         { error: 'repository, provider, ref, sha, and externalRunId are required' },
         { status: 400 }
@@ -28,6 +37,7 @@ export async function GET(request: Request) {
       provider,
       ref,
       sha,
+      ...(baseSha ? { beforeSha: baseSha } : {}),
       externalRunId,
     });
     const project = await db.query.projects.findFirst({
@@ -47,12 +57,13 @@ export async function GET(request: Request) {
       teamId: project.teamId,
       requiredCapabilities: ['read_repo'],
     });
-    const archive = await gateway.openRepositoryArchive(session, repository, sha);
+    const archiveRevision = baseSha ?? sha;
+    const archive = await gateway.openRepositoryArchive(session, repository, archiveRevision);
     if (!archive.body) throw new Error('Source provider returned an empty archive body');
     return new Response(archive.body, {
       headers: {
         'Cache-Control': 'private, no-store, max-age=0',
-        'Content-Disposition': `attachment; filename="source-${sha.slice(0, 12)}.tar.gz"`,
+        'Content-Disposition': `attachment; filename="source-${archiveRevision.slice(0, 12)}.tar.gz"`,
         'Content-Type': 'application/gzip',
         'X-Content-Type-Options': 'nosniff',
       },

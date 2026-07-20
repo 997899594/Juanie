@@ -20,6 +20,8 @@ describe('versioned CI runtime assets', () => {
     ]);
     expect(isCiRuntimeAssetName('../package.json')).toBe(false);
     expect(await readCiRuntimeAsset('build-run.sh')).toContain('JUANIE_BUILD_STATE_DIR');
+    expect(await readCiRuntimeAsset('build-run.sh')).toContain('query affected');
+    expect(await readCiRuntimeAsset('build-run.sh')).toContain('--target juanie-turbo-cache');
 
     for (const asset of ciRuntimeAssetNames) {
       const content = await readCiRuntimeAsset(asset);
@@ -47,6 +49,10 @@ describe('versioned CI runtime assets', () => {
       'JUANIE_DELIVERABLES_FILE="$RUNNER_TEMP/juanie-deliverable.json" +'
     );
     expect(workflow).not.toContain('jq -cn +');
+    expect(workflow).toContain('build-run.sh" prepare');
+    expect(workflow).toContain('baseSha=$' + '{JUANIE_BEFORE_SHA}');
+    expect(workflow).toContain('Remove synthetic source history');
+    expect(workflow).toContain('Restore service-scoped Turbo cache');
   });
 
   it('accepts only a normalized control-plane origin', () => {

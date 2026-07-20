@@ -94,7 +94,7 @@ const runtimeSchema = z
 
 const buildPackageSchema = z
   .object({
-    strategy: z.enum(['pnpm-deploy', 'pnpm-pack', 'npm-pack', 'copy', 'custom']),
+    strategy: z.enum(['turbo-prune', 'pnpm-deploy']),
   })
   .strict();
 
@@ -403,6 +403,14 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
         `Build target "${target.name}" must use managed, dockerfile or bake to produce an immutable output`
       );
     }
+    if (
+      target.build.package?.strategy === 'pnpm-deploy' &&
+      config.monorepo?.packageManager !== 'pnpm'
+    ) {
+      errors.push(
+        `Build target "${target.name}" uses pnpm-deploy but monorepo.packageManager is not pnpm`
+      );
+    }
   }
   for (const deliverable of config.deliverables ?? []) {
     if (!buildTargetNames.has(deliverable.source.target)) {
@@ -427,6 +435,19 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   }
 
   for (const service of config.services) {
+    if (service.build?.package && !service.monorepo) {
+      errors.push(
+        `Service "${service.name}" uses build.package but has no monorepo package identity`
+      );
+    }
+    if (
+      service.build?.package?.strategy === 'pnpm-deploy' &&
+      config.monorepo?.packageManager !== 'pnpm'
+    ) {
+      errors.push(
+        `Service "${service.name}" uses pnpm-deploy but monorepo.packageManager is not pnpm`
+      );
+    }
     if (
       service.build?.secrets?.length &&
       !['managed', 'dockerfile', 'bake'].includes(service.build.strategy ?? '')

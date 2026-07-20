@@ -36,4 +36,30 @@ describe('build run API contract', () => {
 
     expect(response.status).toBe(400);
   });
+
+  it('rejects malformed Turborepo analysis facts before authentication', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/build-runs', {
+        method: 'POST',
+        body: JSON.stringify({
+          repository: 'acme/app',
+          ref: 'refs/heads/main',
+          sha: 'a'.repeat(40),
+          beforeSha: 'b'.repeat(40),
+          provider: 'github',
+          monorepoAnalysis: {
+            engine: 'turbo',
+            engineVersion: 'latest',
+            status: 'complete',
+            mode: 'packages',
+            sourceSha: 'a'.repeat(40),
+            baseSha: 'b'.repeat(40),
+            affectedPackages: ['@acme/web'],
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+  });
 });

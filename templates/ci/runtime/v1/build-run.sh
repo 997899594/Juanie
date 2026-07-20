@@ -15,6 +15,9 @@ build_outputs_file="${state_dir}/build-outputs.json"
 release_file="${state_dir}/release.json"
 artifacts_ready_file="${state_dir}/artifacts-ready"
 deliverables_file="${state_dir}/deliverables.json"
+analysis_policy_file="${state_dir}/analysis-policy.json"
+monorepo_analysis_file="${state_dir}/monorepo-analysis.json"
+turbo_analysis_error_file="${state_dir}/turbo-analysis-error"
 
 require_env() {
   local name="$1"
@@ -30,6 +33,142 @@ request_json() {
   local payload="${3:-}"
 
   juanie_api_json "$method" "$path" "$payload"
+}
+
+build_run_request_payload() {
+  jq -cn \
+    --arg repository "$JUANIE_REPOSITORY" \
+    --arg sha "$JUANIE_SOURCE_SHA" \
+    --arg ref "$JUANIE_RELEASE_REF" \
+    --arg provider "$JUANIE_PROVIDER" \
+    --arg externalRunId "${JUANIE_EXTERNAL_RUN_ID:-}" \
+    --arg beforeSha "${JUANIE_BEFORE_SHA:-}" \
+    --argjson forceFullBuild "${JUANIE_FORCE_FULL_BUILD:-false}" \
+    '{
+      repository: $repository,
+      sha: $sha,
+      ref: $ref,
+      provider: $provider,
+      externalRunId: (if $externalRunId == "" then null else $externalRunId end),
+      beforeSha: (if $beforeSha == "" then null else $beforeSha end),
+      forceFullBuild: $forceFullBuild
+    }'
+}
+
+prepare_build_analysis() {
+  require_env JUANIE_REPOSITORY
+  require_env JUANIE_SOURCE_SHA
+  require_env JUANIE_RELEASE_REF
+  require_env JUANIE_PROVIDER
+
+  mkdir -p "$state_dir"
+  request_json POST /api/build-runs/analysis "$(build_run_request_payload)" \
+    | tee "$analysis_policy_file"
+  jq -e '.policy.mode == "full" or .policy.mode == "manual" or .policy.mode == "turbo"' \
+    "$analysis_policy_file" >/dev/null
+}
+
+write_failed_turbo_analysis() {
+  local message="$1"
+  local engine_version
+  engine_version="$(jq -r '.policy.engineVersion' "$analysis_policy_file")"
+  jq -cn \
+    --arg engineVersion "$engine_version" \
+    --arg sourceSha "$JUANIE_SOURCE_SHA" \
+    --arg baseSha "$JUANIE_BEFORE_SHA" \
+    --arg error "${message:0:500}" \
+    '{
+      engine: "turbo",
+      engineVersion: $engineVersion,
+      sourceSha: $sourceSha,
+      baseSha: $baseSha,
+      status: "failed",
+      error: $error
+    }' > "$monorepo_analysis_file"
+}
+
+resolve_turbo_analysis() {
+  if [ "$(jq -r '.policy.mode' "$analysis_policy_file")" != 'turbo' ]; then
+    rm -f "$monorepo_analysis_file"
+    return 0
+  fi
+
+  if [ -s "$turbo_analysis_error_file" ]; then
+    write_failed_turbo_analysis "$(cat "$turbo_analysis_error_file")"
+    return 0
+  fi
+
+  local engine_version
+  local task
+  local use_task_inputs
+  local query_output_file="${state_dir}/turbo-query.json"
+  local query_error_file="${state_dir}/turbo-query.stderr"
+  local workspace_output_file="${state_dir}/turbo-workspace.json"
+  engine_version="$(jq -r '.policy.engineVersion' "$analysis_policy_file")"
+  task="$(jq -r '.policy.task' "$analysis_policy_file")"
+  use_task_inputs="$(jq -r '.policy.useTaskInputs' "$analysis_policy_file")"
+
+  local query_args=(
+    --yes "turbo@${engine_version}"
+    query affected
+    --base=HEAD^
+    --head=HEAD
+    --no-update-notifier
+    --no-color
+  )
+  if [ "$use_task_inputs" = 'true' ]; then
+    query_args+=(--tasks "$task")
+  else
+    query_args+=(--packages)
+  fi
+
+  if ! npx "${query_args[@]}" > "$query_output_file" 2> "$query_error_file"; then
+    write_failed_turbo_analysis "Turbo query failed: $(tr '\n' ' ' < "$query_error_file")"
+    return 0
+  fi
+  if ! npx --yes "turbo@${engine_version}" query ls --output=json \
+    --no-update-notifier --no-color > "$workspace_output_file" 2>> "$query_error_file"; then
+    write_failed_turbo_analysis "Turbo workspace query failed: $(tr '\n' ' ' < "$query_error_file")"
+    return 0
+  fi
+
+  local package_expression
+  local mode
+  if [ "$use_task_inputs" = 'true' ]; then
+    package_expression='[.data.affectedTasks.items[].package.name] | unique'
+    mode='tasks'
+  else
+    package_expression='[.data.affectedPackages.items[].name] | unique'
+    mode='packages'
+  fi
+  if ! jq -e "$package_expression" "$query_output_file" >/dev/null 2>&1; then
+    write_failed_turbo_analysis 'Turbo query returned an invalid affected graph'
+    return 0
+  fi
+  if ! jq -e '[.packages.items[].name] | unique' "$workspace_output_file" >/dev/null 2>&1; then
+    write_failed_turbo_analysis 'Turbo workspace query returned an invalid package graph'
+    return 0
+  fi
+
+  jq -cn \
+    --arg engineVersion "$engine_version" \
+    --arg sourceSha "$JUANIE_SOURCE_SHA" \
+    --arg baseSha "$JUANIE_BEFORE_SHA" \
+    --arg mode "$mode" \
+    --arg task "$task" \
+    --argjson workspacePackages "$(jq -c '[.packages.items[].name] | unique' "$workspace_output_file")" \
+    --argjson affectedPackages "$(jq -c "$package_expression" "$query_output_file")" \
+    '{
+      engine: "turbo",
+      engineVersion: $engineVersion,
+      sourceSha: $sourceSha,
+      baseSha: $baseSha,
+      status: "complete",
+      mode: $mode,
+      workspacePackages: $workspacePackages,
+      affectedPackages: $affectedPackages
+    }
+    + (if $mode == "tasks" then {task: $task} else {} end)' > "$monorepo_analysis_file"
 }
 
 load_build_secrets() {
@@ -70,6 +209,56 @@ append_docker_secret_args() {
     [ -n "$key" ] || continue
     result+=(--secret "id=${key},env=${key}")
   done < <(jq -r '.secrets[]?' <<<"$unit")
+}
+
+uses_turbo_cache() {
+  local unit="$1"
+  [ "$(jq -r '.strategy' <<<"$unit")" = 'managed' ] \
+    && [ "$(jq -r '.workspace.type // ""' <<<"$unit")" = 'turborepo' ]
+}
+
+append_turbo_cache_context_args() {
+  local unit="$1"
+  local -n result="$2"
+  uses_turbo_cache "$unit" || return 0
+
+  local cache_dir="${JUANIE_TURBO_CACHE_DIR:-${state_dir}/turbo-cache}"
+  mkdir -p "$cache_dir"
+  touch "${cache_dir}/.juanie-cache"
+  result+=(--build-context "juanie_turbo_cache=${cache_dir}")
+}
+
+export_turbo_cache() {
+  local unit="$1"
+  local dockerfile="$2"
+  local context="$3"
+  uses_turbo_cache "$unit" || return 0
+
+  local cache_dir="${JUANIE_TURBO_CACHE_DIR:-${state_dir}/turbo-cache}"
+  local next_dir="${cache_dir}.next"
+  local docker_secret_args=()
+  local docker_context_args=()
+  append_docker_secret_args "$unit" docker_secret_args
+  append_turbo_cache_context_args "$unit" docker_context_args
+  if [ -d "$next_dir" ]; then
+    find "$next_dir" -depth -mindepth 1 -delete
+  fi
+  mkdir -p "$next_dir"
+
+  if ! docker buildx build \
+    --file "$dockerfile" \
+    --target juanie-turbo-cache \
+    --build-arg "GIT_SHA=${JUANIE_SOURCE_SHA}" \
+    "${docker_secret_args[@]}" \
+    "${docker_context_args[@]}" \
+    --output "type=local,dest=${next_dir}" \
+    "$context"; then
+    echo 'Turbo cache export failed; continuing without updating the remote cache'
+    return 0
+  fi
+
+  find "$cache_dir" -depth -mindepth 1 -delete
+  cp -R "${next_dir}/." "$cache_dir/"
 }
 
 wait_for_image() {
@@ -169,7 +358,9 @@ build_unit() {
     fi
     local docker_cache_args=()
     local docker_secret_args=()
+    local docker_context_args=()
     append_docker_secret_args "$unit" docker_secret_args
+    append_turbo_cache_context_args "$unit" docker_context_args
     if [ "${JUANIE_DOCKER_CACHE_BACKEND:-}" = 'gha' ]; then
       docker_cache_args=(
         --cache-from type=gha,scope="juanie-${service_name}"
@@ -181,9 +372,11 @@ build_unit() {
       --tag "$image" \
       --build-arg "GIT_SHA=${JUANIE_SOURCE_SHA}" \
       "${docker_secret_args[@]}" \
+      "${docker_context_args[@]}" \
       "${docker_cache_args[@]}" \
       --push \
       "$context" || return 1
+    export_turbo_cache "$unit" "$dockerfile" "$context"
   else
     if [ "$(jq '.secrets | length' <<<"$unit")" -gt 0 ]; then
       echo "Build unit ${unit_key} requires BuildKit secrets and must use dockerfile or bake"
@@ -322,26 +515,21 @@ start_build_run() {
 
   mkdir -p "$state_dir"
 
+  if [ ! -s "$analysis_policy_file" ]; then
+    prepare_build_analysis >/dev/null
+  fi
+  resolve_turbo_analysis
+
   local payload
-  payload="$(
-    jq -cn \
-      --arg repository "$JUANIE_REPOSITORY" \
-      --arg sha "$JUANIE_SOURCE_SHA" \
-      --arg ref "$JUANIE_RELEASE_REF" \
-      --arg provider "$JUANIE_PROVIDER" \
-      --arg externalRunId "${JUANIE_EXTERNAL_RUN_ID:-}" \
-      --arg beforeSha "${JUANIE_BEFORE_SHA:-}" \
-      --argjson forceFullBuild "${JUANIE_FORCE_FULL_BUILD:-false}" \
-      '{
-        repository: $repository,
-        sha: $sha,
-        ref: $ref,
-        provider: $provider,
-        externalRunId: (if $externalRunId == "" then null else $externalRunId end),
-        beforeSha: (if $beforeSha == "" then null else $beforeSha end)
-      }
-      + {forceFullBuild: $forceFullBuild}'
-  )"
+  payload="$(build_run_request_payload)"
+  if [ -s "$monorepo_analysis_file" ]; then
+    payload="$(
+      jq -cn \
+        --argjson request "$payload" \
+        --slurpfile analysis "$monorepo_analysis_file" \
+        '$request + {monorepoAnalysis: $analysis[0]}'
+    )"
+  fi
 
   local response
   response="$(request_json POST /api/build-runs "$payload")"
@@ -451,6 +639,9 @@ finalize_build_run() {
 }
 
 case "$command" in
+  prepare)
+    prepare_build_analysis
+    ;;
   start)
     start_build_run
     ;;
@@ -464,7 +655,7 @@ case "$command" in
     finalize_build_run
     ;;
   *)
-    echo "Usage: $0 {start|build-group|build-all|finalize}"
+    echo "Usage: $0 {prepare|start|build-group|build-all|finalize}"
     exit 2
     ;;
 esac

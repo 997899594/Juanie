@@ -49,9 +49,10 @@ env:
   JUANIE_FORCE_FULL_BUILD: ${{ inputs.force_full_build }}
   JUANIE_RUNTIME_DIR: /tmp/juanie-ci-runtime-v1
   JUANIE_BUILD_STATE_DIR: /tmp/juanie-build-run
-  JUANIE_BUILD_RUN_SHA256: a0acf8264fb2a24f551c9a684393032d082a0334ed59cebf6edbc698bf1ef35a
+  JUANIE_TURBO_CACHE_DIR: /tmp/juanie-turbo-cache
+  JUANIE_BUILD_RUN_SHA256: b9eb15815d7aa48cbdeb3c1cd220eebbb0b593aed8d86491c210a68adb269f04
   JUANIE_DELIVERY_SHA256: 7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154
-  JUANIE_IDENTITY_SHA256: c03714358bdb8b013e86f3a8448eea838ea78d1a8f8b5ac9100524a2c0ce7112
+  JUANIE_IDENTITY_SHA256: 1f68413d297325e8585db843848df88d71461266a7e2e0c5fe8c301af8356a48
 
 jobs:
   plan:
@@ -80,7 +81,10 @@ jobs:
             "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
             | sha256sum -c -
 
-      - name: Download immutable source snapshot
+      - name: Resolve commit-scoped analysis policy
+        run: bash "$JUANIE_RUNTIME_DIR/build-run.sh" prepare
+
+      - name: Materialize immutable source lineage
         run: |
           set -euo pipefail
           source "$JUANIE_RUNTIME_DIR/workload-identity.sh"
@@ -93,8 +97,42 @@ jobs:
             --data-urlencode "ref=${JUANIE_RELEASE_REF}" \
             --data-urlencode "sha=${JUANIE_SOURCE_SHA}" \
             --data-urlencode "externalRunId=${JUANIE_EXTERNAL_RUN_ID}" \
-            --output "$RUNNER_TEMP/source.tar.gz"
-          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+            --output "$RUNNER_TEMP/source-head.tar.gz"
+
+          find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          if [ "$(jq -r '.policy.mode' "$JUANIE_BUILD_STATE_DIR/analysis-policy.json")" = 'turbo' ]; then
+            if curl --fail --silent --show-error --get \
+              "${JUANIE_BASE_URL}/api/ci/source/archive" \
+              -H "Authorization: Bearer ${token}" \
+              --data-urlencode "repository=${JUANIE_REPOSITORY}" \
+              --data-urlencode "provider=${JUANIE_PROVIDER}" \
+              --data-urlencode "ref=${JUANIE_RELEASE_REF}" \
+              --data-urlencode "sha=${JUANIE_SOURCE_SHA}" \
+              --data-urlencode "baseSha=${JUANIE_BEFORE_SHA}" \
+              --data-urlencode "externalRunId=${JUANIE_EXTERNAL_RUN_ID}" \
+              --output "$RUNNER_TEMP/source-base.tar.gz"; then
+              tar -xzf "$RUNNER_TEMP/source-base.tar.gz" \
+                --strip-components=1 -C "$GITHUB_WORKSPACE"
+              git init --quiet
+              git config user.name juanie-ci
+              git config user.email ci@juanie.art
+              git add --all
+              git commit --quiet --allow-empty -m "Juanie base ${JUANIE_BEFORE_SHA}"
+              find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+              tar -xzf "$RUNNER_TEMP/source-head.tar.gz" \
+                --strip-components=1 -C "$GITHUB_WORKSPACE"
+              git add --all
+              git commit --quiet --allow-empty -m "Juanie head ${JUANIE_SOURCE_SHA}"
+            else
+              echo 'Base source snapshot could not be materialized' \
+                > "$JUANIE_BUILD_STATE_DIR/turbo-analysis-error"
+              tar -xzf "$RUNNER_TEMP/source-head.tar.gz" \
+                --strip-components=1 -C "$GITHUB_WORKSPACE"
+            fi
+          else
+            tar -xzf "$RUNNER_TEMP/source-head.tar.gz" \
+              --strip-components=1 -C "$GITHUB_WORKSPACE"
+          fi
 
       - name: Create commit-scoped build plan
         id: plan
@@ -110,6 +148,9 @@ jobs:
             cat "$JUANIE_BUILD_STATE_DIR/deliverables.json"
             echo 'JUANIE_DELIVERABLES'
           } >> "$GITHUB_OUTPUT"
+
+      - name: Remove synthetic source history
+        run: rm -rf .git
 
       - name: Persist source snapshot
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -150,6 +191,14 @@ jobs:
         with:
           name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
           path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+
+      - name: Restore service-scoped Turbo cache
+        if: ${{ matrix.group.mode == 'affected_matrix' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ env.JUANIE_TURBO_CACHE_DIR }}
+          key: juanie-turbo-${{ inputs.source_repository }}-${{ matrix.group.id }}-${{ hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') }}-${{ inputs.source_sha }}
+          restore-keys: juanie-turbo-${{ inputs.source_repository }}-${{ matrix.group.id }}-${{ hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') }}-
 
       - name: Download immutable Juanie CI runtime
         run: |

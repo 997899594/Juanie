@@ -42,6 +42,12 @@ export {
   type RepositoryTopologyService,
 } from './topology';
 export {
+  type BuildAnalysisPolicy,
+  getBuildAnalysisPolicy,
+  type TurboAnalysisPolicy,
+  turboQueryVersion,
+} from './turbo-analysis';
+export {
   createTurborepoWorkspaceGraph,
   getTurborepoAffectedPolicy,
   getTurborepoAppDir,
