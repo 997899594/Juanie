@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -9,6 +9,7 @@ import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
+import { resolvePackageManagerContract } from '@/lib/package-manager/contract';
 import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
@@ -53,6 +54,25 @@ async function fileExists(pathname: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function loadRepositoryPackageManager(repoDir: string) {
+  const packageJsonPath = path.join(repoDir, 'package.json');
+  let packageJson: unknown;
+
+  try {
+    packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `Unable to read root package.json for schema repair: ${error instanceof Error ? error.message : 'invalid JSON'}`
+    );
+  }
+
+  const packageManagerValue =
+    packageJson && typeof packageJson === 'object' && 'packageManager' in packageJson
+      ? packageJson.packageManager
+      : undefined;
+  return resolvePackageManagerContract(packageManagerValue, await readdir(repoDir));
 }
 
 async function assertAtlasGeneratedQuality(input: {
@@ -336,6 +356,10 @@ export async function executeSchemaRepairAtlasRun(input: {
         expectedVersion: plan.expectedVersion,
         actualVersion: plan.actualVersion,
         sourceConfigPath: spec.specification.sourceConfigPath,
+        packageManager:
+          spec.specification.tool === 'drizzle'
+            ? await loadRepositoryPackageManager(repoDir)
+            : undefined,
       });
       const runtimeDir = path.join(repoDir, '.juanie', 'schema-repair');
       await mkdir(runtimeDir, { recursive: true });

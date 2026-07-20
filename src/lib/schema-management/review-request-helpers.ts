@@ -1,4 +1,5 @@
 import { drizzleSchemaConfigCandidates } from '@/lib/migrations/schema-source';
+import type { PinnedPackageManager } from '@/lib/package-manager/contract';
 
 const DEFAULT_ATLAS_IMAGE = 'arigaio/atlas:1.2.3-community';
 
@@ -28,6 +29,47 @@ interface SchemaRepairArtifactInput {
   expectedVersion: string | null;
   actualVersion: string | null;
   sourceConfigPath?: string | null;
+  packageManager?: PinnedPackageManager;
+}
+
+interface DrizzlePackageManagerCommands {
+  installLines: string[];
+  exportCommand: string;
+}
+
+function quoteShellLiteral(value: string): string {
+  return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function buildDrizzlePackageManagerCommands(
+  packageManager: PinnedPackageManager
+): DrizzlePackageManagerCommands {
+  if (packageManager.name === 'bun') {
+    return {
+      installLines: [
+        `PACKAGE_MANAGER=(bun x --package "bun@${packageManager.version}" bun)`,
+        `"${'$'}{PACKAGE_MANAGER[@]}" install --frozen-lockfile`,
+      ],
+      exportCommand: `"${'$'}{PACKAGE_MANAGER[@]}" x drizzle-kit export`,
+    };
+  }
+
+  const installArgs =
+    packageManager.name === 'npm'
+      ? 'ci'
+      : packageManager.name === 'yarn'
+        ? packageManager.major === 1
+          ? 'install --frozen-lockfile'
+          : 'install --immutable'
+        : 'install --frozen-lockfile';
+
+  return {
+    installLines: [
+      `PACKAGE_MANAGER=(/usr/local/bin/node /app/node_modules/corepack/dist/corepack.js "${packageManager.spec}")`,
+      `"${'$'}{PACKAGE_MANAGER[@]}" ${installArgs}`,
+    ],
+    exportCommand: `"${'$'}{PACKAGE_MANAGER[@]}" exec drizzle-kit export`,
+  };
 }
 
 function buildAtlasConfigContent(input: SchemaRepairArtifactInput): string {
@@ -78,34 +120,35 @@ function buildAtlasScriptContent(
       ? `baseline_${input.planId.slice(0, 8)}`
       : `repair_${input.planId.slice(0, 8)}`;
 
-  const installLines =
-    input.tool === 'drizzle'
-      ? [
-          `if [ -f bun.lockb ] || [ -f bun.lock ]; then`,
-          `  bun install --frozen-lockfile`,
-          `elif [ -f pnpm-lock.yaml ]; then`,
-          `  pnpm install --frozen-lockfile`,
-          `elif [ -f yarn.lock ]; then`,
-          `  yarn install --immutable`,
-          `elif [ -f package-lock.json ]; then`,
-          `  npm ci`,
-          `else`,
-          `  npm install`,
-          `fi`,
-          ``,
-          input.sourceConfigPath
-            ? `DRIZZLE_CONFIG="${'$'}{DRIZZLE_CONFIG:-${input.sourceConfigPath}}"`
-            : `DRIZZLE_CONFIG="${'$'}{DRIZZLE_CONFIG:-$(find . -path ./node_modules -prune -o -path ./.git -prune -o \\( ${drizzleSchemaConfigCandidates
-                .map((candidate) => `-name '${candidate}'`)
-                .join(' -o ')} \\) -print | sed 's#^./##' | sort | head -n 1)}"`,
-          `if [ -z "${'$'}DRIZZLE_CONFIG" ]; then`,
-          `  echo "Unable to locate drizzle config" >&2`,
-          `  exit 1`,
-          `fi`,
-          `npx drizzle-kit export --config "${'$'}DRIZZLE_CONFIG" > "${schemaFilePath}"`,
-          ``,
-        ]
-      : [];
+  let installLines: string[] = [];
+  if (input.tool === 'drizzle') {
+    if (!input.packageManager) {
+      throw new Error('Drizzle schema repair requires a validated package manager contract');
+    }
+    const commands = buildDrizzlePackageManagerCommands(input.packageManager);
+    installLines = [
+      ...commands.installLines,
+      ``,
+      ...(input.sourceConfigPath
+        ? [
+            `if [ -z "${'$'}{DRIZZLE_CONFIG:-}" ]; then`,
+            `  DRIZZLE_CONFIG=${quoteShellLiteral(input.sourceConfigPath)}`,
+            `fi`,
+          ]
+        : [
+            `DRIZZLE_CONFIG="${'$'}{DRIZZLE_CONFIG:-$(find . -path ./node_modules -prune -o -path ./.git -prune -o \\( ${drizzleSchemaConfigCandidates
+              .map((candidate) => `-name '${candidate}'`)
+              .join(' -o ')} \\) -print | sed 's#^./##' | sort | head -n 1)}"`,
+          ]),
+      `if [ -z "${'$'}DRIZZLE_CONFIG" ]; then`,
+      `  echo "Unable to locate drizzle config" >&2`,
+      `  exit 1`,
+      `fi`,
+      `# Export with the repository-declared package manager and Drizzle version.`,
+      `${commands.exportCommand} --config "${'$'}DRIZZLE_CONFIG" > "${schemaFilePath}"`,
+      ``,
+    ];
+  }
 
   return [
     `#!/usr/bin/env bash`,

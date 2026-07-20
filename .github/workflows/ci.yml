@@ -383,6 +383,10 @@ jobs:
           SCHEMA_RUNNER_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:schema-runner-${{ github.sha }}
         run: |
           set -euo pipefail
+          docker run --rm --entrypoint /usr/local/bin/bun "${SCHEMA_RUNNER_IMAGE}" --version
+          docker run --rm --entrypoint /usr/local/bin/node "${SCHEMA_RUNNER_IMAGE}" --version
+          docker run --rm --entrypoint /usr/local/bin/node "${SCHEMA_RUNNER_IMAGE}" \
+            /app/node_modules/corepack/dist/corepack.js --version
           docker run --rm --entrypoint /usr/local/bin/atlas "${SCHEMA_RUNNER_IMAGE}" version
           atlas_help="$(docker run --rm --entrypoint /usr/local/bin/atlas \
             "${SCHEMA_RUNNER_IMAGE}" migrate apply --help)"
