@@ -10,6 +10,7 @@ import {
   runAtlasCommand,
 } from '@/lib/atlas/cli';
 import { encrypt } from '@/lib/crypto';
+import { verifyControlPlaneReleaseGate } from '@/lib/db/control-plane-release-gate';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 import type { AtlasMigrationExecutionOrder } from '@/lib/migrations/atlas';
 import {
@@ -627,6 +628,7 @@ export async function applyControlPlaneExpandMigrations(): Promise<void> {
     })
   );
 
+  await verifyControlPlaneReleaseGate(databaseUrl);
   await runPostMigrationTasks(databaseUrl);
   await migrateEnvironmentSecretEnvelopes(databaseUrl);
 }
@@ -651,6 +653,7 @@ export async function applyControlPlaneContractMigrations(
     '--revisions-schema',
     CONTRACT_REVISIONS_SCHEMA,
   ]);
+  await verifyControlPlaneReleaseGate(databaseUrl);
 }
 
 export async function executeControlPlaneAtlasCommand(

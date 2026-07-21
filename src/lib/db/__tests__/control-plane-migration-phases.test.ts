@@ -49,4 +49,10 @@ describe('control-plane expand and contract migrations', () => {
     expect(schemaJob).not.toContain('"phase" "contract"');
     expect(source).toContain('Contract migration requires explicit promotion epoch');
   });
+
+  it('verifies runtime schema compatibility after expand and contract execution', async () => {
+    const source = await readFile(atlasRunnerPath, 'utf8');
+
+    expect(source.match(/await verifyControlPlaneReleaseGate\(databaseUrl\)/gu)?.length).toBe(2);
+  });
 });
