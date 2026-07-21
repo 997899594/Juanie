@@ -21,6 +21,9 @@ describe('control-plane schema convergence with PostgreSQL', () => {
       const migrationFiles = (await readdir('migrations'))
         .filter((fileName) => fileName.endsWith('.sql'))
         .sort();
+      expect(migrationFiles.at(-2)).toBe(
+        '20260721162900_attach_environment_schema_state_unique_constraint.sql'
+      );
       expect(migrationFiles.at(-1)).toBe(
         '20260721163000_reconcile_release_migration_plan_schema.sql'
       );
@@ -32,7 +35,7 @@ describe('control-plane schema convergence with PostgreSQL', () => {
         await runAtlasCommand(
           buildAtlasMigrateApplyArgs({
             databaseUrl: scratch.url,
-            migrationCount: migrationFiles.length - 1,
+            migrationCount: migrationFiles.length - 2,
           })
         );
 
@@ -44,6 +47,9 @@ describe('control-plane schema convergence with PostgreSQL', () => {
           await transaction.unsafe('DROP TYPE "releaseMigrationPlanStatus"');
           await transaction.unsafe(
             'ALTER TABLE "environmentSchemaState" DROP CONSTRAINT "environmentSchemaState_database_unique"'
+          );
+          await transaction.unsafe(
+            'CREATE UNIQUE INDEX "environmentSchemaState_database_unique" ON "environmentSchemaState" ("databaseId")'
           );
         });
 
@@ -58,6 +64,7 @@ describe('control-plane schema convergence with PostgreSQL', () => {
             planTable: string | null;
             planColumn: boolean;
             stateUnique: boolean;
+            stateUniqueBackedByHistoricalIndex: boolean;
           }[]
         >`
           SELECT
@@ -72,13 +79,22 @@ describe('control-plane schema convergence with PostgreSQL', () => {
               SELECT 1 FROM pg_constraint
               WHERE conrelid = '"environmentSchemaState"'::regclass
                 AND conname = 'environmentSchemaState_database_unique'
-            ) AS "stateUnique"
+            ) AS "stateUnique",
+            EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              INNER JOIN pg_class ON pg_class.oid = pg_constraint.conindid
+              WHERE pg_constraint.conrelid = '"environmentSchemaState"'::regclass
+                AND pg_constraint.conname = 'environmentSchemaState_database_unique'
+                AND pg_class.relname = 'environmentSchemaState_database_unique'
+            ) AS "stateUniqueBackedByHistoricalIndex"
         `;
 
         expect(result).toEqual({
           planTable: '"releaseMigrationPlan"',
           planColumn: true,
           stateUnique: true,
+          stateUniqueBackedByHistoricalIndex: true,
         });
       } finally {
         await sql.end();

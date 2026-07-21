@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 
 const migrationPath = 'migrations/20260721163000_reconcile_release_migration_plan_schema.sql';
+const uniqueConstraintReconciliationPath =
+  'migrations/20260721162900_attach_environment_schema_state_unique_constraint.sql';
 
 describe('control-plane release migration plan schema convergence', () => {
   it('converges both historical schema states through guarded forward-only DDL', async () => {
@@ -31,5 +33,21 @@ describe('control-plane release migration plan schema convergence', () => {
     for (const constraintName of constraintNames) {
       expect(sql).toContain(`conname = '${constraintName}'`);
     }
+  });
+
+  it('promotes only the exact historical unique index into the table constraint', async () => {
+    const sql = await readFile(uniqueConstraintReconciliationPath, 'utf8');
+
+    expect(sql).toContain('juanie:history-reconciliation-through 20260717090000');
+    expect(sql).toContain('named_relation.indisunique');
+    expect(sql).toContain('named_relation.indisvalid');
+    expect(sql).toContain('named_relation.indisready');
+    expect(sql).toContain('named_relation.indnkeyatts <> 1');
+    expect(sql).toContain('named_relation.indnatts <> 1');
+    expect(sql).toContain('named_relation.indkey[0] <> database_attribute_number');
+    expect(sql).toContain('named_relation.indexprs IS NOT NULL');
+    expect(sql).toContain('named_relation.indpred IS NOT NULL');
+    expect(sql).toContain('UNIQUE USING INDEX "environmentSchemaState_database_unique"');
+    expect(sql).toContain('exists with an incompatible index definition');
   });
 });
