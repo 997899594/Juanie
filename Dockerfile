@@ -56,6 +56,7 @@ RUN bun build ./src/lib/restate/server.ts --compile --outfile=restate-services
 RUN bun build ./src/lib/outbox/dispatcher.ts --compile --outfile=outbox-dispatcher
 RUN bun build ./src/lib/backups/control-plane-uploader.ts --compile --outfile=control-plane-backup-uploader
 RUN bun build ./src/lib/backups/restate-snapshot.ts --compile --outfile=restate-snapshot
+RUN bun build ./src/lib/ci/application-delivery-preflight.ts --compile --outfile=application-delivery-preflight
 
 # ============================================
 # Stage 6: Schema Runner Builder
@@ -182,6 +183,7 @@ COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/restate-services 
 COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/outbox-dispatcher ./outbox-dispatcher
 COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/control-plane-backup-uploader ./control-plane-backup-uploader
 COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/restate-snapshot ./restate-snapshot
+COPY --from=runtime-builder --chown=1001:1001 --chmod=755 /app/application-delivery-preflight ./application-delivery-preflight
 COPY --from=source /app/templates ./templates
 
 USER 1001:1001

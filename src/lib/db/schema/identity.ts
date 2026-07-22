@@ -15,6 +15,7 @@ import {
   gitProviderTypeEnum,
   integrationCapabilityEnum,
   platformRoleEnum,
+  sourceWebhookStatusEnum,
 } from '@/lib/db/schema/enums';
 
 // ============================================
@@ -92,6 +93,14 @@ export const repositories = pgTable(
 
     defaultBranch: varchar('defaultBranch', { length: 100 }).default('main'),
     isPrivate: boolean('isPrivate').default(false),
+
+    sourceWebhookId: varchar('sourceWebhookId', { length: 255 }),
+    sourceWebhookUrl: varchar('sourceWebhookUrl', { length: 500 }),
+    sourceWebhookStatus: sourceWebhookStatusEnum('sourceWebhookStatus')
+      .notNull()
+      .default('unmanaged'),
+    sourceWebhookVerifiedAt: timestamp('sourceWebhookVerifiedAt'),
+    sourceWebhookLastError: text('sourceWebhookLastError'),
 
     lastSyncAt: timestamp('lastSyncAt'),
     createdAt: timestamp('createdAt').defaultNow().notNull(),

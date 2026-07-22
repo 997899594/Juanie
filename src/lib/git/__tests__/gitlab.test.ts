@@ -52,7 +52,9 @@ describe('GitLabProvider source control plane', () => {
     try {
       globalThis.fetch = (async (input, init) => {
         requests.push({ url: String(input), init });
-        return init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json([]);
+        return init?.method === 'POST'
+          ? Response.json({ id: 41 }, { status: 201 })
+          : Response.json([]);
       }) as typeof fetch;
       await createProvider().ensurePushWebhook('token', {
         repoFullName: 'acme/demo',
@@ -66,6 +68,7 @@ describe('GitLabProvider source control plane', () => {
         enable_ssl_verification: true,
         token: 'secret',
       });
+      expect(requests.length).toBe(2);
     } finally {
       globalThis.fetch = originalFetch;
     }

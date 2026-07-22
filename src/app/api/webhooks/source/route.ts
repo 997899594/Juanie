@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { dispatchApplicationDelivery } from '@/lib/ci/application-delivery';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
 import { integrationIdentities, projects, repositories } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
+import { acceptSourceDelivery } from '@/lib/source-deliveries/service';
 
 const MAX_WEBHOOK_BYTES = 2 * 1024 * 1024;
 const GITHUB_EVENT_HEADER = 'x-github-event';
@@ -18,6 +19,8 @@ interface SourcePushEvent {
   afterSha: string;
   deliveryId: string;
 }
+
+const webhookLogger = logger.child({ component: 'source-webhook' });
 
 function requiredWebhookSecret(): string {
   const secret = process.env.JUANIE_SOURCE_WEBHOOK_SECRET?.trim();
@@ -70,7 +73,7 @@ function parsePushEvent(request: Request, rawBody: string): SourcePushEvent | nu
       ref: payload.ref,
       beforeSha: payload.before,
       afterSha: payload.after,
-      deliveryId: `github:${deliveryId}`,
+      deliveryId,
     };
   }
 
@@ -96,7 +99,7 @@ function parsePushEvent(request: Request, rawBody: string): SourcePushEvent | nu
     ref: payload.ref,
     beforeSha: payload.before,
     afterSha: payload.after,
-    deliveryId: `gitlab:${deliveryId}`,
+    deliveryId,
   };
 }
 
@@ -148,16 +151,36 @@ export async function POST(request: Request) {
     }
 
     const [binding] = matching;
-    await dispatchApplicationDelivery({
+    const accepted = await acceptSourceDelivery({
+      projectId: binding.project.id,
+      repositoryId: binding.repository.id,
       provider: binding.provider,
-      repository: binding.repository.fullName,
+      providerDeliveryId: event.deliveryId,
+      sourceRepository: binding.repository.fullName,
       sourceRef: event.ref,
       sourceCommitSha: event.afterSha,
       beforeCommitSha: event.beforeSha,
-      deliveryId: event.deliveryId,
       forceFullBuild: /^0+$/u.test(event.beforeSha),
     });
-    return NextResponse.json({ accepted: true, deliveryId: event.deliveryId }, { status: 202 });
+    webhookLogger.info('Accepted source delivery', {
+      sourceDeliveryId: accepted.delivery.id,
+      provider: binding.provider,
+      providerDeliveryId: event.deliveryId,
+      projectId: binding.project.id,
+      repositoryId: binding.repository.id,
+      duplicate: !accepted.created,
+      requeued: accepted.requeued,
+    });
+    return NextResponse.json(
+      {
+        accepted: true,
+        duplicate: !accepted.created,
+        requeued: accepted.requeued,
+        deliveryId: event.deliveryId,
+        sourceDeliveryId: accepted.delivery.id,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     if (error instanceof RangeError) {
       return NextResponse.json({ error: error.message }, { status: 413 });
@@ -165,6 +188,7 @@ export async function POST(request: Request) {
     if (error instanceof SyntaxError || error instanceof TypeError) {
       return NextResponse.json({ error: 'Invalid source webhook payload' }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to dispatch source delivery' }, { status: 503 });
+    webhookLogger.error('Failed to persist source delivery', error);
+    return NextResponse.json({ error: 'Failed to persist source delivery' }, { status: 503 });
   }
 }

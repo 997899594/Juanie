@@ -2,7 +2,15 @@ import { describe, expect, it } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { closeDb, db } from '@/lib/db';
-import { outboxMessages, projects, teams, users } from '@/lib/db/schema';
+import {
+  integrationIdentities,
+  outboxMessages,
+  projects,
+  repositories,
+  sourceDeliveries,
+  teams,
+  users,
+} from '@/lib/db/schema';
 import {
   claimOutboxMessages,
   closeOutboxDispatcherStore,
@@ -11,6 +19,7 @@ import {
 } from '@/lib/outbox/dispatcher';
 import { OutboxOperationConflictError, replayDeadLetterMessage } from '@/lib/outbox/operations';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
+import { acceptSourceDelivery } from '@/lib/source-deliveries/service';
 
 const integrationEnabled = process.env.INTEGRATION_TESTS === 'true';
 const restateIntegrationEnabled =
@@ -32,6 +41,100 @@ async function waitFor(
 }
 
 describe('transactional outbox with PostgreSQL', () => {
+  integrationTest(
+    'accepts a concurrent source delivery exactly once with its command',
+    async () => {
+      const userId = randomUUID();
+      const teamId = randomUUID();
+      const providerId = randomUUID();
+      const repositoryId = randomUUID();
+      const projectId = randomUUID();
+      const providerDeliveryId = randomUUID();
+      const slug = `source-delivery-${projectId}`;
+      let deliveryId: string | null = null;
+
+      try {
+        await db.transaction(async (tx) => {
+          await tx.insert(users).values({
+            id: userId,
+            email: `${userId}@example.test`,
+          });
+          await tx.insert(teams).values({ id: teamId, name: slug, slug });
+          await tx.insert(integrationIdentities).values({
+            id: providerId,
+            userId,
+            provider: 'github',
+          });
+          await tx.insert(repositories).values({
+            id: repositoryId,
+            providerId,
+            externalId: repositoryId,
+            fullName: 'acme/source-delivery',
+            name: 'source-delivery',
+            owner: 'acme',
+          });
+          await tx.insert(projects).values({
+            id: projectId,
+            teamId,
+            repositoryId,
+            name: slug,
+            slug,
+            status: 'active',
+          });
+        });
+
+        const input = {
+          projectId,
+          repositoryId,
+          provider: 'github' as const,
+          providerDeliveryId,
+          sourceRepository: 'acme/source-delivery',
+          sourceRef: 'refs/heads/main',
+          beforeCommitSha: 'a'.repeat(40),
+          sourceCommitSha: 'b'.repeat(40),
+          forceFullBuild: false,
+        };
+        const accepted = await Promise.all([
+          acceptSourceDelivery(input),
+          acceptSourceDelivery(input),
+          acceptSourceDelivery(input),
+        ]);
+        deliveryId = accepted[0].delivery.id;
+
+        expect(new Set(accepted.map(({ delivery }) => delivery.id)).size).toBe(1);
+        expect(accepted.filter(({ created }) => created).length).toBe(1);
+        expect(
+          await db.$count(
+            sourceDeliveries,
+            eq(sourceDeliveries.providerDeliveryId, providerDeliveryId)
+          )
+        ).toBe(1);
+        expect(
+          await db.$count(outboxMessages, eq(outboxMessages.aggregateId, accepted[0].delivery.id))
+        ).toBe(1);
+
+        await db
+          .update(sourceDeliveries)
+          .set({ status: 'failed', attemptCount: 1, lastError: 'dispatch unavailable' })
+          .where(eq(sourceDeliveries.id, deliveryId));
+        const redelivery = await acceptSourceDelivery(input);
+        expect(redelivery.requeued).toBe(true);
+        expect(redelivery.delivery.status).toBe('received');
+        expect(await db.$count(outboxMessages, eq(outboxMessages.aggregateId, deliveryId))).toBe(2);
+      } finally {
+        if (deliveryId) {
+          await db.delete(outboxMessages).where(eq(outboxMessages.aggregateId, deliveryId));
+        }
+        await db.delete(projects).where(eq(projects.id, projectId));
+        await db.delete(repositories).where(eq(repositories.id, repositoryId));
+        await db.delete(integrationIdentities).where(eq(integrationIdentities.id, providerId));
+        await db.delete(teams).where(eq(teams.id, teamId));
+        await db.delete(users).where(eq(users.id, userId));
+        await closeDb();
+      }
+    }
+  );
+
   integrationTest(
     'deduplicates concurrent command writes and recovers an abandoned claim',
     async () => {

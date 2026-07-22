@@ -53,6 +53,11 @@ const topicTargets: Record<OutboxTopic, Omit<RestateInvocationTarget, 'key'>> = 
     handler: 'run',
     idempotencyMode: 'request-header',
   },
+  'source.delivery.requested': {
+    service: restateServiceNames.sourceDelivery,
+    handler: 'run',
+    idempotencyMode: 'request-header',
+  },
 };
 
 const attemptScopedWorkflowTopics = new Set<OutboxTopic>([

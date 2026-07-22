@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   bigint,
   bigserial,
+  boolean,
   index,
   integer,
   jsonb,
@@ -18,10 +19,12 @@ import {
   buildRunStatusEnum,
   buildUnitStatusEnum,
   deploymentStatusEnum,
+  gitProviderTypeEnum,
   outboxStatusEnum,
   ReleaseArtifactKind,
   ReleaseArtifactStatus,
   releaseStatusEnum,
+  sourceDeliveryStatusEnum,
 } from '@/lib/db/schema/enums';
 import { repositories, users } from '@/lib/db/schema/identity';
 import { environments, projects, services } from '@/lib/db/schema/projects';
@@ -32,6 +35,43 @@ import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 // ============================================
 // Release Tables
 // ============================================
+
+export const sourceDeliveries = pgTable(
+  'sourceDelivery',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repositoryId: uuid('repositoryId')
+      .notNull()
+      .references(() => repositories.id, { onDelete: 'cascade' }),
+
+    provider: gitProviderTypeEnum('provider').notNull(),
+    providerDeliveryId: varchar('providerDeliveryId', { length: 255 }).notNull(),
+    sourceRepository: varchar('sourceRepository', { length: 255 }).notNull(),
+    sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
+    beforeCommitSha: varchar('beforeCommitSha', { length: 100 }),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }).notNull(),
+    forceFullBuild: boolean('forceFullBuild').notNull().default(false),
+
+    status: sourceDeliveryStatusEnum('status').notNull().default('received'),
+    attemptCount: integer('attemptCount').notNull().default(0),
+    lastError: text('lastError'),
+    dispatchedAt: timestamp('dispatchedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('sourceDelivery_projectId_idx').on(table.projectId),
+    repositoryIdIdx: index('sourceDelivery_repositoryId_idx').on(table.repositoryId),
+    statusIdx: index('sourceDelivery_status_idx').on(table.status),
+    providerDeliveryUnique: unique('sourceDelivery_provider_delivery_unique').on(
+      table.provider,
+      table.providerDeliveryId
+    ),
+  })
+);
 
 export const buildRuns = pgTable(
   'buildRun',

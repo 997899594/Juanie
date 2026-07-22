@@ -3,11 +3,9 @@ import { eq } from 'drizzle-orm';
 import { getCiRuntimeDescriptor } from '@/lib/ci/runtime-assets';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { logger } from '@/lib/logger';
+import { reconcileRepositorySourceWebhook } from '@/lib/source-deliveries/webhook-management';
 
 const schedule = process.env.SOURCE_WEBHOOK_RECONCILIATION_SCHEDULE?.trim() || '17 */6 * * *';
 const batchSize = 100;
@@ -43,9 +41,10 @@ export async function reconcileSourceWebhooks(): Promise<{
         integrationId: project.repository.providerId,
         requiredCapabilities: ['manage_webhook'],
       });
-      await gateway.ensurePushWebhook(session, {
-        repoFullName: project.repository.fullName,
-        url: webhookUrl,
+      await reconcileRepositorySourceWebhook({
+        repository: project.repository,
+        session,
+        canonicalUrl: webhookUrl,
         secret,
       });
       reconciled += 1;

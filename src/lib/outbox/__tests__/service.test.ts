@@ -53,4 +53,18 @@ describe('transactional outbox contract', () => {
 
     expect(firstAttempt.dedupeKey).not.toBe(retryAttempt.dedupeKey);
   });
+
+  it('uses the source delivery aggregate as the durable dispatch identity', () => {
+    const message = buildOutboxMessage({
+      topic: 'source.delivery.requested',
+      aggregateType: 'sourceDelivery',
+      aggregateId: 'source-delivery-1',
+      commandId: 'dispatch-1',
+      payload: {},
+    });
+
+    expect(message.dedupeKey).toBe(
+      'source.delivery.requested:sourceDelivery:source-delivery-1:dispatch-1'
+    );
+  });
 });

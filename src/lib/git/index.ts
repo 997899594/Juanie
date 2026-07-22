@@ -88,6 +88,14 @@ export interface EnsurePushWebhookOptions {
   repoFullName: string;
   url: string;
   secret: string;
+  managedWebhookId?: string | null;
+  legacyUrls?: string[];
+}
+
+export interface ManagedPushWebhook {
+  id: string;
+  url: string;
+  removedWebhookIds: string[];
 }
 
 export interface GitProviderConfig {
@@ -140,7 +148,10 @@ export interface GitProvider {
     beforeSha: string,
     afterSha: string
   ): Promise<GitCommitComparison>;
-  ensurePushWebhook(accessToken: string, options: EnsurePushWebhookOptions): Promise<void>;
+  ensurePushWebhook(
+    accessToken: string,
+    options: EnsurePushWebhookOptions
+  ): Promise<ManagedPushWebhook>;
   createBranch(accessToken: string, options: CreateBranchOptions): Promise<void>;
   syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void>;
   createTag(accessToken: string, options: CreateTagOptions): Promise<void>;

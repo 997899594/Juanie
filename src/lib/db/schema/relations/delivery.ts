@@ -19,9 +19,21 @@ import {
   releases,
   repositories,
   services,
+  sourceDeliveries,
   teams,
   users,
 } from '@/lib/db/schema/tables';
+
+export const sourceDeliveriesRelations = relations(sourceDeliveries, ({ one }) => ({
+  project: one(projects, {
+    fields: [sourceDeliveries.projectId],
+    references: [projects.id],
+  }),
+  repository: one(repositories, {
+    fields: [sourceDeliveries.repositoryId],
+    references: [repositories.id],
+  }),
+}));
 
 export const buildRunsRelations = relations(buildRuns, ({ one, many }) => ({
   project: one(projects, {

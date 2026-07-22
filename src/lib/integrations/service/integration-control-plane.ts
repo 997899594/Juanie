@@ -12,6 +12,7 @@ import type {
   GitProvider,
   GitRepository,
   GitReviewRequest,
+  ManagedPushWebhook,
   PushOptions,
   SyncBranchRefOptions,
 } from '@/lib/git';
@@ -239,7 +240,7 @@ export const gateway = {
   async ensurePushWebhook(
     session: IntegrationSession,
     options: EnsurePushWebhookOptions
-  ): Promise<void> {
+  ): Promise<ManagedPushWebhook> {
     const provider = resolveProvider(session);
     return provider.ensurePushWebhook(session.accessToken, options);
   },

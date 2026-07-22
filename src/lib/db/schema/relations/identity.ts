@@ -8,6 +8,7 @@ import {
   projects,
   repositories,
   sessions,
+  sourceDeliveries,
   teamIntegrationBindings,
   teamMembers,
   users,
@@ -52,4 +53,5 @@ export const repositoriesRelations = relations(repositories, ({ one, many }) => 
     references: [integrationIdentities.id],
   }),
   projects: many(projects),
+  sourceDeliveries: many(sourceDeliveries),
 }));

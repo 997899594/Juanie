@@ -77,7 +77,9 @@ describe('GitHubProvider source control plane', () => {
     try {
       globalThis.fetch = (async (input, init) => {
         requests.push({ url: String(input), init });
-        return init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json([]);
+        return init?.method === 'POST'
+          ? Response.json({ id: 41 }, { status: 201 })
+          : Response.json([]);
       }) as typeof fetch;
 
       await createProvider().ensurePushWebhook('token', {
@@ -97,6 +99,41 @@ describe('GitHubProvider source control plane', () => {
           secret: 'secret',
         },
       });
+      expect(requests.length).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('updates the persisted webhook id and deletes only recognized Juanie duplicates', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    try {
+      globalThis.fetch = (async (input, init) => {
+        requests.push({ url: String(input), init });
+        if (init?.method === 'PATCH') return Response.json({ id: 42 });
+        if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+        return Response.json([
+          { id: 42, config: { url: 'https://undefined/api/webhooks/git' } },
+          { id: 43, config: { url: 'https://undefined/api/webhooks/git' } },
+          { id: 99, config: { url: 'https://example.com/webhook' } },
+        ]);
+      }) as typeof fetch;
+
+      const webhook = await createProvider().ensurePushWebhook('token', {
+        repoFullName: 'acme/demo',
+        url: 'https://juanie.art/api/webhooks/source',
+        secret: 'secret',
+        managedWebhookId: '42',
+        legacyUrls: ['https://undefined/api/webhooks/git'],
+      });
+
+      expect(webhook).toEqual({
+        id: '42',
+        url: 'https://juanie.art/api/webhooks/source',
+        removedWebhookIds: ['43'],
+      });
+      expect(requests.filter((request) => request.init?.method === 'DELETE').length).toBe(1);
+      expect(requests.some((request) => request.url.includes('/hooks/99'))).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }

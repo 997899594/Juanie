@@ -6,6 +6,7 @@ interface HealthResponse {
   timestamp: string;
   version: string;
   checks: {
+    applicationDelivery?: HealthCheck;
     database: HealthCheck;
     redis?: HealthCheck;
     kubernetes?: HealthCheck;
@@ -103,6 +104,17 @@ async function checkKubernetes(): Promise<HealthCheck> {
   };
 }
 
+async function checkApplicationDelivery(): Promise<HealthCheck> {
+  const start = Date.now();
+  const { verifyApplicationDeliveryCapability } = await import('@/lib/ci/application-delivery');
+  const capability = await verifyApplicationDeliveryCapability();
+  return {
+    status: 'pass',
+    message: `${capability.repository}:${capability.workflow}`,
+    latency: Date.now() - start,
+  };
+}
+
 async function isRedisConfigured(): Promise<boolean> {
   const redisConfig = await import('@/lib/redis/config');
   return redisConfig.isRedisConfigured();
@@ -188,6 +200,16 @@ export async function getHealthResponse() {
     }
   } else {
     checks.kubernetes = createKubernetesNotApplicableCheck();
+  }
+
+  try {
+    checks.applicationDelivery = await checkApplicationDelivery();
+  } catch (error) {
+    checks.applicationDelivery = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Application delivery is unavailable',
+    };
+    overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus;
   }
 
   const response: HealthResponse = {

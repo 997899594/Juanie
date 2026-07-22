@@ -6,6 +6,7 @@ export const restateServiceNames = {
   projectDeletion: 'ProjectDeletionWorkflow',
   environmentRuntime: 'EnvironmentRuntimeWorkflow',
   deployment: 'DeploymentWorkflow',
+  sourceDelivery: 'SourceDeliveryWorkflow',
 } as const;
 
 export interface RestateInvocationTarget {

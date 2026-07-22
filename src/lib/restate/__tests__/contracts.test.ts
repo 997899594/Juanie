@@ -26,6 +26,26 @@ describe('Restate command contracts', () => {
     });
   });
 
+  it('serializes source delivery dispatch by the persisted delivery aggregate', () => {
+    const target = resolveRestateTarget(
+      'source.delivery.requested',
+      'source-delivery-1',
+      'dispatch-1'
+    );
+
+    expect(target).toEqual({
+      service: 'SourceDeliveryWorkflow',
+      handler: 'run',
+      key: 'source-delivery-1',
+      oneWay: true,
+      idempotencyMode: 'request-header',
+    });
+    expect(buildRestateInvocationHeaders(target, 'outbox-1')).toEqual({
+      'content-type': 'application/json',
+      'idempotency-key': 'outbox-1',
+    });
+  });
+
   it('serializes release and migration commands by their mutation scope', () => {
     const release = resolveRestateTarget('release.requested', 'release-1', 'initial', {
       executionKey: 'environment:env-1',

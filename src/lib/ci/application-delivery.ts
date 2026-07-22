@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createPrivateKey, randomUUID } from 'node:crypto';
 import { importPKCS8, SignJWT } from 'jose';
 import { getCiRuntimeDescriptor } from '@/lib/ci/runtime-assets';
 import type { GitProviderType } from '@/lib/db/schema';
@@ -21,6 +21,12 @@ interface GitHubInstallationTokenResponse {
   expires_at?: string;
 }
 
+interface GitHubWorkflowResponse {
+  id: number;
+  path: string;
+  state: string;
+}
+
 function requiredPlatformSecret(name: string): string {
   const value = process.env[name]?.trim();
   if (value) return value;
@@ -33,7 +39,10 @@ function readPrivateKey(): string {
 
 async function createGitHubAppJwt(): Promise<string> {
   const appId = requiredPlatformSecret('JUANIE_GITHUB_APP_ID');
-  const key = await importPKCS8(readPrivateKey(), 'RS256');
+  const normalizedPrivateKey = createPrivateKey(readPrivateKey())
+    .export({ format: 'pem', type: 'pkcs8' })
+    .toString();
+  const key = await importPKCS8(normalizedPrivateKey, 'RS256');
   const now = Math.floor(Date.now() / 1000);
 
   return new SignJWT({})
@@ -58,6 +67,7 @@ async function githubRequest<T>(
       'X-GitHub-Api-Version': '2022-11-28',
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (response.status === 204) return undefined as T;
@@ -123,4 +133,30 @@ export async function dispatchApplicationDelivery(
   );
 
   return { deliveryId };
+}
+
+export async function verifyApplicationDeliveryCapability(): Promise<{
+  repository: string;
+  workflow: string;
+  state: 'active';
+}> {
+  const runtime = getCiRuntimeDescriptor();
+  const token = await getPlatformInstallationToken(runtime.githubRepository);
+  const workflow = await githubRequest<GitHubWorkflowResponse>(
+    `/repos/${runtime.githubRepository}/actions/workflows/${WORKFLOW_ID}`,
+    token
+  );
+  if (workflow.state !== 'active') {
+    throw new Error(`GitHub workflow ${WORKFLOW_ID} is not active: ${workflow.state}`);
+  }
+  if (!workflow.path.endsWith(`/${WORKFLOW_ID}`)) {
+    throw new Error(
+      `GitHub returned an unexpected application delivery workflow: ${workflow.path}`
+    );
+  }
+  return {
+    repository: runtime.githubRepository,
+    workflow: workflow.path,
+    state: 'active',
+  };
 }

@@ -6,11 +6,13 @@ import type {
   CreateReviewRequestOptions,
   CreateTagOptions,
   DeleteFilesOptions,
+  EnsurePushWebhookOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
   GitReviewRequest,
   GitUser,
+  ManagedPushWebhook,
   PushOptions,
   SyncBranchRefOptions,
 } from './index';
@@ -418,12 +420,15 @@ export class GitHubProvider implements GitProvider {
 
   async ensurePushWebhook(
     accessToken: string,
-    options: { repoFullName: string; url: string; secret: string }
-  ): Promise<void> {
+    options: EnsurePushWebhookOptions
+  ): Promise<ManagedPushWebhook> {
     const client = this.getClient(accessToken);
     const { owner, repo } = this.parseRepoFullName(options.repoFullName);
     const hooks = await client.rest.repos.listWebhooks({ owner, repo, per_page: 100 });
-    const existing = hooks.data.find((hook) => hook.config?.url === options.url);
+    const managedId = options.managedWebhookId?.trim();
+    const existing =
+      hooks.data.find((hook) => managedId && String(hook.id) === managedId) ??
+      hooks.data.find((hook) => hook.config?.url === options.url);
     const config = {
       url: options.url,
       content_type: 'json',
@@ -431,26 +436,44 @@ export class GitHubProvider implements GitProvider {
       secret: options.secret,
     };
 
-    if (existing) {
-      await client.rest.repos.updateWebhook({
-        owner,
-        repo,
-        hook_id: existing.id,
-        active: true,
-        events: ['push'],
-        config,
-      });
-      return;
+    const managed = existing
+      ? await client.rest.repos.updateWebhook({
+          owner,
+          repo,
+          hook_id: existing.id,
+          active: true,
+          events: ['push'],
+          config,
+        })
+      : await client.rest.repos.createWebhook({
+          owner,
+          repo,
+          name: 'web',
+          active: true,
+          events: ['push'],
+          config,
+        });
+
+    if (!Number.isSafeInteger(managed.data?.id) || managed.data.id <= 0) {
+      throw new Error('GitHub did not return a managed webhook id');
+    }
+    const managedWebhookId = String(managed.data.id);
+    const cleanupUrls = new Set([options.url, ...(options.legacyUrls ?? [])]);
+    const duplicateHooks = hooks.data.filter(
+      (hook) =>
+        String(hook.id) !== managedWebhookId &&
+        typeof hook.config?.url === 'string' &&
+        cleanupUrls.has(hook.config.url)
+    );
+    for (const hook of duplicateHooks) {
+      await client.rest.repos.deleteWebhook({ owner, repo, hook_id: hook.id });
     }
 
-    await client.rest.repos.createWebhook({
-      owner,
-      repo,
-      name: 'web',
-      active: true,
-      events: ['push'],
-      config,
-    });
+    return {
+      id: managedWebhookId,
+      url: options.url,
+      removedWebhookIds: duplicateHooks.map((hook) => String(hook.id)),
+    };
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {

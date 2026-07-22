@@ -248,6 +248,13 @@ postgres:
 redis:
   storage: "1Gi"
 
+applicationDelivery:
+  preflight:
+    enabled: true
+    backoffLimit: 1
+    activeDeadlineSeconds: 120
+    ttlSecondsAfterFinished: 300
+
 # 敏感配置
 secret:
   existingSecret: "juanie-secret"

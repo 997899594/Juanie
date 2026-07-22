@@ -10,6 +10,7 @@ export const outboxTopics = [
   'schema.repair.requested',
   'environment.runtime.requested',
   'deployment.requested',
+  'source.delivery.requested',
 ] as const;
 
 export type OutboxTopic = (typeof outboxTopics)[number];

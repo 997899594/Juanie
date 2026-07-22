@@ -34,8 +34,8 @@ export const projectStatuses = [
   'initializing',
   'active',
   'failed',
-  'deleting',
   'archived',
+  'deleting',
 ] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
@@ -82,6 +82,12 @@ export type BuildUnitStatus = (typeof buildUnitStatuses)[number];
 export const buildArtifactKinds = ['image', 'package', 'static', 'function'] as const;
 export type BuildArtifactKind = (typeof buildArtifactKinds)[number];
 
+export const sourceDeliveryStatuses = ['received', 'dispatching', 'dispatched', 'failed'] as const;
+export type SourceDeliveryStatus = (typeof sourceDeliveryStatuses)[number];
+
+export const sourceWebhookStatuses = ['unmanaged', 'verified', 'failed'] as const;
+export type SourceWebhookStatus = (typeof sourceWebhookStatuses)[number];
+
 export const deploymentStatuses = [
   'queued',
   'migration_pending',
@@ -99,13 +105,13 @@ export const deploymentStatuses = [
 export type DeploymentStatus = (typeof deploymentStatuses)[number];
 
 export const migrationTools = [
-  'atlas',
   'drizzle',
   'prisma',
   'knex',
   'typeorm',
   'sql',
   'custom',
+  'atlas',
 ] as const;
 export type MigrationTool = (typeof migrationTools)[number];
 
@@ -275,6 +281,8 @@ export const releaseStatusEnum = pgEnum('releaseStatus', releaseStatuses);
 export const buildRunStatusEnum = pgEnum('buildRunStatus', buildRunStatuses);
 export const buildUnitStatusEnum = pgEnum('buildUnitStatus', buildUnitStatuses);
 export const buildArtifactKindEnum = pgEnum('buildArtifactKind', buildArtifactKinds);
+export const sourceDeliveryStatusEnum = pgEnum('sourceDeliveryStatus', sourceDeliveryStatuses);
+export const sourceWebhookStatusEnum = pgEnum('sourceWebhookStatus', sourceWebhookStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);

@@ -13,11 +13,13 @@ import type {
   CreateReviewRequestOptions,
   CreateTagOptions,
   DeleteFilesOptions,
+  EnsurePushWebhookOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
   GitReviewRequest,
   GitUser,
+  ManagedPushWebhook,
   PushOptions,
   SyncBranchRefOptions,
 } from './index';
@@ -374,26 +376,48 @@ export class GitLabProvider implements GitProvider {
 
   async ensurePushWebhook(
     accessToken: string,
-    options: { repoFullName: string; url: string; secret: string }
-  ): Promise<void> {
+    options: EnsurePushWebhookOptions
+  ): Promise<ManagedPushWebhook> {
     const projectPath = this.encodeProjectId(options.repoFullName);
     const hooks = await this.requestJson<Array<{ id: number; url?: string }>>(
       accessToken,
       `/projects/${projectPath}/hooks`,
       { searchParams: { per_page: '100' } }
     );
-    const existing = hooks.find((hook) => hook.url === options.url);
+    const managedId = options.managedWebhookId?.trim();
+    const existing =
+      hooks.find((hook) => managedId && String(hook.id) === managedId) ??
+      hooks.find((hook) => hook.url === options.url);
     const body = {
       url: options.url,
       token: options.secret,
       push_events: true,
       enable_ssl_verification: true,
     };
-    await this.requestJson<void>(
+    const managed = await this.requestJson<{ id: number }>(
       accessToken,
       existing ? `/projects/${projectPath}/hooks/${existing.id}` : `/projects/${projectPath}/hooks`,
       { method: existing ? 'PUT' : 'POST', body }
     );
+    if (!Number.isSafeInteger(managed?.id) || managed.id <= 0) {
+      throw new Error('GitLab did not return a managed webhook id');
+    }
+    const managedWebhookId = String(managed.id);
+    const cleanupUrls = new Set([options.url, ...(options.legacyUrls ?? [])]);
+    const duplicateHooks = hooks.filter(
+      (hook) => String(hook.id) !== managedWebhookId && hook.url && cleanupUrls.has(hook.url)
+    );
+    for (const hook of duplicateHooks) {
+      await this.requestJson<void>(accessToken, `/projects/${projectPath}/hooks/${hook.id}`, {
+        method: 'DELETE',
+      });
+    }
+
+    return {
+      id: managedWebhookId,
+      url: options.url,
+      removedWebhookIds: duplicateHooks.map((hook) => String(hook.id)),
+    };
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {

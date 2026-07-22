@@ -58,6 +58,7 @@ import {
   resolveInitialAutoDeployRefs,
 } from '@/lib/projects/initial-auto-deploy';
 import { getProjectProductionBranch } from '@/lib/projects/refs';
+import { reconcileRepositorySourceWebhook } from '@/lib/source-deliveries/webhook-management';
 import { TemplateService } from '@/lib/templates';
 import { requiredCapabilitiesForStep } from './project-init-capabilities';
 
@@ -630,9 +631,10 @@ export async function configureReleaseTrigger(
     requiredCapabilities: requiredCapabilitiesForStep('configure_release_trigger'),
   });
   const runtime = getCiRuntimeDescriptor();
-  await gateway.ensurePushWebhook(session, {
-    repoFullName: repository.fullName,
-    url: `${runtime.baseUrl}/api/webhooks/source`,
+  await reconcileRepositorySourceWebhook({
+    repository,
+    session,
+    canonicalUrl: `${runtime.baseUrl}/api/webhooks/source`,
     secret: webhookSecret,
   });
 
