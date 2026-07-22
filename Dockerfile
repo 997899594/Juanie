@@ -80,6 +80,7 @@ ARG GO_SHA256_AMD64=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393
 ARG GO_SHA256_ARM64=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
 ARG ATLAS_VERSION=1.2.3
 ARG ATLAS_SOURCE_SHA256=e500c88c4bcabe853d596c576ac44d5985ba265c4ef431d93299d8349b3f98e0
+ARG ATLAS_GRPC_VERSION=1.82.1
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential ca-certificates curl \
@@ -105,12 +106,16 @@ RUN curl --fail --location --retry 5 --retry-all-errors \
   && tar -C /build/atlas --strip-components=1 -xzf /tmp/atlas.tar.gz \
   && rm /tmp/atlas.tar.gz \
   && cd /build/atlas/cmd/atlas \
+  && /usr/local/go/bin/go mod edit -require="google.golang.org/grpc@v${ATLAS_GRPC_VERSION}" \
   && GOTOOLCHAIN=local /usr/local/go/bin/go mod download \
   && CGO_ENABLED=1 GOTOOLCHAIN=local /usr/local/go/bin/go build \
       -mod=mod \
       -trimpath \
       -ldflags "-s -w -buildid= -X ariga.io/atlas/cmd/atlas/internal/cmdapi.version=v${ATLAS_VERSION}" \
       -o /usr/local/bin/atlas . \
+  && /usr/local/go/bin/go version -m /usr/local/bin/atlas \
+      | grep -F 'google.golang.org/grpc' \
+      | grep -F "v${ATLAS_GRPC_VERSION}" \
   && /usr/local/bin/atlas version \
   && /usr/local/bin/atlas migrate apply --help | grep -F -- 'apply [flags] [amount]' \
   && /usr/local/bin/atlas migrate apply --help | grep -F -- '--exec-order' \

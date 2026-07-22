@@ -17,6 +17,7 @@ env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
   ATLAS_VERSION: 1.2.3
+  ATLAS_GRPC_VERSION: 1.82.1
   RESTATE_OPERATOR_VERSION: 2.8.1
   RESTATE_OPERATOR_CHART_DIGEST: sha256:a8e3c1cf8f2267c2e45857466197bb208d63b6c2ec6137e49b94306c4fa315c4
   RESTATE_OPERATOR_CHART_SHA256: 1e9ac065deb9e8f50479e6f80c7d7f80be254728a8bc9ca792612035253c7694
@@ -319,6 +320,7 @@ jobs:
           target: ${{ matrix.target }}
           build-args: |
             ATLAS_VERSION=${{ env.ATLAS_VERSION }}
+            ATLAS_GRPC_VERSION=${{ env.ATLAS_GRPC_VERSION }}
           push: true
           provenance: mode=max
           sbom: true

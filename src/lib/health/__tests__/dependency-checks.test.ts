@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { createKubernetesNotApplicableCheck } from '@/lib/health/dependency-checks';
+import {
+  createKubernetesNotApplicableCheck,
+  deriveFullHealthStatus,
+} from '@/lib/health/dependency-checks';
 
 describe('dependency health policy', () => {
   it('represents unassigned Kubernetes access without a warning or failure', () => {
@@ -7,5 +10,27 @@ describe('dependency health policy', () => {
       status: 'not_applicable',
       message: 'Kubernetes access is not assigned to this runtime',
     });
+  });
+
+  it('fails full health when application delivery is unavailable', () => {
+    expect(
+      deriveFullHealthStatus({
+        database: { status: 'pass' },
+        restate: { status: 'pass' },
+        applicationDelivery: { status: 'fail' },
+      })
+    ).toBe('unhealthy');
+  });
+
+  it('keeps rebuildable dependencies degraded instead of failing required health', () => {
+    expect(
+      deriveFullHealthStatus({
+        database: { status: 'pass' },
+        redis: { status: 'fail' },
+        restate: { status: 'pass' },
+        applicationDelivery: { status: 'pass' },
+        kubernetes: createKubernetesNotApplicableCheck(),
+      })
+    ).toBe('degraded');
   });
 });

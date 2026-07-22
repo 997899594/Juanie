@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { resolveKubernetesConfiguration } from '@/lib/k8s/configuration';
 
+type HealthStatus = 'healthy' | 'unhealthy' | 'degraded';
+
 interface HealthResponse {
-  status: 'healthy' | 'unhealthy' | 'degraded';
+  status: HealthStatus;
   timestamp: string;
   version: string;
   checks: {
@@ -25,6 +27,18 @@ export function createKubernetesNotApplicableCheck(): HealthCheck {
     status: 'not_applicable',
     message: 'Kubernetes access is not assigned to this runtime',
   };
+}
+
+export function deriveFullHealthStatus(checks: HealthResponse['checks']): HealthStatus {
+  const requiredChecks = [checks.database, checks.restate, checks.applicationDelivery];
+  if (requiredChecks.some((check) => check?.status === 'fail')) return 'unhealthy';
+
+  const optionalChecks = [checks.redis, checks.kubernetes];
+  if (optionalChecks.some((check) => check?.status === 'fail' || check?.status === 'warn')) {
+    return 'degraded';
+  }
+
+  return 'healthy';
 }
 
 function createBaseResponse(): HealthResponse {
@@ -81,6 +95,18 @@ async function checkRestate(): Promise<HealthCheck> {
     throw new Error(`Restate health check returned HTTP ${response.status}`);
   }
   return { status: 'pass', latency: Date.now() - start };
+}
+
+async function checkRestateServiceCatalog(): Promise<HealthCheck> {
+  const start = Date.now();
+  const adminUrl = process.env.RESTATE_ADMIN_URL ?? 'http://localhost:9070';
+  const { verifyRestateServiceCatalog } = await import('@/lib/restate/service-catalog');
+  const catalog = await verifyRestateServiceCatalog(adminUrl);
+  return {
+    status: 'pass',
+    message: `${catalog.expectedServiceCount} required services registered`,
+    latency: Date.now() - start,
+  };
 }
 
 async function checkKubernetes(): Promise<HealthCheck> {
@@ -154,8 +180,6 @@ export async function getHealthResponse() {
     database: { status: 'pass' },
   };
 
-  let overallStatus: 'healthy' | 'unhealthy' | 'degraded' = 'healthy';
-
   try {
     checks.database = await checkDatabase();
   } catch (error) {
@@ -163,7 +187,6 @@ export async function getHealthResponse() {
       status: 'fail',
       message: error instanceof Error ? error.message : 'Database connection failed',
     };
-    overallStatus = 'unhealthy';
   }
 
   if (await isRedisConfigured()) {
@@ -174,18 +197,16 @@ export async function getHealthResponse() {
         status: 'fail',
         message: error instanceof Error ? error.message : 'Redis connection failed',
       };
-      overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus;
     }
   }
 
   try {
-    checks.restate = await checkRestate();
+    checks.restate = await checkRestateServiceCatalog();
   } catch (error) {
     checks.restate = {
       status: 'fail',
       message: error instanceof Error ? error.message : 'Restate connection failed',
     };
-    overallStatus = 'unhealthy';
   }
 
   if (resolveKubernetesConfiguration()) {
@@ -196,7 +217,6 @@ export async function getHealthResponse() {
         status: 'warn',
         message: error instanceof Error ? error.message : 'Kubernetes client not available',
       };
-      overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus;
     }
   } else {
     checks.kubernetes = createKubernetesNotApplicableCheck();
@@ -209,8 +229,9 @@ export async function getHealthResponse() {
       status: 'fail',
       message: error instanceof Error ? error.message : 'Application delivery is unavailable',
     };
-    overallStatus = overallStatus === 'healthy' ? 'degraded' : overallStatus;
   }
+
+  const overallStatus = deriveFullHealthStatus(checks);
 
   const response: HealthResponse = {
     status: overallStatus,
