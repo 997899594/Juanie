@@ -172,7 +172,7 @@ jobs:
           registry_get() {
             path="$1"
             accept="$2"
-            curl -fsS \
+            curl -LfsS \
               -H "Authorization: Bearer ${registry_token}" \
               -H "Accept: ${accept}" \
               "https://ghcr.io/v2/${IMAGE_REPOSITORY}/${path}"
