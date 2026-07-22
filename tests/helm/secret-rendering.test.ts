@@ -66,21 +66,7 @@ describe('Helm runtime Secret rendering', () => {
     expect(new Set(collectSecretReferences(resources))).toEqual(new Set(['juanie-secret']));
   });
 
-  it('pins the Restate registration container to the curl image numeric identity', () => {
-    const resources = renderChart([]);
-    const registration = findResource(resources, 'Job', 'juanie-restate-register-1');
-    const template = registration.spec?.template as
-      | { spec?: { containers?: Array<{ securityContext?: Record<string, unknown> }> } }
-      | undefined;
-    const securityContext = template?.spec?.containers?.[0]?.securityContext;
-
-    expect(securityContext?.runAsUser).toBe(101);
-    expect(securityContext?.runAsGroup).toBe(102);
-    expect(securityContext?.allowPrivilegeEscalation).toBe(false);
-    expect(securityContext?.readOnlyRootFilesystem).toBe(true);
-  });
-
-  it('uses immutable Restate revisions in production without directly registering the legacy URL', () => {
+  it('uses the Operator as the only Restate handler owner', () => {
     const resources = renderChart([
       '-f',
       `${chartPath}/values-prod.yaml`,
@@ -92,7 +78,6 @@ describe('Helm runtime Secret rendering', () => {
       'RestateDeployment',
       'juanie-restate-services'
     );
-    const legacyDeployment = findResource(resources, 'Deployment', 'juanie-restate-services');
     const registrations = resources.filter(
       (resource) =>
         resource.metadata?.labels?.['app.kubernetes.io/component'] === 'restate-registration'
@@ -108,23 +93,54 @@ describe('Helm runtime Secret rendering', () => {
         },
       },
     });
-    expect(legacyDeployment.spec?.template).toBeDefined();
     expect(immutableDeployment.spec?.selector?.matchLabels).toEqual({
       'app.kubernetes.io/name': 'juanie',
       'app.kubernetes.io/component': 'restate-handler',
       'juanie.art/restate-generation': 'operator',
     });
-    expect(legacyDeployment.spec?.selector?.matchLabels).toEqual({
-      'app.kubernetes.io/name': 'juanie',
-      'app.kubernetes.io/component': 'restate-services',
-    });
     expect(
       immutableDeployment.spec?.template?.metadata?.labels?.['juanie.art/restate-handler']
     ).toBe('true');
-    expect(legacyDeployment.spec?.template?.metadata?.labels?.['juanie.art/restate-handler']).toBe(
-      'true'
-    );
     expect(registrations).toEqual([]);
+    expect(
+      resources.some(
+        (resource) =>
+          resource.metadata?.name === 'juanie-restate-services' &&
+          (resource.kind === 'Deployment' || resource.kind === 'Service')
+      )
+    ).toBe(false);
+    expect(
+      resources.some(
+        (resource) => resource.metadata?.labels?.['juanie.art/restate-generation'] === 'legacy'
+      )
+    ).toBe(false);
+    expect(
+      resources.some((resource) => JSON.stringify(resource).includes('curlimages/curl'))
+    ).toBe(false);
+    expect(
+      resources.some((resource) =>
+        JSON.stringify(resource).includes(['RESTATE', 'SERVICE', 'REGISTRATION', 'URL'].join('_'))
+      )
+    ).toBe(false);
+    expect(
+      resources.some((resource) =>
+        JSON.stringify(resource).includes('http://juanie-restate-services:9080')
+      )
+    ).toBe(false);
+  });
+
+  it('protects highly available Operator-managed handlers with the matching PDB', () => {
+    const resources = renderChart(['--set', 'replicaCount.restateHandler=2']);
+    const disruptionBudget = findResource(
+      resources,
+      'PodDisruptionBudget',
+      'juanie-restate-handler'
+    );
+
+    expect(disruptionBudget.spec?.selector?.matchLabels).toEqual({
+      'app.kubernetes.io/name': 'juanie',
+      'app.kubernetes.io/component': 'restate-handler',
+    });
   });
 
   it('uses one existing Secret for every runtime consumer', () => {

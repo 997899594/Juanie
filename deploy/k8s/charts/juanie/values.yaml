@@ -34,12 +34,6 @@ images:
     pullPolicy: IfNotPresent
     tag: "1.7.2"
     digest: "sha256:1b87ca71fafcf8af350e59d9e0164e1f5161a313fc4e65f3ee4143d0a4eac400"
-  curl:
-    repository: curlimages/curl
-    pullPolicy: IfNotPresent
-    tag: "8.16.0"
-    digest: "sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6"
-
 imagePullSecrets: []
 
 namespace: juanie
@@ -55,7 +49,7 @@ replicaCount:
   web: 1
   worker: 1
   scheduler: 1
-  restateServices: 1
+  restateHandler: 1
   outboxDispatcher: 1
 
 worker:
@@ -72,14 +66,9 @@ schemaSync:
 restate:
   embeddedEnabled: true
   storage: "10Gi"
-  operator:
-    enabled: false
-    keepLegacyEndpoint: false
+  handler:
     drainDelaySeconds: 300
     revisionHistoryLimit: 10
-  registration:
-    enabled: true
-    backoffLimit: 12
 
 backup:
   postgresql:
@@ -123,7 +112,7 @@ resources:
     requests:
       cpu: 100m
       memory: 256Mi
-  restateServices:
+  restateHandler:
     requests:
       cpu: 100m
       memory: 256Mi
@@ -173,7 +162,6 @@ env:
   RESTATE_INGRESS_URL: "http://juanie-restate:8080"
   RESTATE_ADMIN_URL: "http://juanie-restate:9070"
   RESTATE_SERVICE_PORT: "9080"
-  RESTATE_SERVICE_REGISTRATION_URL: "http://juanie-restate-services:9080"
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
   AUTH_TRUST_HOST: "true"
   # Trust the Kubernetes ServiceAccount CA so Node-based platform workers can
@@ -326,7 +314,7 @@ secret:
       - JUANIE_GITHUB_APP_INSTALLATION_ID
       - JUANIE_GITHUB_APP_PRIVATE_KEY
       - JUANIE_SOURCE_WEBHOOK_SECRET
-    restateServices:
+    restateHandler:
       - DATABASE_PASSWORD
       - ENCRYPTION_MASTER_KEY
       - ENCRYPTION_MASTER_KEY_VERSION

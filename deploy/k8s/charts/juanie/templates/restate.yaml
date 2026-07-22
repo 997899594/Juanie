@@ -98,90 +98,6 @@ spec:
             storage: {{ .Values.restate.storage }}
 ---
 {{- end }}
-{{- if or (not .Values.restate.operator.enabled) .Values.restate.operator.keepLegacyEndpoint }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Chart.Name }}-restate-services
-  namespace: {{ .Values.namespace }}
-spec:
-  ports:
-    - name: http
-      port: 9080
-      targetPort: http
-  selector:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/component: restate-services
-    juanie.art/restate-generation: legacy
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Chart.Name }}-restate-services
-  namespace: {{ .Values.namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/component: restate-services
-spec:
-  replicas: {{ .Values.replicaCount.restateServices }}
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: {{ .Chart.Name }}
-      app.kubernetes.io/component: restate-services
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: {{ .Chart.Name }}
-        app.kubernetes.io/component: restate-services
-        juanie.art/restate-generation: legacy
-        juanie.art/restate-handler: "true"
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    spec:
-      serviceAccountName: {{ .Chart.Name }}-controller
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1001
-        fsGroup: 1001
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: restate-services
-          image: {{ include "juanie.image" .Values.images.runtime | quote }}
-          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
-          command: ["./restate-services"]
-          ports:
-            - name: http
-              containerPort: 9080
-          envFrom:
-            - configMapRef:
-                name: {{ .Chart.Name }}-config
-          env:
-            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateServices) | nindent 12 }}
-          resources:
-            {{- toYaml .Values.resources.restateServices | nindent 12 }}
-          readinessProbe:
-            tcpSocket:
-              port: http
-            periodSeconds: 5
-          livenessProbe:
-            tcpSocket:
-              port: http
-            periodSeconds: 10
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: tmp
-          emptyDir: {}
----
-{{- end }}
-{{- if .Values.restate.operator.enabled }}
 apiVersion: restate.dev/v1beta1
 kind: RestateDeployment
 metadata:
@@ -191,11 +107,11 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/component: restate-handler
 spec:
-  replicas: {{ .Values.replicaCount.restateServices }}
+  replicas: {{ .Values.replicaCount.restateHandler }}
   minReadySeconds: 5
-  revisionHistoryLimit: {{ .Values.restate.operator.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .Values.restate.handler.revisionHistoryLimit }}
   restate:
-    drainDelaySeconds: {{ .Values.restate.operator.drainDelaySeconds }}
+    drainDelaySeconds: {{ .Values.restate.handler.drainDelaySeconds }}
     register:
       {{- if .Values.restate.embeddedEnabled }}
       service:
@@ -239,9 +155,9 @@ spec:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
           env:
-            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateServices) | nindent 12 }}
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateHandler) | nindent 12 }}
           resources:
-            {{- toYaml .Values.resources.restateServices | nindent 12 }}
+            {{- toYaml .Values.resources.restateHandler | nindent 12 }}
           readinessProbe:
             tcpSocket:
               port: restate
@@ -262,7 +178,6 @@ spec:
         - name: tmp
           emptyDir: {}
 ---
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -321,57 +236,3 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
----
-{{- if and .Values.restate.registration.enabled (not .Values.restate.operator.enabled) }}
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: {{ .Chart.Name }}-restate-register-{{ .Release.Revision }}
-  namespace: {{ .Values.namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/component: restate-registration
-spec:
-  backoffLimit: {{ .Values.restate.registration.backoffLimit }}
-  ttlSecondsAfterFinished: 600
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: {{ .Chart.Name }}
-        app.kubernetes.io/component: restate-registration
-    spec:
-      restartPolicy: OnFailure
-      serviceAccountName: {{ .Chart.Name }}-restate
-      automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: register
-          image: {{ include "juanie.image" .Values.images.curl | quote }}
-          imagePullPolicy: {{ .Values.images.curl.pullPolicy }}
-          command:
-            - sh
-            - -ec
-            - >-
-              until curl --http2-prior-knowledge --fail --silent
-              http://{{ .Chart.Name }}-restate-services:9080/health; do sleep 2; done;
-              curl --fail-with-body --silent --show-error
-              -X POST {{ .Values.env.RESTATE_ADMIN_URL }}/deployments
-              -H 'content-type: application/json'
-              -d '{"uri":"{{ .Values.env.RESTATE_SERVICE_REGISTRATION_URL }}"}'
-          securityContext:
-            runAsUser: 101
-            runAsGroup: 102
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: tmp
-          emptyDir: {}
-{{- end }}

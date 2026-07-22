@@ -9,7 +9,7 @@ replicaCount:
   web: 1
   worker: 1
   scheduler: 1
-  restateServices: 1
+  restateHandler: 1
   outboxDispatcher: 1
 
 worker:
@@ -54,7 +54,7 @@ resources:
     limits:
       cpu: 150m
       memory: 192Mi
-  restateServices:
+  restateHandler:
     requests:
       cpu: 100m
       memory: 256Mi
@@ -97,8 +97,3 @@ monitoring:
     enabled: true
   podMonitor:
     enabled: true
-
-restate:
-  operator:
-    enabled: true
-    keepLegacyEndpoint: true

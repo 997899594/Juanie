@@ -17,9 +17,6 @@
 {{- if not .Values.monitoring.podMonitor.enabled }}
 {{- fail "production requires monitoring.podMonitor.enabled=true" }}
 {{- end }}
-{{- if not .Values.restate.operator.enabled }}
-{{- fail "production requires restate.operator.enabled=true" }}
-{{- end }}
 {{- if not (has .Values.production.topologyMode (list "singleNode" "highAvailability")) }}
 {{- fail "production.topologyMode must be singleNode or highAvailability" }}
 {{- end }}
@@ -45,18 +42,18 @@
 {{- if or .Values.postgres.enabled .Values.restate.embeddedEnabled }}
 {{- fail "external production durability must disable embedded PostgreSQL and Restate" }}
 {{- end }}
-{{- if or (eq .Values.env.DATABASE_HOST "postgres") (eq .Values.env.RESTATE_INGRESS_URL "http://juanie-restate:8080") (eq .Values.env.RESTATE_SERVICE_REGISTRATION_URL "http://juanie-restate-services:9080") }}
+{{- if or (eq .Values.env.DATABASE_HOST "postgres") (eq .Values.env.RESTATE_INGRESS_URL "http://juanie-restate:8080") (eq .Values.env.RESTATE_ADMIN_URL "http://juanie-restate:9070") }}
 {{- fail "external production durability requires external PostgreSQL and Restate endpoints" }}
 {{- end }}
 {{- else }}
 {{- fail "production.durabilityMode must be selfHosted or external" }}
 {{- end }}
 {{- if eq .Values.production.topologyMode "singleNode" }}
-{{- if or (ne (int .Values.replicaCount.web) 1) (ne (int .Values.replicaCount.worker) 1) (ne (int .Values.replicaCount.scheduler) 1) (ne (int .Values.replicaCount.restateServices) 1) (ne (int .Values.replicaCount.outboxDispatcher) 1) }}
+{{- if or (ne (int .Values.replicaCount.web) 1) (ne (int .Values.replicaCount.worker) 1) (ne (int .Values.replicaCount.scheduler) 1) (ne (int .Values.replicaCount.restateHandler) 1) (ne (int .Values.replicaCount.outboxDispatcher) 1) }}
 {{- fail "singleNode production requires exactly one replica for every control-plane component" }}
 {{- end }}
 {{- else }}
-{{- if or (lt (int .Values.replicaCount.web) 2) (lt (int .Values.replicaCount.worker) 2) (lt (int .Values.replicaCount.scheduler) 2) (lt (int .Values.replicaCount.restateServices) 2) (lt (int .Values.replicaCount.outboxDispatcher) 2) }}
+{{- if or (lt (int .Values.replicaCount.web) 2) (lt (int .Values.replicaCount.worker) 2) (lt (int .Values.replicaCount.scheduler) 2) (lt (int .Values.replicaCount.restateHandler) 2) (lt (int .Values.replicaCount.outboxDispatcher) 2) }}
 {{- fail "highAvailability production requires at least two replicas for every control-plane component" }}
 {{- end }}
 {{- end }}

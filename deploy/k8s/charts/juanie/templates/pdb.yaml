@@ -1,4 +1,4 @@
-{{- $components := dict "web" .Values.replicaCount.web "worker" .Values.replicaCount.worker "scheduler" .Values.replicaCount.scheduler "restate-services" .Values.replicaCount.restateServices "outbox-dispatcher" .Values.replicaCount.outboxDispatcher -}}
+{{- $components := dict "web" .Values.replicaCount.web "worker" .Values.replicaCount.worker "scheduler" .Values.replicaCount.scheduler "restate-handler" .Values.replicaCount.restateHandler "outbox-dispatcher" .Values.replicaCount.outboxDispatcher -}}
 {{- range $component, $replicas := $components }}
 {{- if gt (int $replicas) 1 }}
 apiVersion: policy/v1

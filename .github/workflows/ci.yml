@@ -82,6 +82,8 @@ jobs:
           test "$(grep -c '^kind: PodMonitor$' <<<"$rendered")" -eq 1
           test "$(grep -c '^kind: RestateDeployment$' <<<"$rendered")" -eq 1
           ! grep -q 'name: juanie-restate-register-' <<<"$rendered"
+          ! grep -q 'juanie.art/restate-generation: legacy' <<<"$rendered"
+          ! grep -q 'http://juanie-restate-services:9080' <<<"$rendered"
           ! grep -q 'control-plane-contract' <<<"$rendered"
           schema_release="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
@@ -111,8 +113,7 @@ jobs:
             --set backup.restateSnapshot.enabled=false \
             --set-string env.DATABASE_HOST=postgres.example.internal \
             --set-string env.RESTATE_INGRESS_URL=https://restate.example.com \
-            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com \
-            --set-string env.RESTATE_SERVICE_REGISTRATION_URL=https://restate-services.example.com)"
+            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com)"
           ! grep -q '^  name: postgres$' <<<"$external"
           external_restate="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
@@ -125,8 +126,7 @@ jobs:
             --set backup.restateSnapshot.enabled=false \
             --set-string env.DATABASE_HOST=postgres.example.internal \
             --set-string env.RESTATE_INGRESS_URL=https://restate.example.com \
-            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com \
-            --set-string env.RESTATE_SERVICE_REGISTRATION_URL=https://restate-services.example.com)"
+            --set-string env.RESTATE_ADMIN_URL=https://restate-admin.example.com)"
           ! grep -q '^kind: StatefulSet$' <<<"$external_restate"
 
       - name: Scan Source, Dependencies, And Secrets
@@ -539,7 +539,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 70m
           envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG,RESTATE_OPERATOR_VERSION,RESTATE_OPERATOR_CHART_DIGEST,RESTATE_OPERATOR_CHART_SHA256,RESTATE_OPERATOR_IMAGE_DIGEST,RESTATE_OPERATOR_AMD64_DIGEST
-          script_stop: true
           script: |
             set -euo pipefail
             deploy_root="/tmp/juanie-direct-deploy-${GITHUB_SHA}"
@@ -600,6 +599,95 @@ jobs:
               echo "Unexpected Restate Operator image: ${operator_image_id}" >&2
               exit 1
             fi
+
+            kubectl -n juanie exec deployment/juanie-web -c juanie -- \
+              /usr/local/bin/bun -e '
+                const adminUrl = "http://juanie-restate:9070";
+                const legacyUri = "http://juanie-restate-services:9080";
+
+                async function readJson(path, init) {
+                  const response = await fetch(`${adminUrl}${path}`, init);
+                  if (!response.ok) {
+                    throw new Error(
+                      `Restate admin ${path} returned ${response.status}: ${await response.text()}`
+                    );
+                  }
+                  return response.json();
+                }
+
+                const normalizeUri = (uri) => uri.replace(/\/+$/, "");
+                const list = await readJson("/deployments");
+                const legacy = list.deployments.filter(
+                  (deployment) =>
+                    typeof deployment.uri === "string" &&
+                    normalizeUri(deployment.uri) === legacyUri
+                );
+                if (legacy.length > 1) {
+                  throw new Error(`Found ${legacy.length} legacy Restate deployments`);
+                }
+                if (legacy.length === 0) {
+                  console.log("Legacy Restate deployment is already absent");
+                  process.exit(0);
+                }
+
+                const quote = String.fromCharCode(39);
+                const completedStatus = `${quote}completed${quote}`;
+                const query = `
+                  WITH active_deployments AS (
+                    SELECT DISTINCT deployment_id AS id
+                    FROM sys_service
+                    WHERE deployment_id IS NOT NULL
+                    UNION
+                    SELECT DISTINCT pinned_deployment_id AS id
+                    FROM sys_invocation_status
+                    WHERE pinned_deployment_id IS NOT NULL AND status != ${completedStatus}
+                  )
+                  SELECT d.id AS deployment_id, a.id IS NOT NULL AS active
+                  FROM sys_deployment d
+                  LEFT JOIN active_deployments a ON d.id = a.id
+                `;
+                const result = await readJson("/query", {
+                  method: "POST",
+                  headers: {
+                    accept: "application/json",
+                    "content-type": "application/json",
+                  },
+                  body: JSON.stringify({ query }),
+                });
+                const legacyStatus = result.rows.find(
+                  (row) => row.deployment_id === legacy[0].id
+                );
+                if (!legacyStatus) {
+                  throw new Error(
+                    `Restate query did not return legacy deployment ${legacy[0].id}`
+                  );
+                }
+                if (legacyStatus.active !== false) {
+                  throw new Error(
+                    `Legacy Restate deployment ${legacy[0].id} is still active; refusing deletion`
+                  );
+                }
+
+                const deletion = await fetch(
+                  `${adminUrl}/deployments/${legacy[0].id}?force=true`,
+                  { method: "DELETE" }
+                );
+                if (deletion.status !== 202) {
+                  throw new Error(
+                    `Legacy Restate deletion returned ${deletion.status}: ${await deletion.text()}`
+                  );
+                }
+
+                for (let attempt = 1; attempt <= 20; attempt++) {
+                  const current = await readJson("/deployments");
+                  if (!current.deployments.some((deployment) => deployment.id === legacy[0].id)) {
+                    console.log(`Retired inactive legacy Restate deployment ${legacy[0].id}`);
+                    process.exit(0);
+                  }
+                  await Bun.sleep(500);
+                }
+                throw new Error(`Legacy Restate deployment ${legacy[0].id} was not removed`);
+              '
 
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
