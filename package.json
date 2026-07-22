@@ -89,7 +89,7 @@
     "mongodb": "^7.2.0",
     "mysql2": "^3.22.5",
     "nanoid": "^5.1.11",
-    "next": "16.2.7",
+    "next": "16.2.11",
     "next-auth": "5.0.0-beta.31",
     "octokit": "^5.0.5",
     "pg": "^8.21.0",
@@ -127,7 +127,7 @@
     "@opentelemetry/core": "2.9.0",
     "brace-expansion": "5.0.7",
     "dompurify": "3.4.12",
-    "fast-uri": "3.1.3",
+    "fast-uri": "3.1.4",
     "form-data": "4.0.6",
     "ip-address": "10.2.0",
     "js-yaml": "4.3.0",
@@ -136,6 +136,7 @@
     "postcss": "8.5.19",
     "qs": "6.15.3",
     "serialize-javascript": "7.0.7",
+    "sharp": "0.35.3",
     "uuid": "11.1.1",
     "ws": "8.21.1"
   }
