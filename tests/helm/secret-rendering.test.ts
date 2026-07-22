@@ -114,9 +114,9 @@ describe('Helm runtime Secret rendering', () => {
         (resource) => resource.metadata?.labels?.['juanie.art/restate-generation'] === 'legacy'
       )
     ).toBe(false);
-    expect(
-      resources.some((resource) => JSON.stringify(resource).includes('curlimages/curl'))
-    ).toBe(false);
+    expect(resources.some((resource) => JSON.stringify(resource).includes('curlimages/curl'))).toBe(
+      false
+    );
     expect(
       resources.some((resource) =>
         JSON.stringify(resource).includes(['RESTATE', 'SERVICE', 'REGISTRATION', 'URL'].join('_'))
