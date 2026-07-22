@@ -164,9 +164,6 @@ env:
   RESTATE_SERVICE_PORT: "9080"
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
   AUTH_TRUST_HOST: "true"
-  # Trust the Kubernetes ServiceAccount CA so Node-based platform workers can
-  # verify the in-cluster Kubernetes API certificate without disabling TLS.
-  NODE_EXTRA_CA_CERTS: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
   # Optional outbound proxy for GitHub OAuth, Git provider APIs, AI providers,
   # and artifact storage in restricted networks. Node 24 fetch only honors these
   # variables when NODE_USE_ENV_PROXY is enabled.

@@ -59,6 +59,21 @@ function collectSecretReferences(value: unknown, references: string[] = []): str
   return references;
 }
 
+function collectContainerEnvironmentNames(resource: KubernetesResource): Set<string> {
+  const template = resource.spec?.template as
+    | {
+        spec?: {
+          containers?: Array<{ env?: Array<{ name?: string }> }>;
+        };
+      }
+    | undefined;
+  return new Set(
+    template?.spec?.containers?.flatMap(
+      (container) => container.env?.flatMap(({ name }) => (name ? [name] : [])) ?? []
+    ) ?? []
+  );
+}
+
 describe('Helm runtime Secret rendering', () => {
   it('uses the chart-managed Secret when no external source is configured', () => {
     const resources = renderChart(['--set', 'secret.existingSecret=']);
@@ -141,6 +156,29 @@ describe('Helm runtime Secret rendering', () => {
       'app.kubernetes.io/name': 'juanie',
       'app.kubernetes.io/component': 'restate-handler',
     });
+  });
+
+  it('scopes the Kubernetes CA to workloads with ServiceAccount credentials', () => {
+    const resources = renderChart([]);
+    const caVariable = 'NODE_EXTRA_CA_CERTS';
+    const config = findResource(resources, 'ConfigMap', 'juanie-config') as KubernetesResource & {
+      data?: Record<string, string>;
+    };
+
+    expect(config.data?.[caVariable]).toBeUndefined();
+    for (const name of ['juanie-web', 'juanie-worker', 'juanie-outbox-dispatcher']) {
+      expect(
+        collectContainerEnvironmentNames(findResource(resources, 'Deployment', name))
+      ).not.toContain(caVariable);
+    }
+    expect(
+      collectContainerEnvironmentNames(findResource(resources, 'Deployment', 'juanie-scheduler'))
+    ).toContain(caVariable);
+    expect(
+      collectContainerEnvironmentNames(
+        findResource(resources, 'RestateDeployment', 'juanie-restate-services')
+      )
+    ).toContain(caVariable);
   });
 
   it('uses one existing Secret for every runtime consumer', () => {

@@ -20,9 +20,6 @@ data:
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ . | quote }}
   {{- end }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
-  {{- with .Values.env.NODE_EXTRA_CA_CERTS }}
-  NODE_EXTRA_CA_CERTS: {{ . | quote }}
-  {{- end }}
   {{- if or .Values.env.HTTP_PROXY .Values.env.HTTPS_PROXY .Values.env.ALL_PROXY }}
   NODE_USE_ENV_PROXY: {{ .Values.env.NODE_USE_ENV_PROXY | default "1" | quote }}
   {{- end }}

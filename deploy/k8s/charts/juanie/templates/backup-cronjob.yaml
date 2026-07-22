@@ -120,6 +120,8 @@ spec:
               imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
               command: ["./restate-snapshot"]
               env:
+                - name: NODE_EXTRA_CA_CERTS
+                  value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
                 - name: JUANIE_NAMESPACE
                   value: {{ .Values.namespace | quote }}
                 - name: RESTATE_SNAPSHOT_PVC_NAME

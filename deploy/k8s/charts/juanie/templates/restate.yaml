@@ -155,6 +155,8 @@ spec:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
           env:
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateHandler) | nindent 12 }}
           resources:
             {{- toYaml .Values.resources.restateHandler | nindent 12 }}
