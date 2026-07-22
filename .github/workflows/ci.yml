@@ -161,24 +161,69 @@ jobs:
       - name: Plan Component Images
         id: plan
         env:
-          BASE_REVISION: ${{ github.event.before }}
           HEAD_REVISION: ${{ github.sha }}
         run: |
           set -euo pipefail
-          plan="$(bun scripts/plan-platform-images.ts "$BASE_REVISION" "$HEAD_REVISION")"
+          plan='{"targets":[],"changedPaths":[],"reasons":[]}'
           registry_token="$(curl -fsS \
             "https://ghcr.io/token?service=ghcr.io&scope=repository:${IMAGE_REPOSITORY}:pull" \
             | jq -r .token)"
 
-          for target in web runtime schema-runner; do
-            if ! curl -fsS -o /dev/null \
+          registry_get() {
+            path="$1"
+            accept="$2"
+            curl -fsS \
               -H "Authorization: Bearer ${registry_token}" \
-              -H 'Accept: application/vnd.oci.image.index.v1+json' \
-              "https://ghcr.io/v2/${IMAGE_REPOSITORY}/manifests/${target}-stable"; then
+              -H "Accept: ${accept}" \
+              "https://ghcr.io/v2/${IMAGE_REPOSITORY}/${path}"
+          }
+
+          stable_revision() {
+            target="$1"
+            index="$(registry_get "manifests/${target}-stable" \
+              'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json')" || return 1
+            if jq -e '.manifests' <<<"$index" >/dev/null; then
+              manifest_digest="$(jq -er '
+                .manifests[] |
+                select(.platform.os == "linux" and .platform.architecture == "amd64") |
+                .digest
+              ' <<<"$index" | head -n 1)" || return 1
+              manifest="$(registry_get "manifests/${manifest_digest}" \
+                'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json')" || return 1
+            else
+              manifest="$index"
+            fi
+            config_digest="$(jq -er '.config.digest' <<<"$manifest")" || return 1
+            config="$(registry_get "blobs/${config_digest}" \
+              'application/vnd.oci.image.config.v1+json')" || return 1
+            revision="$(jq -r \
+              '.config.Labels["org.opencontainers.image.revision"] // empty' \
+              <<<"$config")"
+            [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || return 1
+            printf '%s\n' "$revision"
+          }
+
+          for target in web runtime schema-runner; do
+            if ! deployed_revision="$(stable_revision "$target")"; then
               plan="$(jq -c --arg target "$target" \
                 '.targets = ((.targets + [$target]) | unique) |
-                 .reasons += ["stable channel missing: " + $target]' <<<"$plan")"
+                 .reasons += [$target + ": stable image metadata is unavailable"]' <<<"$plan")"
+              continue
             fi
+
+            target_plan="$(bun scripts/plan-platform-images.ts \
+              "$deployed_revision" "$HEAD_REVISION")"
+            plan="$(jq -c \
+              --arg target "$target" \
+              --argjson targetPlan "$target_plan" '
+                .changedPaths = ((.changedPaths + $targetPlan.changedPaths) | unique) |
+                if ($targetPlan.targets | index($target)) != null then
+                  .targets = ((.targets + [$target]) | unique) |
+                  .reasons += ($targetPlan.reasons | map($target + ": " + .))
+                else
+                  .
+                end
+              ' <<<"$plan")"
           done
 
           echo "targets=$(jq -c '.targets' <<<"$plan")" >> "$GITHUB_OUTPUT"
@@ -324,6 +369,9 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           tags: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ matrix.target }}-${{ github.sha }}
           cache-from: type=gha,scope=juanie-docker-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=juanie-docker-${{ matrix.target }}
@@ -590,10 +638,10 @@ jobs:
               -o jsonpath='{.status.deploymentId}')"
             test -n "${restate_deployment_id}"
             kubectl -n juanie exec deployment/juanie-web -c juanie -- \
-              env RESTATE_DEPLOYMENT_ID="${restate_deployment_id}" \
               /usr/local/bin/bun -e '
+                const deploymentId = process.argv[1];
                 const response = await fetch(
-                  `http://juanie-restate:9070/deployments/${process.env.RESTATE_DEPLOYMENT_ID}`
+                  `http://juanie-restate:9070/deployments/${deploymentId}`
                 );
                 if (!response.ok) throw new Error(`Restate admin returned ${response.status}`);
                 const deployment = await response.json();
@@ -619,7 +667,7 @@ jobs:
                 console.log(
                   `Verified immutable Restate deployment ${deployment.id} with ${services.size} services`
                 );
-              '
+              ' "${restate_deployment_id}"
             for attempt in $(seq 1 24); do
               if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
                 break
