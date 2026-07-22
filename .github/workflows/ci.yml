@@ -546,13 +546,12 @@ jobs:
             operator_image_id="$(kubectl -n restate-operator get pod \
               -l app=restate-operator \
               -o jsonpath='{.items[0].status.containerStatuses[0].imageID}')"
-            case "${operator_image_id}" in
-              *@"${RESTATE_OPERATOR_IMAGE_DIGEST}"|*@"${RESTATE_OPERATOR_AMD64_DIGEST}") ;;
-              *)
-                echo "Unexpected Restate Operator image: ${operator_image_id}" >&2
-                exit 1
-                ;;
-            esac
+            operator_image_digest="${operator_image_id##*@}"
+            if [ "${operator_image_digest}" != "${RESTATE_OPERATOR_IMAGE_DIGEST}" ] && \
+              [ "${operator_image_digest}" != "${RESTATE_OPERATOR_AMD64_DIGEST}" ]; then
+              echo "Unexpected Restate Operator image: ${operator_image_id}" >&2
+              exit 1
+            fi
 
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
