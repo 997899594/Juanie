@@ -97,3 +97,8 @@ monitoring:
     enabled: true
   podMonitor:
     enabled: true
+
+restate:
+  operator:
+    enabled: true
+    keepLegacyEndpoint: true

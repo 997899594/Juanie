@@ -23,6 +23,14 @@ spec:
             matchLabels:
               app.kubernetes.io/name: {{ .Chart.Name }}
               app.kubernetes.io/component: restate-registration
+        {{- if .Values.restate.operator.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: restate-operator
+          podSelector:
+            matchLabels:
+              app: restate-operator
+        {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -32,8 +40,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: {{ .Chart.Name }}
-      app.kubernetes.io/component: restate-services
+      juanie.art/restate-handler: "true"
   policyTypes: [Ingress]
   ingress:
     - from:

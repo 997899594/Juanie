@@ -17,6 +17,11 @@ env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
   ATLAS_VERSION: 1.2.3
+  RESTATE_OPERATOR_VERSION: 2.8.1
+  RESTATE_OPERATOR_CHART_DIGEST: sha256:a8e3c1cf8f2267c2e45857466197bb208d63b6c2ec6137e49b94306c4fa315c4
+  RESTATE_OPERATOR_CHART_SHA256: 1e9ac065deb9e8f50479e6f80c7d7f80be254728a8bc9ca792612035253c7694
+  RESTATE_OPERATOR_IMAGE_DIGEST: sha256:dc4d3391cc8ae64a7fcfb9131652787bc4adde8f214ea35b716944bc5e7c1550
+  RESTATE_OPERATOR_AMD64_DIGEST: sha256:d480844e50ffd24d1033ad8bae69616cfe777c87dee4b425fc14819336fadd53
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -74,6 +79,8 @@ jobs:
           test "$(grep -c '^kind: CronJob$' <<<"$rendered" || true)" -eq 0
           test "$(grep -c '^kind: PrometheusRule$' <<<"$rendered")" -eq 1
           test "$(grep -c '^kind: PodMonitor$' <<<"$rendered")" -eq 1
+          test "$(grep -c '^kind: RestateDeployment$' <<<"$rendered")" -eq 1
+          ! grep -q 'name: juanie-restate-register-' <<<"$rendered"
           ! grep -q 'control-plane-contract' <<<"$rendered"
           schema_release="$(helm template juanie deploy/k8s/charts/juanie \
             -f deploy/k8s/charts/juanie/values-prod.yaml \
@@ -471,12 +478,17 @@ jobs:
           WEB_IMAGE_TAG: ${{ env.WEB_IMAGE_TAG }}
           RUNTIME_IMAGE_TAG: ${{ env.RUNTIME_IMAGE_TAG }}
           SCHEMA_RUNNER_IMAGE_TAG: ${{ env.SCHEMA_RUNNER_IMAGE_TAG }}
+          RESTATE_OPERATOR_VERSION: ${{ env.RESTATE_OPERATOR_VERSION }}
+          RESTATE_OPERATOR_CHART_DIGEST: ${{ env.RESTATE_OPERATOR_CHART_DIGEST }}
+          RESTATE_OPERATOR_CHART_SHA256: ${{ env.RESTATE_OPERATOR_CHART_SHA256 }}
+          RESTATE_OPERATOR_IMAGE_DIGEST: ${{ env.RESTATE_OPERATOR_IMAGE_DIGEST }}
+          RESTATE_OPERATOR_AMD64_DIGEST: ${{ env.RESTATE_OPERATOR_AMD64_DIGEST }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 70m
-          envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG
+          envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG,RESTATE_OPERATOR_VERSION,RESTATE_OPERATOR_CHART_DIGEST,RESTATE_OPERATOR_CHART_SHA256,RESTATE_OPERATOR_IMAGE_DIGEST,RESTATE_OPERATOR_AMD64_DIGEST
           script_stop: true
           script: |
             set -euo pipefail
@@ -503,6 +515,43 @@ jobs:
               fi
               echo "Preloaded ${image_tag%%@*}"
             done
+
+            operator_archive="${deploy_root}/restate-operator-helm-${RESTATE_OPERATOR_VERSION}.tgz"
+            rm -f "${operator_archive}"
+            operator_pull_output="$(helm pull oci://ghcr.io/restatedev/restate-operator-helm \
+              --version "${RESTATE_OPERATOR_VERSION}" \
+              --destination "${deploy_root}" 2>&1)"
+            grep -F "Digest: ${RESTATE_OPERATOR_CHART_DIGEST}" <<<"${operator_pull_output}"
+            echo "${RESTATE_OPERATOR_CHART_SHA256}  ${operator_archive}" | sha256sum --check
+
+            operator_chart_root="${deploy_root}/restate-operator-chart"
+            rm -rf "${operator_chart_root}"
+            mkdir -p "${operator_chart_root}"
+            tar -xzf "${operator_archive}" -C "${operator_chart_root}"
+            kubectl apply --server-side \
+              --field-manager=juanie-platform-ci \
+              -f "${operator_chart_root}/restate-operator-helm/charts/restate-operator-crds/crds"
+
+            helm upgrade --install restate-operator "${operator_archive}" \
+              --namespace restate-operator \
+              --create-namespace \
+              --set installCrds=false \
+              --set-string version="${RESTATE_OPERATOR_VERSION}" \
+              --atomic \
+              --wait \
+              --timeout 10m
+            kubectl -n restate-operator rollout status deployment/restate-operator --timeout=5m
+            operator_image_id="$(kubectl -n restate-operator get pod \
+              -l app=restate-operator \
+              -o jsonpath='{.items[0].status.containerStatuses[0].imageID}')"
+            case "${operator_image_id}" in
+              *@"${RESTATE_OPERATOR_IMAGE_DIGEST}"|*@"${RESTATE_OPERATOR_AMD64_DIGEST}") ;;
+              *)
+                echo "Unexpected Restate Operator image: ${operator_image_id}" >&2
+                exit 1
+                ;;
+            esac
+
             kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
             kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
               --ignore-not-found=true >/dev/null 2>&1 || true
@@ -531,6 +580,45 @@ jobs:
 
             kubectl -n juanie rollout status deployment/juanie-web --timeout=10m
             kubectl -n juanie rollout status deployment/juanie-worker --timeout=10m
+            kubectl -n juanie wait \
+              --for=condition=Ready \
+              restatedeployment/juanie-restate-services \
+              --timeout=10m
+            restate_deployment_id="$(kubectl -n juanie get \
+              restatedeployment/juanie-restate-services \
+              -o jsonpath='{.status.deploymentId}')"
+            test -n "${restate_deployment_id}"
+            kubectl -n juanie exec deployment/juanie-web -c juanie -- \
+              env RESTATE_DEPLOYMENT_ID="${restate_deployment_id}" \
+              /usr/local/bin/bun -e '
+                const response = await fetch(
+                  `http://juanie-restate:9070/deployments/${process.env.RESTATE_DEPLOYMENT_ID}`
+                );
+                if (!response.ok) throw new Error(`Restate admin returned ${response.status}`);
+                const deployment = await response.json();
+                const services = new Set(deployment.services?.map((service) => service.name));
+                const expected = new Set([
+                  "ProjectInitializationWorkflow",
+                  "ReleaseWorkflow",
+                  "EnvironmentRuntimeWorkflow",
+                  "MigrationWorkflow",
+                  "DeploymentWorkflow",
+                  "ProjectDeletionWorkflow",
+                  "SchemaRepairWorkflow",
+                  "SourceDeliveryWorkflow",
+                ]);
+                const missing = [...expected].filter((service) => !services.has(service));
+                const unexpected = [...services].filter((service) => !expected.has(service));
+                if (missing.length > 0 || unexpected.length > 0) {
+                  throw new Error(
+                    `Restate service catalog mismatch: missing=${missing.join(",") || "none"} ` +
+                    `unexpected=${unexpected.join(",") || "none"}`
+                  );
+                }
+                console.log(
+                  `Verified immutable Restate deployment ${deployment.id} with ${services.size} services`
+                );
+              '
             for attempt in $(seq 1 24); do
               if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
                 break

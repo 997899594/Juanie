@@ -17,6 +17,9 @@
 {{- if not .Values.monitoring.podMonitor.enabled }}
 {{- fail "production requires monitoring.podMonitor.enabled=true" }}
 {{- end }}
+{{- if not .Values.restate.operator.enabled }}
+{{- fail "production requires restate.operator.enabled=true" }}
+{{- end }}
 {{- if not (has .Values.production.topologyMode (list "singleNode" "highAvailability")) }}
 {{- fail "production.topologyMode must be singleNode or highAvailability" }}
 {{- end }}

@@ -6,8 +6,13 @@ const chartPath = 'deploy/k8s/charts/juanie';
 
 interface KubernetesResource {
   kind?: string;
-  metadata?: { name?: string };
-  spec?: Record<string, unknown>;
+  metadata?: { name?: string; labels?: Record<string, string> };
+  spec?: {
+    selector?: { matchLabels?: Record<string, string> };
+    template?: { metadata?: { labels?: Record<string, string> } };
+    restate?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 }
 
 function renderChart(args: string[]): KubernetesResource[] {
@@ -73,6 +78,53 @@ describe('Helm runtime Secret rendering', () => {
     expect(securityContext?.runAsGroup).toBe(102);
     expect(securityContext?.allowPrivilegeEscalation).toBe(false);
     expect(securityContext?.readOnlyRootFilesystem).toBe(true);
+  });
+
+  it('uses immutable Restate revisions in production without directly registering the legacy URL', () => {
+    const resources = renderChart([
+      '-f',
+      `${chartPath}/values-prod.yaml`,
+      '--set-string',
+      'env.JUANIE_SOURCE_REVISION=12d57bc2bfcfcd3373dfd6640bec463bd71b027e',
+    ]);
+    const immutableDeployment = findResource(
+      resources,
+      'RestateDeployment',
+      'juanie-restate-services'
+    );
+    const legacyDeployment = findResource(resources, 'Deployment', 'juanie-restate-services');
+    const registrations = resources.filter(
+      (resource) =>
+        resource.metadata?.labels?.['app.kubernetes.io/component'] === 'restate-registration'
+    );
+
+    expect(immutableDeployment.spec?.restate).toEqual({
+      drainDelaySeconds: 300,
+      register: {
+        service: {
+          name: 'juanie-restate',
+          namespace: 'juanie',
+          port: 9070,
+        },
+      },
+    });
+    expect(legacyDeployment.spec?.template).toBeDefined();
+    expect(immutableDeployment.spec?.selector?.matchLabels).toEqual({
+      'app.kubernetes.io/name': 'juanie',
+      'app.kubernetes.io/component': 'restate-handler',
+      'juanie.art/restate-generation': 'operator',
+    });
+    expect(legacyDeployment.spec?.selector?.matchLabels).toEqual({
+      'app.kubernetes.io/name': 'juanie',
+      'app.kubernetes.io/component': 'restate-services',
+    });
+    expect(
+      immutableDeployment.spec?.template?.metadata?.labels?.['juanie.art/restate-handler']
+    ).toBe('true');
+    expect(legacyDeployment.spec?.template?.metadata?.labels?.['juanie.art/restate-handler']).toBe(
+      'true'
+    );
+    expect(registrations).toEqual([]);
   });
 
   it('uses one existing Secret for every runtime consumer', () => {

@@ -72,6 +72,11 @@ schemaSync:
 restate:
   embeddedEnabled: true
   storage: "10Gi"
+  operator:
+    enabled: false
+    keepLegacyEndpoint: false
+    drainDelaySeconds: 300
+    revisionHistoryLimit: 10
   registration:
     enabled: true
     backoffLimit: 12

@@ -98,6 +98,7 @@ spec:
             storage: {{ .Values.restate.storage }}
 ---
 {{- end }}
+{{- if or (not .Values.restate.operator.enabled) .Values.restate.operator.keepLegacyEndpoint }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -111,6 +112,7 @@ spec:
   selector:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/component: restate-services
+    juanie.art/restate-generation: legacy
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -131,6 +133,10 @@ spec:
       labels:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/component: restate-services
+        juanie.art/restate-generation: legacy
+        juanie.art/restate-handler: "true"
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ .Chart.Name }}-controller
       securityContext:
@@ -174,6 +180,89 @@ spec:
         - name: tmp
           emptyDir: {}
 ---
+{{- end }}
+{{- if .Values.restate.operator.enabled }}
+apiVersion: restate.dev/v1beta1
+kind: RestateDeployment
+metadata:
+  name: {{ .Chart.Name }}-restate-services
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: restate-handler
+spec:
+  replicas: {{ .Values.replicaCount.restateServices }}
+  minReadySeconds: 5
+  revisionHistoryLimit: {{ .Values.restate.operator.revisionHistoryLimit }}
+  restate:
+    drainDelaySeconds: {{ .Values.restate.operator.drainDelaySeconds }}
+    register:
+      {{- if .Values.restate.embeddedEnabled }}
+      service:
+        name: {{ .Chart.Name }}-restate
+        namespace: {{ .Values.namespace }}
+        port: 9070
+      {{- else }}
+      url: {{ .Values.env.RESTATE_ADMIN_URL | quote }}
+      {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: restate-handler
+      juanie.art/restate-generation: operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: restate-handler
+        juanie.art/restate-generation: operator
+        juanie.art/restate-handler: "true"
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Chart.Name }}-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restate-services
+          image: {{ include "juanie.image" .Values.images.runtime | quote }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command: ["./restate-services"]
+          ports:
+            - name: restate
+              containerPort: 9080
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+          env:
+            {{- include "juanie.secretEnv" (dict "root" . "keys" .Values.secret.componentKeys.restateServices) | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources.restateServices | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: restate
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: restate
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -233,7 +322,7 @@ spec:
         - name: tmp
           emptyDir: {}
 ---
-{{- if .Values.restate.registration.enabled }}
+{{- if and .Values.restate.registration.enabled (not .Values.restate.operator.enabled) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
