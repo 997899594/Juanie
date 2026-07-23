@@ -834,7 +834,7 @@ export class GitHubProvider implements GitProvider {
       const apiResponse = await fetch(archiveUrl, {
         redirect: 'manual',
         headers: {
-          Accept: 'application/octet-stream',
+          Accept: 'application/vnd.github+json',
           Authorization: `Bearer ${accessToken}`,
           'X-GitHub-Api-Version': '2022-11-28',
         },

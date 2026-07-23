@@ -61,9 +61,13 @@ describe('GitHubProvider source control plane', () => {
       expect(requests[0]?.url).toBe(
         `https://api.github.com/repos/acme/demo/tarball/${'a'.repeat(40)}`
       );
-      expect(new Headers(requests[0]?.init?.headers).get('authorization')).toBe('Bearer token');
+      const apiHeaders = new Headers(requests[0]?.init?.headers);
+      expect(apiHeaders.get('accept')).toBe('application/vnd.github+json');
+      expect(apiHeaders.get('authorization')).toBe('Bearer token');
       expect(requests[1]?.url.startsWith('https://codeload.github.com/')).toBe(true);
-      expect(new Headers(requests[1]?.init?.headers).has('authorization')).toBe(false);
+      const codeloadHeaders = new Headers(requests[1]?.init?.headers);
+      expect(codeloadHeaders.get('accept')).toBe('application/octet-stream');
+      expect(codeloadHeaders.has('authorization')).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }
