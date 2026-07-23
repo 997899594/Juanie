@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 
 describe('production web runtime contract', () => {
   it('runs and smoke-tests the Next standalone server with Node', async () => {
-    const [dockerfile, workflow] = await Promise.all([
+    const [dockerfile, workflow, reconciler] = await Promise.all([
       readFile('Dockerfile', 'utf8'),
       readFile('.github/workflows/ci.yml', 'utf8'),
+      readFile('deploy/k8s/scripts/reconcile-production.sh', 'utf8'),
     ]);
 
     expect(dockerfile).toContain('FROM node-toolchain AS web');
@@ -15,5 +16,9 @@ describe('production web runtime contract', () => {
     expect(workflow).toContain('/usr/local/bin/node -e "\\');
     expect(workflow).toContain("'unexpected web runtime toolchain: ' + path");
     expect(workflow).not.toContain('/usr/local/bin/bun -e "\\');
+    expect(reconciler).toContain('kubectl get --raw \\');
+    expect(reconciler).toContain('/services/juanie-restate:9070/proxy/deployments/');
+    expect(reconciler).not.toContain('kubectl -n juanie exec');
+    expect(reconciler).not.toContain('/usr/local/bin/bun');
   });
 });

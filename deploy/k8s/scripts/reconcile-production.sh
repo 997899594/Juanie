@@ -188,37 +188,26 @@ if [ "${PLATFORM_DEPLOY_REQUIRED}" = true ]; then
     restatedeployment/juanie-restate-services \
     -o jsonpath='{.status.deploymentId}')"
   test -n "${restate_deployment_id}"
-  kubectl -n juanie exec deployment/juanie-web -c juanie -- \
-    /usr/local/bin/bun -e '
-      const deploymentId = process.argv[1];
-      const response = await fetch(
-        `http://juanie-restate:9070/deployments/${deploymentId}`
-      );
-      if (!response.ok) throw new Error(`Restate admin returned ${response.status}`);
-      const deployment = await response.json();
-      const services = new Set(deployment.services?.map((service) => service.name));
-      const expected = new Set([
-        "ProjectInitializationWorkflow",
-        "ReleaseWorkflow",
-        "EnvironmentRuntimeWorkflow",
-        "MigrationWorkflow",
-        "DeploymentWorkflow",
-        "ProjectDeletionWorkflow",
-        "SchemaRepairWorkflow",
-        "SourceDeliveryWorkflow",
-      ]);
-      const missing = [...expected].filter((service) => !services.has(service));
-      const unexpected = [...services].filter((service) => !expected.has(service));
-      if (missing.length > 0 || unexpected.length > 0) {
-        throw new Error(
-          `Restate service catalog mismatch: missing=${missing.join(",") || "none"} ` +
-          `unexpected=${unexpected.join(",") || "none"}`
-        );
-      }
-      console.log(
-        `Verified immutable Restate deployment ${deployment.id} with ${services.size} services`
-      );
-    ' "${restate_deployment_id}"
+  restate_deployment="$(kubectl get --raw \
+    "/api/v1/namespaces/juanie/services/juanie-restate:9070/proxy/deployments/${restate_deployment_id}")"
+  expected_services='[
+    "ProjectInitializationWorkflow",
+    "ReleaseWorkflow",
+    "EnvironmentRuntimeWorkflow",
+    "MigrationWorkflow",
+    "DeploymentWorkflow",
+    "ProjectDeletionWorkflow",
+    "SchemaRepairWorkflow",
+    "SourceDeliveryWorkflow"
+  ]'
+  actual_services="$(jq -c '[.services[]?.name] | sort' <<<"${restate_deployment}")"
+  expected_services="$(jq -c 'sort' <<<"${expected_services}")"
+  if [ "${actual_services}" != "${expected_services}" ]; then
+    echo "Restate service catalog mismatch: expected=${expected_services} actual=${actual_services}" >&2
+    exit 1
+  fi
+  service_count="$(jq 'length' <<<"${actual_services}")"
+  echo "Verified immutable Restate deployment ${restate_deployment_id} with ${service_count} services"
 
   for attempt in $(seq 1 24); do
     if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
