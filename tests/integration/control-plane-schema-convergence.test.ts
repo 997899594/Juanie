@@ -21,13 +21,17 @@ describe('control-plane schema convergence with PostgreSQL', () => {
       const migrationFiles = (await readdir('migrations'))
         .filter((fileName) => fileName.endsWith('.sql'))
         .sort();
-      expect(migrationFiles.at(-3)).toBe(
+      const repairStart = migrationFiles.indexOf(
         '20260721162900_attach_environment_schema_state_unique_constraint.sql'
       );
-      expect(migrationFiles.at(-2)).toBe(
-        '20260721163000_reconcile_release_migration_plan_schema.sql'
-      );
-      expect(migrationFiles.at(-1)).toBe('20260722040146_source_delivery_durability.sql');
+      if (repairStart === -1) {
+        throw new Error('Missing release-plan schema repair migration chain');
+      }
+      expect(migrationFiles.slice(repairStart, repairStart + 3)).toEqual([
+        '20260721162900_attach_environment_schema_state_unique_constraint.sql',
+        '20260721163000_reconcile_release_migration_plan_schema.sql',
+        '20260722040146_source_delivery_durability.sql',
+      ]);
 
       const scratch = await prepareAtlasDevDatabaseSession('postgresql');
       const sql = postgres(scratch.url, { max: 1 });
@@ -36,7 +40,7 @@ describe('control-plane schema convergence with PostgreSQL', () => {
         await runAtlasCommand(
           buildAtlasMigrateApplyArgs({
             databaseUrl: scratch.url,
-            migrationCount: migrationFiles.length - 3,
+            migrationCount: repairStart,
           })
         );
 
