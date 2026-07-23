@@ -23,6 +23,13 @@ describe('platform release planner', () => {
     expect(plan.operatorRequired).toBe(false);
   });
 
+  it('deploys a new immutable application delivery workflow revision', () => {
+    const plan = planPlatformRelease(['.github/workflows/application-delivery.yml'], []);
+
+    expect(plan.platformRequired).toBe(true);
+    expect(plan.operatorRequired).toBe(false);
+  });
+
   it('reconciles only the operator when its lock changes', () => {
     const plan = planPlatformRelease([restateOperatorLockPath], []);
 

@@ -509,12 +509,25 @@ jobs:
       cancel-in-progress: false
     environment: production
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       DEPLOY_CHART_DIR: /tmp/juanie-direct-deploy-${{ github.sha }}/deploy/k8s/charts/juanie
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Publish Immutable Delivery Workflow Ref
+        if: needs.plan-images.outputs.platform_required == 'true'
+        run: |
+          set -euo pipefail
+          tag="juanie-ci-${GITHUB_SHA}"
+          remote_sha="$(git ls-remote --tags origin "refs/tags/${tag}" | awk '{print $1}')"
+          if [ -n "${remote_sha}" ]; then
+            test "${remote_sha}" = "${GITHUB_SHA}"
+          else
+            git tag "${tag}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${tag}"
+          fi
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
         if: needs.plan-images.outputs.platform_required == 'true'

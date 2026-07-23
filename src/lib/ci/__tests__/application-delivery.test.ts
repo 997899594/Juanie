@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { generateKeyPairSync } from 'node:crypto';
-import { verifyApplicationDeliveryCapability } from '@/lib/ci/application-delivery';
+import {
+  dispatchApplicationDelivery,
+  getApplicationDeliveryWorkflowRef,
+  verifyApplicationDeliveryCapability,
+} from '@/lib/ci/application-delivery';
+
+const deployedRevision = '1111111111111111111111111111111111111111';
+const workflowRef = `juanie-ci-${deployedRevision}`;
 
 const managedEnvironment = [
   'JUANIE_PUBLIC_ORIGIN',
@@ -28,7 +35,7 @@ function configureApplicationDeliveryIdentity(): void {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   Reflect.set(process.env, 'JUANIE_PUBLIC_ORIGIN', 'https://juanie.art');
   Reflect.set(process.env, 'JUANIE_SOURCE_REPOSITORY', '997899594/Juanie');
-  Reflect.set(process.env, 'JUANIE_SOURCE_REVISION', 'main');
+  Reflect.set(process.env, 'JUANIE_SOURCE_REVISION', deployedRevision);
   Reflect.set(process.env, 'JUANIE_GITHUB_APP_ID', '12345');
   Reflect.deleteProperty(process.env, 'JUANIE_GITHUB_APP_INSTALLATION_ID');
   Reflect.set(
@@ -60,6 +67,9 @@ describe('platform-owned application delivery capability', () => {
             state: 'active',
           });
         }
+        if (url.endsWith(`/git/ref/tags/${workflowRef}`)) {
+          return Response.json({ object: { sha: deployedRevision } });
+        }
         return Response.json({ message: 'unexpected request' }, { status: 500 });
       }) as typeof fetch;
 
@@ -68,10 +78,60 @@ describe('platform-owned application delivery capability', () => {
         workflow: '.github/workflows/application-delivery.yml',
         state: 'active',
       });
-      expect(requests.map((request) => request.url).length).toBe(3);
+      expect(requests.map((request) => request.url).length).toBe(4);
     } finally {
       restoreEnvironment();
     }
+  });
+
+  it('dispatches the workflow at the immutable deployed revision', async () => {
+    try {
+      configureApplicationDeliveryIdentity();
+      Reflect.set(process.env, 'JUANIE_GITHUB_APP_INSTALLATION_ID', '77');
+      let dispatchBody: unknown;
+      globalThis.fetch = (async (input, init) => {
+        const url = String(input);
+        if (url.endsWith('/access_tokens')) {
+          return Response.json({ token: 'installation-token' });
+        }
+        if (url.endsWith('/dispatches')) {
+          dispatchBody = JSON.parse(String(init?.body));
+          return new Response(null, { status: 204 });
+        }
+        return Response.json({ message: 'unexpected request' }, { status: 500 });
+      }) as typeof fetch;
+
+      await dispatchApplicationDelivery({
+        provider: 'github',
+        repository: '997899594/nexusnote',
+        sourceRef: 'refs/heads/main',
+        sourceCommitSha: '2222222222222222222222222222222222222222',
+        beforeCommitSha: '1111111111111111111111111111111111111111',
+        deliveryId: 'delivery-1',
+      });
+
+      expect(dispatchBody).toEqual({
+        ref: workflowRef,
+        inputs: {
+          source_provider: 'github',
+          source_repository: '997899594/nexusnote',
+          source_ref: 'refs/heads/main',
+          source_sha: '2222222222222222222222222222222222222222',
+          before_sha: '1111111111111111111111111111111111111111',
+          delivery_id: 'delivery-1',
+          force_full_build: 'false',
+        },
+      });
+    } finally {
+      restoreEnvironment();
+    }
+  });
+
+  it('derives only immutable workflow refs', () => {
+    expect(getApplicationDeliveryWorkflowRef(deployedRevision)).toBe(workflowRef);
+    expect(() => getApplicationDeliveryWorkflowRef('main')).toThrow(
+      'Application delivery workflow revision must be an immutable commit SHA'
+    );
   });
 
   it('rejects a disabled workflow before a release can roll out', async () => {

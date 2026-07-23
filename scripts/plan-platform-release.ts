@@ -10,6 +10,7 @@ export interface PlatformReleasePlan {
 export const restateOperatorLockPath = 'deploy/k8s/restate-operator.lock.json';
 
 const platformDeploymentPrefixes = ['deploy/k8s/charts/juanie/'] as const;
+const platformDeploymentFiles = new Set(['.github/workflows/application-delivery.yml']);
 
 function normalizePaths(paths: string[]): string[] {
   return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].sort();
@@ -29,18 +30,20 @@ export function planPlatformRelease(
   }
 
   const normalizedPaths = normalizePaths(changedPaths);
-  const chartPaths = normalizedPaths.filter((path) =>
-    platformDeploymentPrefixes.some((prefix) => path.startsWith(prefix))
+  const platformPaths = normalizedPaths.filter(
+    (path) =>
+      platformDeploymentFiles.has(path) ||
+      platformDeploymentPrefixes.some((prefix) => path.startsWith(prefix))
   );
   const operatorRequired = normalizedPaths.includes(restateOperatorLockPath);
-  const platformRequired = imageTargets.length > 0 || chartPaths.length > 0;
+  const platformRequired = imageTargets.length > 0 || platformPaths.length > 0;
   const reasons: string[] = [];
 
   if (imageTargets.length > 0) {
     reasons.push(`component images changed: ${imageTargets.join(', ')}`);
   }
-  if (chartPaths.length > 0) {
-    reasons.push(`platform chart changed: ${chartPaths.join(', ')}`);
+  if (platformPaths.length > 0) {
+    reasons.push(`platform delivery inputs changed: ${platformPaths.join(', ')}`);
   }
   if (operatorRequired) {
     reasons.push('Restate Operator lock changed');

@@ -5,6 +5,7 @@ import type { GitProviderType } from '@/lib/db/schema';
 
 const GITHUB_API = 'https://api.github.com';
 const WORKFLOW_ID = 'application-delivery.yml';
+const WORKFLOW_REF_PREFIX = 'juanie-ci-';
 
 export interface ApplicationDeliveryInput {
   provider: GitProviderType;
@@ -25,6 +26,17 @@ interface GitHubWorkflowResponse {
   id: number;
   path: string;
   state: string;
+}
+
+interface GitHubRefResponse {
+  object?: { sha?: string };
+}
+
+export function getApplicationDeliveryWorkflowRef(revision: string): string {
+  if (!/^[a-f0-9]{40}$/u.test(revision)) {
+    throw new Error('Application delivery workflow revision must be an immutable commit SHA');
+  }
+  return `${WORKFLOW_REF_PREFIX}${revision}`;
 }
 
 function requiredPlatformSecret(name: string): string {
@@ -108,7 +120,7 @@ export async function dispatchApplicationDelivery(
   input: ApplicationDeliveryInput
 ): Promise<{ deliveryId: string }> {
   const runtime = getCiRuntimeDescriptor();
-  const workflowRef = process.env.JUANIE_DELIVERY_WORKFLOW_REF?.trim() || 'main';
+  const workflowRef = getApplicationDeliveryWorkflowRef(runtime.githubRevision);
   const deliveryId = input.deliveryId?.trim() || randomUUID();
   const token = await getPlatformInstallationToken(runtime.githubRepository);
 
@@ -153,6 +165,14 @@ export async function verifyApplicationDeliveryCapability(): Promise<{
     throw new Error(
       `GitHub returned an unexpected application delivery workflow: ${workflow.path}`
     );
+  }
+  const workflowRef = getApplicationDeliveryWorkflowRef(runtime.githubRevision);
+  const gitRef = await githubRequest<GitHubRefResponse>(
+    `/repos/${runtime.githubRepository}/git/ref/tags/${workflowRef}`,
+    token
+  );
+  if (gitRef.object?.sha?.toLowerCase() !== runtime.githubRevision.toLowerCase()) {
+    throw new Error(`GitHub workflow ref ${workflowRef} does not match the deployed revision`);
   }
   return {
     repository: runtime.githubRepository,
