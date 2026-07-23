@@ -18,15 +18,17 @@ import {
   buildAtlasMigrateApplyArgs,
   buildAtlasMigrateSetArgs,
   getAppliedAtlasVersions,
-  getAtlasDeclaredVersions,
   hasAtlasUserTables,
   isAtlasDatabaseTarget,
-  isAtlasTargetVersionApplied,
   planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasBoundedMigrationCount,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
+import {
+  getAtlasDeclaredVersions,
+  isAtlasTargetVersionApplied,
+} from '@/lib/migrations/atlas-versioning';
 import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';

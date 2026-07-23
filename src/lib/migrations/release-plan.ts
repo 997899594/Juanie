@@ -3,11 +3,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns, releaseMigrationPlans, releases } from '@/lib/db/schema';
 import { assertExecutionFence, buildMigrationExecutionKey } from '@/lib/execution/ownership';
-import {
-  extractAtlasMigrationVersion,
-  getAppliedAtlasVersions,
-  isAtlasDatabaseTarget,
-} from '@/lib/migrations/atlas';
+import { getAppliedAtlasVersions, isAtlasDatabaseTarget } from '@/lib/migrations/atlas';
+import { extractAtlasMigrationVersion } from '@/lib/migrations/atlas-versioning';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { inspectResolvedMigrationSpecPendingState } from '@/lib/migrations/file-preview';
 import type {

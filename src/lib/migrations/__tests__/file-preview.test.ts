@@ -41,11 +41,9 @@ mock.module('@/lib/migrations/atlas', () => ({
     hasChanges: true,
     diffSql: 'ALTER TABLE notes ADD COLUMN title text;',
   }),
-  extractAtlasMigrationVersion: (fileName: string) => fileName.match(/^(\d+)/)?.[1] ?? null,
   getAppliedAtlasVersions: async () => [],
   isAtlasDatabaseTarget: (database: { type: string }) =>
     database.type === 'postgresql' || database.type === 'mysql',
-  selectAtlasMigrationsThroughTarget: <T extends { name: string }>(files: T[]) => files,
 }));
 
 describe('migration file preview pending state', () => {

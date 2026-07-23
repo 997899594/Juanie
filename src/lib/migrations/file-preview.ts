@@ -4,11 +4,13 @@ import { db } from '@/lib/db';
 import { databaseMigrations, migrationRuns } from '@/lib/db/schema';
 import {
   diffDatabaseSchemaAgainstDesiredSchema,
-  extractAtlasMigrationVersion,
   getAppliedAtlasVersions,
   isAtlasDatabaseTarget,
-  selectAtlasMigrationsThroughTarget,
 } from '@/lib/migrations/atlas';
+import {
+  extractAtlasMigrationVersion,
+  selectAtlasMigrationsThroughTarget,
+} from '@/lib/migrations/atlas-versioning';
 import { exportDesiredSchemaFromRepository } from '@/lib/migrations/desired-schema';
 import {
   fetchMigrationFilesFromRepoPath,

@@ -9,11 +9,11 @@ import {
   diffDatabaseSchemaAgainstDesiredSchema,
   diffDatabaseSchemaAgainstMigrationDir,
   getAppliedAtlasVersions,
-  getAtlasDeclaredVersions,
   hasAtlasUserTables,
   isAtlasDatabaseTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
+import { getAtlasDeclaredVersions } from '@/lib/migrations/atlas-versioning';
 import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';

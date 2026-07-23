@@ -4,11 +4,11 @@ import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
-  getAtlasDeclaredVersions,
   isAtlasDatabaseTarget,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
+import { getAtlasDeclaredVersions } from '@/lib/migrations/atlas-versioning';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import {

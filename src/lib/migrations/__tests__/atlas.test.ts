@@ -2,13 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildAtlasMigrateApplyArgs,
   buildAtlasMigrateSetArgs,
-  getAtlasDeclaredVersions,
   getAtlasSchemaDiffExcludePatterns,
   getAtlasSchemaDiffScopeArgs,
   getPostgresSchemaNamesFromDatabaseUrl,
-  isAtlasTargetVersionApplied,
   resolveAtlasBoundedMigrationCount,
-  selectAtlasMigrationsThroughTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
 import {
@@ -17,6 +14,11 @@ import {
   getDefaultAtlasDevUrl,
   resolveAtlasDevUrlOverrideFromEnv,
 } from '@/lib/migrations/atlas-dev-database';
+import {
+  getAtlasDeclaredVersions,
+  isAtlasTargetVersionApplied,
+  selectAtlasMigrationsThroughTarget,
+} from '@/lib/migrations/atlas-versioning';
 
 describe('atlas migration helpers', () => {
   it('passes the planned migration count as the community apply positional argument', () => {
