@@ -1,0 +1,57 @@
+name: Promote Control-Plane Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      epoch:
+        description: Explicit control-plane contract epoch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: control-plane-contract-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Validate Promotion Epoch
+        env:
+          CONTRACT_EPOCH: ${{ inputs.epoch }}
+        run: |
+          set -euo pipefail
+          [[ "${CONTRACT_EPOCH}" =~ ^[0-9]{8}$ ]]
+
+      - name: Upload Contract Promoter
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: deploy/k8s/charts/juanie,deploy/k8s/scripts/promote-control-plane-contract.sh
+          target: /tmp/juanie-contract-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Promote Contract
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          CONTRACT_EPOCH: ${{ inputs.epoch }}
+          DEPLOY_ROOT: /tmp/juanie-contract-${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 25m
+          envs: CONTRACT_EPOCH,DEPLOY_ROOT
+          script: |
+            set -euo pipefail
+            trap 'rm -rf "${DEPLOY_ROOT}"' EXIT
+            bash "${DEPLOY_ROOT}/deploy/k8s/scripts/promote-control-plane-contract.sh" \
+              "${CONTRACT_EPOCH}" \
+              "${DEPLOY_ROOT}/deploy/k8s/charts/juanie"

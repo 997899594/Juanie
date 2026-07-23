@@ -50,7 +50,8 @@ describe('control-plane expand and contract migrations', () => {
     const schemaJob = await readFile(schemaJobPath, 'utf8');
     const source = await readFile(atlasRunnerPath, 'utf8');
 
-    expect(schemaJob).not.toContain('"phase" "contract"');
+    expect(schemaJob).toContain('.Values.schemaSync.contractPromotionEpoch');
+    expect(schemaJob).toContain('CONTROL_PLANE_CONTRACT_PROMOTION');
     expect(source).toContain('Contract migration requires explicit promotion epoch');
   });
 

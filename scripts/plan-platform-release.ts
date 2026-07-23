@@ -13,6 +13,7 @@ const platformDeploymentPrefixes = ['deploy/k8s/charts/juanie/', 'deploy/k8s/scr
 const platformDeploymentFiles = new Set([
   '.github/workflows/application-delivery.yml',
   '.github/workflows/ci.yml',
+  '.github/workflows/control-plane-contract.yml',
   'scripts/plan-platform-images.ts',
   'scripts/plan-platform-release.ts',
 ]);

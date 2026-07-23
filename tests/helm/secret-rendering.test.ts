@@ -75,7 +75,7 @@ function collectContainerEnvironmentNames(resource: KubernetesResource): Set<str
 }
 
 describe('Helm runtime Secret rendering', () => {
-  it('uses the chart-managed Secret plus the isolated legacy migration key', () => {
+  it('uses only the chart-managed Secret for schema execution', () => {
     const resources = renderChart([
       '--set',
       'secret.existingSecret=',
@@ -83,12 +83,10 @@ describe('Helm runtime Secret rendering', () => {
       'schemaSync.enabled=true',
     ]);
     findResource(resources, 'Secret', 'juanie-secret');
-    expect(new Set(collectSecretReferences(resources))).toEqual(
-      new Set(['juanie-secret', 'juanie-master-key'])
-    );
+    expect(new Set(collectSecretReferences(resources))).toEqual(new Set(['juanie-secret']));
     expect(
       collectContainerEnvironmentNames(findResource(resources, 'Job', 'juanie-schema-expand'))
-    ).toContain('ENCRYPTION_MASTER_KEY_V0');
+    ).not.toContain('ENCRYPTION_MASTER_KEY_V0');
     for (const name of [
       'juanie-web',
       'juanie-worker',
@@ -99,6 +97,34 @@ describe('Helm runtime Secret rendering', () => {
         collectContainerEnvironmentNames(findResource(resources, 'Deployment', name))
       ).not.toContain('ENCRYPTION_MASTER_KEY_V0');
     }
+  });
+
+  it('renders contract promotion only for an explicit epoch', () => {
+    const defaultResources = renderChart([]);
+    expect(
+      defaultResources.some((resource) =>
+        resource.metadata?.name?.startsWith('juanie-schema-contract')
+      )
+    ).toBe(false);
+
+    const resources = renderChart(['--set-string', 'schemaSync.contractPromotionEpoch=20260723']);
+    const serviceAccount = findResource(resources, 'ServiceAccount', 'juanie-schema-runner');
+    const contractJob = findResource(resources, 'Job', 'juanie-schema-contract-20260723');
+    const podSpec = (
+      contractJob.spec?.template as {
+        spec?: { serviceAccountName?: string; automountServiceAccountToken?: boolean };
+      }
+    )?.spec;
+
+    expect(serviceAccount).toBeDefined();
+    expect(podSpec?.serviceAccountName).toBe('juanie-schema-runner');
+    expect(podSpec?.automountServiceAccountToken).toBe(false);
+    expect(collectContainerEnvironmentNames(contractJob)).toContain(
+      'CONTROL_PLANE_CONTRACT_PROMOTION'
+    );
+    expect(JSON.stringify(contractJob)).toContain('control-plane-contract');
+    expect(JSON.stringify(contractJob)).toContain('20260723');
+    expect(JSON.stringify(contractJob)).not.toContain('helm.sh/hook');
   });
 
   it('uses the Operator as the only Restate handler owner', () => {

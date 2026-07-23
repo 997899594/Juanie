@@ -3,15 +3,20 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $root.Chart.Name }}-schema-{{ .phase }}
+  name: {{ $root.Chart.Name }}-schema-{{ .nameSuffix }}
   namespace: {{ $root.Values.namespace }}
   labels:
     app.kubernetes.io/name: {{ $root.Chart.Name }}
     app.kubernetes.io/component: schema-{{ .phase }}
+    {{- with .promotionEpoch }}
+    juanie.art/schema-contract-epoch: {{ . | quote }}
+    {{- end }}
+  {{- with .hook }}
   annotations:
-    helm.sh/hook: {{ .hook }}
-    helm.sh/hook-weight: {{ .weight | quote }}
+    helm.sh/hook: {{ . }}
+    helm.sh/hook-weight: {{ $.weight | quote }}
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- end }}
 spec:
   backoffLimit: {{ $root.Values.schemaSync.backoffLimit }}
   ttlSecondsAfterFinished: {{ $root.Values.schemaSync.ttlSecondsAfterFinished }}
@@ -22,7 +27,7 @@ spec:
         app.kubernetes.io/component: schema-{{ .phase }}
     spec:
       restartPolicy: Never
-      serviceAccountName: default
+      serviceAccountName: {{ $root.Chart.Name }}-schema-runner
       automountServiceAccountToken: false
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
@@ -52,6 +57,10 @@ spec:
               value: /tmp
             - name: XDG_CACHE_HOME
               value: /tmp/.cache
+            {{- with .promotionEpoch }}
+            - name: CONTROL_PLANE_CONTRACT_PROMOTION
+              value: {{ . | quote }}
+            {{- end }}
             {{- include "juanie.secretEnv" (dict "root" $root "keys" $root.Values.secret.componentKeys.schemaRunner) | nindent 12 }}
           envFrom:
             - configMapRef:
@@ -70,5 +79,13 @@ spec:
 {{- end }}
 
 {{- if .Values.schemaSync.enabled }}
-{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "expand" "hook" "pre-install,pre-upgrade" "weight" "-10") }}
+{{ include "juanie.schemaSyncJob" (dict "root" . "phase" "expand" "nameSuffix" "expand" "hook" "pre-install,pre-upgrade" "weight" "-10") }}
+{{- end }}
+
+{{- with .Values.schemaSync.contractPromotionEpoch }}
+{{- if not (regexMatch "^[0-9]{8}$" .) }}
+{{- fail "schemaSync.contractPromotionEpoch must be an 8-digit epoch" }}
+{{- end }}
+---
+{{ include "juanie.schemaSyncJob" (dict "root" $ "phase" "contract" "nameSuffix" (printf "contract-%s" .) "promotionEpoch" .) }}
 {{- end }}

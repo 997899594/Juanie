@@ -60,6 +60,7 @@ scheduler:
 
 schemaSync:
   enabled: false
+  contractPromotionEpoch: ""
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
 
