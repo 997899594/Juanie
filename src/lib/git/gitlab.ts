@@ -23,6 +23,11 @@ import type {
   PushOptions,
   SyncBranchRefOptions,
 } from './index';
+import {
+  type RepositoryArchive,
+  repositoryArchiveTransportError,
+  validateRepositoryArchiveResponse,
+} from './repository-archive';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'message' in error) {
@@ -682,35 +687,34 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array> {
-    const response = await this.openRepositoryArchive(accessToken, repoFullName, ref);
-    return new Uint8Array(await response.arrayBuffer());
+    const archive = await this.openRepositoryArchive(accessToken, repoFullName, ref);
+    return new Uint8Array(await new Response(archive.body).arrayBuffer());
   }
 
   async openRepositoryArchive(
     accessToken: string,
     repoFullName: string,
     ref: string
-  ): Promise<Response> {
-    const response = await fetch(
-      this.buildApiUrl(
-        `/projects/${this.encodeProjectId(repoFullName)}/repository/archive.tar.gz`,
+  ): Promise<RepositoryArchive> {
+    try {
+      const response = await fetch(
+        this.buildApiUrl(
+          `/projects/${this.encodeProjectId(repoFullName)}/repository/archive.tar.gz`,
+          {
+            sha: normalizeArchiveRef(ref),
+          }
+        ),
         {
-          sha: normalizeArchiveRef(ref),
+          headers: {
+            Accept: 'application/octet-stream',
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
-      ),
-      {
-        headers: {
-          Accept: 'application/octet-stream',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-    if (!response.ok) {
-      throw Object.assign(new Error(`GitLab archive request failed with ${response.status}`), {
-        status: response.status,
-      });
+      );
+      return validateRepositoryArchiveResponse(this.type, response);
+    } catch (error) {
+      throw repositoryArchiveTransportError(this.type, error);
     }
-    return response;
   }
 
   private mapRepository(data: ProjectSchema): GitRepository {

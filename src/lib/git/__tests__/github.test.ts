@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { GitHubProvider } from '@/lib/git/github';
+import { RepositoryArchiveError } from '@/lib/git/repository-archive';
 
 function createProvider(): GitHubProvider {
   return new GitHubProvider({
@@ -33,12 +34,22 @@ describe('GitHubProvider source control plane', () => {
   });
 
   it('downloads an immutable repository archive through the provider API', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
     try {
-      globalThis.fetch = (async (input) => {
-        expect(String(input)).toBe(
-          `https://api.github.com/repos/acme/demo/tarball/${'a'.repeat(40)}`
-        );
-        return new Response('archive');
+      globalThis.fetch = (async (input, init) => {
+        const url = String(input);
+        requests.push({ url, init });
+        if (url.startsWith('https://api.github.com/')) {
+          return new Response(null, {
+            status: 302,
+            headers: {
+              location: `https://codeload.github.com/acme/demo/legacy.tar.gz/${'a'.repeat(40)}`,
+            },
+          });
+        }
+        return new Response('archive', {
+          headers: { 'content-type': 'application/x-gzip' },
+        });
       }) as typeof fetch;
 
       const archive = await createProvider().downloadRepositoryArchive(
@@ -47,6 +58,37 @@ describe('GitHubProvider source control plane', () => {
         'a'.repeat(40)
       );
       expect(new TextDecoder().decode(archive)).toBe('archive');
+      expect(requests[0]?.url).toBe(
+        `https://api.github.com/repos/acme/demo/tarball/${'a'.repeat(40)}`
+      );
+      expect(new Headers(requests[0]?.init?.headers).get('authorization')).toBe('Bearer token');
+      expect(requests[1]?.url.startsWith('https://codeload.github.com/')).toBe(true);
+      expect(new Headers(requests[1]?.init?.headers).has('authorization')).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('preserves an upstream archive rejection as a typed provider error', async () => {
+    try {
+      globalThis.fetch = (async () =>
+        Response.json(
+          { message: 'Resource not accessible by integration' },
+          { status: 403 }
+        )) as typeof fetch;
+
+      let caught: unknown;
+      try {
+        await createProvider().openRepositoryArchive('token', 'acme/demo', 'a'.repeat(40));
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught instanceof RepositoryArchiveError).toBe(true);
+      if (!(caught instanceof RepositoryArchiveError)) throw caught;
+      expect(caught.code).toBe('upstream_rejected');
+      expect(caught.provider).toBe('github');
+      expect(caught.upstreamStatus).toBe(403);
     } finally {
       globalThis.fetch = originalFetch;
     }

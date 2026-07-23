@@ -52,7 +52,7 @@ env:
   JUANIE_TURBO_CACHE_DIR: /tmp/juanie-turbo-cache
   JUANIE_BUILD_RUN_SHA256: b9eb15815d7aa48cbdeb3c1cd220eebbb0b593aed8d86491c210a68adb269f04
   JUANIE_DELIVERY_SHA256: 7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154
-  JUANIE_IDENTITY_SHA256: 0a495c89aa07c6e7a6e56645199c4d725ca24c515fddac1d6f52efff9a0657e3
+  JUANIE_IDENTITY_SHA256: 41e570b4dfb648595a3c1c642591bd6f50ba073374e08d7edebb34d889fd293d
 
 jobs:
   plan:
@@ -89,28 +89,14 @@ jobs:
           set -euo pipefail
           source "$JUANIE_RUNTIME_DIR/workload-identity.sh"
           token="$(acquire_juanie_ci_token)"
-          curl --fail --silent --show-error --get \
-            "${JUANIE_BASE_URL}/api/ci/source/archive" \
-            -H "Authorization: Bearer ${token}" \
-            --data-urlencode "repository=${JUANIE_REPOSITORY}" \
-            --data-urlencode "provider=${JUANIE_PROVIDER}" \
-            --data-urlencode "ref=${JUANIE_RELEASE_REF}" \
-            --data-urlencode "sha=${JUANIE_SOURCE_SHA}" \
-            --data-urlencode "externalRunId=${JUANIE_EXTERNAL_RUN_ID}" \
-            --output "$RUNNER_TEMP/source-head.tar.gz"
+          download_juanie_source_archive "$token" "$RUNNER_TEMP/source-head.tar.gz"
 
           find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
           if [ "$(jq -r '.policy.mode' "$JUANIE_BUILD_STATE_DIR/analysis-policy.json")" = 'turbo' ]; then
-            if curl --fail --silent --show-error --get \
-              "${JUANIE_BASE_URL}/api/ci/source/archive" \
-              -H "Authorization: Bearer ${token}" \
-              --data-urlencode "repository=${JUANIE_REPOSITORY}" \
-              --data-urlencode "provider=${JUANIE_PROVIDER}" \
-              --data-urlencode "ref=${JUANIE_RELEASE_REF}" \
-              --data-urlencode "sha=${JUANIE_SOURCE_SHA}" \
-              --data-urlencode "baseSha=${JUANIE_BEFORE_SHA}" \
-              --data-urlencode "externalRunId=${JUANIE_EXTERNAL_RUN_ID}" \
-              --output "$RUNNER_TEMP/source-base.tar.gz"; then
+            if download_juanie_source_archive \
+              "$token" \
+              "$RUNNER_TEMP/source-base.tar.gz" \
+              "$JUANIE_BEFORE_SHA"; then
               tar -xzf "$RUNNER_TEMP/source-base.tar.gz" \
                 --strip-components=1 -C "$GITHUB_WORKSPACE"
               git init --quiet

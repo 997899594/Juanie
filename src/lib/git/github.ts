@@ -16,6 +16,12 @@ import type {
   PushOptions,
   SyncBranchRefOptions,
 } from './index';
+import {
+  type RepositoryArchive,
+  RepositoryArchiveError,
+  repositoryArchiveTransportError,
+  validateRepositoryArchiveResponse,
+} from './repository-archive';
 
 const gitHubProviderLogger = logger.child({ component: 'git-provider-github' });
 
@@ -810,33 +816,62 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array> {
-    const response = await this.openRepositoryArchive(accessToken, repoFullName, ref);
-    return new Uint8Array(await response.arrayBuffer());
+    const archive = await this.openRepositoryArchive(accessToken, repoFullName, ref);
+    return new Uint8Array(await new Response(archive.body).arrayBuffer());
   }
 
   async openRepositoryArchive(
     accessToken: string,
     repoFullName: string,
     ref: string
-  ): Promise<Response> {
+  ): Promise<RepositoryArchive> {
     const { owner, repo } = this.parseRepoFullName(repoFullName);
-    const response = await fetch(
-      this.buildApiUrl(
-        `/repos/${owner}/${repo}/tarball/${encodeURIComponent(normalizeArchiveRef(ref))}`
-      ),
-      {
+    const archiveUrl = this.buildApiUrl(
+      `/repos/${owner}/${repo}/tarball/${encodeURIComponent(normalizeArchiveRef(ref))}`
+    );
+
+    try {
+      const apiResponse = await fetch(archiveUrl, {
+        redirect: 'manual',
         headers: {
           Accept: 'application/octet-stream',
           Authorization: `Bearer ${accessToken}`,
+          'X-GitHub-Api-Version': '2022-11-28',
         },
-      }
-    );
-    if (!response.ok) {
-      throw Object.assign(new Error(`GitHub archive request failed with ${response.status}`), {
-        status: response.status,
       });
+
+      if (apiResponse.status < 300 || apiResponse.status >= 400) {
+        return validateRepositoryArchiveResponse('github', apiResponse);
+      }
+
+      const location = apiResponse.headers.get('location');
+      if (!location) {
+        throw new RepositoryArchiveError(
+          'GitHub archive redirect did not include a location',
+          'github',
+          'invalid_redirect',
+          apiResponse.status
+        );
+      }
+
+      const downloadUrl = new URL(location, archiveUrl);
+      if (downloadUrl.protocol !== 'https:' || downloadUrl.hostname !== 'codeload.github.com') {
+        throw new RepositoryArchiveError(
+          `GitHub archive redirect targeted an untrusted host: ${downloadUrl.hostname}`,
+          'github',
+          'invalid_redirect',
+          apiResponse.status
+        );
+      }
+
+      const downloadResponse = await fetch(downloadUrl, {
+        redirect: 'error',
+        headers: { Accept: 'application/octet-stream' },
+      });
+      return validateRepositoryArchiveResponse('github', downloadResponse);
+    } catch (error) {
+      throw repositoryArchiveTransportError('github', error);
     }
-    return response;
   }
 
   private async getDirectoryContents(

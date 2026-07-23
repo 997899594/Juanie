@@ -17,6 +17,7 @@ import type {
   SyncBranchRefOptions,
 } from '@/lib/git';
 import { createGitProviderForSession } from '@/lib/git';
+import type { RepositoryArchive } from '@/lib/git/repository-archive';
 import {
   type IntegrationError,
   type IntegrationErrorCode,
@@ -318,7 +319,7 @@ export const gateway = {
     session: IntegrationSession,
     repoFullName: string,
     ref: string
-  ): Promise<Response> {
+  ): Promise<RepositoryArchive> {
     const provider = resolveProvider(session);
     return provider.openRepositoryArchive(session.accessToken, repoFullName, ref);
   },

@@ -1,4 +1,5 @@
 import type { GitProviderType } from '@/lib/db/schema';
+import type { RepositoryArchive } from './repository-archive';
 
 export interface GitUser {
   id: string;
@@ -210,7 +211,11 @@ export interface GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<Uint8Array>;
-  openRepositoryArchive(accessToken: string, repoFullName: string, ref: string): Promise<Response>;
+  openRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<RepositoryArchive>;
 }
 
 export function createGitProvider(config: GitProviderConfig): GitProvider {

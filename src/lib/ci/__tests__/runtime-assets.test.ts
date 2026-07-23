@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { parse } from 'yaml';
 import {
   ciRuntimeAssetDigests,
@@ -54,9 +56,77 @@ describe('versioned CI runtime assets', () => {
     );
     expect(workflow).not.toContain('jq -cn +');
     expect(workflow).toContain('build-run.sh" prepare');
-    expect(workflow).toContain('baseSha=$' + '{JUANIE_BEFORE_SHA}');
+    expect(workflow).toContain('download_juanie_source_archive');
+    expect(workflow).toContain('"$JUANIE_BEFORE_SHA"');
+    expect(await readCiRuntimeAsset('workload-identity.sh')).toContain(
+      '--data-urlencode "baseSha=$' + '{base_sha}"'
+    );
+    expect(workflow).not.toContain('curl --fail --silent --show-error --get');
     expect(workflow).toContain('Remove synthetic source history');
     expect(workflow).toContain('Restore service-scoped Turbo cache');
+  });
+
+  it('atomically downloads and validates a complete source archive', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'juanie-source-archive-'));
+    const fixture = join(directory, 'fixture.tar.gz');
+    const output = join(directory, 'source.tar.gz');
+    await writeFile(fixture, gzipSync('immutable source'));
+
+    try {
+      const runtime = join(
+        process.cwd(),
+        'templates',
+        'ci',
+        'runtime',
+        'v1',
+        'workload-identity.sh'
+      );
+      const child = spawn(
+        'bash',
+        [
+          '-c',
+          `
+            source "$1"
+            curl() {
+              local output_file=''
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --output) output_file="$2"; shift 2 ;;
+                  *) shift ;;
+                esac
+              done
+              cp "$JUANIE_ARCHIVE_FIXTURE" "$output_file"
+              printf '%s' '200'
+            }
+            download_juanie_source_archive token "$JUANIE_ARCHIVE_OUTPUT"
+          `,
+          'runtime-archive-test',
+          runtime,
+        ],
+        {
+          env: {
+            ...process.env,
+            JUANIE_ARCHIVE_FIXTURE: fixture,
+            JUANIE_ARCHIVE_OUTPUT: output,
+            JUANIE_EXTERNAL_RUN_ID: 'delivery-1',
+            JUANIE_PROVIDER: 'github',
+            JUANIE_RELEASE_REF: 'refs/heads/main',
+            JUANIE_REPOSITORY: 'acme/demo',
+            JUANIE_SOURCE_SHA: 'a'.repeat(40),
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }
+      );
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', resolve);
+      });
+
+      expect(exitCode).toBe(0);
+      expect(await readFile(output)).toEqual(await readFile(fixture));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('prints structured Juanie API failures from the managed shell runtime', async () => {

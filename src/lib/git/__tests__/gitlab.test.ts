@@ -18,7 +18,9 @@ describe('GitLabProvider source control plane', () => {
     try {
       globalThis.fetch = (async (input) => {
         expect(String(input)).toContain(`/repository/archive.tar.gz?sha=${'a'.repeat(40)}`);
-        return new Response('archive');
+        return new Response('archive', {
+          headers: { 'content-type': 'application/octet-stream' },
+        });
       }) as typeof fetch;
       const archive = await createProvider().downloadRepositoryArchive(
         'token',

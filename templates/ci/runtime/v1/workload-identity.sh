@@ -78,6 +78,78 @@ request_juanie_json() {
   rm -f "$response_file"
 }
 
+request_juanie_file() {
+  local method="$1"
+  local url="$2"
+  local token="$3"
+  local output_file="$4"
+  shift 4
+
+  local response_file
+  local http_status
+  local curl_args=(
+    --silent
+    --show-error
+    --request "$method"
+    --header "Authorization: Bearer ${token}"
+    --output
+  )
+
+  mkdir -p "$(dirname "$output_file")"
+  response_file="$(mktemp "${output_file}.download.XXXXXX")"
+  curl_args+=("$response_file" --write-out '%{http_code}')
+
+  if ! http_status="$(curl "${curl_args[@]}" "$@" "$url")"; then
+    [ ! -s "$response_file" ] || head -c 2000 "$response_file" >&2
+    rm -f "$response_file"
+    return 1
+  fi
+
+  if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    printf 'Juanie API %s %s returned HTTP %s\n' "$method" "$url" "$http_status" >&2
+    if jq -e . "$response_file" >/dev/null 2>&1; then
+      jq -c . "$response_file" >&2
+    else
+      head -c 2000 "$response_file" >&2
+    fi
+    rm -f "$response_file"
+    return 22
+  fi
+
+  mv "$response_file" "$output_file"
+}
+
+download_juanie_source_archive() {
+  local token="$1"
+  local output_file="$2"
+  local base_sha="${3:-}"
+  local request_args=(
+    --get
+    --data-urlencode "repository=${JUANIE_REPOSITORY}"
+    --data-urlencode "provider=${JUANIE_PROVIDER}"
+    --data-urlencode "ref=${JUANIE_RELEASE_REF}"
+    --data-urlencode "sha=${JUANIE_SOURCE_SHA}"
+    --data-urlencode "externalRunId=${JUANIE_EXTERNAL_RUN_ID}"
+  )
+
+  if [ -n "$base_sha" ]; then
+    request_args+=(--data-urlencode "baseSha=${base_sha}")
+  fi
+
+  request_juanie_file \
+    GET \
+    "${juanie_base_url}/api/ci/source/archive" \
+    "$token" \
+    "$output_file" \
+    "${request_args[@]}" || return $?
+
+  if ! gzip -t "$output_file"; then
+    rm -f "$output_file"
+    echo 'Juanie source archive failed gzip integrity validation' >&2
+    return 1
+  fi
+}
+
 acquire_juanie_ci_token() {
   require_juanie_identity_env JUANIE_REPOSITORY
   require_juanie_identity_env JUANIE_PROVIDER
