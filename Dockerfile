@@ -151,7 +151,14 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 FROM node-toolchain AS web
 WORKDIR /app
 
-RUN /usr/local/bin/node --version
+RUN /usr/local/bin/node --version \
+  && rm -rf /usr/local/lib/node_modules \
+  && rm -f \
+    /usr/local/bin/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/yarn \
+    /usr/local/bin/yarnpkg
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

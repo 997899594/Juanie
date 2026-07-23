@@ -473,9 +473,18 @@ jobs:
           done
 
           docker exec "${container}" /usr/local/bin/node -e "\
+            const { existsSync } = require('node:fs'); \
             require.resolve('next/package.json'); \
             require.resolve('@kubernetes/client-node/package.json'); \
             require.resolve('ws/package.json'); \
+            for (const path of [ \
+              '/usr/local/lib/node_modules', \
+              '/usr/local/bin/corepack', \
+              '/usr/local/bin/npm', \
+              '/usr/local/bin/npx', \
+            ]) { \
+              if (existsSync(path)) throw new Error('unexpected web runtime toolchain: ' + path); \
+            } \
             console.log('web image runtime smoke ok');"
 
       - name: Smoke Test Schema Runner Toolchain
