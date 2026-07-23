@@ -34,6 +34,50 @@ acquire_ci_oidc_token() {
   esac
 }
 
+request_juanie_json() {
+  local method="$1"
+  local url="$2"
+  local token="${3:-}"
+  local payload="${4:-}"
+  local response_file
+  local http_status
+  local curl_args=(
+    --silent
+    --show-error
+    --request "$method"
+    --header 'Content-Type: application/json'
+  )
+
+  response_file="$(mktemp)"
+  curl_args+=(--output "$response_file" --write-out '%{http_code}')
+  if [ -n "$token" ]; then
+    curl_args+=(--header "Authorization: Bearer ${token}")
+  fi
+  if [ -n "$payload" ]; then
+    curl_args+=(--data-binary "$payload")
+  fi
+
+  if ! http_status="$(curl "${curl_args[@]}" "$url")"; then
+    [ ! -s "$response_file" ] || cat "$response_file" >&2
+    rm -f "$response_file"
+    return 1
+  fi
+
+  if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+    printf 'Juanie API %s %s returned HTTP %s\n' "$method" "$url" "$http_status" >&2
+    if jq -e . "$response_file" >/dev/null 2>&1; then
+      jq -c . "$response_file" >&2
+    else
+      cat "$response_file" >&2
+    fi
+    rm -f "$response_file"
+    return 22
+  fi
+
+  cat "$response_file"
+  rm -f "$response_file"
+}
+
 acquire_juanie_ci_token() {
   require_juanie_identity_env JUANIE_REPOSITORY
   require_juanie_identity_env JUANIE_PROVIDER
@@ -63,9 +107,7 @@ acquire_juanie_ci_token() {
       }'
   )"
 
-  printf '%s' "$payload" | curl -fsSL -X POST "${juanie_base_url}/api/auth/ci/exchange" \
-    -H 'Content-Type: application/json' \
-    --data-binary @- |
+  request_juanie_json POST "${juanie_base_url}/api/auth/ci/exchange" '' "$payload" |
     jq -er '.token'
 }
 
@@ -75,16 +117,5 @@ juanie_api_json() {
   local payload="${3:-}"
   local token
   token="$(acquire_juanie_ci_token)"
-
-  if [ -n "$payload" ]; then
-    curl -fsSL -X "$method" "${juanie_base_url}${path}" \
-      -H 'Content-Type: application/json' \
-      -H "Authorization: Bearer ${token}" \
-      -d "$payload"
-    return
-  fi
-
-  curl -fsSL -X "$method" "${juanie_base_url}${path}" \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer ${token}"
+  request_juanie_json "$method" "${juanie_base_url}${path}" "$token" "$payload"
 }

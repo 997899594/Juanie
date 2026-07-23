@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -22,6 +23,9 @@ describe('versioned CI runtime assets', () => {
     expect(await readCiRuntimeAsset('build-run.sh')).toContain('JUANIE_BUILD_STATE_DIR');
     expect(await readCiRuntimeAsset('build-run.sh')).toContain('query affected');
     expect(await readCiRuntimeAsset('build-run.sh')).toContain('--target juanie-turbo-cache');
+    expect(await readCiRuntimeAsset('workload-identity.sh')).toContain(
+      'Juanie API %s %s returned HTTP %s'
+    );
 
     for (const asset of ciRuntimeAssetNames) {
       const content = await readCiRuntimeAsset(asset);
@@ -53,6 +57,48 @@ describe('versioned CI runtime assets', () => {
     expect(workflow).toContain('baseSha=$' + '{JUANIE_BEFORE_SHA}');
     expect(workflow).toContain('Remove synthetic source history');
     expect(workflow).toContain('Restore service-scoped Turbo cache');
+  });
+
+  it('prints structured Juanie API failures from the managed shell runtime', async () => {
+    const runtime = join(process.cwd(), 'templates', 'ci', 'runtime', 'v1', 'workload-identity.sh');
+    const child = spawn(
+      'bash',
+      [
+        '-c',
+        `
+          source "$1"
+          curl() {
+            local output_file=''
+            while [ "$#" -gt 0 ]; do
+              case "$1" in
+                --output) output_file="$2"; shift 2 ;;
+                *) shift ;;
+              esac
+            done
+            printf '%s' '{"error":"Invalid build analysis request","details":["source.target"]}' > "$output_file"
+            printf '%s' '400'
+          }
+          request_juanie_json POST https://juanie.example.test/api/build-runs/analysis '' '{}'
+        `,
+        'runtime-error-test',
+        runtime,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', resolve);
+    });
+
+    expect(exitCode).toBe(22);
+    expect(stderr).toContain('returned HTTP 400');
+    expect(stderr).toContain('Invalid build analysis request');
+    expect(stderr).toContain('source.target');
   });
 
   it('accepts only a normalized control-plane origin', () => {

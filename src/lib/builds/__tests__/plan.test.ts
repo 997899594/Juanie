@@ -253,6 +253,36 @@ describe('build plan', () => {
     expect(selected.services.map((service) => service.name)).toEqual(['web', 'worker']);
   });
 
+  it('produces an empty plan for an empty non-monorepo commit', () => {
+    const config = {
+      services: [
+        {
+          name: 'web',
+          type: 'web',
+          run: { command: 'node server.js', port: 3000 },
+        },
+        {
+          name: 'worker',
+          type: 'worker',
+          run: { command: 'node worker.js' },
+        },
+      ],
+    } satisfies Pick<JuanieConfig, 'services'>;
+
+    const plan = createBuildPlan({
+      config,
+      repository: 'acme/app',
+      ref: 'refs/heads/main',
+      sha: 'abc123',
+      ...configLineage,
+      changes: { changedFiles: [] },
+    });
+
+    expect(plan.units).toEqual([]);
+    expect(plan.groups).toEqual([]);
+    expect(plan.deliverables).toEqual([]);
+  });
+
   it('plans build-only targets without leaking them into release services', () => {
     const config = {
       monorepo: { type: 'turborepo', packageManager: 'pnpm' },

@@ -374,11 +374,11 @@ export function selectBuildScope(
     inputs: [],
   };
 
-  if (!config.monorepo || !changes || changes.forceFullBuild || affected.strategy === 'all') {
+  if (!changes || changes.forceFullBuild || affected.strategy === 'all') {
     return { services, targets, deliverables };
   }
 
-  if (affected.strategy === 'turbo' && changes.affectedPackages === undefined) {
+  if (config.monorepo && affected.strategy === 'turbo' && changes.affectedPackages === undefined) {
     return { services, targets, deliverables };
   }
 
@@ -401,7 +401,7 @@ export function selectBuildScope(
   }
 
   const affectedPackages = new Set(changes.affectedPackages ?? []);
-  const usePackageGraph = affected.strategy === 'turbo';
+  const usePackageGraph = Boolean(config.monorepo) && affected.strategy === 'turbo';
   const selectedServices = services.filter((service) =>
     usePackageGraph
       ? affectedPackages.has(service.monorepo?.packageName ?? service.name)
