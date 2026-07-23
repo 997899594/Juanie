@@ -151,6 +151,8 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 FROM node-toolchain AS web
 WORKDIR /app
 
+RUN /usr/local/bin/node --version
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOME=/tmp
