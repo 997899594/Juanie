@@ -147,8 +147,8 @@ RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
 # ============================================
 # Stage 9: Web Runner
 # ============================================
-# Next standalone only requires a compatible JavaScript runtime. Keep web and workers on one Bun baseline.
-FROM bun-runtime-os AS web
+# Next standalone is a Node server. Keep Bun for builds and compiled control-plane services.
+FROM node-toolchain AS web
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -169,7 +169,7 @@ USER 1001:1001
 EXPOSE 3001
 
 ENTRYPOINT []
-CMD ["/usr/local/bin/bun", "server.js"]
+CMD ["/usr/local/bin/node", "server.js"]
 
 # ============================================
 # Stage 10: Long-lived Runtime Runner

@@ -8,6 +8,8 @@ const atlasRunnerPath = 'src/lib/db/control-plane-atlas.ts';
 const schemaJobPath = 'deploy/k8s/charts/juanie/templates/schema-sync-job.yaml';
 const environmentKeyVersionMigrationPath =
   'migrations/20260723092304_environment_variable_key_version.sql';
+const environmentKeyVersionContractPath =
+  'migrations-contract/20260723000000_require_environment_secret_key_version.sql';
 
 describe('control-plane expand and contract migrations', () => {
   it('keeps destructive credential and legacy-table changes out of the expand phase', async () => {
@@ -52,14 +54,34 @@ describe('control-plane expand and contract migrations', () => {
     expect(source).toContain('Contract migration requires explicit promotion epoch');
   });
 
-  it('adds the environment key version as an expand-compatible nullable column', async () => {
+  it('adds the environment key version in expand and enforces it only in contract', async () => {
     const migration = await readFile(environmentKeyVersionMigrationPath, 'utf8');
+    const contract = await readFile(environmentKeyVersionContractPath, 'utf8');
     const schemaJob = await readFile(schemaJobPath, 'utf8');
 
     expect(migration).toContain('ADD COLUMN "encryptionKeyVersion" integer NULL');
     expect(migration).not.toContain('SET NOT NULL');
-    expect(schemaJob).toContain('name: ENCRYPTION_MASTER_KEY_V0');
-    expect(schemaJob).toContain('name: juanie-master-key');
+    expect(contract).toContain('"encryptionKeyVersion" IS NOT NULL');
+    expect(contract).toContain(
+      'VALIDATE CONSTRAINT "environmentVariable_secret_envelope_versioned"'
+    );
+    expect(contract).toContain('RENAME CONSTRAINT "environmentVariable_secret_envelope_versioned"');
+    expect(schemaJob).not.toContain('ENCRYPTION_MASTER_KEY_V0');
+    expect(schemaJob).not.toContain('juanie-master-key');
+  });
+
+  it('validates contract migrations on top of the expanded control-plane schema', async () => {
+    const source = await readFile(atlasRunnerPath, 'utf8');
+
+    const helper = source.slice(
+      source.indexOf('async function validateContractMigrationsAgainstExpandedSchema'),
+      source.indexOf('export async function validateControlPlaneMigrations')
+    );
+    expect(
+      helper.indexOf('MIGRATIONS_DIR_URL') < helper.indexOf('CONTRACT_MIGRATIONS_DIR_URL')
+    ).toBe(true);
+    expect(helper).toContain('CONTRACT_REVISIONS_SCHEMA');
+    expect(helper).toContain('ensureContractAtlasBaseline(devUrl, options)');
   });
 
   it('verifies runtime schema compatibility after expand and contract execution', async () => {

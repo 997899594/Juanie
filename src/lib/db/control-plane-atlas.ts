@@ -10,7 +10,6 @@ import {
   runAtlasCommand,
 } from '@/lib/atlas/cli';
 import { verifyControlPlaneReleaseGate } from '@/lib/db/control-plane-release-gate';
-import { migrateUnversionedEnvironmentSecret } from '@/lib/env-vars/migration';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 import type { AtlasMigrationExecutionOrder } from '@/lib/migrations/atlas';
 import {
@@ -33,7 +32,8 @@ const CREDENTIAL_ENVELOPE_VERSION = '20260713120000';
 const PLAINTEXT_CREDENTIAL_REMOVAL_VERSION = '20260713121000';
 const CONTROL_PLANE_HISTORY_RECONCILIATION_VERSION = '20260714130000';
 const LEGACY_CONTRACT_BOUNDARY_VERSION = PLAINTEXT_CREDENTIAL_REMOVAL_VERSION;
-const CONTROL_PLANE_CONTRACT_EPOCH = '20260715';
+const CONTROL_PLANE_CONTRACT_BASELINE = '20260715000000';
+const CONTROL_PLANE_CONTRACT_EPOCH = '20260723';
 
 type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply' | 'contract';
 
@@ -108,10 +108,13 @@ function extractVersion(fileName: string): string {
   return version;
 }
 
-async function getAtlasRevisionCount(databaseUrl: string): Promise<number> {
+async function getAtlasRevisionCount(
+  databaseUrl: string,
+  revisionsSchema = REVISIONS_SCHEMA
+): Promise<number> {
   const sql = postgres(databaseUrl, { max: 1 });
   try {
-    const tableName = `${REVISIONS_SCHEMA}.${ATLAS_REVISIONS_TABLE}`;
+    const tableName = `${revisionsSchema}.${ATLAS_REVISIONS_TABLE}`;
     const [table] = await sql<{ regclass: string | null }[]>`
       select to_regclass(${tableName}) as regclass
     `;
@@ -121,12 +124,36 @@ async function getAtlasRevisionCount(databaseUrl: string): Promise<number> {
     }
 
     const rows = await sql.unsafe(
-      `select count(*)::int as count from "${REVISIONS_SCHEMA}"."${ATLAS_REVISIONS_TABLE}"`
+      `select count(*)::int as count from "${revisionsSchema}"."${ATLAS_REVISIONS_TABLE}"`
     );
     return Number(rows[0]?.count ?? 0);
   } finally {
     await sql.end();
   }
+}
+
+async function ensureContractAtlasBaseline(
+  databaseUrl: string,
+  options?: { network?: string }
+): Promise<void> {
+  if ((await getAtlasRevisionCount(databaseUrl, CONTRACT_REVISIONS_SCHEMA)) !== 0) {
+    return;
+  }
+
+  await runAtlas(
+    [
+      'migrate',
+      'set',
+      CONTROL_PLANE_CONTRACT_BASELINE,
+      '--dir',
+      CONTRACT_MIGRATIONS_DIR_URL,
+      '--url',
+      databaseUrl,
+      '--revisions-schema',
+      CONTRACT_REVISIONS_SCHEMA,
+    ],
+    options
+  );
 }
 
 async function hasLegacyMigrationState(databaseUrl: string): Promise<boolean> {
@@ -225,6 +252,8 @@ async function withDockerDevDatabase<T>(
     containerName,
     '--network',
     networkName,
+    '--publish',
+    '127.0.0.1::5432',
     '-e',
     'POSTGRES_PASSWORD=postgres',
     '-e',
@@ -250,10 +279,23 @@ async function withDockerDevDatabase<T>(
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    return await task({
-      devUrl: `postgres://postgres:postgres@${containerName}:5432/dev?sslmode=disable&search_path=public`,
-      networkName,
-    });
+    const devUrl = (() => {
+      if (!hasLocalAtlas()) {
+        return `postgres://postgres:postgres@${containerName}:5432/dev?sslmode=disable&search_path=public`;
+      }
+
+      const port = spawnSync('docker', ['port', containerName, '5432/tcp'], {
+        encoding: 'utf8',
+      });
+      const match = port.stdout.trim().match(/:(\d+)$/u);
+      if (port.status !== 0 || !match?.[1]) {
+        throw new Error(`无法解析临时 Atlas PostgreSQL 端口: ${port.stderr || port.stdout}`);
+      }
+
+      return `postgres://postgres:postgres@127.0.0.1:${match[1]}/dev?sslmode=disable&search_path=public`;
+    })();
+
+    return await task({ devUrl, networkName });
   } finally {
     spawnSync('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
     spawnSync('docker', ['network', 'rm', networkName], { stdio: 'ignore' });
@@ -319,43 +361,62 @@ export async function generateControlPlaneMigration(name: string | undefined): P
   });
 }
 
+async function validateContractMigrationsAgainstExpandedSchema(
+  devUrl: string,
+  options?: { network?: string }
+): Promise<void> {
+  await runAtlas(
+    [
+      'migrate',
+      'apply',
+      '--dir',
+      MIGRATIONS_DIR_URL,
+      '--url',
+      devUrl,
+      '--revisions-schema',
+      REVISIONS_SCHEMA,
+    ],
+    options
+  );
+  await ensureContractAtlasBaseline(devUrl, options);
+  await runAtlas(
+    [
+      'migrate',
+      'apply',
+      '--dir',
+      CONTRACT_MIGRATIONS_DIR_URL,
+      '--url',
+      devUrl,
+      '--revisions-schema',
+      CONTRACT_REVISIONS_SCHEMA,
+    ],
+    options
+  );
+}
+
 export async function validateControlPlaneMigrations(): Promise<void> {
   await validateExpandMigrationSafety();
   await exportDesiredSchema();
 
-  if (hasLocalAtlas()) {
-    const devDatabase = await prepareAtlasDevDatabaseSession('postgresql');
-    try {
-      await runAtlas([
-        'migrate',
-        'validate',
-        '--dir',
-        MIGRATIONS_DIR_URL,
-        '--dev-url',
-        devDatabase.url,
-      ]);
-      await runAtlas([
-        'migrate',
-        'validate',
-        '--dir',
-        CONTRACT_MIGRATIONS_DIR_URL,
-        '--dev-url',
-        devDatabase.url,
-      ]);
-    } finally {
-      await devDatabase.cleanup();
-    }
-    return;
+  const devDatabase = await prepareAtlasDevDatabaseSession('postgresql');
+  try {
+    await runAtlas([
+      'migrate',
+      'validate',
+      '--dir',
+      MIGRATIONS_DIR_URL,
+      '--dev-url',
+      devDatabase.url,
+    ]);
+  } finally {
+    await devDatabase.cleanup();
   }
 
+  // Contract revisions are a second lineage applied after the complete expand lineage.
+  // Both apply commands must share one materialized database; docker:// URLs are ephemeral
+  // Atlas dev databases and therefore cannot preserve the expanded schema between commands.
   await withDockerDevDatabase(async ({ devUrl, networkName }) => {
-    await runAtlas(['migrate', 'validate', '--dir', MIGRATIONS_DIR_URL, '--dev-url', devUrl], {
-      network: networkName,
-    });
-    await runAtlas(
-      ['migrate', 'validate', '--dir', CONTRACT_MIGRATIONS_DIR_URL, '--dev-url', devUrl],
-      { network: networkName }
-    );
+    await validateContractMigrationsAgainstExpandedSchema(devUrl, { network: networkName });
   });
 }
 
@@ -486,64 +547,6 @@ async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
   }
 }
 
-async function migrateEnvironmentSecretEnvelopes(databaseUrl: string): Promise<void> {
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    const variables = await sql<
-      {
-        id: string;
-        value: string | null;
-        encryptedValue: string | null;
-        iv: string | null;
-        authTag: string | null;
-      }[]
-    >`
-      select id, value, "encryptedValue", iv, "authTag"
-      from "environmentVariable"
-      where "isSecret" = true
-        and (
-          "encryptionKeyVersion" is null
-          or "encryptedValue" is null
-          or iv is null
-          or "authTag" is null
-          or value is not null
-        )
-    `;
-
-    const migrated = await Promise.all(
-      variables.map(async (variable) => ({
-        id: variable.id,
-        ...(await migrateUnversionedEnvironmentSecret(variable)),
-      }))
-    );
-
-    await sql.begin(async (transaction) => {
-      for (const variable of migrated) {
-        await transaction`
-          update "environmentVariable"
-          set value = null,
-              "encryptedValue" = ${variable.envelope.encryptedValue},
-              iv = ${variable.envelope.iv},
-              "authTag" = ${variable.envelope.authTag},
-              "encryptionKeyVersion" = ${variable.envelope.keyVersion},
-              "updatedAt" = now()
-          where id = ${variable.id}
-        `;
-      }
-    });
-
-    await sql`
-      alter table "environmentVariable"
-      validate constraint "environmentVariable_secret_envelope_required"
-    `;
-    console.log(
-      `[db:push] migrated ${migrated.length} environment secret envelope(s), including ${migrated.filter(({ usedLegacyKey }) => usedLegacyKey).length} legacy envelope(s)`
-    );
-  } finally {
-    await sql.end();
-  }
-}
-
 export async function applyControlPlaneMigrations(): Promise<void> {
   await applyControlPlaneExpandMigrations();
 }
@@ -654,7 +657,6 @@ export async function applyControlPlaneExpandMigrations(): Promise<void> {
 
   await verifyControlPlaneReleaseGate(databaseUrl);
   await runPostMigrationTasks(databaseUrl);
-  await migrateEnvironmentSecretEnvelopes(databaseUrl);
 }
 
 export async function applyControlPlaneContractMigrations(
@@ -667,6 +669,7 @@ export async function applyControlPlaneContractMigrations(
   }
   const databaseUrl = getDatabaseUrl();
   await ensureAtlasBaseline(databaseUrl);
+  await ensureContractAtlasBaseline(databaseUrl);
   await runAtlas([
     'migrate',
     'apply',

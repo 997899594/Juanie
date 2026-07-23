@@ -88,7 +88,7 @@ export const environmentVariables = pgTable(
     projectIdIdx: index('environmentVariable_projectId_idx').on(table.projectId),
     secretEnvelopeRequired: check(
       'environmentVariable_secret_envelope_required',
-      sql`${table.isSecret} is not true or (${table.value} is null and ${table.encryptedValue} is not null and ${table.iv} is not null and ${table.authTag} is not null)`
+      sql`${table.isSecret} is not true or (${table.value} is null and ${table.encryptedValue} is not null and ${table.iv} is not null and ${table.authTag} is not null and ${table.encryptionKeyVersion} is not null)`
     ),
   })
 );

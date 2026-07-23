@@ -53,12 +53,6 @@ spec:
             - name: XDG_CACHE_HOME
               value: /tmp/.cache
             {{- include "juanie.secretEnv" (dict "root" $root "keys" $root.Values.secret.componentKeys.schemaRunner) | nindent 12 }}
-            - name: ENCRYPTION_MASTER_KEY_V0
-              valueFrom:
-                secretKeyRef:
-                  name: juanie-master-key
-                  key: masterKey
-                  optional: true
           envFrom:
             - configMapRef:
                 name: {{ $root.Chart.Name }}-config

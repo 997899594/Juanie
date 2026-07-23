@@ -31,7 +31,7 @@ export async function decryptEnvironmentSecret(
   envelope: EnvironmentSecretEnvelope
 ): Promise<string> {
   if (envelope.encryptionKeyVersion === null) {
-    return decrypt(envelope.encryptedValue, envelope.iv, envelope.authTag);
+    throw new Error(`Secret environment variable ${envelope.id} has no encryption key version`);
   }
 
   return decrypt(envelope.encryptedValue, envelope.iv, envelope.authTag, {
