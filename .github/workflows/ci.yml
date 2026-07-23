@@ -18,11 +18,6 @@ env:
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
   ATLAS_VERSION: 1.2.3
   ATLAS_GRPC_VERSION: 1.82.1
-  RESTATE_OPERATOR_VERSION: 2.8.1
-  RESTATE_OPERATOR_CHART_DIGEST: sha256:a8e3c1cf8f2267c2e45857466197bb208d63b6c2ec6137e49b94306c4fa315c4
-  RESTATE_OPERATOR_CHART_SHA256: 1e9ac065deb9e8f50479e6f80c7d7f80be254728a8bc9ca792612035253c7694
-  RESTATE_OPERATOR_IMAGE_DIGEST: sha256:dc4d3391cc8ae64a7fcfb9131652787bc4adde8f214ea35b716944bc5e7c1550
-  RESTATE_OPERATOR_AMD64_DIGEST: sha256:d480844e50ffd24d1033ad8bae69616cfe777c87dee4b425fc14819336fadd53
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -145,10 +140,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      deployments: read
       packages: read
     outputs:
       targets: ${{ steps.plan.outputs.targets }}
       plan: ${{ steps.plan.outputs.plan }}
+      platform_required: ${{ steps.plan.outputs.platform_required }}
+      operator_required: ${{ steps.plan.outputs.operator_required }}
+      release_plan: ${{ steps.plan.outputs.release_plan }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -158,10 +157,43 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Resolve Last Successful Production Revision
+        id: production
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deployments="$(curl --fail-with-body -sS \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments?environment=production&per_page=100")"
+          production_revision=none
+
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            state="$(curl --fail-with-body -sS \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses?per_page=1" \
+              | jq -r '.[0].state // empty')"
+            if [ "${state}" = success ]; then
+              production_revision="${deployment_sha}"
+              break
+            fi
+          done < <(jq -r '.[] | [.id, .sha] | @tsv' <<<"${deployments}")
+
+          if [ "${production_revision}" != none ]; then
+            [[ "${production_revision}" =~ ^[a-f0-9]{40}$ ]]
+            git cat-file -e "${production_revision}^{commit}"
+          fi
+          echo "revision=${production_revision}" >> "${GITHUB_OUTPUT}"
+
       - name: Plan Component Images
         id: plan
         env:
           HEAD_REVISION: ${{ github.sha }}
+          PRODUCTION_REVISION: ${{ steps.production.outputs.revision }}
         run: |
           set -euo pipefail
           plan='{"targets":[],"changedPaths":[],"reasons":[]}'
@@ -226,12 +258,24 @@ jobs:
               ' <<<"$plan")"
           done
 
+          release_plan="$(bun scripts/plan-platform-release.ts \
+            "${PRODUCTION_REVISION}" "${HEAD_REVISION}" "$(jq -c '.targets' <<<"${plan}")")"
+
           echo "targets=$(jq -c '.targets' <<<"$plan")" >> "$GITHUB_OUTPUT"
           echo "plan=$(jq -c '.' <<<"$plan")" >> "$GITHUB_OUTPUT"
+          echo "platform_required=$(jq -r '.platformRequired' <<<"${release_plan}")" \
+            >> "$GITHUB_OUTPUT"
+          echo "operator_required=$(jq -r '.operatorRequired' <<<"${release_plan}")" \
+            >> "$GITHUB_OUTPUT"
+          echo "release_plan=$(jq -c '.' <<<"${release_plan}")" >> "$GITHUB_OUTPUT"
           {
             echo '### Platform image plan'
             echo '```json'
             jq '.' <<<"$plan"
+            echo '```'
+            echo '### Production release plan'
+            echo '```json'
+            jq '.' <<<"${release_plan}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -453,7 +497,11 @@ jobs:
 
   deploy-platform:
     needs: [build-images, plan-images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      (needs.plan-images.outputs.platform_required == 'true' ||
+      needs.plan-images.outputs.operator_required == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 75
     concurrency:
@@ -469,17 +517,41 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        if: needs.plan-images.outputs.platform_required == 'true'
 
       - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        if: needs.plan-images.outputs.platform_required == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Cosign
+        if: needs.plan-images.outputs.platform_required == 'true'
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
+      - name: Load Restate Operator Lock
+        if: needs.plan-images.outputs.operator_required == 'true'
+        run: |
+          set -euo pipefail
+          lock=deploy/k8s/restate-operator.lock.json
+          jq -e '
+            (.version | type == "string" and length > 0) and
+            (.chartDigest | test("^sha256:[a-f0-9]{64}$")) and
+            (.chartSha256 | test("^[a-f0-9]{64}$")) and
+            (.imageDigest | test("^sha256:[a-f0-9]{64}$")) and
+            (.amd64Digest | test("^sha256:[a-f0-9]{64}$"))
+          ' "${lock}" >/dev/null
+          {
+            echo "RESTATE_OPERATOR_VERSION=$(jq -er '.version' "${lock}")"
+            echo "RESTATE_OPERATOR_CHART_DIGEST=$(jq -er '.chartDigest' "${lock}")"
+            echo "RESTATE_OPERATOR_CHART_SHA256=$(jq -er '.chartSha256' "${lock}")"
+            echo "RESTATE_OPERATOR_IMAGE_DIGEST=$(jq -er '.imageDigest' "${lock}")"
+            echo "RESTATE_OPERATOR_AMD64_DIGEST=$(jq -er '.amd64Digest' "${lock}")"
+          } >> "${GITHUB_ENV}"
+
       - name: Verify And Resolve Immutable Images
+        if: needs.plan-images.outputs.platform_required == 'true'
         env:
           IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
           PLAN_TARGETS: ${{ needs.plan-images.outputs.targets }}
@@ -508,19 +580,20 @@ jobs:
           resolve_component runtime RUNTIME_IMAGE_TAG
           resolve_component schema-runner SCHEMA_RUNNER_IMAGE_TAG
 
-      - name: Upload Helm Chart
+      - name: Upload Production Reconciler
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: deploy/k8s/charts/juanie
+          source: deploy/k8s/charts/juanie,deploy/k8s/scripts/reconcile-production.sh
           target: /tmp/juanie-direct-deploy-${{ github.sha }}
 
       - name: Deploy Platform With Helm
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
           DEPLOY_CHART_DIR: ${{ env.DEPLOY_CHART_DIR }}
+          DEPLOY_SCRIPT: /tmp/juanie-direct-deploy-${{ github.sha }}/deploy/k8s/scripts/reconcile-production.sh
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
@@ -533,150 +606,18 @@ jobs:
           RESTATE_OPERATOR_CHART_SHA256: ${{ env.RESTATE_OPERATOR_CHART_SHA256 }}
           RESTATE_OPERATOR_IMAGE_DIGEST: ${{ env.RESTATE_OPERATOR_IMAGE_DIGEST }}
           RESTATE_OPERATOR_AMD64_DIGEST: ${{ env.RESTATE_OPERATOR_AMD64_DIGEST }}
+          PLATFORM_DEPLOY_REQUIRED: ${{ needs.plan-images.outputs.platform_required }}
+          OPERATOR_DEPLOY_REQUIRED: ${{ needs.plan-images.outputs.operator_required }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 70m
-          envs: DEPLOY_CHART_DIR,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG,RESTATE_OPERATOR_VERSION,RESTATE_OPERATOR_CHART_DIGEST,RESTATE_OPERATOR_CHART_SHA256,RESTATE_OPERATOR_IMAGE_DIGEST,RESTATE_OPERATOR_AMD64_DIGEST
-          script: |
-            set -euo pipefail
-            deploy_root="/tmp/juanie-direct-deploy-${GITHUB_SHA}"
-            trap 'rm -rf "${deploy_root}"' EXIT
-            preload_log="${deploy_root}/image-preload.log"
-
-            test -d "${DEPLOY_CHART_DIR}"
-            registry_hosts_dir=/var/lib/rancher/k3s/agent/etc/containerd/certs.d
-            test -f "${registry_hosts_dir}/ghcr.io/hosts.toml"
-            for image_tag in \
-              "${SCHEMA_RUNNER_IMAGE_TAG}" \
-              "${RUNTIME_IMAGE_TAG}" \
-              "${WEB_IMAGE_TAG}"; do
-              if ! timeout 15m k3s ctr --namespace k8s.io images pull \
-                --local \
-                --hosts-dir "${registry_hosts_dir}" \
-                --platform linux/amd64 \
-                --max-concurrent-downloads 3 \
-                "${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${image_tag}" \
-                >"${preload_log}" 2>&1; then
-                tail -200 "${preload_log}"
-                exit 1
-              fi
-              echo "Preloaded ${image_tag%%@*}"
-            done
-
-            operator_archive="${deploy_root}/restate-operator-helm-${RESTATE_OPERATOR_VERSION}.tgz"
-            rm -f "${operator_archive}"
-            operator_pull_output="$(helm pull oci://ghcr.io/restatedev/restate-operator-helm \
-              --version "${RESTATE_OPERATOR_VERSION}" \
-              --destination "${deploy_root}" 2>&1)"
-            grep -F "Digest: ${RESTATE_OPERATOR_CHART_DIGEST}" <<<"${operator_pull_output}"
-            echo "${RESTATE_OPERATOR_CHART_SHA256}  ${operator_archive}" | sha256sum --check
-
-            operator_chart_root="${deploy_root}/restate-operator-chart"
-            rm -rf "${operator_chart_root}"
-            mkdir -p "${operator_chart_root}"
-            tar -xzf "${operator_archive}" -C "${operator_chart_root}"
-            kubectl apply --server-side \
-              --field-manager=juanie-platform-ci \
-              -f "${operator_chart_root}/restate-operator-helm/charts/restate-operator-crds/crds"
-
-            helm upgrade --install restate-operator "${operator_archive}" \
-              --namespace restate-operator \
-              --create-namespace \
-              --set installCrds=false \
-              --set-string version="${RESTATE_OPERATOR_VERSION}" \
-              --atomic \
-              --wait \
-              --timeout 10m
-            kubectl -n restate-operator rollout status deployment/restate-operator --timeout=5m
-            operator_image_id="$(kubectl -n restate-operator get pod \
-              -l app=restate-operator \
-              -o jsonpath='{.items[0].status.containerStatuses[0].imageID}')"
-            operator_image_digest="${operator_image_id##*@}"
-            if [ "${operator_image_digest}" != "${RESTATE_OPERATOR_IMAGE_DIGEST}" ] && \
-              [ "${operator_image_digest}" != "${RESTATE_OPERATOR_AMD64_DIGEST}" ]; then
-              echo "Unexpected Restate Operator image: ${operator_image_id}" >&2
-              exit 1
-            fi
-
-            kubectl -n argocd delete application juanie-platform --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
-            kubectl -n juanie delete job juanie-schema-sync juanie-schema-expand juanie-schema-contract \
-              --ignore-not-found=true >/dev/null 2>&1 || true
-
-            helm upgrade --install juanie "${DEPLOY_CHART_DIR}" \
-              --namespace juanie \
-              --create-namespace \
-              -f "${DEPLOY_CHART_DIR}/values-prod.yaml" \
-              --set-string images.web.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
-              --set-string images.web.tag="${WEB_IMAGE_TAG}" \
-              --set-string images.runtime.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
-              --set-string images.runtime.tag="${RUNTIME_IMAGE_TAG}" \
-              --set-string images.schemaRunner.repository="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}" \
-              --set-string images.schemaRunner.tag="${SCHEMA_RUNNER_IMAGE_TAG}" \
-              --set-string env.JUANIE_SOURCE_REPOSITORY="${GITHUB_REPOSITORY}" \
-              --set-string env.JUANIE_SOURCE_REVISION="${GITHUB_SHA}" \
-              --set schemaSync.enabled=true \
-              --atomic \
-              --cleanup-on-fail \
-              --wait \
-              --wait-for-jobs \
-              --timeout 20m
-
-            kubectl -n juanie rollout status deployment/juanie-web --timeout=10m
-            kubectl -n juanie rollout status deployment/juanie-worker --timeout=10m
-            kubectl -n juanie wait \
-              --for=condition=Ready \
-              restatedeployment/juanie-restate-services \
-              --timeout=10m
-            restate_deployment_id="$(kubectl -n juanie get \
-              restatedeployment/juanie-restate-services \
-              -o jsonpath='{.status.deploymentId}')"
-            test -n "${restate_deployment_id}"
-            kubectl -n juanie exec deployment/juanie-web -c juanie -- \
-              /usr/local/bin/bun -e '
-                const deploymentId = process.argv[1];
-                const response = await fetch(
-                  `http://juanie-restate:9070/deployments/${deploymentId}`
-                );
-                if (!response.ok) throw new Error(`Restate admin returned ${response.status}`);
-                const deployment = await response.json();
-                const services = new Set(deployment.services?.map((service) => service.name));
-                const expected = new Set([
-                  "ProjectInitializationWorkflow",
-                  "ReleaseWorkflow",
-                  "EnvironmentRuntimeWorkflow",
-                  "MigrationWorkflow",
-                  "DeploymentWorkflow",
-                  "ProjectDeletionWorkflow",
-                  "SchemaRepairWorkflow",
-                  "SourceDeliveryWorkflow",
-                ]);
-                const missing = [...expected].filter((service) => !services.has(service));
-                const unexpected = [...services].filter((service) => !expected.has(service));
-                if (missing.length > 0 || unexpected.length > 0) {
-                  throw new Error(
-                    `Restate service catalog mismatch: missing=${missing.join(",") || "none"} ` +
-                    `unexpected=${unexpected.join(",") || "none"}`
-                  );
-                }
-                console.log(
-                  `Verified immutable Restate deployment ${deployment.id} with ${services.size} services`
-                );
-              ' "${restate_deployment_id}"
-            for attempt in $(seq 1 24); do
-              if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
-                break
-              fi
-
-              if [ "${attempt}" -eq 24 ]; then
-                curl -fsS https://juanie.art/api/health/ready
-              fi
-
-              sleep 5
-            done
+          envs: DEPLOY_CHART_DIR,DEPLOY_SCRIPT,GITHUB_SHA,GITHUB_REPOSITORY,IMAGE_REGISTRY,IMAGE_REPOSITORY,WEB_IMAGE_TAG,RUNTIME_IMAGE_TAG,SCHEMA_RUNNER_IMAGE_TAG,RESTATE_OPERATOR_VERSION,RESTATE_OPERATOR_CHART_DIGEST,RESTATE_OPERATOR_CHART_SHA256,RESTATE_OPERATOR_IMAGE_DIGEST,RESTATE_OPERATOR_AMD64_DIGEST,PLATFORM_DEPLOY_REQUIRED,OPERATOR_DEPLOY_REQUIRED
+          script: bash "${DEPLOY_SCRIPT}"
 
       - name: Promote Deployed Component Channels
+        if: needs.plan-images.outputs.platform_required == 'true'
         env:
           IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
           PLAN_TARGETS: ${{ needs.plan-images.outputs.targets }}

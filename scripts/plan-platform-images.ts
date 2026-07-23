@@ -75,7 +75,7 @@ export function planPlatformImages(changedPaths: string[]): PlatformImagePlan {
   };
 }
 
-function changedPathsBetween(baseRevision: string, headRevision: string): string[] | null {
+export function changedPathsBetween(baseRevision: string, headRevision: string): string[] | null {
   if (/^0+$/u.test(baseRevision)) return null;
 
   try {
