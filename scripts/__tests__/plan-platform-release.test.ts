@@ -2,8 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { planPlatformRelease, restateOperatorLockPath } from '../plan-platform-release';
 
 describe('platform release planner', () => {
-  it('does not deploy workflow and documentation-only changes', () => {
-    const plan = planPlatformRelease(['.github/workflows/ci.yml', 'docs/operations.md'], []);
+  it('does not deploy documentation-only changes', () => {
+    const plan = planPlatformRelease(['README.md', 'docs/operations.md'], []);
 
     expect(plan.platformRequired).toBe(false);
     expect(plan.operatorRequired).toBe(false);
@@ -18,6 +18,27 @@ describe('platform release planner', () => {
 
   it('deploys the platform for chart-only changes', () => {
     const plan = planPlatformRelease(['deploy/k8s/charts/juanie/templates/deployment.yaml'], []);
+
+    expect(plan.platformRequired).toBe(true);
+    expect(plan.operatorRequired).toBe(false);
+  });
+
+  it('deploys the platform when production reconciliation code changes', () => {
+    const plan = planPlatformRelease(['deploy/k8s/scripts/reconcile-production.sh'], []);
+
+    expect(plan.platformRequired).toBe(true);
+    expect(plan.operatorRequired).toBe(false);
+  });
+
+  it('deploys the platform when its CI delivery workflow changes', () => {
+    const plan = planPlatformRelease(['.github/workflows/ci.yml'], []);
+
+    expect(plan.platformRequired).toBe(true);
+    expect(plan.operatorRequired).toBe(false);
+  });
+
+  it('deploys the platform when its release planning code changes', () => {
+    const plan = planPlatformRelease(['scripts/plan-platform-release.ts'], []);
 
     expect(plan.platformRequired).toBe(true);
     expect(plan.operatorRequired).toBe(false);

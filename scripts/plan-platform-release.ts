@@ -9,8 +9,13 @@ export interface PlatformReleasePlan {
 
 export const restateOperatorLockPath = 'deploy/k8s/restate-operator.lock.json';
 
-const platformDeploymentPrefixes = ['deploy/k8s/charts/juanie/'] as const;
-const platformDeploymentFiles = new Set(['.github/workflows/application-delivery.yml']);
+const platformDeploymentPrefixes = ['deploy/k8s/charts/juanie/', 'deploy/k8s/scripts/'] as const;
+const platformDeploymentFiles = new Set([
+  '.github/workflows/application-delivery.yml',
+  '.github/workflows/ci.yml',
+  'scripts/plan-platform-images.ts',
+  'scripts/plan-platform-release.ts',
+]);
 
 function normalizePaths(paths: string[]): string[] {
   return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].sort();
