@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
-import { encrypt } from '@/lib/crypto';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
@@ -27,6 +26,7 @@ import {
   buildManagedEnvironmentHostname,
   type HostnameAllocatorExecutor,
 } from '@/lib/domains/managed';
+import { encryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import {
   getPlatformManagedRuntimeEnvKeyMessage,
   isPlatformManagedRuntimeEnvKey,
@@ -223,8 +223,9 @@ async function buildInitialVariableRows(
   return Promise.all(
     variables.map(async (variable) => {
       if (variable.isSecret) {
-        const encrypted = await encrypt(variable.value);
+        const encrypted = await encryptEnvironmentSecret(variable.value);
         return {
+          id: encrypted.id,
           projectId,
           environmentId: null,
           serviceId: null,
@@ -235,6 +236,7 @@ async function buildInitialVariableRows(
           encryptedValue: encrypted.encryptedValue,
           iv: encrypted.iv,
           authTag: encrypted.authTag,
+          encryptionKeyVersion: encrypted.keyVersion,
         };
       }
 
@@ -249,6 +251,7 @@ async function buildInitialVariableRows(
         encryptedValue: null,
         iv: null,
         authTag: null,
+        encryptionKeyVersion: null,
       };
     })
   );

@@ -5,10 +5,10 @@ import {
   getProjectEnvironmentOrThrow,
   getProjectServiceOrThrow,
 } from '@/lib/api/access';
-import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s, syncServiceEnvVarsToK8s } from '@/lib/env-sync';
+import { encryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
 import {
   getPlatformManagedRuntimeEnvKeyMessage,
@@ -31,6 +31,7 @@ interface EnvironmentVariableRecord {
   encryptedValue: string | null;
   iv: string | null;
   authTag: string | null;
+  encryptionKeyVersion: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -184,7 +185,7 @@ async function encryptOrThrow(input: {
   operation: 'create' | 'update';
 }) {
   try {
-    return await encrypt(input.plaintext);
+    return await encryptEnvironmentSecret(input.plaintext, input.variableId);
   } catch (error) {
     envVarLogger.error(`Failed to encrypt secret value during variable ${input.operation}`, error, {
       projectId: input.projectId,
@@ -349,7 +350,8 @@ export async function createEnvironmentVariableForProject(input: {
         key: input.key,
         plaintext: input.value,
         operation: 'create',
-      }).then(({ encryptedValue, iv, authTag }) => ({
+      }).then(({ id, encryptedValue, iv, authTag, keyVersion }) => ({
+        id,
         projectId: input.projectId,
         key: input.key,
         value: null,
@@ -360,6 +362,7 @@ export async function createEnvironmentVariableForProject(input: {
         encryptedValue,
         iv,
         authTag,
+        encryptionKeyVersion: keyVersion,
       }))
     : {
         projectId: input.projectId,
@@ -372,6 +375,7 @@ export async function createEnvironmentVariableForProject(input: {
         encryptedValue: null,
         iv: null,
         authTag: null,
+        encryptionKeyVersion: null,
       };
 
   const [created] = await db.insert(environmentVariables).values(insertData).returning({
@@ -448,6 +452,7 @@ export async function updateEnvironmentVariableForProject(input: {
     encryptedValue: string | null;
     iv: string | null;
     authTag: string | null;
+    encryptionKeyVersion: number | null;
     updatedAt: Date;
   }> = {
     updatedAt: new Date(),
@@ -478,12 +483,14 @@ export async function updateEnvironmentVariableForProject(input: {
       updateData.encryptedValue = encrypted.encryptedValue;
       updateData.iv = encrypted.iv;
       updateData.authTag = encrypted.authTag;
+      updateData.encryptionKeyVersion = encrypted.keyVersion;
       updateData.isSecret = true;
     } else {
       updateData.value = input.value;
       updateData.encryptedValue = null;
       updateData.iv = null;
       updateData.authTag = null;
+      updateData.encryptionKeyVersion = null;
       updateData.isSecret = false;
     }
   } else if (input.isSecret !== undefined && input.isSecret !== Boolean(envVar.isSecret)) {
@@ -502,6 +509,7 @@ export async function updateEnvironmentVariableForProject(input: {
       updateData.encryptedValue = encrypted.encryptedValue;
       updateData.iv = encrypted.iv;
       updateData.authTag = encrypted.authTag;
+      updateData.encryptionKeyVersion = encrypted.keyVersion;
     } else if (!input.isSecret && envVar.encryptedValue) {
       throw new EnvVarControlError(
         400,

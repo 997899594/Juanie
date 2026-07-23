@@ -3,7 +3,6 @@ import type { TurboAnalysisFacts } from '@/lib/builds/api-schema';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
 import { resolveWorkloadImageRepository } from '@/lib/builds/registry';
 import { type CiWorkloadProvider, isCiWorkloadProvider } from '@/lib/ci/workload-identity';
-import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import {
   type BuildArtifactKind,
@@ -19,6 +18,7 @@ import {
   releases,
   repositories,
 } from '@/lib/db/schema';
+import { decryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import {
   gateway,
@@ -450,7 +450,13 @@ async function readBuildVariableValue(
 ): Promise<string | null> {
   if (!variable.isSecret) return variable.value;
   if (variable.encryptedValue && variable.iv && variable.authTag) {
-    return decrypt(variable.encryptedValue, variable.iv, variable.authTag);
+    return decryptEnvironmentSecret({
+      id: variable.id,
+      encryptedValue: variable.encryptedValue,
+      iv: variable.iv,
+      authTag: variable.authTag,
+      encryptionKeyVersion: variable.encryptionKeyVersion,
+    });
   }
   throw new BuildRunError(`Build secret ${variable.key} has no encrypted credential envelope`, 409);
 }

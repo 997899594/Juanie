@@ -13,9 +13,9 @@
  */
 
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
-import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
+import { decryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import { isPlatformManagedRuntimeEnvKey } from '@/lib/env-vars/system';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import { isK8sAvailable, upsertConfigMap, upsertSecret } from '@/lib/k8s';
@@ -120,7 +120,13 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
         throw new Error(`Secret variable "${v.key}" has no encrypted credential envelope`);
       }
       try {
-        secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
+        secrets[v.key] = await decryptEnvironmentSecret({
+          id: v.id,
+          encryptedValue: v.encryptedValue,
+          iv: v.iv,
+          authTag: v.authTag,
+          encryptionKeyVersion: v.encryptionKeyVersion,
+        });
       } catch (e) {
         envSyncLogger.error('Failed to decrypt environment variable', e, {
           varId: v.id,
@@ -190,7 +196,13 @@ export async function syncServiceEnvVarsToK8s(
         throw new Error(`Service secret variable "${v.key}" has no encrypted credential envelope`);
       }
       try {
-        secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
+        secrets[v.key] = await decryptEnvironmentSecret({
+          id: v.id,
+          encryptedValue: v.encryptedValue,
+          iv: v.iv,
+          authTag: v.authTag,
+          encryptionKeyVersion: v.encryptionKeyVersion,
+        });
       } catch (e) {
         envSyncLogger.error('Failed to decrypt service environment variable', e, {
           varId: v.id,

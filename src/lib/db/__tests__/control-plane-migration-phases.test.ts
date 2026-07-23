@@ -6,6 +6,8 @@ const contractMigrationPath = 'migrations/20260713121000_remove_plaintext_creden
 const reconciliationMigrationPath = 'migrations/20260714130000_reconcile_control_plane_history.sql';
 const atlasRunnerPath = 'src/lib/db/control-plane-atlas.ts';
 const schemaJobPath = 'deploy/k8s/charts/juanie/templates/schema-sync-job.yaml';
+const environmentKeyVersionMigrationPath =
+  'migrations/20260723092304_environment_variable_key_version.sql';
 
 describe('control-plane expand and contract migrations', () => {
   it('keeps destructive credential and legacy-table changes out of the expand phase', async () => {
@@ -48,6 +50,16 @@ describe('control-plane expand and contract migrations', () => {
 
     expect(schemaJob).not.toContain('"phase" "contract"');
     expect(source).toContain('Contract migration requires explicit promotion epoch');
+  });
+
+  it('adds the environment key version as an expand-compatible nullable column', async () => {
+    const migration = await readFile(environmentKeyVersionMigrationPath, 'utf8');
+    const schemaJob = await readFile(schemaJobPath, 'utf8');
+
+    expect(migration).toContain('ADD COLUMN "encryptionKeyVersion" integer NULL');
+    expect(migration).not.toContain('SET NOT NULL');
+    expect(schemaJob).toContain('name: ENCRYPTION_MASTER_KEY_V0');
+    expect(schemaJob).toContain('name: juanie-master-key');
   });
 
   it('verifies runtime schema compatibility after expand and contract execution', async () => {

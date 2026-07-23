@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { databases, environmentVariables, projects } from '@/lib/db/schema';
+import { encryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import { logger } from '@/lib/logger';
 import { provisionManagedDatabase } from './provider';
 
@@ -77,22 +77,32 @@ async function upsertEnvVar(
   });
 
   if (sensitive) {
-    const { encryptedValue, iv, authTag } = await encrypt(value);
+    const encrypted = await encryptEnvironmentSecret(value, existing?.id);
     if (existing) {
       await db
         .update(environmentVariables)
-        .set({ value: null, isSecret: true, encryptedValue, iv, authTag, updatedAt: new Date() })
+        .set({
+          value: null,
+          isSecret: true,
+          encryptedValue: encrypted.encryptedValue,
+          iv: encrypted.iv,
+          authTag: encrypted.authTag,
+          encryptionKeyVersion: encrypted.keyVersion,
+          updatedAt: new Date(),
+        })
         .where(eq(environmentVariables.id, existing.id));
     } else {
       await db.insert(environmentVariables).values({
+        id: encrypted.id,
         projectId,
         environmentId,
         key,
         value: null,
         isSecret: true,
-        encryptedValue,
-        iv,
-        authTag,
+        encryptedValue: encrypted.encryptedValue,
+        iv: encrypted.iv,
+        authTag: encrypted.authTag,
+        encryptionKeyVersion: encrypted.keyVersion,
         injectionType: 'runtime',
       });
     }

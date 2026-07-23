@@ -75,10 +75,30 @@ function collectContainerEnvironmentNames(resource: KubernetesResource): Set<str
 }
 
 describe('Helm runtime Secret rendering', () => {
-  it('uses the chart-managed Secret when no external source is configured', () => {
-    const resources = renderChart(['--set', 'secret.existingSecret=']);
+  it('uses the chart-managed Secret plus the isolated legacy migration key', () => {
+    const resources = renderChart([
+      '--set',
+      'secret.existingSecret=',
+      '--set',
+      'schemaSync.enabled=true',
+    ]);
     findResource(resources, 'Secret', 'juanie-secret');
-    expect(new Set(collectSecretReferences(resources))).toEqual(new Set(['juanie-secret']));
+    expect(new Set(collectSecretReferences(resources))).toEqual(
+      new Set(['juanie-secret', 'juanie-master-key'])
+    );
+    expect(
+      collectContainerEnvironmentNames(findResource(resources, 'Job', 'juanie-schema-expand'))
+    ).toContain('ENCRYPTION_MASTER_KEY_V0');
+    for (const name of [
+      'juanie-web',
+      'juanie-worker',
+      'juanie-scheduler',
+      'juanie-outbox-dispatcher',
+    ]) {
+      expect(
+        collectContainerEnvironmentNames(findResource(resources, 'Deployment', name))
+      ).not.toContain('ENCRYPTION_MASTER_KEY_V0');
+    }
   });
 
   it('uses the Operator as the only Restate handler owner', () => {

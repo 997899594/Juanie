@@ -9,8 +9,8 @@ import {
   normalizeAtlasDatabaseUrl,
   runAtlasCommand,
 } from '@/lib/atlas/cli';
-import { encrypt } from '@/lib/crypto';
 import { verifyControlPlaneReleaseGate } from '@/lib/db/control-plane-release-gate';
+import { migrateUnversionedEnvironmentSecret } from '@/lib/env-vars/migration';
 import { encryptGrantCredentials } from '@/lib/integrations/service/grant-credentials';
 import type { AtlasMigrationExecutionOrder } from '@/lib/migrations/atlas';
 import {
@@ -489,32 +489,56 @@ async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
 async function migrateEnvironmentSecretEnvelopes(databaseUrl: string): Promise<void> {
   const sql = postgres(databaseUrl, { max: 1 });
   try {
-    const variables = await sql<{ id: string; value: string | null }[]>`
-      select id, value
+    const variables = await sql<
+      {
+        id: string;
+        value: string | null;
+        encryptedValue: string | null;
+        iv: string | null;
+        authTag: string | null;
+      }[]
+    >`
+      select id, value, "encryptedValue", iv, "authTag"
       from "environmentVariable"
       where "isSecret" = true
-        and ("encryptedValue" is null or iv is null or "authTag" is null or value is not null)
+        and (
+          "encryptionKeyVersion" is null
+          or "encryptedValue" is null
+          or iv is null
+          or "authTag" is null
+          or value is not null
+        )
     `;
-    for (const variable of variables) {
-      if (!variable.value) {
-        throw new Error(`Secret environment variable ${variable.id} has no encryptable value`);
+
+    const migrated = await Promise.all(
+      variables.map(async (variable) => ({
+        id: variable.id,
+        ...(await migrateUnversionedEnvironmentSecret(variable)),
+      }))
+    );
+
+    await sql.begin(async (transaction) => {
+      for (const variable of migrated) {
+        await transaction`
+          update "environmentVariable"
+          set value = null,
+              "encryptedValue" = ${variable.envelope.encryptedValue},
+              iv = ${variable.envelope.iv},
+              "authTag" = ${variable.envelope.authTag},
+              "encryptionKeyVersion" = ${variable.envelope.keyVersion},
+              "updatedAt" = now()
+          where id = ${variable.id}
+        `;
       }
-      const encrypted = await encrypt(variable.value);
-      await sql`
-        update "environmentVariable"
-        set value = null,
-            "encryptedValue" = ${encrypted.encryptedValue},
-            iv = ${encrypted.iv},
-            "authTag" = ${encrypted.authTag},
-            "updatedAt" = now()
-        where id = ${variable.id}
-      `;
-    }
+    });
+
     await sql`
       alter table "environmentVariable"
       validate constraint "environmentVariable_secret_envelope_required"
     `;
-    console.log(`[db:push] encrypted ${variables.length} environment secret(s)`);
+    console.log(
+      `[db:push] migrated ${migrated.length} environment secret envelope(s), including ${migrated.filter(({ usedLegacyKey }) => usedLegacyKey).length} legacy envelope(s)`
+    );
   } finally {
     await sql.end();
   }

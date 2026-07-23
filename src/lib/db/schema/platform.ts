@@ -76,6 +76,7 @@ export const environmentVariables = pgTable(
     encryptedValue: text('encryptedValue'), // 加密后的值（hex）
     iv: varchar('iv', { length: 64 }), // 初始化向量（hex，12字节→24字符）
     authTag: varchar('authTag', { length: 64 }), // GCM 认证标签（hex，16字节→32字符）
+    encryptionKeyVersion: integer('encryptionKeyVersion'),
 
     referenceType: varchar('referenceType', { length: 50 }),
     referenceId: uuid('referenceId'),
