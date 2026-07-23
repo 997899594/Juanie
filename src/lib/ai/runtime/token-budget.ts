@@ -1,33 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { getMonthlyTokenLimit } from '@/lib/ai/runtime/token-budget-policy';
 import { db } from '@/lib/db';
 import type { AIPlan } from '@/lib/db/schema';
 import { aiTokenReservations } from '@/lib/db/schema';
 
-const defaultMonthlyLimits: Record<AIPlan, number> = {
-  free: 100_000,
-  pro: 2_000_000,
-  scale: 10_000_000,
-  enterprise: 100_000_000,
-};
+export { getMonthlyTokenLimit } from '@/lib/ai/runtime/token-budget-policy';
 
 export class AITokenBudgetExceededError extends Error {
   constructor(readonly limitTokens: number) {
     super(`团队本月 AI token 预算已用尽（上限 ${limitTokens.toLocaleString()}）`);
     this.name = 'AITokenBudgetExceededError';
   }
-}
-
-export function getMonthlyTokenLimit(plan: AIPlan): number {
-  const override = process.env[`AI_MONTHLY_TOKEN_LIMIT_${plan.toUpperCase()}`];
-  if (!override) {
-    return defaultMonthlyLimits[plan];
-  }
-  const parsed = Number.parseInt(override, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) {
-    throw new Error(`AI_MONTHLY_TOKEN_LIMIT_${plan.toUpperCase()} must be a positive integer`);
-  }
-  return parsed;
 }
 
 function getPeriodStart(now = new Date()): Date {

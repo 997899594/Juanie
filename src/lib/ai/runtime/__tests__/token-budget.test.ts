@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { getMonthlyTokenLimit } from '@/lib/ai/runtime/token-budget';
+import { getMonthlyTokenLimit } from '@/lib/ai/runtime/token-budget-policy';
 
 describe('AI token budgets', () => {
   it('assigns increasing monthly limits by plan', () => {
