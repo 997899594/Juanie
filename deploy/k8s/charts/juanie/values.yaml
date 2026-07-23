@@ -241,7 +241,7 @@ applicationDelivery:
   preflight:
     enabled: true
     backoffLimit: 1
-    activeDeadlineSeconds: 120
+    activeDeadlineSeconds: 600
     ttlSecondsAfterFinished: 300
 
 # 敏感配置
