@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.68",
-    "@auth/drizzle-adapter": "^1.11.2",
+    "@auth/drizzle-adapter": "1.11.3",
     "@aws-sdk/client-s3": "^3.1064.0",
     "@aws-sdk/s3-request-presigner": "^3.1064.0",
     "@gitbeaker/rest": "^43.8.0",
@@ -90,7 +90,7 @@
     "mysql2": "^3.22.5",
     "nanoid": "^5.1.11",
     "next": "16.2.11",
-    "next-auth": "5.0.0-beta.31",
+    "next-auth": "5.0.0-beta.32",
     "octokit": "^5.0.5",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
