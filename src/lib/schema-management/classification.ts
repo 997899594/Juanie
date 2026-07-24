@@ -25,6 +25,24 @@ function isPrefix(prefix: string[], values: string[]): boolean {
   return prefix.length <= values.length && prefix.every((value, index) => values[index] === value);
 }
 
+type LedgerRelation = 'missing' | 'aligned' | 'behind' | 'diverged';
+
+function classifyLedgerRelation(
+  actualEntries: string[],
+  expectedEntries: string[]
+): LedgerRelation {
+  if (actualEntries.length === 0) {
+    return 'missing';
+  }
+  if (arraysEqual(actualEntries, expectedEntries)) {
+    return 'aligned';
+  }
+  if (isPrefix(actualEntries, expectedEntries)) {
+    return 'behind';
+  }
+  return 'diverged';
+}
+
 function describeKind(kind: SchemaLedgerClassificationInput['kind']): string {
   if (kind === 'atlas') {
     return 'Atlas';
@@ -92,8 +110,10 @@ export function classifySchemaLedgerState(
     };
   }
 
-  if (!input.driftDetected) {
-    if (input.actualEntries.length === 0) {
+  const ledgerRelation = classifyLedgerRelation(input.actualEntries, input.expectedEntries);
+
+  if (ledgerRelation === 'missing') {
+    if (!input.driftDetected) {
       return {
         status: 'aligned_untracked',
         summary: `Atlas diff 未发现 schema 差异，但缺少 ${toolLabel} 迁移账本，需要人工接管`,
@@ -102,24 +122,6 @@ export function classifySchemaLedgerState(
       };
     }
 
-    if (arraysEqual(input.actualEntries, input.expectedEntries)) {
-      return {
-        status: 'aligned',
-        summary: `Atlas diff 未发现 schema 差异，数据库结构与仓库 ${toolLabel} 迁移链一致`,
-        hasLedger,
-        hasUserTables: input.hasUserTables,
-      };
-    }
-
-    return {
-      status: 'aligned_untracked',
-      summary: `Atlas diff 未发现 schema 差异，但数据库账本与仓库 ${toolLabel} 迁移链不一致，需要人工接管`,
-      hasLedger,
-      hasUserTables: input.hasUserTables,
-    };
-  }
-
-  if (input.actualEntries.length === 0) {
     if (input.hasUserTables) {
       return {
         status: 'drifted',
@@ -143,13 +145,43 @@ export function classifySchemaLedgerState(
     };
   }
 
-  if (isPrefix(input.actualEntries, input.expectedEntries)) {
+  if (ledgerRelation === 'aligned') {
+    if (!input.driftDetected) {
+      return {
+        status: 'aligned',
+        summary: `Atlas diff 未发现 schema 差异，数据库结构与仓库 ${toolLabel} 迁移链一致`,
+        hasLedger,
+        hasUserTables: input.hasUserTables,
+      };
+    }
+
+    return {
+      status: 'drifted',
+      summary: appendDiffSummary(
+        `数据库账本与仓库 ${toolLabel} 迁移链一致，但 Atlas diff 检测到 schema 差异`,
+        input.driftSummary
+      ),
+      hasLedger,
+      hasUserTables: input.hasUserTables,
+    };
+  }
+
+  if (ledgerRelation === 'behind') {
     return {
       status: 'pending_migrations',
       summary: appendDiffSummary(
         `数据库落后于仓库迁移链，已执行 ${input.actualEntries.length}/${input.expectedEntries.length} 项，可通过正常发布补齐`,
         input.driftSummary
       ),
+      hasLedger,
+      hasUserTables: input.hasUserTables,
+    };
+  }
+
+  if (!input.driftDetected) {
+    return {
+      status: 'aligned_untracked',
+      summary: `Atlas diff 未发现 schema 差异，但数据库账本与仓库 ${toolLabel} 迁移链不一致，需要人工接管`,
       hasLedger,
       hasUserTables: input.hasUserTables,
     };
