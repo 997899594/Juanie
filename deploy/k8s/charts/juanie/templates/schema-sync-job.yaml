@@ -27,7 +27,7 @@ spec:
         app.kubernetes.io/component: schema-{{ .phase }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ $root.Chart.Name }}-schema-runner
+      serviceAccountName: {{ if eq .phase "contract" }}{{ $root.Chart.Name }}-schema-runner{{ else }}default{{ end }}
       automountServiceAccountToken: false
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:

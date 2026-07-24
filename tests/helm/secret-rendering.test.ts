@@ -84,9 +84,15 @@ describe('Helm runtime Secret rendering', () => {
     ]);
     findResource(resources, 'Secret', 'juanie-secret');
     expect(new Set(collectSecretReferences(resources))).toEqual(new Set(['juanie-secret']));
-    expect(
-      collectContainerEnvironmentNames(findResource(resources, 'Job', 'juanie-schema-expand'))
-    ).not.toContain('ENCRYPTION_MASTER_KEY_V0');
+    const expandJob = findResource(resources, 'Job', 'juanie-schema-expand');
+    const expandPodSpec = (
+      expandJob.spec?.template as {
+        spec?: { serviceAccountName?: string; automountServiceAccountToken?: boolean };
+      }
+    )?.spec;
+    expect(collectContainerEnvironmentNames(expandJob)).not.toContain('ENCRYPTION_MASTER_KEY_V0');
+    expect(expandPodSpec?.serviceAccountName).toBe('default');
+    expect(expandPodSpec?.automountServiceAccountToken).toBe(false);
     for (const name of [
       'juanie-web',
       'juanie-worker',
