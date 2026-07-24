@@ -39,7 +39,7 @@ jobs:
           target: /tmp/juanie-contract-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Promote Contract
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           CONTRACT_EPOCH: ${{ inputs.epoch }}
           DEPLOY_ROOT: /tmp/juanie-contract-${{ github.run_id }}-${{ github.run_attempt }}
