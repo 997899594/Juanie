@@ -75,6 +75,9 @@ describe('versioned CI runtime assets', () => {
     expect(workflow).toContain('juanie-source-$' + '{{ steps.plan.outputs.build_run_id }}');
     expect(workflow).toContain('juanie-source-$' + '{{ needs.plan.outputs.build_run_id }}');
     expect(workflow).toContain('build-run.sh" fail');
+    expect(await readCiRuntimeAsset('build-run.sh')).toContain("'.outcome'");
+    expect(await readCiRuntimeAsset('build-run.sh')).toContain("= 'no_change'");
+    expect(await readCiRuntimeAsset('build-run.sh')).not.toContain('.noOp');
   });
 
   it('atomically downloads and validates a complete source archive', async () => {

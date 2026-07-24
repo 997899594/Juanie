@@ -16,8 +16,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: true,
-        buildRun: result.buildRun,
-        release: result.release,
+        ...result,
       },
       { status: 202 }
     );

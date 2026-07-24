@@ -787,6 +787,7 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
     }
 
     return {
+      outcome: 'release' as const,
       buildRun,
       release: {
         ...release,
@@ -823,9 +824,9 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
       throw new BuildRunError('No-op build run could not be finalized', 409);
     }
     return {
+      outcome: 'no_change' as const,
       buildRun: finalized ?? buildRun,
       release: null,
-      noOp: true as const,
     };
   }
   const missingUnits = plan.release.requiredUnits.filter((unitKey) => {
@@ -931,6 +932,7 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
   }
 
   return {
+    outcome: 'release' as const,
     buildRun: {
       ...buildRun,
       releaseId: release.id,

@@ -678,7 +678,7 @@ finalize_build_run() {
   response="$(request_json POST "/api/build-runs/${build_run_id}/finalize")"
   printf '%s\n' "$response" | tee "$release_file"
 
-  if [ "$(jq -r '.noOp // false' "$release_file")" = 'true' ]; then
+  if [ "$(jq -r '.outcome' "$release_file")" = 'no_change' ]; then
     echo 'No affected build units; delivery completed as a verified no-op'
     : > "${state_dir}/release-id"
     printf '%s' 'false' > "$artifacts_ready_file"
