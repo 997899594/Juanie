@@ -612,7 +612,7 @@ jobs:
           target: /tmp/juanie-direct-deploy-${{ github.sha }}
 
       - name: Deploy Platform With Helm
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_CHART_DIR: ${{ env.DEPLOY_CHART_DIR }}
           DEPLOY_SCRIPT: /tmp/juanie-direct-deploy-${{ github.sha }}/deploy/k8s/scripts/reconcile-production.sh
