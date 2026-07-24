@@ -43,8 +43,9 @@ describe('delivery execution state machine', () => {
     ).not.toThrow();
   });
 
-  it('treats verified, failed, and canceled as terminal', () => {
+  it('treats verified, historical, failed, and canceled as terminal', () => {
     expect(isDeliveryExecutionTerminal('production_verified')).toBe(true);
+    expect(isDeliveryExecutionTerminal('historical')).toBe(true);
     expect(isDeliveryExecutionTerminal('failed')).toBe(true);
     expect(isDeliveryExecutionTerminal('canceled')).toBe(true);
     expect(isDeliveryExecutionTerminal('awaiting_promotion')).toBe(false);

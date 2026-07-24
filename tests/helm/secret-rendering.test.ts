@@ -75,6 +75,21 @@ function collectContainerEnvironmentNames(resource: KubernetesResource): Set<str
 }
 
 describe('Helm runtime Secret rendering', () => {
+  it('keeps the production web endpoint available during single-replica rollouts', () => {
+    const resources = renderChart([
+      '-f',
+      `${chartPath}/values-prod.yaml`,
+      '--set-string',
+      'env.JUANIE_SOURCE_REVISION=12d57bc2bfcfcd3373dfd6640bec463bd71b027e',
+    ]);
+    const web = findResource(resources, 'Deployment', 'juanie-web');
+
+    expect(web.spec?.strategy).toEqual({
+      type: 'RollingUpdate',
+      rollingUpdate: { maxSurge: 1, maxUnavailable: 0 },
+    });
+  });
+
   it('uses only the chart-managed Secret for schema execution', () => {
     const resources = renderChart([
       '--set',

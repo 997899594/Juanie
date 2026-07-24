@@ -766,6 +766,36 @@ complete_delivery() {
   )"
 }
 
+fail_delivery_build() {
+  require_env JUANIE_REPOSITORY
+  require_env JUANIE_PROVIDER
+  require_env JUANIE_RELEASE_REF
+  require_env JUANIE_SOURCE_SHA
+  require_env JUANIE_EXTERNAL_RUN_ID
+  require_env JUANIE_PLAN_RESULT
+  require_env JUANIE_BUILD_RESULT
+
+  request_json POST /api/delivery-executions/fail "$(
+    jq -cn \
+      --arg repository "$JUANIE_REPOSITORY" \
+      --arg provider "$JUANIE_PROVIDER" \
+      --arg ref "$JUANIE_RELEASE_REF" \
+      --arg sha "$JUANIE_SOURCE_SHA" \
+      --arg externalRunId "$JUANIE_EXTERNAL_RUN_ID" \
+      --arg planResult "$JUANIE_PLAN_RESULT" \
+      --arg buildResult "$JUANIE_BUILD_RESULT" \
+      '{
+        repository: $repository,
+        provider: $provider,
+        ref: $ref,
+        sha: $sha,
+        externalRunId: $externalRunId,
+        planResult: $planResult,
+        buildResult: $buildResult
+      }'
+  )"
+}
+
 case "$command" in
   prepare)
     prepare_build_analysis
@@ -785,8 +815,11 @@ case "$command" in
   complete-delivery)
     complete_delivery
     ;;
+  fail)
+    fail_delivery_build
+    ;;
   *)
-    echo "Usage: $0 {prepare|start|build-group|build-all|finalize|complete-delivery}"
+    echo "Usage: $0 {prepare|start|build-group|build-all|finalize|complete-delivery|fail}"
     exit 2
     ;;
 esac

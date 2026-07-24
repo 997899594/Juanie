@@ -1,4 +1,4 @@
-import { Check, CircleDashed, GitCommit, ShieldCheck, X } from 'lucide-react';
+import { Archive, Check, CircleDashed, GitCommit, ShieldCheck, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { getDeliveryExecutionReadModel } from '@/lib/delivery-executions/read-model';
 import { formatPlatformDateTime } from '@/lib/time/format';
@@ -21,12 +21,14 @@ function getEventToneClass(status: EventIconProps['status']): string {
   if (status === 'production_verified' || status === 'staging_verified') {
     return 'border-success text-success';
   }
+  if (status === 'historical') return 'border-muted-foreground text-muted-foreground';
   return 'border-info text-info';
 }
 
 function EventIcon({ status }: EventIconProps) {
   if (status === 'failed' || status === 'canceled') return <X className="size-3.5" />;
   if (status === 'production_verified') return <ShieldCheck className="size-3.5" />;
+  if (status === 'historical') return <Archive className="size-3.5" />;
   if (status === 'staging_verified' || status === 'awaiting_promotion') {
     return <Check className="size-3.5" />;
   }

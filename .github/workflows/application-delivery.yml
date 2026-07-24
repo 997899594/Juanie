@@ -54,7 +54,7 @@ env:
   JUANIE_RUNTIME_DIR: /tmp/juanie-ci-runtime-v1
   JUANIE_BUILD_STATE_DIR: /tmp/juanie-build-run
   JUANIE_TURBO_CACHE_DIR: /tmp/juanie-turbo-cache
-  JUANIE_BUILD_RUN_SHA256: a292720eb4405d1588c83db787d966aaa7e6e89c72cf24cf4448c6b7dd0a30c3
+  JUANIE_BUILD_RUN_SHA256: a37b5019dd47e046559bb9980ec19996cca8122d8a607fa322cd49ad8e168fd0
   JUANIE_DELIVERY_SHA256: 7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154
   JUANIE_IDENTITY_SHA256: 41e570b4dfb648595a3c1c642591bd6f50ba073374e08d7edebb34d889fd293d
 
@@ -145,7 +145,7 @@ jobs:
       - name: Persist source snapshot
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: juanie-source-${{ inputs.delivery_id }}
+          name: juanie-source-${{ steps.plan.outputs.build_run_id }}
           path: .
           include-hidden-files: true
           if-no-files-found: error
@@ -174,7 +174,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: juanie-source-${{ inputs.delivery_id }}
+          name: juanie-source-${{ needs.plan.outputs.build_run_id }}
           path: .
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -379,3 +379,33 @@ jobs:
           JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
           JUANIE_DELIVERY_RESULT: ${{ needs.deliver.result }}
         run: bash "$JUANIE_RUNTIME_DIR/build-run.sh" complete-delivery
+
+  settle:
+    needs: [plan, build, release, deliver, complete]
+    if: ${{ always() && (needs.plan.result == 'failure' || needs.plan.result == 'cancelled' || needs.build.result == 'failure' || needs.build.result == 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR"
+          for asset in build-run.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_BUILD_RUN_SHA256" build-run.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - name: Settle failed CI-owned delivery phase
+        env:
+          JUANIE_PLAN_RESULT: ${{ needs.plan.result }}
+          JUANIE_BUILD_RESULT: ${{ needs.build.result }}
+        run: bash "$JUANIE_RUNTIME_DIR/build-run.sh" fail

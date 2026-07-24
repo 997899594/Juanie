@@ -50,6 +50,7 @@ describe('versioned CI runtime assets', () => {
       'release',
       'deliver',
       'complete',
+      'settle',
     ]);
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).not.toContain('workflow_call:');
@@ -70,6 +71,10 @@ describe('versioned CI runtime assets', () => {
     expect(workflow).not.toContain('curl --fail --silent --show-error --get');
     expect(workflow).toContain('Remove synthetic source history');
     expect(workflow).toContain('Restore service-scoped Turbo cache');
+    expect(workflow).not.toContain('juanie-source-$' + '{{ inputs.delivery_id }}');
+    expect(workflow).toContain('juanie-source-$' + '{{ steps.plan.outputs.build_run_id }}');
+    expect(workflow).toContain('juanie-source-$' + '{{ needs.plan.outputs.build_run_id }}');
+    expect(workflow).toContain('build-run.sh" fail');
   });
 
   it('atomically downloads and validates a complete source archive', async () => {

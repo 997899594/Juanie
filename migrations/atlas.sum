@@ -1,4 +1,4 @@
-h1:M4xBi3HK4vMbmQ7Fq+xjAoZFyUKU6Au/B3rkclA91jU=
+h1:wwSMy3illgKZ5rMaGhf85GOpITpkpCPzoH7wM59dgP4=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -37,3 +37,4 @@ h1:M4xBi3HK4vMbmQ7Fq+xjAoZFyUKU6Au/B3rkclA91jU=
 20260722040146_source_delivery_durability.sql h1:PNB6T4QRF11xOhtBXk9PYxPoe3axXcNIO3a4KtdTrwA=
 20260723092304_environment_variable_key_version.sql h1:ZZZBrb334cKUd+2aWF0xoPilLxmzuVRUbMgV/1W0vzM=
 20260724120000_delivery_control_plane.sql h1:3VwVASPSh8Ii4RYOL10M+UIaqM4ChZhVl7Y3BgL5yEA=
+20260724120001_delivery_history_convergence.sql h1:ZDlRgn+UxtUNMcyShWdO2c3ZnTwp5QKyk79OAOh7HMc=

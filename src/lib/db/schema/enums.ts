@@ -94,6 +94,7 @@ export const deliveryExecutionStatuses = [
   'awaiting_promotion',
   'production_releasing',
   'production_verified',
+  'historical',
   'failed',
   'canceled',
 ] as const;

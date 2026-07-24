@@ -2,6 +2,7 @@ import type { DeliveryExecutionStatus } from '@/lib/db/schema';
 
 const terminalStatuses = new Set<DeliveryExecutionStatus>([
   'production_verified',
+  'historical',
   'failed',
   'canceled',
 ]);
@@ -21,6 +22,7 @@ const allowedTransitions = {
   awaiting_promotion: ['production_releasing', 'failed', 'canceled'],
   production_releasing: ['production_verified', 'failed', 'canceled'],
   production_verified: [],
+  historical: [],
   failed: [],
   canceled: [],
 } as const satisfies Record<DeliveryExecutionStatus, readonly DeliveryExecutionStatus[]>;

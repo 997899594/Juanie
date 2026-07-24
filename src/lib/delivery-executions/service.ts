@@ -1,6 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  buildRuns,
+  buildUnits,
   type DeliveryExecutionStatus,
   deliveryExecutionEvents,
   deliveryExecutions,
@@ -66,7 +68,9 @@ export async function signalDeliveryExecutionInTransaction(
       lastSignalAt: now,
       lastErrorCode: input.errorCode?.slice(0, 100) ?? null,
       lastError: input.errorMessage?.slice(0, 10_000) ?? null,
-      completedAt: ['production_verified', 'failed', 'canceled'].includes(input.status)
+      completedAt: ['production_verified', 'historical', 'failed', 'canceled'].includes(
+        input.status
+      )
         ? now
         : null,
       updatedAt: now,
@@ -89,4 +93,70 @@ export async function signalDeliveryExecutionInTransaction(
 
 export async function signalDeliveryExecution(input: DeliveryExecutionSignal) {
   return db.transaction((tx) => signalDeliveryExecutionInTransaction(tx, input));
+}
+
+export async function failCiOwnedDeliveryPhase(input: {
+  repositoryId: string;
+  provider: string;
+  providerDeliveryId: string;
+  sourceRepository: string;
+  sourceRef: string;
+  sourceCommitSha: string;
+  planResult: 'success' | 'failure' | 'cancelled';
+  buildResult: 'failure' | 'cancelled' | 'skipped';
+}) {
+  const execution = await findDeliveryExecutionForProviderRun(input);
+  if (!execution) throw new Error('Delivery execution was not found');
+  if (
+    execution.sourceRepository !== input.sourceRepository ||
+    execution.sourceRef !== input.sourceRef ||
+    execution.sourceCommitSha !== input.sourceCommitSha
+  ) {
+    throw new Error('Delivery execution source identity does not match the CI workload');
+  }
+  if (['production_verified', 'historical', 'failed', 'canceled'].includes(execution.status)) {
+    return { execution, completed: false, reason: 'already_terminal' as const };
+  }
+
+  const errorMessage = `Managed CI phase failed (plan=${input.planResult}, build=${input.buildResult})`;
+  return db.transaction(async (tx) => {
+    const activeBuildRuns = await tx.query.buildRuns.findMany({
+      where: and(
+        eq(buildRuns.deliveryExecutionId, execution.id),
+        inArray(buildRuns.status, ['pending', 'running', 'succeeded', 'finalizing'])
+      ),
+      columns: { id: true },
+    });
+    const now = new Date();
+    for (const buildRun of activeBuildRuns) {
+      await tx
+        .update(buildUnits)
+        .set({ status: 'failed', errorMessage, updatedAt: now, finishedAt: now })
+        .where(
+          and(
+            eq(buildUnits.buildRunId, buildRun.id),
+            inArray(buildUnits.status, ['pending', 'running'])
+          )
+        );
+      await tx
+        .update(buildRuns)
+        .set({ status: 'failed', errorMessage, updatedAt: now, finishedAt: now })
+        .where(eq(buildRuns.id, buildRun.id));
+    }
+
+    const updated = await signalDeliveryExecutionInTransaction(tx, {
+      executionId: execution.id,
+      eventKey: 'ci.phase.failed',
+      type: 'ci.phase.failed',
+      status: 'failed',
+      errorCode: 'CI_PHASE_FAILED',
+      errorMessage,
+      data: {
+        planResult: input.planResult,
+        buildResult: input.buildResult,
+        buildRunIds: activeBuildRuns.map((buildRun) => buildRun.id),
+      },
+    });
+    return { execution: updated, completed: true, reason: 'ci_phase_failed' as const };
+  });
 }
