@@ -89,19 +89,6 @@ async function checkRedis(): Promise<HealthCheck> {
   }
 }
 
-async function checkRestate(): Promise<HealthCheck> {
-  const start = Date.now();
-  const adminUrl = (process.env.RESTATE_ADMIN_URL ?? 'http://localhost:9070').replace(/\/$/u, '');
-  const response = await fetch(`${adminUrl}/health`, {
-    signal: AbortSignal.timeout(2_000),
-    cache: 'no-store',
-  });
-  if (!response.ok) {
-    throw new Error(`Restate health check returned HTTP ${response.status}`);
-  }
-  return { status: 'pass', latency: Date.now() - start };
-}
-
 async function checkRestateServiceCatalog(): Promise<HealthCheck> {
   const start = Date.now();
   const adminUrl = process.env.RESTATE_ADMIN_URL ?? 'http://localhost:9070';
@@ -297,7 +284,7 @@ export async function getReadinessResponse() {
   }
 
   try {
-    response.checks.restate = await checkRestate();
+    response.checks.restate = await checkRestateServiceCatalog();
   } catch (error) {
     response.status = 'unhealthy';
     response.checks.restate = {

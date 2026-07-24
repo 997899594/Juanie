@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { readFile } from 'node:fs/promises';
+import { expectedRestateServiceNames } from '@/lib/restate/service-catalog';
 
 describe('production web runtime contract', () => {
   it('runs and smoke-tests the Next standalone server with Node', async () => {
@@ -18,6 +19,10 @@ describe('production web runtime contract', () => {
     expect(workflow).not.toContain('/usr/local/bin/bun -e "\\');
     expect(reconciler).toContain('kubectl get --raw \\');
     expect(reconciler).toContain('/services/juanie-restate:9070/proxy/deployments/');
+    expect(reconciler).toContain('application-owned Restate service catalog');
+    for (const serviceName of expectedRestateServiceNames) {
+      expect(reconciler).not.toContain(serviceName);
+    }
     expect(reconciler).not.toContain('kubectl -n juanie exec');
     expect(reconciler).not.toContain('/usr/local/bin/bun');
   });

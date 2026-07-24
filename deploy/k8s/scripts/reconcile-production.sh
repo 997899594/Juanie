@@ -190,24 +190,9 @@ if [ "${PLATFORM_DEPLOY_REQUIRED}" = true ]; then
   test -n "${restate_deployment_id}"
   restate_deployment="$(kubectl get --raw \
     "/api/v1/namespaces/juanie/services/juanie-restate:9070/proxy/deployments/${restate_deployment_id}")"
-  expected_services='[
-    "ProjectInitializationWorkflow",
-    "ReleaseWorkflow",
-    "EnvironmentRuntimeWorkflow",
-    "MigrationWorkflow",
-    "DeploymentWorkflow",
-    "ProjectDeletionWorkflow",
-    "SchemaRepairWorkflow",
-    "SourceDeliveryWorkflow"
-  ]'
   actual_services="$(jq -c '[.services[]?.name] | sort' <<<"${restate_deployment}")"
-  expected_services="$(jq -c 'sort' <<<"${expected_services}")"
-  if [ "${actual_services}" != "${expected_services}" ]; then
-    echo "Restate service catalog mismatch: expected=${expected_services} actual=${actual_services}" >&2
-    exit 1
-  fi
   service_count="$(jq 'length' <<<"${actual_services}")"
-  echo "Verified immutable Restate deployment ${restate_deployment_id} with ${service_count} services"
+  echo "Observed immutable Restate deployment ${restate_deployment_id} with ${service_count} services"
 
   for attempt in $(seq 1 24); do
     if curl -fsS https://juanie.art/api/health/ready >/dev/null; then
@@ -218,4 +203,5 @@ if [ "${PLATFORM_DEPLOY_REQUIRED}" = true ]; then
     fi
     sleep 5
   done
+  echo 'Verified platform readiness with the application-owned Restate service catalog'
 fi
