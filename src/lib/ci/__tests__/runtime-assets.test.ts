@@ -44,7 +44,13 @@ describe('versioned CI runtime assets', () => {
     );
     const parsed = parse(workflow) as { jobs?: Record<string, unknown> };
 
-    expect(Object.keys(parsed.jobs ?? {})).toEqual(['plan', 'build', 'release', 'deliver']);
+    expect(Object.keys(parsed.jobs ?? {})).toEqual([
+      'plan',
+      'build',
+      'release',
+      'deliver',
+      'complete',
+    ]);
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).not.toContain('workflow_call:');
     for (const digest of Object.values(ciRuntimeAssetDigests)) {

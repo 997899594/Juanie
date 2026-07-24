@@ -76,13 +76,18 @@ async function getReleaseForRepository(releaseId: string) {
 function assertReleaseAcceptsDeliveryArtifacts(
   release: Awaited<ReturnType<typeof getReleaseForRepository>>
 ) {
-  if (release.status === 'succeeded' || release.status === 'awaiting_rollout') {
+  if (
+    release.status === 'succeeded' ||
+    release.status === 'awaiting_rollout' ||
+    release.status === 'awaiting_approval' ||
+    release.status === 'awaiting_external_completion'
+  ) {
     return;
   }
 
   throw accessError(
     'invalid_scope',
-    `Release ${release.id} is ${release.status}; delivery artifacts can only be attached after verification`
+    `Release ${release.id} is ${release.status}; delivery artifacts are not accepted in this state`
   );
 }
 

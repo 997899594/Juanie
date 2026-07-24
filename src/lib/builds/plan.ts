@@ -115,7 +115,7 @@ function normalizeBuildStrategy(
     return strategy;
   }
 
-  return 'buildpacks';
+  return 'managed';
 }
 
 function sanitizeUnitId(name: string): string {

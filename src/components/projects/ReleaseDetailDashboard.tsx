@@ -1,3 +1,4 @@
+import { DeliveryExecutionTimeline } from '@/components/projects/DeliveryExecutionTimeline';
 import { EnvironmentPageFrame } from '@/components/projects/EnvironmentPageFrame';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
@@ -52,6 +53,9 @@ export function ReleaseDetailDashboard({
         </div>
       }
     >
+      {pageData.deliveryExecution ? (
+        <DeliveryExecutionTimeline execution={pageData.deliveryExecution} />
+      ) : null}
       <ReleaseResultSection release={release} />
 
       <ReleaseExecutionSections

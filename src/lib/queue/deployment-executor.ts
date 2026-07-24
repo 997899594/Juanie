@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, releases } from '@/lib/db/schema';
-import { resolveDeployImageReference } from '@/lib/deploy-images';
 import {
   getK8sConfigMapName,
   getK8sSecretName,
@@ -42,6 +41,7 @@ import {
   syncProjectDatabaseRuntimeContractsFromRepo,
   syncProjectServiceRuntimeContractsFromRepo,
 } from '@/lib/services/runtime-contract';
+import { resolveImmutableImageReference } from '@/lib/supply-chain/image-trust';
 
 const deploymentExecutorLogger = logger.child({ component: 'deployment-executor' });
 
@@ -162,20 +162,15 @@ export async function executeDeploymentWorkload(
 
   await syncEnvVarsToK8s(project.id, targetEnvironment.id);
 
-  const imageName =
-    deployment.imageUrl ||
-    resolveDeployImageReference(
-      {
-        configJson: project.configJson,
-        repositoryFullName: project.repository?.fullName ?? null,
-      },
-      deployment.commitSha
-    );
-  if (!imageName) {
+  if (!deployment.imageUrl) {
     throw new Error(
-      `Cannot resolve image name for project ${project.slug}: no imageUrl in deployment record and repository URL not configured`
+      `Deployment ${deployment.id} is missing its admitted immutable image reference`
     );
   }
+  const imageName = resolveImmutableImageReference({
+    image: deployment.imageUrl,
+    digest: deployment.imageDigest,
+  });
 
   const targetServices = deployment.serviceId
     ? serviceList.filter((service) => service.id === deployment.serviceId)

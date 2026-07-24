@@ -7,6 +7,7 @@ export const restateServiceNames = {
   environmentRuntime: 'EnvironmentRuntimeWorkflow',
   deployment: 'DeploymentWorkflow',
   sourceDelivery: 'SourceDeliveryWorkflow',
+  sourceWebhookController: 'SourceWebhookController',
 } as const;
 
 export interface RestateInvocationTarget {

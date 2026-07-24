@@ -7,17 +7,22 @@ import {
   buildArtifacts,
   buildRuns,
   buildUnits,
+  deliveryExecutionEvents,
+  deliveryExecutions,
   deploymentDiagnostics,
   deploymentLogs,
   deployments,
   environments,
   migrationRuns,
   projects,
+  promotionApprovalEvents,
+  promotionRequests,
   releaseArtifacts,
   releaseEvents,
   releaseMigrationPlans,
   releases,
   repositories,
+  repositoryWebhookControllers,
   services,
   sourceDeliveries,
   teams,
@@ -25,6 +30,10 @@ import {
 } from '@/lib/db/schema/tables';
 
 export const sourceDeliveriesRelations = relations(sourceDeliveries, ({ one }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [sourceDeliveries.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
   project: one(projects, {
     fields: [sourceDeliveries.projectId],
     references: [projects.id],
@@ -35,7 +44,35 @@ export const sourceDeliveriesRelations = relations(sourceDeliveries, ({ one }) =
   }),
 }));
 
+export const deliveryExecutionsRelations = relations(deliveryExecutions, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [deliveryExecutions.projectId],
+    references: [projects.id],
+  }),
+  repository: one(repositories, {
+    fields: [deliveryExecutions.repositoryId],
+    references: [repositories.id],
+  }),
+  events: many(deliveryExecutionEvents),
+  sourceDeliveries: many(sourceDeliveries),
+  buildRuns: many(buildRuns),
+  releases: many(releases),
+  promotionRequests: many(promotionRequests),
+  deployments: many(deployments),
+}));
+
+export const deliveryExecutionEventsRelations = relations(deliveryExecutionEvents, ({ one }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [deliveryExecutionEvents.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
+}));
+
 export const buildRunsRelations = relations(buildRuns, ({ one, many }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [buildRuns.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
   project: one(projects, {
     fields: [buildRuns.projectId],
     references: [projects.id],
@@ -80,6 +117,15 @@ export const buildArtifactsRelations = relations(buildArtifacts, ({ one }) => ({
 }));
 
 export const releasesRelations = relations(releases, ({ one, many }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [releases.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
+  promotionRequest: one(promotionRequests, {
+    fields: [releases.promotionRequestId],
+    references: [promotionRequests.id],
+    relationName: 'promotion_production_release',
+  }),
   project: one(projects, {
     fields: [releases.projectId],
     references: [projects.id],
@@ -111,6 +157,59 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   buildRuns: many(buildRuns),
   events: many(releaseEvents),
 }));
+
+export const promotionRequestsRelations = relations(promotionRequests, ({ one, many }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [promotionRequests.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
+  project: one(projects, {
+    fields: [promotionRequests.projectId],
+    references: [projects.id],
+  }),
+  sourceRelease: one(releases, {
+    fields: [promotionRequests.sourceReleaseId],
+    references: [releases.id],
+    relationName: 'promotion_source_release',
+  }),
+  productionRelease: one(releases, {
+    fields: [promotionRequests.productionReleaseId],
+    references: [releases.id],
+    relationName: 'promotion_production_release',
+  }),
+  requestedByUser: one(users, {
+    fields: [promotionRequests.requestedByUserId],
+    references: [users.id],
+    relationName: 'promotion_requested_by',
+  }),
+  approvedByUser: one(users, {
+    fields: [promotionRequests.approvedByUserId],
+    references: [users.id],
+    relationName: 'promotion_approved_by',
+  }),
+  approvalEvents: many(promotionApprovalEvents),
+}));
+
+export const promotionApprovalEventsRelations = relations(promotionApprovalEvents, ({ one }) => ({
+  promotionRequest: one(promotionRequests, {
+    fields: [promotionApprovalEvents.promotionRequestId],
+    references: [promotionRequests.id],
+  }),
+  actorUser: one(users, {
+    fields: [promotionApprovalEvents.actorUserId],
+    references: [users.id],
+  }),
+}));
+
+export const repositoryWebhookControllersRelations = relations(
+  repositoryWebhookControllers,
+  ({ one }) => ({
+    repository: one(repositories, {
+      fields: [repositoryWebhookControllers.repositoryId],
+      references: [repositories.id],
+    }),
+  })
+);
 
 export const releaseEventsRelations = relations(releaseEvents, ({ one }) => ({
   release: one(releases, {
@@ -171,6 +270,10 @@ export const artifactDownloadEventsRelations = relations(artifactDownloadEvents,
 }));
 
 export const deploymentsRelations = relations(deployments, ({ one, many }) => ({
+  deliveryExecution: one(deliveryExecutions, {
+    fields: [deployments.deliveryExecutionId],
+    references: [deliveryExecutions.id],
+  }),
   release: one(releases, {
     fields: [deployments.releaseId],
     references: [releases.id],

@@ -33,4 +33,26 @@ describe('dependency health policy', () => {
       })
     ).toBe('degraded');
   });
+
+  it('fails full health when the durable delivery chain is broken', () => {
+    expect(
+      deriveFullHealthStatus({
+        database: { status: 'pass' },
+        restate: { status: 'pass' },
+        applicationDelivery: { status: 'pass' },
+        deliveryControlPlane: { status: 'fail' },
+      })
+    ).toBe('unhealthy');
+  });
+
+  it('reports controller drift as degraded', () => {
+    expect(
+      deriveFullHealthStatus({
+        database: { status: 'pass' },
+        restate: { status: 'pass' },
+        applicationDelivery: { status: 'pass' },
+        deliveryControlPlane: { status: 'warn' },
+      })
+    ).toBe('degraded');
+  });
 });

@@ -11,7 +11,7 @@ export const ciRuntimeAssetNames = [
 
 export type CiRuntimeAssetName = (typeof ciRuntimeAssetNames)[number];
 export const ciRuntimeAssetDigests: Record<CiRuntimeAssetName, string> = {
-  'build-run.sh': 'b9eb15815d7aa48cbdeb3c1cd220eebbb0b593aed8d86491c210a68adb269f04',
+  'build-run.sh': 'a292720eb4405d1588c83db787d966aaa7e6e89c72cf24cf4448c6b7dd0a30c3',
   'delivery-artifacts.sh': '7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154',
   'workload-identity.sh': '41e570b4dfb648595a3c1c642591bd6f50ba073374e08d7edebb34d889fd293d',
 };

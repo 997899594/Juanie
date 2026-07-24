@@ -11,6 +11,7 @@ export const outboxTopics = [
   'environment.runtime.requested',
   'deployment.requested',
   'source.delivery.requested',
+  'source.webhook.reconcile.requested',
 ] as const;
 
 export type OutboxTopic = (typeof outboxTopics)[number];

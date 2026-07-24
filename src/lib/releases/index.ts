@@ -2,14 +2,18 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  buildRuns,
   deliveryRules,
   environments,
   projects,
+  promotionApprovalEvents,
+  promotionRequests,
   releaseArtifacts,
   releases,
   repositories,
   services,
 } from '@/lib/db/schema';
+import { signalDeliveryExecutionInTransaction } from '@/lib/delivery-executions/service';
 import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
@@ -17,6 +21,7 @@ import { buildReleaseExecutionKey, claimExecutionOwnership } from '@/lib/executi
 import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
+import type { PromotionContent } from '@/lib/promotions/content-digest';
 import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
@@ -24,6 +29,7 @@ import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
 import { assertExternalResourceBindingsResolved } from '@/lib/releases/resource-admission';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
+import { resolveImmutableImageReference } from '@/lib/supply-chain/image-trust';
 import { buildTraceLogFields, createTraceId } from '@/lib/trace/context';
 import { getDeliveryReleaseArtifacts, getDeployableReleaseArtifacts } from './artifacts';
 import { appendReleaseEvent } from './events';
@@ -37,6 +43,8 @@ export interface ReleaseServiceInput {
   name?: string;
   image: string;
   digest?: string | null;
+  sbomUri?: string | null;
+  provenanceUri?: string | null;
 }
 
 export interface CreateRepositoryReleaseInput {
@@ -54,6 +62,8 @@ export interface CreateRepositoryReleaseInput {
   triggeredByUserId?: string | null;
   summary?: string | null;
   artifactOnly?: boolean;
+  deliveryExecutionId?: string | null;
+  buildRunId?: string;
 }
 
 export interface CreateProjectReleaseInput {
@@ -69,6 +79,14 @@ export interface CreateProjectReleaseInput {
   triggeredByUserId?: string | null;
   summary?: string | null;
   entryPoint?: ReleaseEntryPoint;
+  deliveryExecutionId?: string | null;
+  promotionRequestId?: string | null;
+  promotion?: {
+    content: PromotionContent;
+    contentDigest: string;
+    requestedByUserId: string;
+    requireDistinctApprover?: boolean;
+  };
 }
 
 export function resolveEnvironment(
@@ -113,13 +131,17 @@ async function resolveReleaseServices(
     }
     resolvedServiceIds.add(service.id);
 
+    const imageDigest = input.digest ?? null;
+    const imageUrl = resolveImmutableImageReference({ image: input.image, digest: imageDigest });
     artifacts.push({
       service,
-      imageUrl: input.image,
-      imageDigest: input.digest ?? null,
+      imageUrl,
+      imageDigest,
+      sbomUri: input.sbomUri ?? null,
+      provenanceUri: input.provenanceUri ?? null,
       kind: 'image' as const,
       name: service.name,
-      uri: input.image,
+      uri: imageUrl,
       status: 'succeeded' as const,
     });
   }
@@ -142,6 +164,10 @@ async function persistRelease(
     triggeredByUserId?: string | null;
     summary?: string | null;
     artifactOnly?: boolean;
+    deliveryExecutionId?: string | null;
+    buildRunId?: string;
+    promotionRequestId?: string | null;
+    promotion?: CreateProjectReleaseInput['promotion'];
   }
 ) {
   if (!meta.artifactOnly) {
@@ -182,8 +208,35 @@ async function persistRelease(
   const deployableArtifacts = getDeployableReleaseArtifacts(artifacts);
   const deployableServiceIds = deployableArtifacts.map((artifact) => artifact.service.id);
 
-  const release = await db.transaction(async (tx) => {
+  const persisted = await db.transaction(async (tx) => {
+    if (meta.buildRunId) {
+      const [claimedBuildRun] = await tx
+        .update(buildRuns)
+        .set({ status: 'finalizing', updatedAt: new Date() })
+        .where(
+          and(
+            eq(buildRuns.id, meta.buildRunId),
+            eq(buildRuns.projectId, project.id),
+            eq(buildRuns.status, 'succeeded')
+          )
+        )
+        .returning({ id: buildRuns.id });
+      if (!claimedBuildRun) {
+        const existingBuildRun = await tx.query.buildRuns.findFirst({
+          where: and(eq(buildRuns.id, meta.buildRunId), eq(buildRuns.projectId, project.id)),
+        });
+        if (existingBuildRun?.releaseId) {
+          const existingRelease = await tx.query.releases.findFirst({
+            where: eq(releases.id, existingBuildRun.releaseId),
+          });
+          if (existingRelease) return { release: existingRelease, created: false };
+        }
+        throw new Error(`Build run ${meta.buildRunId} is not ready to finalize`);
+      }
+    }
+
     const releaseId = randomUUID();
+    const promotionRequestId = meta.promotion ? randomUUID() : (meta.promotionRequestId ?? null);
     const executionKey = meta.artifactOnly
       ? `release:${releaseId}`
       : buildReleaseExecutionKey(environment.id);
@@ -193,12 +246,64 @@ async function persistRelease(
       ownerType: 'release',
       ownerId: releaseId,
     });
+    if (meta.deliveryExecutionId && !meta.promotion && !meta.artifactOnly) {
+      const releaseStage = environment.isProduction ? 'production' : 'staging';
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: meta.deliveryExecutionId,
+        eventKey: `${releaseStage}.release.requested.${releaseId}`,
+        type: `${releaseStage}.release.requested`,
+        status: environment.isProduction ? 'production_releasing' : 'staging_releasing',
+        data: { releaseId },
+      });
+    }
+    if (meta.promotion) {
+      if (!meta.sourceReleaseId) throw new Error('Promotion request requires a source release');
+      const requireDistinctApprover = meta.promotion.requireDistinctApprover ?? false;
+      if (requireDistinctApprover) {
+        throw new Error('Distinct approver policy requires a separate approval command');
+      }
+      await tx.insert(promotionRequests).values({
+        id: promotionRequestId!,
+        deliveryExecutionId: meta.deliveryExecutionId ?? null,
+        projectId: project.id,
+        sourceReleaseId: meta.sourceReleaseId,
+        targetEnvironmentId: environment.id,
+        status: 'approved',
+        contentDigest: meta.promotion.contentDigest,
+        content: meta.promotion.content as unknown as Record<string, unknown>,
+        requireDistinctApprover,
+        requestedByUserId: meta.promotion.requestedByUserId,
+        approvedByUserId: meta.promotion.requestedByUserId,
+        approvedAt: new Date(),
+      });
+      await tx.insert(promotionApprovalEvents).values({
+        promotionRequestId: promotionRequestId!,
+        action: 'approved',
+        contentDigest: meta.promotion.contentDigest,
+        actorUserId: meta.promotion.requestedByUserId,
+      });
+      if (meta.deliveryExecutionId) {
+        await signalDeliveryExecutionInTransaction(tx, {
+          executionId: meta.deliveryExecutionId,
+          eventKey: `promotion.approved.${promotionRequestId}`,
+          type: 'promotion.approved',
+          status: 'production_releasing',
+          data: {
+            promotionRequestId,
+            contentDigest: meta.promotion.contentDigest,
+            targetEnvironmentId: environment.id,
+          },
+        });
+      }
+    }
     const [createdRelease] = await tx
       .insert(releases)
       .values({
         id: releaseId,
         projectId: project.id,
         environmentId: environment.id,
+        deliveryExecutionId: meta.deliveryExecutionId ?? null,
+        promotionRequestId,
         executionKey,
         executionGeneration: fence.generation,
         sourceRepository: meta.sourceRepository,
@@ -207,7 +312,7 @@ async function persistRelease(
         externalRunId: meta.externalRunId ?? null,
         configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
         sourceReleaseId: meta.sourceReleaseId ?? null,
-        status: meta.artifactOnly ? 'succeeded' : 'admission_running',
+        status: meta.artifactOnly ? 'awaiting_external_completion' : 'admission_running',
         triggeredBy: meta.triggeredBy ?? 'api',
         triggeredByUserId: meta.triggeredByUserId ?? null,
         summary:
@@ -223,6 +328,16 @@ async function persistRelease(
     if (!createdRelease) {
       throw new Error('Failed to persist release');
     }
+    if (promotionRequestId) {
+      await tx
+        .update(promotionRequests)
+        .set({
+          productionReleaseId: createdRelease.id,
+          status: 'executing',
+          updatedAt: new Date(),
+        })
+        .where(eq(promotionRequests.id, promotionRequestId));
+    }
 
     await tx.insert(releaseArtifacts).values([
       ...artifacts.map((artifact) => ({
@@ -234,6 +349,8 @@ async function persistRelease(
         status: artifact.status,
         imageUrl: artifact.imageUrl,
         imageDigest: artifact.imageDigest,
+        sbomUri: artifact.sbomUri,
+        provenanceUri: artifact.provenanceUri,
       })),
       ...sourceDeliveryArtifacts.map((artifact) => ({
         releaseId: createdRelease.id,
@@ -279,9 +396,13 @@ async function persistRelease(
         projectId: project.id,
         environmentId: environment.id,
         actorUserId: meta.triggeredByUserId ?? null,
-        eventKey: 'artifact-only-completed',
+        eventKey: 'artifact-only-awaiting-delivery',
         type: 'release.status.changed',
-        data: { from: 'admission_running', to: 'succeeded', artifactOnly: true },
+        data: {
+          from: 'admission_running',
+          to: 'awaiting_external_completion',
+          artifactOnly: true,
+        },
         correlationId: traceId,
         causationId: 'created',
       });
@@ -295,42 +416,66 @@ async function persistRelease(
       });
     }
 
-    return createdRelease;
+    if (meta.buildRunId) {
+      const now = new Date();
+      await tx
+        .update(buildRuns)
+        .set({
+          releaseId: createdRelease.id,
+          status: 'finalized',
+          errorMessage: null,
+          finishedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(buildRuns.id, meta.buildRunId));
+    }
+
+    return { release: createdRelease, created: true };
   });
+  const release = persisted.release;
 
-  const traceId = createTraceId(release.id);
-  releaseServiceLogger.info('Release admission queued', {
-    ...buildTraceLogFields({
-      traceId,
-      projectId: project.id,
-      environmentId: environment.id,
-      releaseId: release.id,
-    }),
-    serviceCount: artifacts.length,
-    artifactCount: artifacts.length,
-  });
-
-  await publishReleaseRealtimeSnapshot(release.id);
-
-  void (async () => {
-    try {
-      invalidateMigrationFilePreviewCache({ projectId: project.id });
-      await prewarmReleaseMigrationPreviewCache({
+  if (persisted.created) {
+    const traceId = createTraceId(release.id);
+    releaseServiceLogger.info('Release admission queued', {
+      ...buildTraceLogFields({
+        traceId,
         projectId: project.id,
         environmentId: environment.id,
-        sourceRef: meta.sourceRef,
-        sourceCommitSha: meta.sourceCommitSha ?? null,
-        serviceIds: deployableServiceIds,
-      });
-    } catch (error) {
-      releaseServiceLogger.warn('Failed to prewarm migration preview cache', {
         releaseId: release.id,
-        projectId: project.id,
-        environmentId: environment.id,
+      }),
+      serviceCount: artifacts.length,
+      artifactCount: artifacts.length,
+    });
+
+    try {
+      await publishReleaseRealtimeSnapshot(release.id);
+    } catch (error) {
+      releaseServiceLogger.warn('Failed to publish release realtime snapshot', {
+        releaseId: release.id,
         errorMessage: error instanceof Error ? error.message : String(error),
       });
     }
-  })();
+
+    void (async () => {
+      try {
+        invalidateMigrationFilePreviewCache({ projectId: project.id });
+        await prewarmReleaseMigrationPreviewCache({
+          projectId: project.id,
+          environmentId: environment.id,
+          sourceRef: meta.sourceRef,
+          sourceCommitSha: meta.sourceCommitSha ?? null,
+          serviceIds: deployableServiceIds,
+        });
+      } catch (error) {
+        releaseServiceLogger.warn('Failed to prewarm migration preview cache', {
+          releaseId: release.id,
+          projectId: project.id,
+          environmentId: environment.id,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+  }
 
   return db.query.releases.findFirst({
     where: eq(releases.id, release.id),
@@ -439,6 +584,8 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
         triggeredByUserId: input.triggeredByUserId ?? null,
         summary: input.summary ?? null,
         artifactOnly: input.artifactOnly,
+        deliveryExecutionId: input.deliveryExecutionId ?? null,
+        buildRunId: input.buildRunId,
       }
     );
   } catch (error) {
@@ -487,6 +634,9 @@ export async function createProjectRelease(input: CreateProjectReleaseInput) {
     triggeredBy: input.triggeredBy,
     triggeredByUserId: input.triggeredByUserId ?? null,
     summary: input.summary ?? null,
+    deliveryExecutionId: input.deliveryExecutionId ?? null,
+    promotionRequestId: input.promotionRequestId ?? null,
+    promotion: input.promotion,
   });
 }
 

@@ -18,12 +18,15 @@ import {
   buildArtifactKindEnum,
   buildRunStatusEnum,
   buildUnitStatusEnum,
+  deliveryExecutionStatusEnum,
   deploymentStatusEnum,
   gitProviderTypeEnum,
   outboxStatusEnum,
+  promotionRequestStatusEnum,
   ReleaseArtifactKind,
   ReleaseArtifactStatus,
   releaseStatusEnum,
+  repositoryWebhookReconcileStatusEnum,
   sourceDeliveryStatusEnum,
 } from '@/lib/db/schema/enums';
 import { repositories, users } from '@/lib/db/schema/identity';
@@ -36,6 +39,73 @@ import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 // Release Tables
 // ============================================
 
+export const deliveryExecutions = pgTable(
+  'deliveryExecution',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    repositoryId: uuid('repositoryId')
+      .notNull()
+      .references(() => repositories.id, { onDelete: 'cascade' }),
+    provider: gitProviderTypeEnum('provider').notNull(),
+    providerDeliveryId: varchar('providerDeliveryId', { length: 255 }).notNull(),
+    sourceRepository: varchar('sourceRepository', { length: 255 }).notNull(),
+    sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }).notNull(),
+    status: deliveryExecutionStatusEnum('status').notNull().default('received'),
+    lastErrorCode: varchar('lastErrorCode', { length: 100 }),
+    lastError: text('lastError'),
+    lastSignalAt: timestamp('lastSignalAt').defaultNow().notNull(),
+    startedAt: timestamp('startedAt').defaultNow().notNull(),
+    completedAt: timestamp('completedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    providerDeliveryUnique: unique('deliveryExecution_provider_delivery_unique').on(
+      table.provider,
+      table.providerDeliveryId
+    ),
+    projectCreatedIdx: index('deliveryExecution_project_created_idx').on(
+      table.projectId,
+      table.createdAt
+    ),
+    statusSignalIdx: index('deliveryExecution_status_signal_idx').on(
+      table.status,
+      table.lastSignalAt
+    ),
+  })
+);
+
+export const deliveryExecutionEvents = pgTable(
+  'deliveryExecutionEvent',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    sequence: bigserial('sequence', { mode: 'number' }).notNull(),
+    deliveryExecutionId: uuid('deliveryExecutionId')
+      .notNull()
+      .references(() => deliveryExecutions.id, { onDelete: 'cascade' }),
+    eventKey: varchar('eventKey', { length: 255 }).notNull(),
+    type: varchar('type', { length: 100 }).notNull(),
+    fromStatus: deliveryExecutionStatusEnum('fromStatus'),
+    toStatus: deliveryExecutionStatusEnum('toStatus').notNull(),
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    occurredAt: timestamp('occurredAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    executionSequenceIdx: index('deliveryExecutionEvent_execution_sequence_idx').on(
+      table.deliveryExecutionId,
+      table.sequence
+    ),
+    eventKeyUnique: unique('deliveryExecutionEvent_execution_event_key_unique').on(
+      table.deliveryExecutionId,
+      table.eventKey
+    ),
+  })
+);
+
 export const sourceDeliveries = pgTable(
   'sourceDelivery',
   {
@@ -46,6 +116,9 @@ export const sourceDeliveries = pgTable(
     repositoryId: uuid('repositoryId')
       .notNull()
       .references(() => repositories.id, { onDelete: 'cascade' }),
+    deliveryExecutionId: uuid('deliveryExecutionId')
+      .notNull()
+      .references(() => deliveryExecutions.id, { onDelete: 'cascade' }),
 
     provider: gitProviderTypeEnum('provider').notNull(),
     providerDeliveryId: varchar('providerDeliveryId', { length: 255 }).notNull(),
@@ -65,6 +138,9 @@ export const sourceDeliveries = pgTable(
   (table) => ({
     projectIdIdx: index('sourceDelivery_projectId_idx').on(table.projectId),
     repositoryIdIdx: index('sourceDelivery_repositoryId_idx').on(table.repositoryId),
+    deliveryExecutionUnique: unique('sourceDelivery_deliveryExecution_unique').on(
+      table.deliveryExecutionId
+    ),
     statusIdx: index('sourceDelivery_status_idx').on(table.status),
     providerDeliveryUnique: unique('sourceDelivery_provider_delivery_unique').on(
       table.provider,
@@ -81,6 +157,9 @@ export const buildRuns = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     repositoryId: uuid('repositoryId').references(() => repositories.id, { onDelete: 'set null' }),
+    deliveryExecutionId: uuid('deliveryExecutionId').references(() => deliveryExecutions.id, {
+      onDelete: 'set null',
+    }),
     releaseId: uuid('releaseId').references((): AnyPgColumn => releases.id, {
       onDelete: 'set null',
     }),
@@ -102,6 +181,7 @@ export const buildRuns = pgTable(
   (table) => ({
     projectIdIdx: index('buildRun_projectId_idx').on(table.projectId),
     repositoryIdIdx: index('buildRun_repositoryId_idx').on(table.repositoryId),
+    deliveryExecutionIdx: index('buildRun_deliveryExecution_idx').on(table.deliveryExecutionId),
     releaseIdIdx: index('buildRun_releaseId_idx').on(table.releaseId),
     sourceIdx: index('buildRun_source_idx').on(
       table.sourceRepository,
@@ -192,6 +272,13 @@ export const releases = pgTable(
     environmentId: uuid('environmentId')
       .notNull()
       .references(() => environments.id, { onDelete: 'cascade' }),
+    deliveryExecutionId: uuid('deliveryExecutionId').references(() => deliveryExecutions.id, {
+      onDelete: 'set null',
+    }),
+    promotionRequestId: uuid('promotionRequestId').references(
+      (): AnyPgColumn => promotionRequests.id,
+      { onDelete: 'set null' }
+    ),
 
     executionKey: varchar('executionKey', { length: 255 }).notNull(),
     executionGeneration: integer('executionGeneration').notNull(),
@@ -219,9 +306,110 @@ export const releases = pgTable(
   (table) => ({
     projectIdIdx: index('release_projectId_idx').on(table.projectId),
     environmentIdIdx: index('release_environmentId_idx').on(table.environmentId),
+    deliveryExecutionIdx: index('release_deliveryExecution_idx').on(table.deliveryExecutionId),
+    promotionRequestIdx: index('release_promotionRequest_idx').on(table.promotionRequestId),
     sourceReleaseIdIdx: index('release_sourceReleaseId_idx').on(table.sourceReleaseId),
     statusIdx: index('release_status_idx').on(table.status),
     sourceRepoIdx: index('release_sourceRepository_idx').on(table.sourceRepository),
+  })
+);
+
+export const promotionRequests = pgTable(
+  'promotionRequest',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    deliveryExecutionId: uuid('deliveryExecutionId').references(() => deliveryExecutions.id, {
+      onDelete: 'set null',
+    }),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceReleaseId: uuid('sourceReleaseId')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'restrict' }),
+    targetEnvironmentId: uuid('targetEnvironmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'restrict' }),
+    productionReleaseId: uuid('productionReleaseId').references(() => releases.id, {
+      onDelete: 'set null',
+    }),
+    status: promotionRequestStatusEnum('status').notNull().default('requested'),
+    contentDigest: varchar('contentDigest', { length: 71 }).notNull(),
+    content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+    requireDistinctApprover: boolean('requireDistinctApprover').notNull().default(false),
+    requestedByUserId: uuid('requestedByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedByUserId: uuid('approvedByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    requestedAt: timestamp('requestedAt').defaultNow().notNull(),
+    approvedAt: timestamp('approvedAt'),
+    completedAt: timestamp('completedAt'),
+    lastError: text('lastError'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectCreatedIdx: index('promotionRequest_project_created_idx').on(
+      table.projectId,
+      table.createdAt
+    ),
+    executionIdx: index('promotionRequest_deliveryExecution_idx').on(table.deliveryExecutionId),
+    sourceTargetDigestUnique: unique('promotionRequest_source_target_digest_unique').on(
+      table.sourceReleaseId,
+      table.targetEnvironmentId,
+      table.contentDigest
+    ),
+  })
+);
+
+export const promotionApprovalEvents = pgTable(
+  'promotionApprovalEvent',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    promotionRequestId: uuid('promotionRequestId')
+      .notNull()
+      .references(() => promotionRequests.id, { onDelete: 'cascade' }),
+    action: varchar('action', { length: 20 }).$type<'approved' | 'rejected'>().notNull(),
+    contentDigest: varchar('contentDigest', { length: 71 }).notNull(),
+    actorUserId: uuid('actorUserId').references(() => users.id, { onDelete: 'set null' }),
+    reason: text('reason'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    requestCreatedIdx: index('promotionApprovalEvent_request_created_idx').on(
+      table.promotionRequestId,
+      table.createdAt
+    ),
+  })
+);
+
+export const repositoryWebhookControllers = pgTable(
+  'repositoryWebhookController',
+  {
+    repositoryId: uuid('repositoryId')
+      .primaryKey()
+      .references(() => repositories.id, { onDelete: 'cascade' }),
+    desiredGeneration: integer('desiredGeneration').notNull().default(1),
+    observedGeneration: integer('observedGeneration').notNull().default(0),
+    canonicalUrl: varchar('canonicalUrl', { length: 500 }).notNull(),
+    observedWebhookId: varchar('observedWebhookId', { length: 255 }),
+    observedUrl: varchar('observedUrl', { length: 500 }),
+    status: repositoryWebhookReconcileStatusEnum('status').notNull().default('pending'),
+    attemptCount: integer('attemptCount').notNull().default(0),
+    retryAt: timestamp('retryAt'),
+    lastErrorCode: varchar('lastErrorCode', { length: 100 }),
+    lastError: text('lastError'),
+    lastReconciledAt: timestamp('lastReconciledAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    reconcileIdx: index('repositoryWebhookController_reconcile_idx').on(
+      table.status,
+      table.retryAt
+    ),
   })
 );
 
@@ -422,6 +610,9 @@ export const deployments = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    deliveryExecutionId: uuid('deliveryExecutionId').references(() => deliveryExecutions.id, {
+      onDelete: 'set null',
+    }),
     projectId: uuid('projectId')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -438,6 +629,7 @@ export const deployments = pgTable(
     branch: varchar('branch', { length: 100 }),
 
     imageUrl: varchar('imageUrl', { length: 500 }),
+    imageDigest: varchar('imageDigest', { length: 255 }),
     buildLogs: text('buildLogs'),
     errorMessage: text('errorMessage'),
 
@@ -448,6 +640,7 @@ export const deployments = pgTable(
   },
   (table) => ({
     releaseIdIdx: index('deployment_releaseId_idx').on(table.releaseId),
+    deliveryExecutionIdx: index('deployment_deliveryExecution_idx').on(table.deliveryExecutionId),
     projectIdIdx: index('deployment_projectId_idx').on(table.projectId),
     statusIdx: index('deployment_status_idx').on(table.status),
   })

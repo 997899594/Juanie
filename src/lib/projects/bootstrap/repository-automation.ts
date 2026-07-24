@@ -121,8 +121,8 @@ function buildServiceBuildLines(
   }
 
   lines.push(
-    '      # strategy buildpacks lets the platform infer the image build when no Dockerfile is declared.',
-    `      strategy: ${buildStrategy ?? 'buildpacks'}`,
+    '      # managed uses Juanie BuildKit defaults when no Dockerfile is declared.',
+    `      strategy: ${buildStrategy ?? 'managed'}`,
     '      # context is the source directory used by the selected build strategy.',
     `      context: ${dockerContext}`
   );

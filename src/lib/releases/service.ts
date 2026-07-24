@@ -7,6 +7,7 @@ import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snaps
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, releases, type TeamRole } from '@/lib/db/schema';
+import { getDeliveryExecutionReadModel } from '@/lib/delivery-executions/read-model';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import {
   getEnvironmentScopeLabel,
@@ -678,7 +679,7 @@ export async function getReleaseDetailPageData(input: {
     return null;
   }
 
-  const [previousRelease, runtimeContext] = await Promise.all([
+  const [previousRelease, runtimeContext, deliveryExecution] = await Promise.all([
     getPreviousReleaseByScope({
       projectId: input.projectId,
       environmentId: release.environmentId,
@@ -693,6 +694,7 @@ export async function getReleaseDetailPageData(input: {
         finishedAt: release.updatedAt,
       },
     }),
+    getDeliveryExecutionReadModel(release.deliveryExecutionId),
   ]);
 
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
@@ -736,7 +738,7 @@ export async function getReleaseDetailPageData(input: {
     input.actorUserId
   );
 
-  return buildReleaseDetailPageData({
+  const pageData = buildReleaseDetailPageData({
     projectId: input.projectId,
     release: {
       ...releaseWithApprovalTokens,
@@ -746,4 +748,5 @@ export async function getReleaseDetailPageData(input: {
     },
     previousRelease: previousRelease ?? null,
   });
+  return pageData ? { ...pageData, deliveryExecution } : null;
 }

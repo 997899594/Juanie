@@ -4,10 +4,12 @@ import {
   deployments,
   type MigrationRunStatus,
   migrationRuns,
+  promotionRequests,
   type ReleaseStatus,
   releaseMigrationPlans,
   releases,
 } from '@/lib/db/schema';
+import { signalDeliveryExecutionInTransaction } from '@/lib/delivery-executions/service';
 import { clearEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import { assertExecutionFence, assertReleaseExecutionFence } from '@/lib/execution/ownership';
 import { logger } from '@/lib/logger';
@@ -118,10 +120,17 @@ export async function updateReleaseStatus(
         id: true,
         projectId: true,
         environmentId: true,
+        deliveryExecutionId: true,
+        promotionRequestId: true,
         executionKey: true,
         executionGeneration: true,
         status: true,
         updatedAt: true,
+      },
+      with: {
+        environment: {
+          columns: { isProduction: true },
+        },
       },
     });
     if (!current) {
@@ -159,6 +168,73 @@ export async function updateReleaseStatus(
         updatedAt: new Date(),
       })
       .where(eq(releases.id, releaseId));
+    if (current.promotionRequestId && status === 'succeeded') {
+      await tx
+        .update(promotionRequests)
+        .set({
+          status: 'succeeded',
+          completedAt: new Date(),
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(promotionRequests.id, current.promotionRequestId));
+    } else if (
+      current.promotionRequestId &&
+      [
+        'admission_failed',
+        'migration_pre_failed',
+        'verification_failed',
+        'failed',
+        'canceled',
+      ].includes(status)
+    ) {
+      await tx
+        .update(promotionRequests)
+        .set({
+          status: 'failed',
+          completedAt: new Date(),
+          lastError: errorMessage ?? `Release entered ${status}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(promotionRequests.id, current.promotionRequestId));
+    }
+    if (current.deliveryExecutionId && status === 'succeeded') {
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: current.deliveryExecutionId,
+        eventKey: `release.verified.${releaseId}`,
+        type: `${current.environment.isProduction ? 'production' : 'staging'}.verified`,
+        status: current.environment.isProduction ? 'production_verified' : 'staging_verified',
+        data: { releaseId },
+      });
+      if (!current.environment.isProduction) {
+        await signalDeliveryExecutionInTransaction(tx, {
+          executionId: current.deliveryExecutionId,
+          eventKey: `promotion.awaiting.${releaseId}`,
+          type: 'promotion.awaiting',
+          status: 'awaiting_promotion',
+          data: { sourceReleaseId: releaseId },
+        });
+      }
+    } else if (
+      current.deliveryExecutionId &&
+      [
+        'admission_failed',
+        'migration_pre_failed',
+        'verification_failed',
+        'failed',
+        'canceled',
+      ].includes(status)
+    ) {
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: current.deliveryExecutionId,
+        eventKey: `release.failed.${releaseId}.${status}`,
+        type: 'release.failed',
+        status: status === 'canceled' ? 'canceled' : 'failed',
+        errorCode: `RELEASE_${status.toUpperCase()}`,
+        errorMessage: errorMessage ?? `Release entered ${status}`,
+        data: { releaseId, status },
+      });
+    }
   });
 
   await publishReleaseRealtimeSnapshot(releaseId);
@@ -492,6 +568,7 @@ export async function startReleaseDeploymentStage(
           .insert(deployments)
           .values({
             releaseId: release.id,
+            deliveryExecutionId: release.deliveryExecutionId,
             projectId: release.projectId,
             environmentId: release.environmentId,
             serviceId: artifact.serviceId,
@@ -499,6 +576,7 @@ export async function startReleaseDeploymentStage(
             commitMessage:
               release.summary || `Release ${release.sourceCommitSha?.slice(0, 7) ?? ''}`,
             imageUrl: artifactUri,
+            imageDigest: artifact.imageDigest,
             status: 'queued',
             deployedById: release.triggeredByUserId ?? null,
           })

@@ -58,6 +58,11 @@ const topicTargets: Record<OutboxTopic, Omit<RestateInvocationTarget, 'key'>> = 
     handler: 'run',
     idempotencyMode: 'request-header',
   },
+  'source.webhook.reconcile.requested': {
+    service: restateServiceNames.sourceWebhookController,
+    handler: 'run',
+    idempotencyMode: 'request-header',
+  },
 };
 
 const attemptScopedWorkflowTopics = new Set<OutboxTopic>([

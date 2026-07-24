@@ -20,7 +20,7 @@ export async function reconcileRepositorySourceWebhook(input: {
   session: IntegrationSession;
   canonicalUrl: string;
   secret: string;
-}): Promise<void> {
+}): Promise<{ id: string; url: string }> {
   try {
     const managed = await gateway.ensurePushWebhook(input.session, {
       repoFullName: input.repository.fullName,
@@ -39,6 +39,7 @@ export async function reconcileRepositorySourceWebhook(input: {
         sourceWebhookLastError: null,
       })
       .where(eq(repositories.id, input.repository.id));
+    return managed;
   } catch (error) {
     await db
       .update(repositories)

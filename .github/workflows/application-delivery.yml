@@ -34,6 +34,10 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: juanie-delivery-${{ inputs.delivery_id }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -50,7 +54,7 @@ env:
   JUANIE_RUNTIME_DIR: /tmp/juanie-ci-runtime-v1
   JUANIE_BUILD_STATE_DIR: /tmp/juanie-build-run
   JUANIE_TURBO_CACHE_DIR: /tmp/juanie-turbo-cache
-  JUANIE_BUILD_RUN_SHA256: b9eb15815d7aa48cbdeb3c1cd220eebbb0b593aed8d86491c210a68adb269f04
+  JUANIE_BUILD_RUN_SHA256: a292720eb4405d1588c83db787d966aaa7e6e89c72cf24cf4448c6b7dd0a30c3
   JUANIE_DELIVERY_SHA256: 7f7e8b61d62c10a152314c7e0d4058839b79e60dc85ff3dd00a6e13c66929154
   JUANIE_IDENTITY_SHA256: 41e570b4dfb648595a3c1c642591bd6f50ba073374e08d7edebb34d889fd293d
 
@@ -203,6 +207,7 @@ jobs:
             | sha256sum -c -
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
@@ -218,7 +223,7 @@ jobs:
 
   release:
     needs: [plan, build]
-    if: ${{ always() && needs.plan.outputs.groups != '[]' && needs.build.result == 'success' }}
+    if: ${{ always() && (needs.plan.outputs.groups == '[]' || needs.build.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -339,3 +344,38 @@ jobs:
           )"
           source "$JUANIE_RUNTIME_DIR/workload-identity.sh"
           juanie_api_json POST "/api/releases/${JUANIE_RELEASE_ID}/artifacts" "$payload"
+
+  complete:
+    needs: [plan, release, deliver]
+    if: ${{ always() && needs.plan.outputs.deliverables != '[]' && needs.release.result == 'success' && needs.deliver.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: juanie-build-run-${{ needs.plan.outputs.build_run_id }}
+          path: ${{ env.JUANIE_BUILD_STATE_DIR }}
+
+      - name: Download immutable Juanie CI runtime
+        run: |
+          set -euo pipefail
+          mkdir -p "$JUANIE_RUNTIME_DIR"
+          for asset in build-run.sh workload-identity.sh; do
+            curl --fail --silent --show-error \
+              "${JUANIE_BASE_URL}/api/ci/runtime/v1/${asset}" \
+              --output "${JUANIE_RUNTIME_DIR}/${asset}"
+          done
+          chmod +x "$JUANIE_RUNTIME_DIR"/*
+          cd "$JUANIE_RUNTIME_DIR"
+          printf '%s  %s\n' \
+            "$JUANIE_BUILD_RUN_SHA256" build-run.sh \
+            "$JUANIE_IDENTITY_SHA256" workload-identity.sh \
+            | sha256sum -c -
+
+      - name: Complete delivery aggregate
+        env:
+          JUANIE_BUILD_RUN_ID: ${{ needs.plan.outputs.build_run_id }}
+          JUANIE_DELIVERY_RESULT: ${{ needs.deliver.result }}
+        run: bash "$JUANIE_RUNTIME_DIR/build-run.sh" complete-delivery

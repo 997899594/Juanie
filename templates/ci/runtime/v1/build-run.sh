@@ -280,6 +280,88 @@ image_digest() {
   docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' | jq -r '.digest // empty'
 }
 
+sign_image() {
+  local image="$1"
+  local digest="$2"
+  command -v cosign >/dev/null 2>&1 || {
+    echo 'cosign is required for keyless image signing'
+    return 1
+  }
+  cosign sign --yes "${image}@${digest}"
+  cosign verify "${image}@${digest}" \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/application-delivery.yml@"
+}
+
+attest_buildpacks_image() {
+  local image="$1"
+  local digest="$2"
+  local unit_key="$3"
+  local image_ref="${image%@*}@${digest}"
+  local attestation_dir="${state_dir}/attestations/${unit_key}"
+  local sbom_dir="${attestation_dir}/sbom"
+  local provenance_file="${attestation_dir}/provenance.json"
+  rm -rf "$attestation_dir"
+  mkdir -p "$sbom_dir"
+
+  docker run --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "${sbom_dir}:/sbom" \
+    buildpacksio/pack:0.38.2 \
+    sbom download "$image_ref" --output-dir /sbom
+
+  local sbom_files=()
+  mapfile -t sbom_files < <(find "$sbom_dir" -type f -name '*.spdx.json' -print | sort)
+  if [ "${#sbom_files[@]}" -eq 0 ]; then
+    echo "Buildpacks image ${unit_key} did not expose an SPDX SBOM"
+    return 1
+  fi
+  for sbom_file in "${sbom_files[@]}"; do
+    cosign attest --yes --type spdxjson --predicate "$sbom_file" "$image_ref"
+  done
+
+  jq -cn \
+    --arg repository "${GITHUB_REPOSITORY}" \
+    --arg sha "${JUANIE_SOURCE_SHA}" \
+    --arg workflowRef "${GITHUB_WORKFLOW_REF:-}" \
+    --arg invocationId "${GITHUB_RUN_ID:-}" \
+    --arg builderImage 'buildpacksio/pack:0.38.2' \
+    --arg buildpackBuilder 'paketobuildpacks/builder-jammy-full' \
+    '{
+      buildDefinition: {
+        buildType: "https://buildpacks.io/spec/slsa/v1",
+        externalParameters: {
+          repository: $repository,
+          revision: $sha,
+          builder: $buildpackBuilder
+        },
+        internalParameters: {},
+        resolvedDependencies: [
+          {uri: ("git+https://github.com/" + $repository + "@" + $sha)},
+          {uri: ("pkg:docker/" + $builderImage)}
+        ]
+      },
+      runDetails: {
+        builder: {id: ("https://github.com/" + $workflowRef)},
+        metadata: {invocationId: $invocationId}
+      }
+    }' > "$provenance_file"
+  cosign attest --yes \
+    --type 'https://slsa.dev/provenance/v1' \
+    --predicate "$provenance_file" \
+    "$image_ref"
+  cosign verify-attestation \
+    --type spdxjson \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/application-delivery.yml@" \
+    "$image_ref" >/dev/null
+  cosign verify-attestation \
+    --type 'https://slsa.dev/provenance/v1' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+    --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/application-delivery.yml@" \
+    "$image_ref" >/dev/null
+}
+
 report_unit() {
   local build_run_id="$1"
   local unit_key="$2"
@@ -287,6 +369,8 @@ report_unit() {
   local image="${4:-}"
   local digest="${5:-}"
   local error_message="${6:-}"
+  local metadata="${7:-}"
+  [ -n "$metadata" ] || metadata='{}'
   local payload
 
   payload="$(
@@ -295,11 +379,13 @@ report_unit() {
       --arg image "$image" \
       --arg imageDigest "$digest" \
       --arg errorMessage "$error_message" \
+      --argjson metadata "$metadata" \
       '{
         status: $status,
         image: (if $image == "" then null else $image end),
         imageDigest: (if $imageDigest == "" then null else $imageDigest end),
-        errorMessage: (if $errorMessage == "" then null else $errorMessage end)
+        errorMessage: (if $errorMessage == "" then null else $errorMessage end),
+        metadata: $metadata
       }'
   )"
 
@@ -318,6 +404,7 @@ build_unit() {
   local bake_definition
   local image
   local digest
+  local supply_chain_metadata='{"signature":"sigstore-keyless","attestation":"buildkit-sbom-provenance"}'
 
   unit_key="$(jq -r '.id' <<<"$unit")"
   service_name="$(jq -r '.service' <<<"$unit")"
@@ -345,6 +432,8 @@ build_unit() {
       -f "$bake_definition" \
       --set "$target.tags=$image" \
       --set "$target.args.GIT_SHA=${JUANIE_SOURCE_SHA}" \
+      --set "$target.attest=type=sbom" \
+      --set "$target.attest+=type=provenance,mode=max" \
       "${bake_cache_args[@]}" \
       --push || return 1
   elif [ "$strategy" = 'dockerfile' ] || [ "$strategy" = 'managed' ]; then
@@ -371,6 +460,8 @@ build_unit() {
       --file "$dockerfile" \
       --tag "$image" \
       --build-arg "GIT_SHA=${JUANIE_SOURCE_SHA}" \
+      --sbom=true \
+      --provenance=mode=max \
       "${docker_secret_args[@]}" \
       "${docker_context_args[@]}" \
       "${docker_cache_args[@]}" \
@@ -386,13 +477,19 @@ build_unit() {
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v "$PWD:/workspace" \
       -w /workspace \
-      buildpacksio/pack \
-      pack build "$image" --builder paketobuildpacks/builder-jammy-full --publish || return 1
+      buildpacksio/pack:0.38.2 \
+      build "$image" --builder paketobuildpacks/builder-jammy-full --publish || return 1
   fi
 
   wait_for_image "$image" || return 1
   digest="$(image_digest "$image")" || return 1
-  report_unit "$build_run_id" "$unit_key" succeeded "$image" "$digest" || return 1
+  sign_image "$image" "$digest" || return 1
+  if [ "$strategy" = 'buildpacks' ]; then
+    attest_buildpacks_image "$image" "$digest" "$unit_key" || return 1
+    supply_chain_metadata='{"signature":"sigstore-keyless","attestation":"sigstore-sbom-slsa"}'
+  fi
+  report_unit "$build_run_id" "$unit_key" succeeded "$image" "$digest" "" \
+    "$supply_chain_metadata" || return 1
 }
 
 get_unit() {
@@ -439,6 +536,8 @@ build_bake_group() {
     bake_set_args+=(
       --set "$target.tags=$image"
       --set "$target.args.GIT_SHA=${JUANIE_SOURCE_SHA}"
+      --set "$target.attest=type=sbom"
+      --set "$target.attest+=type=provenance,mode=max"
     )
     while IFS= read -r key; do
       [ -n "$key" ] || continue
@@ -463,7 +562,9 @@ build_bake_group() {
     local digest
     wait_for_image "$image" || return 1
     digest="$(image_digest "$image")" || return 1
-    report_unit "$build_run_id" "$unit_key" succeeded "$image" "$digest" || return 1
+    sign_image "$image" "$digest" || return 1
+    report_unit "$build_run_id" "$unit_key" succeeded "$image" "$digest" "" \
+      '{"signature":"sigstore-keyless","attestation":"buildkit-sbom-provenance"}' || return 1
   done
 }
 
@@ -577,6 +678,13 @@ finalize_build_run() {
   response="$(request_json POST "/api/build-runs/${build_run_id}/finalize")"
   printf '%s\n' "$response" | tee "$release_file"
 
+  if [ "$(jq -r '.noOp // false' "$release_file")" = 'true' ]; then
+    echo 'No affected build units; delivery completed as a verified no-op'
+    : > "${state_dir}/release-id"
+    printf '%s' 'false' > "$artifacts_ready_file"
+    return 0
+  fi
+
   local release_id
   local release_path
   release_id="$(jq -r '.release.id' "$release_file")"
@@ -618,7 +726,7 @@ finalize_build_run() {
         if [ -n "$release_path" ]; then
           echo "Juanie release requires manual action: ${juanie_base_url}${release_path}"
         fi
-        if [ "$status" = "awaiting_rollout" ]; then
+        if [ "$status" = "awaiting_rollout" ] || [ "$(jq 'length' "$deliverables_file")" -gt 0 ]; then
           printf '%s' 'true' > "$artifacts_ready_file"
         else
           printf '%s' 'false' > "$artifacts_ready_file"
@@ -638,6 +746,26 @@ finalize_build_run() {
   exit 1
 }
 
+complete_delivery() {
+  local build_run_id="${JUANIE_BUILD_RUN_ID:-}"
+  local delivery_result="${JUANIE_DELIVERY_RESULT:?JUANIE_DELIVERY_RESULT is required}"
+  if [ -z "$build_run_id" ]; then
+    build_run_id="$(cat "${state_dir}/build-run-id")"
+  fi
+
+  local status='failed'
+  local error_message="Delivery artifact jobs ended with ${delivery_result}"
+  if [ "$delivery_result" = 'success' ]; then
+    status='succeeded'
+    error_message=''
+  fi
+
+  request_json POST "/api/build-runs/${build_run_id}/complete-delivery" "$(
+    jq -cn --arg status "$status" --arg errorMessage "$error_message" \
+      '{status: $status, errorMessage: (if $errorMessage == "" then null else $errorMessage end)}'
+  )"
+}
+
 case "$command" in
   prepare)
     prepare_build_analysis
@@ -654,8 +782,11 @@ case "$command" in
   finalize)
     finalize_build_run
     ;;
+  complete-delivery)
+    complete_delivery
+    ;;
   *)
-    echo "Usage: $0 {prepare|start|build-group|build-all|finalize}"
+    echo "Usage: $0 {prepare|start|build-group|build-all|finalize|complete-delivery}"
     exit 2
     ;;
 esac

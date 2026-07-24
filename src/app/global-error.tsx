@@ -16,7 +16,7 @@ export default function GlobalErrorPage({
   }, [error]);
 
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="zh-CN" suppressHydrationWarning data-scroll-behavior="smooth">
       <body>
         <AppErrorState
           title="应用启动异常"

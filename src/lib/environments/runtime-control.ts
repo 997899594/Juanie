@@ -8,6 +8,10 @@ import {
   type EnvironmentAutoSleepSnapshot,
 } from '@/lib/environments/idle-policy';
 import { isProductionEnvironment } from '@/lib/environments/model';
+import {
+  resolveServiceRuntimeExpectation,
+  type ServiceRuntimeExpectation,
+} from '@/lib/health/runtime-expectations';
 import { getDeployments, isK8sAvailable, scaleDeploymentIfExists } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import {
@@ -22,6 +26,7 @@ export type EnvironmentRuntimeState = {
   workloadCount: number;
   summary: string;
   autoSleep: EnvironmentAutoSleepSnapshot;
+  serviceHealth: Array<ServiceRuntimeExpectation & { serviceId: string; serviceName: string }>;
 };
 
 type EnvironmentRuntimeProject = {
@@ -156,6 +161,7 @@ export async function getEnvironmentRuntimeState(input: {
       workloadCount: 0,
       summary: '环境命名空间还没有建立',
       autoSleep,
+      serviceHealth: [],
     };
   }
 
@@ -167,6 +173,7 @@ export async function getEnvironmentRuntimeState(input: {
       workloadCount: 0,
       summary: '当前无法连接 Kubernetes',
       autoSleep,
+      serviceHealth: [],
     };
   }
 
@@ -184,12 +191,14 @@ export async function getEnvironmentRuntimeState(input: {
       ...deploymentList
         .filter((deployment) => expectedWorkloadNames.has(deployment.metadata?.name ?? ''))
         .map((deployment) => ({
+          name: deployment.metadata?.name ?? '',
           desiredReplicas: deployment.spec?.replicas ?? 0,
           readyReplicas: deployment.status?.readyReplicas ?? 0,
         })),
       ...rolloutList
         .filter((rollout) => expectedWorkloadNames.has(rollout.metadata?.name ?? ''))
         .map((rollout) => ({
+          name: rollout.metadata?.name ?? '',
           desiredReplicas: rollout.spec?.replicas ?? 0,
           readyReplicas: rollout.status?.readyReplicas ?? rollout.status?.availableReplicas ?? 0,
         })),
@@ -203,6 +212,7 @@ export async function getEnvironmentRuntimeState(input: {
         workloadCount: 0,
         summary: '当前环境还没有可休眠的应用工作负载',
         autoSleep,
+        serviceHealth: [],
       };
     }
 
@@ -216,6 +226,21 @@ export async function getEnvironmentRuntimeState(input: {
     );
     const state =
       desiredReplicas === 0 ? 'sleeping' : readyReplicas >= desiredReplicas ? 'running' : 'partial';
+    const snapshotByName = new Map(
+      workloadSnapshots.map((snapshot) => [snapshot.name, snapshot] as const)
+    );
+    const serviceHealth = serviceList.map((service) => {
+      const snapshot = snapshotByName.get(getWorkloadName(input.project.slug, service));
+      return {
+        serviceId: service.id,
+        serviceName: service.name,
+        ...resolveServiceRuntimeExpectation({
+          workloadObserved: Boolean(snapshot),
+          desiredReplicas: snapshot?.desiredReplicas ?? 0,
+          readyReplicas: snapshot?.readyReplicas ?? 0,
+        }),
+      };
+    });
 
     return {
       state,
@@ -227,6 +252,7 @@ export async function getEnvironmentRuntimeState(input: {
           ? '应用工作负载已休眠，数据库和配置仍保留'
           : `${readyReplicas}/${desiredReplicas} 个应用副本可用`,
       autoSleep,
+      serviceHealth,
     };
   } catch (error) {
     return {
@@ -236,6 +262,7 @@ export async function getEnvironmentRuntimeState(input: {
       workloadCount: 0,
       summary: error instanceof Error ? error.message : '运行态暂不可用',
       autoSleep,
+      serviceHealth: [],
     };
   }
 }

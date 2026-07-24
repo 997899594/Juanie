@@ -12,6 +12,10 @@ import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import { resolvePromotionFlow } from '@/lib/environments/promotion';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { getProjectProductionRef } from '@/lib/projects/refs';
+import {
+  computePromotionContentDigest,
+  type PromotionContent,
+} from '@/lib/promotions/content-digest';
 import { createProjectRelease } from '@/lib/releases';
 import { getDeployableReleaseArtifacts, getReleaseArtifactUri } from '@/lib/releases/artifacts';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
@@ -158,6 +162,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const { sourceRelease, sourceArtifacts } = promotionSource;
+    if (sourceArtifacts.some((artifact) => !artifact.serviceId || !artifact.imageDigest)) {
+      return NextResponse.json(
+        { error: '来源发布包含未绑定服务或未固定 digest 的制品，无法审批提升' },
+        { status: 409 }
+      );
+    }
     const duplicatePromotion = await resolveDuplicatePromotion({
       projectId: id,
       targetEnvironmentId: promotion.targetEnvironment.id,
@@ -171,6 +181,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: duplicatePromotion.blockingReason }, { status: 409 });
     }
 
+    const promotionContent: PromotionContent = {
+      sourceReleaseId: sourceRelease.id,
+      targetEnvironmentId: promotion.targetEnvironment.id,
+      sourceCommitSha: sourceRelease.sourceCommitSha,
+      migrationApprovalMode: 'independent_release_plan',
+      artifacts: sourceArtifacts.map((artifact) => ({
+        serviceId: artifact.serviceId!,
+        image: getReleaseArtifactUri(artifact) ?? '',
+        digest: artifact.imageDigest!,
+        sbomUri: artifact.sbomUri,
+        provenanceUri: artifact.provenanceUri,
+      })),
+    };
+    const promotionContentDigest = computePromotionContentDigest(promotionContent);
     const promotedRelease = await createProjectRelease({
       projectId: id,
       environmentId: promotion.targetEnvironment.id,
@@ -179,6 +203,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         name: artifact.service?.name,
         image: getReleaseArtifactUri(artifact) ?? '',
         digest: artifact.imageDigest,
+        sbomUri: artifact.sbomUri,
+        provenanceUri: artifact.provenanceUri,
       })),
       sourceRepository: project.repository?.fullName ?? project.name,
       sourceRef: sourceRelease.sourceRef ?? getProjectProductionRef(project),
@@ -189,6 +215,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       triggeredByUserId: session.user.id,
       summary: `提升 ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} 到 ${promotion.targetEnvironment.name}`,
       entryPoint: 'promotion',
+      deliveryExecutionId: sourceRelease.deliveryExecutionId,
+      promotion: {
+        content: promotionContent,
+        contentDigest: promotionContentDigest,
+        requestedByUserId: session.user.id,
+      },
     });
     const tagName =
       promotedRelease?.environment && isPromoteOnlyEnvironment(promotedRelease.environment)
@@ -219,6 +251,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         targetEnvironmentId: promotedReleaseEnvironmentId,
         targetEnvironmentName: promotion.targetEnvironment.name,
         tagName,
+        promotionRequestId: promotedRelease?.promotionRequestId ?? null,
+        promotionContentDigest,
       },
       { status: 202 }
     );

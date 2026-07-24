@@ -85,6 +85,40 @@ export type BuildArtifactKind = (typeof buildArtifactKinds)[number];
 export const sourceDeliveryStatuses = ['received', 'dispatching', 'dispatched', 'failed'] as const;
 export type SourceDeliveryStatus = (typeof sourceDeliveryStatuses)[number];
 
+export const deliveryExecutionStatuses = [
+  'received',
+  'dispatching',
+  'building',
+  'staging_releasing',
+  'staging_verified',
+  'awaiting_promotion',
+  'production_releasing',
+  'production_verified',
+  'failed',
+  'canceled',
+] as const;
+export type DeliveryExecutionStatus = (typeof deliveryExecutionStatuses)[number];
+
+export const promotionRequestStatuses = [
+  'requested',
+  'approved',
+  'rejected',
+  'executing',
+  'succeeded',
+  'failed',
+  'superseded',
+] as const;
+export type PromotionRequestStatus = (typeof promotionRequestStatuses)[number];
+
+export const repositoryWebhookReconcileStatuses = [
+  'pending',
+  'reconciling',
+  'in_sync',
+  'drifted',
+  'failed',
+] as const;
+export type RepositoryWebhookReconcileStatus = (typeof repositoryWebhookReconcileStatuses)[number];
+
 export const sourceWebhookStatuses = ['unmanaged', 'verified', 'failed'] as const;
 export type SourceWebhookStatus = (typeof sourceWebhookStatuses)[number];
 
@@ -283,6 +317,18 @@ export const buildUnitStatusEnum = pgEnum('buildUnitStatus', buildUnitStatuses);
 export const buildArtifactKindEnum = pgEnum('buildArtifactKind', buildArtifactKinds);
 export const sourceDeliveryStatusEnum = pgEnum('sourceDeliveryStatus', sourceDeliveryStatuses);
 export const sourceWebhookStatusEnum = pgEnum('sourceWebhookStatus', sourceWebhookStatuses);
+export const deliveryExecutionStatusEnum = pgEnum(
+  'deliveryExecutionStatus',
+  deliveryExecutionStatuses
+);
+export const promotionRequestStatusEnum = pgEnum(
+  'promotionRequestStatus',
+  promotionRequestStatuses
+);
+export const repositoryWebhookReconcileStatusEnum = pgEnum(
+  'repositoryWebhookReconcileStatus',
+  repositoryWebhookReconcileStatuses
+);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);

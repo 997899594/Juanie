@@ -116,7 +116,7 @@ export function ReleasePromoteDialog({
   );
   const schemaHasMissingResults = (schemaRefresh?.missingCount ?? 0) > 0;
   const confirmLabel = selectedPlan?.plan.releasePolicy.requiresApproval
-    ? '创建并进入审批'
+    ? '确认审批并提升'
     : '确认提升';
 
   return (

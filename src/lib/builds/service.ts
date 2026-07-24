@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { TurboAnalysisFacts } from '@/lib/builds/api-schema';
+import { assessDeliveryArtifacts } from '@/lib/builds/delivery-completion';
 import { type BuildPlan, createBuildPlan, getBuildPlanReleaseServices } from '@/lib/builds/plan';
 import { resolveWorkloadImageRepository } from '@/lib/builds/registry';
 import { type CiWorkloadProvider, isCiWorkloadProvider } from '@/lib/ci/workload-identity';
@@ -18,6 +19,10 @@ import {
   releases,
   repositories,
 } from '@/lib/db/schema';
+import {
+  findDeliveryExecutionForProviderRun,
+  signalDeliveryExecutionInTransaction,
+} from '@/lib/delivery-executions/service';
 import { decryptEnvironmentSecret } from '@/lib/env-vars/envelope';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import {
@@ -28,8 +33,10 @@ import { getBuildAnalysisPolicy, turboQueryVersion } from '@/lib/monorepo/turbo-
 import { loadRepositoryJuanieConfig } from '@/lib/projects/repository-config';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { appendReleaseEvent } from '@/lib/releases/events';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
+import { assertImageDigest, resolveImmutableImageReference } from '@/lib/supply-chain/image-trust';
 
 export class BuildRunError extends Error {
   constructor(
@@ -69,6 +76,13 @@ export interface CompleteBuildUnitInput {
 
 export interface FinalizeBuildRunInput {
   buildRunId: string;
+  authHeader: string | null;
+}
+
+export interface CompleteDeliveryInput {
+  buildRunId: string;
+  status: 'succeeded' | 'failed';
+  errorMessage?: string | null;
   authHeader: string | null;
 }
 
@@ -173,6 +187,20 @@ function deriveBuildRunStatus(
   }
 
   return 'running';
+}
+
+function requireCompleteDeliveryArtifacts(
+  plan: Pick<BuildPlan, 'deliverables'>,
+  artifacts: Parameters<typeof assessDeliveryArtifacts>[1]
+): number {
+  const assessment = assessDeliveryArtifacts(plan, artifacts);
+  if (assessment.missing.length > 0 || assessment.invalid.length > 0) {
+    throw new BuildRunError(
+      `Delivery artifacts are incomplete: missing=${assessment.missing.join(',') || 'none'} invalid=${assessment.invalid.join(',') || 'none'}`,
+      409
+    );
+  }
+  return assessment.expected;
 }
 
 function assertExistingBuildRunMatchesInput(
@@ -280,6 +308,11 @@ export async function startBuildRun(input: StartBuildRunInput) {
     projectId: access.projectId,
   });
   const provider = access.provider;
+  const deliveryExecution = await findDeliveryExecutionForProviderRun({
+    repositoryId: repo.id,
+    provider,
+    providerDeliveryId: input.externalRunId,
+  });
 
   if (input.externalRunId) {
     const existingBuildRun = await db.query.buildRuns.findFirst({
@@ -354,6 +387,7 @@ export async function startBuildRun(input: StartBuildRunInput) {
     const insertBuildRun = tx.insert(buildRuns).values({
       projectId: project.id,
       repositoryId: repo.id,
+      deliveryExecutionId: deliveryExecution?.id ?? null,
       sourceRepository: input.repository,
       sourceRef: input.ref,
       sourceCommitSha: input.sha,
@@ -406,6 +440,15 @@ export async function startBuildRun(input: StartBuildRunInput) {
           metadata: unit,
         }))
       );
+    }
+    if (deliveryExecution) {
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: deliveryExecution.id,
+        eventKey: `build.started.${createdBuildRun.id}`,
+        type: 'build.started',
+        status: 'building',
+        data: { buildRunId: createdBuildRun.id, unitCount: plan.units.length },
+      });
     }
 
     return createdBuildRun;
@@ -567,6 +610,9 @@ export async function completeBuildUnit(input: CompleteBuildUnitInput) {
   if (input.status === 'succeeded' && !image) {
     throw new BuildRunError(`Build unit ${input.unitKey} did not report an image`, 400);
   }
+  if (input.status === 'succeeded') {
+    assertImageDigest(input.imageDigest);
+  }
 
   const now = new Date();
 
@@ -661,14 +707,20 @@ export async function completeBuildUnit(input: CompleteBuildUnitInput) {
             name: output.name,
             uri,
             digest: input.imageDigest ?? null,
-            metadata: output,
+            metadata: {
+              ...output,
+              supplyChain: input.metadata ?? {},
+            },
           })
           .onConflictDoUpdate({
             target: [buildArtifacts.buildUnitId, buildArtifacts.kind, buildArtifacts.name],
             set: {
               uri,
               digest: input.imageDigest ?? null,
-              metadata: output,
+              metadata: {
+                ...output,
+                supplyChain: input.metadata ?? {},
+              },
             },
           });
       }
@@ -700,6 +752,17 @@ export async function completeBuildUnit(input: CompleteBuildUnitInput) {
       .where(
         and(eq(buildRuns.id, input.buildRunId), inArray(buildRuns.status, mutableBuildRunStatuses))
       );
+    if (input.status === 'failed' && buildRun.deliveryExecutionId) {
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: buildRun.deliveryExecutionId,
+        eventKey: `build.failed.${input.buildRunId}.${input.unitKey}`,
+        type: 'build.failed',
+        status: 'failed',
+        errorCode: 'BUILD_UNIT_FAILED',
+        errorMessage: input.errorMessage ?? `Build unit ${input.unitKey} failed`,
+        data: { buildRunId: input.buildRunId, unitKey: input.unitKey },
+      });
+    }
   });
 
   return db.query.buildRuns.findFirst({
@@ -736,11 +799,35 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
     throw new BuildRunError(buildRun.errorMessage ?? 'Build run failed', 409);
   }
 
-  if (buildRun.status === 'finalizing') {
-    throw new BuildRunError('Build run is already finalizing', 409);
-  }
-
   const plan = buildRun.plan as BuildPlan;
+  if (plan.units.length === 0) {
+    const now = new Date();
+    const finalized = await db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(buildRuns)
+        .set({ status: 'finalized', updatedAt: now, finishedAt: now })
+        .where(and(eq(buildRuns.id, buildRun.id), eq(buildRuns.status, 'succeeded')))
+        .returning();
+      if (result && buildRun.deliveryExecutionId) {
+        await signalDeliveryExecutionInTransaction(tx, {
+          executionId: buildRun.deliveryExecutionId,
+          eventKey: `build.no-change.${buildRun.id}`,
+          type: 'delivery.no_change',
+          status: 'production_verified',
+          data: { buildRunId: buildRun.id, reason: 'no_affected_units' },
+        });
+      }
+      return result;
+    });
+    if (!finalized && buildRun.status !== 'finalized') {
+      throw new BuildRunError('No-op build run could not be finalized', 409);
+    }
+    return {
+      buildRun: finalized ?? buildRun,
+      release: null,
+      noOp: true as const,
+    };
+  }
   const missingUnits = plan.release.requiredUnits.filter((unitKey) => {
     const unit = buildRun.units.find((candidate) => candidate.unitKey === unitKey);
     return unit?.status !== 'succeeded';
@@ -757,72 +844,40 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
     throw new BuildRunError(`Build run is not ready to finalize: ${buildRun.status}`, 409);
   }
 
-  const now = new Date();
-  const [claimedBuildRun] = await db
-    .update(buildRuns)
-    .set({
-      status: 'finalizing',
-      updatedAt: now,
-    })
-    .where(and(eq(buildRuns.id, buildRun.id), eq(buildRuns.status, 'succeeded')))
-    .returning();
-
-  if (!claimedBuildRun) {
-    const latestBuildRun = await db.query.buildRuns.findFirst({
-      where: eq(buildRuns.id, buildRun.id),
-    });
-
-    if (latestBuildRun?.releaseId) {
-      const release = await db.query.releases.findFirst({
-        where: eq(releases.id, latestBuildRun.releaseId),
-      });
-
-      if (release) {
-        return {
-          buildRun: latestBuildRun,
-          release: {
-            ...release,
-            releasePath: buildReleaseDetailPath(
-              release.projectId,
-              release.environmentId,
-              release.id
-            ),
-          },
-        };
-      }
-    }
-
-    throw new BuildRunError(
-      `Build run is not ready to finalize: ${latestBuildRun?.status ?? 'unknown'}`,
-      409
-    );
-  }
-
-  const claimedBuildRunWithArtifacts = await db.query.buildRuns.findFirst({
-    where: eq(buildRuns.id, claimedBuildRun.id),
-    with: {
-      units: true,
-      artifacts: true,
-    },
-  });
-
-  if (!claimedBuildRunWithArtifacts) {
-    throw new BuildRunError('Build run not found after finalizing claim', 404);
-  }
-
   const releaseServices = getBuildPlanReleaseServices(plan);
   const artifactByService = new Map(
-    claimedBuildRunWithArtifacts.artifacts
+    buildRun.artifacts
       .filter((artifact) => artifact.kind === 'image')
       .map((artifact) => [artifact.name, artifact] as const)
   );
   const servicesWithDigests = releaseServices.map((service) => {
     const artifact = artifactByService.get(service.name);
+    const digest = assertImageDigest(artifact?.digest);
+    const immutableImage = resolveImmutableImageReference({
+      image: artifact?.uri ?? service.image,
+      digest,
+    });
+    const supplyChain =
+      artifact?.metadata &&
+      typeof artifact.metadata === 'object' &&
+      'supplyChain' in artifact.metadata &&
+      artifact.metadata.supplyChain &&
+      typeof artifact.metadata.supplyChain === 'object'
+        ? (artifact.metadata.supplyChain as Record<string, unknown>)
+        : {};
+    if (buildRun.deliveryExecutionId && supplyChain.signature !== 'sigstore-keyless') {
+      throw new BuildRunError(
+        `Build artifact ${service.name} is missing keyless signature proof`,
+        409
+      );
+    }
 
     return {
       name: service.name,
-      image: artifact?.uri ?? service.image,
-      digest: artifact?.digest ?? null,
+      image: immutableImage,
+      digest,
+      sbomUri: `oci://${immutableImage}`,
+      provenanceUri: `oci://${immutableImage}`,
     };
   });
   let release: NonNullable<Awaited<ReturnType<typeof createRepositoryRelease>>>;
@@ -840,6 +895,8 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
       artifactOnly:
         servicesWithDigests.length === 0 &&
         plan.units.some((unit) => unit.outputs.some((output) => output.kind !== 'image')),
+      deliveryExecutionId: buildRun.deliveryExecutionId,
+      buildRunId: buildRun.id,
     });
 
     if (!createdRelease) {
@@ -849,27 +906,29 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
     release = createdRelease;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    await db
-      .update(buildRuns)
-      .set({
-        status: 'failed',
-        errorMessage,
-        updatedAt: new Date(),
-        finishedAt: new Date(),
-      })
-      .where(eq(buildRuns.id, buildRun.id));
+    await db.transaction(async (tx) => {
+      const now = new Date();
+      const [failedBuildRun] = await tx
+        .update(buildRuns)
+        .set({ status: 'failed', errorMessage, updatedAt: now, finishedAt: now })
+        .where(
+          and(eq(buildRuns.id, buildRun.id), inArray(buildRuns.status, mutableBuildRunStatuses))
+        )
+        .returning({ id: buildRuns.id });
+      if (failedBuildRun && buildRun.deliveryExecutionId) {
+        await signalDeliveryExecutionInTransaction(tx, {
+          executionId: buildRun.deliveryExecutionId,
+          eventKey: `build.finalize.failed.${buildRun.id}`,
+          type: 'build.failed',
+          status: 'failed',
+          errorCode: 'BUILD_FINALIZATION_FAILED',
+          errorMessage,
+          data: { buildRunId: buildRun.id },
+        });
+      }
+    });
     throw error;
   }
-
-  await db
-    .update(buildRuns)
-    .set({
-      releaseId: release.id,
-      status: 'finalized',
-      updatedAt: now,
-      finishedAt: now,
-    })
-    .where(eq(buildRuns.id, buildRun.id));
 
   return {
     buildRun: {
@@ -882,4 +941,110 @@ export async function finalizeBuildRun(input: FinalizeBuildRunInput) {
       releasePath: getBuildRunReleasePath(release),
     },
   };
+}
+
+export async function completeBuildRunDelivery(input: CompleteDeliveryInput) {
+  const buildRun = await loadBuildRunForMutation(input.buildRunId, input.authHeader);
+  const plan = buildRun.plan as BuildPlan;
+  if (plan.deliverables.length === 0) {
+    return { completed: false, reason: 'no_planned_deliverables' as const };
+  }
+  if (buildRun.status !== 'finalized' || !buildRun.releaseId) {
+    throw new BuildRunError('Build run delivery cannot complete before release finalization', 409);
+  }
+
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select 1 from ${buildRuns} where ${buildRuns.id} = ${buildRun.id} for update`
+    );
+    await tx.execute(
+      sql`select 1 from ${releases} where ${releases.id} = ${buildRun.releaseId} for update`
+    );
+    const release = await tx.query.releases.findFirst({
+      where: eq(releases.id, buildRun.releaseId!),
+      with: { artifacts: true },
+    });
+    if (!release) throw new BuildRunError('Build run release not found', 404);
+
+    const artifactOnly = !release.artifacts.some((artifact) => artifact.kind === 'image');
+    if (!artifactOnly) {
+      if (input.status === 'succeeded') {
+        requireCompleteDeliveryArtifacts(plan, release.artifacts);
+      }
+      return { completed: false, reason: 'deployment_managed' as const };
+    }
+    if (release.status === 'succeeded' && input.status === 'succeeded') {
+      return { completed: true, reason: 'already_completed' as const };
+    }
+    if (release.status !== 'awaiting_external_completion') {
+      throw new BuildRunError(`Artifact release is not awaiting delivery: ${release.status}`, 409);
+    }
+
+    const now = new Date();
+    if (input.status === 'failed') {
+      const errorMessage = (input.errorMessage?.trim() || 'Delivery artifact job failed').slice(
+        0,
+        10_000
+      );
+      await tx
+        .update(releases)
+        .set({ status: 'failed', errorMessage, updatedAt: now })
+        .where(eq(releases.id, release.id));
+      await appendReleaseEvent(tx, {
+        releaseId: release.id,
+        projectId: release.projectId,
+        environmentId: release.environmentId,
+        eventKey: 'artifact-delivery-failed',
+        type: 'release.status.changed',
+        data: { from: release.status, to: 'failed', errorMessage },
+        correlationId: release.id,
+      });
+      if (release.deliveryExecutionId) {
+        await signalDeliveryExecutionInTransaction(tx, {
+          executionId: release.deliveryExecutionId,
+          eventKey: `artifact.delivery.failed.${release.id}`,
+          type: 'artifact.delivery.failed',
+          status: 'failed',
+          errorCode: 'DELIVERY_ARTIFACT_FAILED',
+          errorMessage,
+          data: { buildRunId: buildRun.id, releaseId: release.id },
+        });
+      }
+      return { completed: true, reason: 'delivery_failed' as const };
+    }
+
+    const artifactCount = requireCompleteDeliveryArtifacts(plan, release.artifacts);
+
+    await tx
+      .update(releases)
+      .set({ status: 'succeeded', errorMessage: null, updatedAt: now })
+      .where(eq(releases.id, release.id));
+    await appendReleaseEvent(tx, {
+      releaseId: release.id,
+      projectId: release.projectId,
+      environmentId: release.environmentId,
+      eventKey: 'artifact-delivery-completed',
+      type: 'release.status.changed',
+      data: {
+        from: release.status,
+        to: 'succeeded',
+        artifactCount,
+      },
+      correlationId: release.id,
+    });
+    if (release.deliveryExecutionId) {
+      await signalDeliveryExecutionInTransaction(tx, {
+        executionId: release.deliveryExecutionId,
+        eventKey: `artifact.delivery.completed.${release.id}`,
+        type: 'artifact.delivery.completed',
+        status: 'production_verified',
+        data: {
+          buildRunId: buildRun.id,
+          releaseId: release.id,
+          artifactCount,
+        },
+      });
+    }
+    return { completed: true, reason: 'delivery_completed' as const };
+  });
 }

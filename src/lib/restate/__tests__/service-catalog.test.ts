@@ -12,7 +12,7 @@ describe('Restate service catalog', () => {
 
     expect(catalog).toEqual({
       registeredServices: [...expectedRestateServiceNames, 'AnotherService'],
-      expectedServiceCount: 8,
+      expectedServiceCount: expectedRestateServiceNames.length,
     });
   });
 

@@ -9,6 +9,7 @@ interface HealthResponse {
   version: string;
   checks: {
     applicationDelivery?: HealthCheck;
+    deliveryControlPlane?: HealthCheck;
     database: HealthCheck;
     redis?: HealthCheck;
     kubernetes?: HealthCheck;
@@ -30,11 +31,15 @@ export function createKubernetesNotApplicableCheck(): HealthCheck {
 }
 
 export function deriveFullHealthStatus(checks: HealthResponse['checks']): HealthStatus {
-  const requiredChecks = [checks.database, checks.restate, checks.applicationDelivery];
+  const requiredChecks = [
+    checks.database,
+    checks.restate,
+    checks.applicationDelivery,
+    checks.deliveryControlPlane,
+  ];
   if (requiredChecks.some((check) => check?.status === 'fail')) return 'unhealthy';
 
-  const optionalChecks = [checks.redis, checks.kubernetes];
-  if (optionalChecks.some((check) => check?.status === 'fail' || check?.status === 'warn')) {
+  if (Object.values(checks).some((check) => check?.status === 'fail' || check?.status === 'warn')) {
     return 'degraded';
   }
 
@@ -141,6 +146,11 @@ async function checkApplicationDelivery(): Promise<HealthCheck> {
   };
 }
 
+async function checkDeliveryChain(): Promise<HealthCheck> {
+  const { checkDeliveryControlPlane } = await import('@/lib/health/delivery-control-plane');
+  return checkDeliveryControlPlane();
+}
+
 async function isRedisConfigured(): Promise<boolean> {
   const redisConfig = await import('@/lib/redis/config');
   return redisConfig.isRedisConfigured();
@@ -228,6 +238,15 @@ export async function getHealthResponse() {
     checks.applicationDelivery = {
       status: 'fail',
       message: error instanceof Error ? error.message : 'Application delivery is unavailable',
+    };
+  }
+
+  try {
+    checks.deliveryControlPlane = await checkDeliveryChain();
+  } catch (error) {
+    checks.deliveryControlPlane = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Delivery control-plane check failed',
     };
   }
 
