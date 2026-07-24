@@ -169,13 +169,11 @@ export async function POST(request: Request) {
       projectId: binding.project.id,
       repositoryId: binding.repository.id,
       duplicate: !accepted.created,
-      requeued: accepted.requeued,
     });
     return NextResponse.json(
       {
         accepted: true,
         duplicate: !accepted.created,
-        requeued: accepted.requeued,
         deliveryId: event.deliveryId,
         sourceDeliveryId: accepted.delivery.id,
       },

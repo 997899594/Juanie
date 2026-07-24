@@ -19,7 +19,7 @@ import {
 } from '@/lib/outbox/dispatcher';
 import { OutboxOperationConflictError, replayDeadLetterMessage } from '@/lib/outbox/operations';
 import { enqueueOutboxMessage } from '@/lib/outbox/service';
-import { acceptSourceDelivery } from '@/lib/source-deliveries/service';
+import { acceptSourceDelivery, beginSourceDeliveryDispatch } from '@/lib/source-deliveries/service';
 
 const integrationEnabled = process.env.INTEGRATION_TESTS === 'true';
 const restateIntegrationEnabled =
@@ -113,14 +113,11 @@ describe('transactional outbox with PostgreSQL', () => {
           await db.$count(outboxMessages, eq(outboxMessages.aggregateId, accepted[0].delivery.id))
         ).toBe(1);
 
-        await db
-          .update(sourceDeliveries)
-          .set({ status: 'failed', attemptCount: 1, lastError: 'dispatch unavailable' })
-          .where(eq(sourceDeliveries.id, deliveryId));
+        await beginSourceDeliveryDispatch(deliveryId);
         const redelivery = await acceptSourceDelivery(input);
-        expect(redelivery.requeued).toBe(true);
-        expect(redelivery.delivery.status).toBe('received');
-        expect(await db.$count(outboxMessages, eq(outboxMessages.aggregateId, deliveryId))).toBe(2);
+        expect(redelivery.created).toBe(false);
+        expect(redelivery.delivery.status).toBe('dispatching');
+        expect(await db.$count(outboxMessages, eq(outboxMessages.aggregateId, deliveryId))).toBe(1);
       } finally {
         if (deliveryId) {
           await db.delete(outboxMessages).where(eq(outboxMessages.aggregateId, deliveryId));
